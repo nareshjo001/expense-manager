@@ -49,7 +49,40 @@ from training.retrain_pipeline import (
     run_retraining
 )
 
+from threading import Thread
+
+training_in_progress = False
+
+
+def background_retrain():
+    global training_in_progress
+
+    try:
+        run_retraining()
+
+    finally:
+        training_in_progress = False
+
+
 @app.post("/retrain-model")
 def retrain_model():
 
-    return run_retraining()
+    global training_in_progress
+
+    if training_in_progress:
+        return {
+            "success": False,
+            "message": "Training already running"
+        }
+
+    training_in_progress = True
+
+    Thread(
+        target=background_retrain,
+        daemon=True
+    ).start()
+
+    return {
+        "success": True,
+        "message": "Retraining started"
+    }
