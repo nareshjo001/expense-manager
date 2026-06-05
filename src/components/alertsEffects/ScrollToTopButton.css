@@ -1,0 +1,60 @@
+/* ========== Scroll To Top Button ========== */
+.scroll-top-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  bottom: 30px;
+  right: 0;
+  transform: translateX(-50%);
+  will-change: transform;
+  background-color:  #111827;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 50px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  z-index: 9999999;
+  opacity: 0.9;
+  animation: fadeInUp 0.3s ease forwards;
+  animation-delay: 0.1s;
+}
+
+/* Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px); /* Fade in from bottom */
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ========== Mobile Devices (≤ 600px) ========== */
+@media screen and (max-width: 600px) {
+  .scroll-top-btn {
+    left: auto;
+    right: 15px;
+    bottom: 60px;
+    transform: none;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    animation: fadeInUpMobile 0.3s ease forwards;
+  }
+
+  @keyframes fadeInUpMobile {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

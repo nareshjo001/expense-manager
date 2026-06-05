@@ -1,0 +1,229 @@
+@keyframes slideInFromRight {
+    0% {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.fade-from-right {
+    animation: slideInFromRight 0.7s ease forwards;
+}
+
+/* Card container */
+.login-card, 
+.forgot-pass-card,
+.reset-pass-card {
+    width: 100%;
+    max-width: 420px;
+    margin: 50px auto;
+    background: #f9fafb;
+    border-radius: 24px;
+    padding: 25px;
+    box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: box-shadow 0.3s ease;
+}
+
+.login-card:hover,
+.forgot-pass-card:hover,
+.reset-pass-card:hover {
+    box-shadow: 0 0 10px 1px rgba(0, 102, 255, 0.7);
+}
+
+/* Header */
+.login-header, 
+.forgot-pass-header,
+.reset-pass-header {
+    margin-bottom: 30px;
+}
+
+.login-title,
+.forgot-pass-text,
+.reset-pass-text {
+    font-size: 36px;
+    font-weight: 700;
+    color: #0056b3;
+    margin-bottom: 8px;
+}
+
+.login-subtitle,
+.forgot-pass-subtext,
+.reset-pass-subtext {
+    font-size: 16px;
+    color: #0056b3;
+}
+
+/* Form wrapper */
+.login-form form,
+.forgot-pass form,
+.reset-pass form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Input fields */
+.login-input,
+.forgot-pass-input,
+.reset-pass-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    border-radius: 16px;
+    border: 2px solid #d1d5db;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-input:focus,
+.forgot-pass-input:focus,
+.reset-pass-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.forgot-password {
+    font-size: 0.95rem;
+    margin-top: -10px;
+    margin-bottom: -8px;
+    color: #0056b3;
+    text-align: right;
+    cursor: pointer;
+}
+
+.login-signup-btn:hover,
+.forgot-password:hover {
+    text-decoration: underline;
+}
+
+/* Submit button */
+.login-submit,
+.forgot-pass-submit,
+.reset-pass-submit {
+    height: 48px;
+    background-color: #d7eafc !important;
+    color: #0056b3 !important;
+    font-weight: 600;
+    font-size: 18px !important;
+    border: 1px solid #0056b3 !important;
+    border-radius: 9999px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.login-submit:hover,
+.forgot-pass-submit:hover,
+.reset-pass-submit:hover {
+    color: #f9fafb !important;
+    background: #0056b3 !important;
+}
+
+.reset-pass-submit {
+    margin-top: 16px;
+}
+
+/* Footer */
+.login-footer {
+    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.93rem;
+    color: #374151;
+}
+
+.login-signup-btn {
+    background: none;
+    border: none;
+    color: #0056b3;
+    font-weight: 600;
+    cursor: pointer;
+    transition: scale 0.2s ease;
+}
+
+.reset-pass-submit:disabled {
+    background-color: #e5e7eb !important;
+    color: #9ca3af !important;
+    cursor: not-allowed !important;
+    border: 1px solid #bfdbfe !important;
+}
+
+.otp-submit,
+.forgot-pass-submit {
+    width: 100%;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.forgot-pass-submit:disabled {
+    background: linear-gradient(180deg,
+                #eef5ff,
+                #e2ecf9) !important;
+    border: 1px solid #9bbce8 !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed !important;
+}
+
+/* OTP container animation */
+.otp-wrapper {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition:
+        max-height 0.4s ease,
+        opacity 0.3s ease,
+        transform 0.3s ease;
+}
+
+/* When OTP is sent */
+.otp-wrapper.open {
+    max-height: 100px;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@media (max-width: 480px) {
+    .login-card {
+        padding: 26px 20px;
+    }
+
+    .login-title,
+    .forgot-pass-text {
+        font-size: 28px;
+    }
+
+    .login-subtitle,
+    .forgot-pass-subtext {
+        font-size: 15px;
+    }
+
+    .login-input,
+    .forgot-pass-input {
+        padding: 12px 14px;
+        font-size: 15px;
+    }
+
+    .login-submit,
+    .forgot-pass-submit {
+        height: 48px;
+        font-size: 16px;
+    }
+    
+    .forgot-password {
+        font-size: 15px;
+    }
+
+    .login-footer {
+        font-size: 15px;
+    }
+}

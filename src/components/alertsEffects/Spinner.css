@@ -1,0 +1,84 @@
+/* ====== Universal Spinner (Auto-Adapts to Theme) ====== */
+.spinner-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.loader {
+  display: block;
+  position: relative;
+  width: 120px;
+  height: 120px;
+  perspective: 400px;
+}
+
+/* ====== Default (Dark Theme) Spinner ====== */
+.loader::before,
+.loader::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  transform-origin: center center;
+}
+
+.loader::before {
+  background-image:
+    radial-gradient(circle 12px, #3B82F6 100%, transparent 0), /* vivid blue */
+    radial-gradient(circle 12px, #3B82F6 100%, transparent 0),
+    linear-gradient(#60A5FA 60px, transparent 0), /* lighter blue strip */
+    linear-gradient(#60A5FA 60px, transparent 0);
+  background-size: 24px 24px, 24px 24px, 40% 3px, 40% 3px;
+  background-position: left center, right center, left center, right center;
+  animation: rotateY 1.2s linear infinite;
+}
+
+.loader::after {
+  background-image:
+    radial-gradient(circle 12px, #93C5FD 100%, transparent 0), /* soft steel-blue */
+    radial-gradient(circle 12px, #93C5FD 100%, transparent 0),
+    linear-gradient(#BFDBFE 60px, transparent 0), /* pale blue-gray */
+    linear-gradient(#BFDBFE 60px, transparent 0);
+  background-size: 24px 24px, 24px 24px, 3px 40%, 3px 40%;
+  background-position: top center, bottom center, top center, bottom center;
+  animation: rotateX 1.2s linear infinite;
+}
+
+/* ====== Light Theme Override ====== */
+.light-theme .loader::before {
+  background-image:
+    radial-gradient(circle 12px, #f472b6 100%, transparent 0), /* soft rose */
+    radial-gradient(circle 12px, #f472b6 100%, transparent 0),
+    linear-gradient(#f9a8d4 60px, transparent 0), /* pink tint */
+    linear-gradient(#f9a8d4 60px, transparent 0);
+}
+
+.light-theme .loader::after {
+  background-image:
+    radial-gradient(circle 12px, #fbcfe8 100%, transparent 0), /* pastel pink */
+    radial-gradient(circle 12px, #fbcfe8 100%, transparent 0),
+    linear-gradient(#fecdd3 60px, transparent 0), /* pale blush */
+    linear-gradient(#fecdd3 60px, transparent 0);
+}
+
+/* ====== Rotations ====== */
+@keyframes rotateY {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(-180deg); }
+}
+
+@keyframes rotateX {
+  0%, 25% { transform: rotateX(0deg); }
+  75%, 100% { transform: rotateX(-180deg); }
+}

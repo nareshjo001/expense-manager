@@ -1,0 +1,257 @@
+.dark-theme {
+  --tooltip-bg: rgba(0, 0, 0, 0.9);  
+  --tooltip-border: #334155;
+  --bar-gradient-end: #2563eb;    
+}
+
+.light-theme {
+  --tooltip-bg: rgba(0, 0, 0, 0.75);
+  --tooltip-border: #ccc; 
+  --bar-gradient-end: #e91e63;     
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 10px; 
+}
+
+.chart-icon-button {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.chart-container {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.chart-content {
+  width: 100%;
+}
+
+.chart-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.filter-button {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+
+.custom-tooltip {
+  background-color: var(--tooltip-bg);
+  color: #ffffff;
+  border: 1px solid var(--tooltip-border);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.chart-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: nowrap; 
+}
+
+.compare-by-year {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 1rem 0;
+}
+
+.compare-by-year input[type='checkbox'] {
+  transform: scale(1.2);
+  cursor: pointer;
+}
+
+.compare-by-year label {
+  font-weight: 500;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.compare-year-select {
+  margin: 0.5rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.compare-year-select label {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.compare-year-select .react-select__control {
+  border-radius: 8px;
+}
+
+/* Animation Keyframes */
+@keyframes slideInFromRight {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Wrapper for the animation */
+.chart-container {
+  animation: slideInFromRight 0.7s ease forwards;
+}
+
+.chart-with-legend {
+  position: relative;
+}
+
+.custom-legend {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: 14px;
+  pointer-events: none;
+  /* chart still interactive */
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.recharts-pie-sector {
+  outline: none !important;
+}
+
+.recharts-wrapper svg,
+.recharts-wrapper svg * {
+  outline: none !important;
+}
+
+@media screen and (max-width: 600px) {
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .chart-container {
+    /* padding: 0.5rem; */
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .chart-content {
+    padding: 0.5rem 0;
+    overflow-x: hidden; 
+    overflow-y: visible;
+    border-radius: 10px;
+    position: relative;
+  }
+
+  .chart-content > div {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  .chart-content svg {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+
+  .chart-content canvas {
+    width: 100% !important;
+    height: auto !important;
+    display: block;
+    max-width: 100%;
+  }
+
+  .heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    font-size: 1.1rem;
+    margin-bottom: -10px;
+  }
+
+  .heading h1 {
+    font-size: 1.2rem;
+  }
+
+  .chart-icon-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .chart-filters {
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 1rem; 
+    width: 100%;
+    align-items: flex-end;
+    overflow-x: hidden;
+  }
+
+  .compare-by-year {
+    display: flex;
+    align-items: flex-start;
+    width: auto;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    margin-top: 5px;
+    margin-bottom: 10px;
+  }
+
+  .compare-by-year label {
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+
+  .compare-year-select {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .compare-year-select select,
+  .compare-year-select input {
+    font-size: 0.85rem; 
+    padding: 4px 8px; 
+    box-sizing: border-box;
+    flex: 0 1 auto;
+    min-width: 60px; 
+  }
+}

@@ -1,0 +1,250 @@
+/* ===== Container ===== */
+.overall-insights-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+/* ===== Card Base ===== */
+.overall-insights-card {
+  border-radius: 20px;
+  border-left:5px solid #e11d48;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(249,115,22,0.25), transparent 40%),
+    linear-gradient(#ffffff, #fafafa);;
+  box-shadow: var(--card-box-shadow);
+  transition: 0.3s ease;
+}
+
+/* ===== Left Border Accent ===== */
+.spending-jump {
+  background:
+    linear-gradient(135deg, rgba(249,115,22,0.25), transparent 40%),
+    linear-gradient(#ffffff, #fafafa);;
+  border-left-color: #ef4444;
+}
+
+.budget-streak {
+  background:
+    linear-gradient(135deg, rgba(99,102,241,0.25), transparent 40%),
+    linear-gradient(#ffffff, #fafafa);;
+  border-left-color: #8b5cf6;
+}
+
+.stability-score {
+  background:
+    linear-gradient(135deg, rgba(20,184,166,0.25), transparent 40%),
+    linear-gradient(#ffffff, #fafafa);;
+  border-left-color: #14b8a6;
+}
+
+.overall-insights-card:hover {
+  transform: translateY(-3px);
+}
+
+/* ===== Header ===== */
+.overall-insights-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Icon backgrounds */
+.spending-jump-head .heading-icon {
+  background: linear-gradient(135deg, #f97316, #ef4444);
+}
+
+.budget-streak-head .heading-icon {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.stability-score-head .heading-icon {
+  background: linear-gradient(135deg, #14b8a6, #3b82f6);
+}
+
+/* ===== Text ===== */
+.overall-insights-h-text {
+  font-size: 18px;
+  font-weight: 650;
+  margin: 0;
+  color: #111827;
+}
+
+.overall-insights-p-text {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 4px 0;
+}
+
+/* ===== Spending Jump Box ===== */
+.spending-jump-body-time-card {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(249,115,22,0.3);
+  background: rgba(249,115,22,0.08);
+}
+
+.spending-jump-body-time-card h1 {
+  font-size: 20px;
+  color: #ef4444;
+  margin-bottom: 10px;
+
+}
+
+.spending-jump-body-time-card p {
+  color: #4b5563;
+  font-size: 14px;
+  margin: 4px 0 0 0;
+}
+
+.p-wrapper {
+  display: flex;
+  gap: 10px !important;
+  align-items: center;
+
+}
+
+/* ===== Budget Streak ===== */
+.budget-streak-body {
+  text-align: center;
+  margin-top: 10px;
+}
+
+.budget-streak-body h1 {
+  font-size: 42px;
+  color: #8b5cf6;
+  margin: 10px 0;
+}
+
+/* ===== Stability Score ===== */
+.stability-score-body {
+  text-align: center;
+}
+
+/* Circle */
+.circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin: 10px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Inner white circle */
+.circle::before {
+  content: "";
+  width: 60px;
+  height: 60px;
+  background: #ffffff;
+  border-radius: 50%;
+  position: absolute;
+}
+
+/* Percentage text */
+.circle span {
+  position: relative;
+  font-size: 19px;
+  font-weight: bold;
+  color: var(--menu-color);
+}
+
+.overall-insights-empty-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center; 
+  text-align: center;
+}
+
+.streak-number {
+  display: inline-block;
+}
+
+/* hidden initial state */
+.streak-number.hidden {
+  transform: translateY(-60px);
+  opacity: 0;
+}
+
+/* animate */
+.streak-number.animate {
+  animation: jumpIn 1.5s ease 0.1s forwards;
+}
+
+@keyframes jumpIn {
+  0% {
+    transform: translateY(-60px);
+    opacity: 0;
+  }
+
+  30% {
+    transform: translateY(10px);
+    opacity: 1;
+  }
+
+  45% {
+    transform: translateY(-18px);
+  }
+
+  60% {
+    transform: translateY(6px);
+  }
+
+  72% {
+    transform: translateY(-10px);
+  }
+
+  85% {
+    transform: translateY(3px);
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .overall-insights-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .spending-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overall-insights-container {
+    padding: 10px !important;
+  }
+
+  .overall-insights-card {
+    padding: 20px !important;
+  }
+
+  .overall-insights-h-text {
+    font-size: 16px !important;
+  }
+
+  .peak-hours-body-time-card {
+    margin-top: 16px;
+    padding: 10px;
+  }
+
+  .peak-hours-body-time-card h1 {
+    font-size: 15px !important;
+  }
+
+  .budget-streak-body h1 {
+    font-size: 32px !important; 
+    margin: 10px 0;
+  }
+} 
