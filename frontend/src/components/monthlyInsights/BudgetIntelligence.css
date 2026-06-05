@@ -1,0 +1,286 @@
+/* GLOBAL FIX */
+*{
+  box-sizing:border-box;
+}
+
+/* ========== Light Theme ========== */
+.light-theme {
+  --menu-color: #9d174d;
+}
+
+/* ========== Dark Theme ========== */
+.dark-theme {
+  --menu-color: #1D4ED8;
+}
+
+/* WRAPPER */
+.budget-intelligence-card {
+  width:100%;
+}
+
+/* HEADING */
+.budget-intelligence-heading {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:15px;
+}
+
+.budget-intelligence-h-text {
+  font-size:18px !important;
+  font-weight:600;
+  color:var(--text-color);
+}
+
+/* MAIN CARD */
+.budget-intelligence-report-card {
+  width:100%;
+  padding:24px;
+  border-radius:20px;
+  background:
+    linear-gradient(#ffffff,#ffffff) padding-box,
+    linear-gradient(180deg,#f1f5f9,#e5e7eb) border-box;
+  border:1px solid transparent;
+  box-shadow: var(--card-box-shadow);
+  border-left:5px solid #ffffff;
+  transition:all .25s ease;
+  overflow:hidden;
+}
+
+.budget-intelligence-report-card:hover {
+  transform:translateY(-3px);
+  box-shadow:
+    0 20px 40px rgba(0,0,0,0.08);
+}
+
+/* RISK COLORS */
+.budget-intelligence-report-card.EXCEEDED{
+  border-left-color:#e11d48;
+}
+
+.budget-intelligence-report-card.HIGH_RISK{
+  border-left-color:#f97316;
+}
+
+.budget-intelligence-report-card.WARNING{
+  border-left-color:#eab308;
+}
+
+.budget-intelligence-report-card.SAFE{
+  border-left-color:#10b981;
+}
+
+/* REPORT HEADER */
+.budget-intelligence-report-heading {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  min-width:0;
+}
+
+.budget-intelligence-report-heading h1 {
+  font-size:18px !important;
+  font-weight:650;
+  color:#111827;
+}
+
+/* PRIORITY BADGE */
+.budget-intelligence-report-priority {
+  font-size:11px;
+  font-weight:700;
+  padding:5px 10px;
+  border-radius:999px;
+  letter-spacing:.5px;
+  display:inline-flex;
+  align-items:center;
+}
+
+/* EXCEEDED */
+.budget-intelligence-report-priority.EXCEEDED {
+  background:#ffe4e6;
+  color:#e11d48;
+}
+
+/* HIGH RISK */
+.budget-intelligence-report-priority.HIGH_RISK {
+  background:#ffedd5;
+  color:#f97316;
+}
+
+/* WARNING */
+.budget-intelligence-report-priority.WARNING {
+  background:#fef9c3;
+  color:#ca8a04;
+}
+
+/* SAFE */
+.budget-intelligence-report-priority.SAFE {
+  background:#d1fae5;
+  color:#10b981;
+}
+
+.budget-intelligence-report-card.WARNING{
+  border-left-color:#eab308;
+}
+
+.budget-intelligence-p-text {
+  font-size:15px;
+  color:#4b5563;
+  line-height:1.5;
+  word-break:break-word;
+  overflow-wrap:break-word;
+}
+
+/* PROGRESS SECTION */
+.budget-intelligence-report-bar-container {
+  margin-top:20px;
+}
+
+.budget-intelligence-report-bar {
+  background: var(--progress-bg);
+}
+
+/* PROGRESS HEADER */
+.budget-progress-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:8px;
+  min-width:0;
+}
+
+.budget-progress-title {
+  font-size:14px;
+  font-weight:500;
+  color:#374151;
+}
+
+.budget-progress-percent {
+  font-size:18px;
+  font-weight:700;
+  color:#e11d48;
+  flex-shrink:0;
+}
+
+/* PROGRESS BAR */
+.budget-intelligence-report-bar {
+  width:100%;
+  height:10px;
+  border-radius:999px;
+  background:#eef2f7;
+  overflow:hidden;
+  position:relative;
+}
+
+/* PROGRESS FILL */
+.progress-fill {
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient( 90deg, #22c55e, #06b6d4, #3b82f6) !important;
+  transition:width .4s ease;
+}
+
+.progress-fill.EXCEEDED {
+  background: linear-gradient(90deg,#fb7185,#e11d48) !important;
+}
+
+.progress-fill.HIGH_RISK {
+  background: linear-gradient(90deg,#fdba74,#f97316) !important;
+}
+
+.progress-fill.WARNING {
+  background: linear-gradient(90deg,#fde68a,#eab308) !important;
+}
+
+.progress-fill.SAFE {
+  background: linear-gradient(90deg,#22c55e,#06b6d4) !important;
+}
+
+/* BAR LABELS */
+.budget-bar-labels {
+  display:flex;
+  justify-content:space-between;
+  margin-top:8px;
+  font-size:13px;
+  color:#6b7280;
+  font-weight:500;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+/* SMART TIP */
+.budget-intelligence-smart-tip {
+  margin-top:18px;
+  padding:14px 16px;
+  border-radius:12px;
+  background:#f5efe4;          
+  border:2px solid #facc15;     
+  display:flex;
+  flex-direction:column;
+}
+
+/* label row */
+.budget-intelligence-smart-tip-label {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+/* title */
+.budget-intelligence-smart-tip-label h5 {
+  font-size:16px;
+  font-weight:700;
+  color:#7c2d12;
+  margin:0;
+}
+
+/* description */
+.budget-intelligence-smart-tip p {
+  font-size:14px;
+  color:#9a3412;
+  margin-left:34px; 
+}
+
+/* RESPONSIVE */
+@media (max-width:768px) {
+  .budget-intelligence-h-text {
+    font-size:16px !important;
+  }
+
+  .budget-intelligence-report-card {
+    padding:18px;
+  }
+
+  .budget-intelligence-report-heading h1 {
+    font-size:16px !important;
+  }
+
+  .budget-progress-percent {
+    font-size:16px;
+  }
+
+}
+
+@media (max-width:480px) {
+  .budget-intelligence-card {
+    padding:10px;
+  }
+
+  .budget-progress-header {
+    flex-direction:row;
+  }
+
+  .budget-intelligence-smart-tip {
+    padding:10px;
+  }
+
+  .budget-intelligence-smart-tip-label h5 {
+    font-size:16px;
+  }
+
+  .budget-intelligence-smart-tip p {
+    font-size:14px;
+    margin-left:28px; 
+  }
+}

@@ -1,0 +1,18 @@
+.monthly-page-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  padding-bottom: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .monthly-page-container {
+    padding: 5px;
+    gap: 16px;
+    padding-bottom: 90px;
+  }
+}

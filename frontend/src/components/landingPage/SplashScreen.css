@@ -1,0 +1,198 @@
+/* ========== Font Imports ========== */
+/* Loading custom display fonts for the splash animation text */
+@import url('https://fonts.googleapis.com/css2?family=Kaushan+Script&display=swap');
+
+.logo-text {
+  font-family: 'Kaushan Script', cursive;
+}
+
+/* ========== Global Page Styling ========== */
+html, body {
+  min-height: 450px; /* Prevents layout collapse on very small viewports */
+  height: 100vh; /* Full viewport height */
+  margin: 0;
+  background: linear-gradient(270deg, #1f4f96, #003366, #1b2949, #000); /* Animated multi-tone dark gradient */
+  background-size: 600% 600%; /* Large size for smooth animated shift */
+  animation: bgshift 10s ease infinite; /* Background shifting animation */
+}
+
+/* Background animation keyframes */
+@keyframes bgshift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Container for the splash screen */
+.splash-screen {
+  width: 100vw;
+  height: 100vh;
+  background: inherit; /* Inherit animated gradient from parent */
+}
+
+/* ========== Central Animated Stage ========== */
+.stage {
+  width: 500px;
+  height: 300px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* 🎯 Perfect vertical and horizontal centering */
+  perspective: 9999px; /* Enables 3D perspective */
+  transform-style: preserve-3d; /* Allows child elements to render in 3D */
+}
+
+/* ========== Layered Text Effect ========== */
+.layer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  transform-style: preserve-3d;
+  animation: ಠ_ಠ 5s infinite alternate ease-in-out -7.5s; /* Layer animation for subtle shifting illusion */
+  animation-fill-mode: forwards;
+  transform: rotateY(33deg) rotateX(33deg) translateZ(0); /* 3D skewing effect */
+}
+
+.layer:after {
+  font: 150px/0.65 "Pacifico", "Kaushan Script", Futura, "Roboto", "Trebuchet MS", Helvetica, sans-serif;
+  content: attr(data-text); /* Dynamically inserts the same text on all layers */
+  white-space: pre; /* Allows `\n` to create line breaks */
+  text-align: center;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 10px; /* Fine-tunes vertical alignment */
+  color: whitesmoke;
+  letter-spacing: -2px;
+  line-height: 1;
+  text-shadow: 4px 0 10px rgba(0, 0, 0, 0.13); /* Soft glow shadow */
+}
+
+/* ========== Layer Depth Simulation ========== */
+/* Each layer is moved further on Z-axis to create 3D depth illusion */
+.layer:nth-child(1):after {
+  transform: translateZ(0px);
+}
+
+.layer:nth-child(2):after {
+  transform: translateZ(-1.5px);
+}
+
+.layer:nth-child(3):after {
+  transform: translateZ(-3px);
+}
+
+.layer:nth-child(4):after {
+  transform: translateZ(-4.5px);
+}
+
+.layer:nth-child(5):after {
+  transform: translateZ(-6px);
+}
+
+.layer:nth-child(6):after {
+  transform: translateZ(-7.5px);
+}
+
+.layer:nth-child(7):after {
+  transform: translateZ(-9px);
+}
+
+.layer:nth-child(8):after {
+  transform: translateZ(-10.5px);
+}
+
+.layer:nth-child(9):after {
+  transform: translateZ(-12px);
+}
+
+.layer:nth-child(10):after {
+  transform: translateZ(-13.5px);
+}
+
+.layer:nth-child(11):after {
+  transform: translateZ(-15px);
+}
+
+.layer:nth-child(12):after {
+  transform: translateZ(-16.5px);
+}
+
+.layer:nth-child(13):after {
+  transform: translateZ(-18px);
+}
+
+.layer:nth-child(14):after {
+  transform: translateZ(-19.5px);
+}
+
+.layer:nth-child(15):after {
+  transform: translateZ(-21px);
+}
+
+.layer:nth-child(16):after {
+  transform: translateZ(-22.5px);
+}
+
+.layer:nth-child(17):after {
+  transform: translateZ(-24px);
+}
+
+.layer:nth-child(18):after {
+  transform: translateZ(-25.5px);
+}
+
+.layer:nth-child(19):after {
+  transform: translateZ(-27px);
+}
+
+.layer:nth-child(20):after {
+  transform: translateZ(-28.5px);
+}
+
+/* Enhancing text effects for deeper layers */
+.layer:nth-child(n+10):after {
+  -webkit-text-stroke: 3px rgba(0, 0, 0, 0.25);
+}
+
+.layer:nth-child(n+11):after {
+  -webkit-text-stroke: 15px dodgerblue;
+  text-shadow:
+    6px 0 6px #00366b,
+    5px 5px 5px #002951,
+    0 6px 6px #00366b; /* Blue glowing shadow */
+}
+
+.layer:nth-child(n+12):after {
+  -webkit-text-stroke: 15px #0077ea; /* Brighter blue stroke */
+}
+
+.layer:last-child:after {
+  -webkit-text-stroke: 17px rgba(0, 0, 0, 0.1); /* Faint stroke for fading edges */
+}
+
+.layer:first-child:after {
+  color: #fff; /* Top layer is clean and white */
+  text-shadow: none;
+}
+
+/* Text floating/skewing animation */
+@keyframes ಠ_ಠ {
+  100% {
+    transform: rotateY(-35deg) rotateX(-35deg);
+  }
+}
+
+/* ========== Responsive Design ========== */
+
+/* ✅ Responsive adjustment for small mobile screens */
+@media screen and (max-width: 480px) {
+  .stage {
+    width: 90vw;
+    height: 150px; /* More compact for smaller screens */
+  }
+
+  .layer:after {
+    font-size: 70px; /* Reduces text size accordingly */
+  }
+}

@@ -1,0 +1,162 @@
+/* Expense Insights Card */
+.expense-insights-card {
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin: 14px 0 20px;
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.expense-insights-card:hover {
+    transform: translateY(-4px);
+}
+
+/* Header Section */
+.insight-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.insight-icon {
+    background: var(--header-gradient-start);
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 6px 8px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.insight-title {
+    font-weight: 500;
+    font-size: 15px;
+    opacity: 0.9;
+}
+
+/* Insights List */
+.insight-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Individual Insight Item */
+.insight-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border-radius: 12px;
+    padding: 12px 14px;
+    line-height: 1.45;
+}
+
+.severity-high {
+    border-left: 3px solid #ef4444;
+}
+
+.severity-medium {
+    border-left: 3px solid #f59e0b;
+}
+
+.severity-low {
+    border-left: 3px solid #22c55e;
+}
+
+.insight-item p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #1f2937;
+}
+
+/* Colored Dot Indicators */
+.insight-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+/* High severity — Red / Rose */
+.severity-high .insight-dot {
+    background: #ef4444;
+}
+
+/* Medium severity — Amber / Orange */
+.severity-medium .insight-dot {
+    background: #f59e0b;
+}
+
+/* Low severity — Green */
+.severity-low .insight-dot {
+    background: #22c55e;
+}
+
+/* Light Theme Support */
+.light-theme .expense-insights-card {
+    background: linear-gradient(135deg,
+    rgba(249, 168, 212, 0.35),
+    rgba(244, 114, 182, 0.25)
+    );
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(249, 168, 212, 0.45);
+}
+
+.light-theme .expense-insights-card:hover {
+    box-shadow: 0 10px 24px rgba(244, 114, 182, 0.25);
+}
+
+/* Dark Theme Support */
+.dark-theme .expense-insights-card {
+    background: linear-gradient(135deg,
+    rgba(59, 130, 246, 0.18),
+    rgba(96, 165, 250, 0.12)
+    );
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.dark-theme .expense-insights-card:hover {
+    box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35);
+}
+
+.light-theme .insight-item {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.light-theme .insight-item p {
+    color: var(--text-color);
+}
+
+.dark-theme .insight-item {
+    background: rgba(31, 41, 55, 0.6);
+}
+
+.dark-theme .insight-item p {
+    color: rgba(249, 250, 251, 0.9);
+}
+
+/* Responsive (Mobile) */
+@media (max-width: 600px) {
+    .expense-insights-card {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .insight-title {
+        font-size: 15px;
+    }
+
+    .insight-item {
+        padding: 10px 12px;
+    }
+
+    .insight-item p {
+        font-size: 0.89rem;
+    }
+}

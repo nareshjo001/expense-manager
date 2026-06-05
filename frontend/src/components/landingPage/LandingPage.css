@@ -1,0 +1,519 @@
+/* ========== Light Theme ========== */
+.light-theme {
+  --bg-color: #FFE4E1;
+  --header-gradient-start: #f9a8d4;
+  --header-gradient-end: #f472b6;
+  --text-color: #9d174d;
+  --nav-link-hover: #f9a8d4;
+  --menu-color: #9d174d;
+}
+
+/* ========== Dark Theme ========== */
+.dark-theme {
+  --bg-color: #1F2937;
+  --header-gradient-start: #3B82F6;
+  --header-gradient-end: #60A5FA;
+  --text-color: #F9FAFB;
+  --nav-link-hover: #3B82F6;
+  --menu-color: #1D4ED8;
+}
+
+/* ========== App Container ========== */
+.app-container {
+  background-color: var(--bg-color);
+  min-height: 100vh;
+  color: var(--text-color);
+  animation: fadeIn 1.5s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ========== Header Flex ========== */
+.app-header {
+  background: linear-gradient(270deg, var(--header-gradient-start), var(--header-gradient-end), var(--header-gradient-start));
+  background-size: 600% 600%;
+  animation: glitter 10s ease infinite; /* Subtle gradient shimmer */
+  padding: 12px 16px;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  text-align: center;
+  z-index: 999;
+}
+
+@keyframes glitter {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Nav Links + Toggle Button Row */
+.app-nav-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 0 15px;
+  font-size: 1rem;
+}
+
+.app-navigation {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  font-weight: 450;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.nav-link:hover {
+  scale: 1.05;
+  border-bottom: 2px solid var(--nav-link-hover);
+  padding-bottom: 3px;
+  font-weight: 600;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  margin-right: 24px;
+  gap: 6px;
+}
+
+/* ========== Dropdown Styles ========== */
+.dropdown {
+  position: relative;
+  cursor: pointer;
+  z-index: 1000;
+}
+
+.dropdown-menu {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--bg-color);
+  border-radius: 15px;
+  overflow: hidden;
+  min-width: 150px;
+  z-index: 9999;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Show dropdown */
+.dropdown:hover .dropdown-menu {
+  display: flex;
+}
+
+/* Dropdown items */
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 15px;
+  text-decoration: none;
+  color: var(--text-color);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: var(--nav-link-hover);
+}
+
+/* Icon Buttons */
+.icon-button {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* ========== Typewriter Animation ========== */
+.typewriter p,
+  .desktop-typewriter p {
+  color: white;
+  overflow: hidden;
+  border-right: .15em solid var(--header-gradient-start); 
+  white-space: nowrap;
+  margin: 0 auto;
+  letter-spacing: .15em;
+  animation: 
+    typing 3.5s steps(30, end) forwards,
+    blink-caret .5s step-end 3 3s forwards; /* Typing + blinking cursor */
+}
+
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+@keyframes blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: var(--header-gradient-end) }
+  100% { border: none; } 
+}
+
+/* ========== Main ========== */
+.app-main {
+  padding: 20px;
+  height: auto;
+  overflow: visible;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+.total-section {
+  padding: 0.75rem 1.25rem;
+  margin: 1rem 0;
+  border-radius: 12px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  text-align: center;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Gradient background per theme */
+.light-theme .total-section {
+  background: linear-gradient(135deg, var(--header-gradient-start), var(--header-gradient-end));
+  color: var(--text-color);
+  box-shadow: 0 4px 10px rgba(249, 168, 212, 0.3);
+}
+
+.dark-theme .total-section {
+  background: linear-gradient(135deg, var(--header-gradient-start), var(--header-gradient-end));
+  color: var(--text-color);
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
+.select-group {
+  display: flex;
+  gap: 10px;
+  margin-left: auto; 
+}
+
+/* ========== Button Styles ========== */
+.header-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.toggle-button,
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--header-gradient-start);
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.toggle-button:hover,
+  .logout-button:hover {
+  scale: 1.05;
+  background: var(--header-gradient-end);
+}
+
+.select-button {
+  background-color: var(--header-gradient-start);
+  color: white;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  z-index: 999;
+}
+
+select > option {
+  background-color: #D4D4D4;
+  color: black;
+}
+
+/* ========== Delete Alert Modal ========== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999; 
+}
+
+.modal {
+  background: white;
+  padding: 20px 30px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.modal-buttons {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.modal-buttons button {
+  font-size: 0.92rem;
+  padding: 8px 16px;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: bold;
+  transition: background 0.3s ease;
+}
+
+.modal-buttons button:last-child {
+  background: #dc2626; 
+  color: white;
+}
+
+.modal-buttons button:first-child {
+  background: #e2e8f0; 
+  color: #696969;
+}
+
+.modal-buttons button:last-child:hover {
+  background: #b91c1c;
+}
+
+.modal-buttons button:first-child:hover {
+  background: #cbd5e1;
+}
+
+/* Applies blur behind modal to prevent interaction */
+.blur-background {
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.mobile-header {
+  display: none;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+/* Mobile Settings Drawer */
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(3px);
+  z-index: 9999;
+}
+
+.mobile-settings-panel {
+  position: fixed;
+  top: 30px;
+  bottom: 30px;
+  right: 0;
+  /* height: calc(100vh - 60px); */
+  width: 230px;
+  background: var(--bg-color);
+  z-index: 9999;
+  padding: 20px;
+  border-radius: 12px 0 0 12px;
+  box-shadow: -3px 0 12px rgba(0,0,0,0.2);
+  will-change: transform;
+  transform: translateZ(0);
+  animation: slideIn 0.3s ease forwards;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.mobile-settings-panel .toggle-button,
+  .mobile-settings-panel .logout-button {
+  width: 70%;
+}
+
+.mobile-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 18px;
+  margin-bottom: 30px;
+}
+
+.mobile-settings-close-btn {
+  border: none;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.mobile-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+/* Bottom Nav */
+.mobile-bottom-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #F9FAFB;
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding: 8px 0;
+  z-index: 9995 !important;
+}
+
+.dark-theme .mobile-bottom-nav {
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.mobile-bottom-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 12px !important;
+  color: var(--menu-color);
+}
+
+.mobile-bottom-nav a,
+.mobile-bottom-nav a:visited,
+.mobile-bottom-nav a:hover,
+.mobile-bottom-nav a:active {
+  text-decoration: none;
+  border-bottom: none;
+}
+
+.mobile-bottom-nav svg {
+  font-size: 20px;
+}
+
+.mobile-bottom-nav .active-nav {
+  color: var(--header-gradient-end);
+  font-weight: 600;
+}
+
+@media screen and (max-width: 900px) {
+  .app-nav-toggle {
+    gap: 10px;
+  }
+
+  .nav-item {
+    margin-right: 0;
+  }
+
+  .toggle-button,
+  .logout-button {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+/* ========== Mobile Media Queries (≤600px) ========== */
+@media screen and (max-width: 600px) {
+  .desktop-typewriter {
+    display: none;
+  }
+
+  .desktop-header {
+    display: none;
+  }
+
+  .mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+  }
+
+  .mobile-chart-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 12px;
+    color: var(--menu-color);
+    cursor: pointer;
+  }
+
+  /* Converts dropdown to modal-style overlay on mobile */
+  .dropdown-menu {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50%;
+    background-color: var(--bg-color);
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 999;
+    padding: 10px ;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .dropdown-menu a {
+    padding: 12px;
+    font-size: 1rem;
+    display: flex;
+    justify-content: space-around; 
+    width: 100%;
+    border-bottom: 1px solid #ddd;
+    text-decoration: none; 
+    color: var(--text-color); 
+  }
+
+  .dropdown-menu a:last-child {
+    border-bottom: none;
+  }
+
+  .dropdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+    background-color: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+  }
+
+  .modal {
+    width: 75%;
+  }
+}
