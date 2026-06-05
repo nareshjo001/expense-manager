@@ -25,15 +25,6 @@ cron.schedule("* * * * *", async () => {
 
         console.log(response.data);
 
-        if (response.data.success) {
-
-            await MlFeedbackModel.updateMany(
-                { corrected: true },
-                { $set: { corrected: false } }
-            );
-            console.log("Feedback flags reset");
-        }
-
     } catch (err) {
         console.log("Cron job error:");
         console.log(
