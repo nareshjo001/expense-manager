@@ -13,7 +13,7 @@ const sendPush = async (userId, title, body, route = '/') => {
 
     const messages = tokens.map(t => {
 
-        const imageUrl = "https://expense-manager-green.vercel.app/images/final.jpeg"; 
+        const imageUrl = "https://balensia.vercel.app/images/final.jpeg"; 
         // Must be PUBLIC HTTPS URL (NOT localhost)
 
         if (t.platform === "mobile") {
