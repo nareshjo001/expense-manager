@@ -4,6 +4,8 @@ const express = require('express');
 // Import CORS middleware (allows requests from other origins)
 const cors = require('cors');
 
+const axios = require("axios");
+
 // Load environment variables from .env file
 require('dotenv').config();
 
@@ -46,8 +48,24 @@ app.get('/', (req, res) => {
 });
 
 // Health check route
-app.get('/ping', (req, res) => {
-  res.status(200).send('pong');
+app.get('/ping', async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${process.env.ML_ROUTE}/`);
+
+    res.status(200).json({
+      success: true,
+      backend: "up",
+      ml: "up"
+    });
+
+  } catch (err) {
+    res.status(503).json({
+      success: false,
+      backend: "up",
+      ml: "down",
+      message: "Server Unavailable."
+    });
+  }
 });
 
 // Authentication routes

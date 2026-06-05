@@ -6,6 +6,9 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import ScrollToTopButton from './components/alertsEffects/ScrollToTopButton';
 
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
+
 // Create the React root
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
@@ -21,6 +24,8 @@ root.render(
       which is intentional and useful.
     */}
     <App />
+    <Analytics />
+    <SpeedInsights />
     {/*
       ScrollToTopButton is mounted globally so:
       - it persists across route changes
