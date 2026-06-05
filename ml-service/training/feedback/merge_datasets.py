@@ -27,9 +27,6 @@ RETRAIN_DATASET_PATH = os.path.join(
     "retrain_data.csv"
 )
 
-# To be removed
-print("Feedback file exists:", os.path.exists(FEEDBACK_DATASET_PATH))
-
 if os.path.exists(FEEDBACK_DATASET_PATH):
     print(
         "Feedback file size:",
@@ -50,10 +47,6 @@ merged_df = pd.concat(
 merged_df.to_csv(
     RETRAIN_DATASET_PATH,
     index=False
-)
-
-print(
-    "Datasets merged and saved to dataset/retrain_data.csv"
 )
 
 print(len(base_df), "->", len(merged_df), "records after merging")

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi import Response
 
 from inference.predictor import predict_category
 from inference.descriptionGenerator import (
@@ -18,6 +19,9 @@ class DescriptionRequest(BaseModel):
     expenseCategory: str
     expenseAmount: float
 
+@app.head("/")
+def health_head():
+    return Response(status_code=200)
 
 @app.get("/")
 def health():

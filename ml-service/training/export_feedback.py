@@ -53,10 +53,6 @@ for item in feedback_data:
 # DATAFRAME
 df = pd.DataFrame(rows)
 
-# To be removed
-print("DataFrame shape:", df.shape)
-print(df.head())
-
 # ABSOLUTE PATH
 CURRENT_DIR = os.path.dirname(
     os.path.abspath(__file__)
@@ -70,8 +66,5 @@ SAVE_PATH = os.path.join(
 
 # SAVE CSV
 df.to_csv(SAVE_PATH, index=False)
-
-# To be removed
-print("CSV size:", os.path.getsize(SAVE_PATH))
 
 print(f"Feedback data exported to {SAVE_PATH}")
