@@ -23,6 +23,19 @@ feedback_data = list(
     })
 )
 
+collection.update_many(
+    {
+        "corrected": True
+    },
+    {
+        "$set": {
+            "corrected": False
+        }
+    }
+)
+
+print("Feedback flags reset")
+
 rows = []
 
 for item in feedback_data:
