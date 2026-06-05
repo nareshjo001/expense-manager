@@ -123,7 +123,9 @@ print("CATEGORY NORMALIZATION COMPLETED\n")
 # STEP 4 — FEATURE EXTRACTION
 print("TF-IDF VECTORIZATION...")
 
-vectorizer = TfidfVectorizer()
+vectorizer = TfidfVectorizer(
+    max_features=1000
+)
 
 X = vectorizer.fit_transform(df["expenseName"])
 
@@ -176,9 +178,9 @@ print("TEST SIZE :", X_test.shape[0])
 print("CREATING RANDOM FOREST MODEL...")
 
 model = RandomForestClassifier(
-    n_estimators=100,
+    n_estimators=30,
     random_state=42,
-    n_jobs=-1,
+    n_jobs=1,
 )
 
 print("MODEL CREATED")

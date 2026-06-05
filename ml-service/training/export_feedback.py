@@ -23,26 +23,6 @@ feedback_data = list(
     })
 )
 
-# To be removed
-print(f"Feedback records fetched: {len(feedback_data)}")
-
-if len(feedback_data) > 0:
-    print("Sample document:")
-    print(feedback_data[0])
-
-collection.update_many(
-    {
-        "corrected": True
-    },
-    {
-        "$set": {
-            "corrected": False
-        }
-    }
-)
-
-print("Feedback flags reset")
-
 rows = []
 
 for item in feedback_data:
@@ -60,10 +40,6 @@ for item in feedback_data:
 # DATAFRAME
 df = pd.DataFrame(rows)
 
-# To be removed
-print("DataFrame shape:", df.shape)
-print(df.head())
-
 # ABSOLUTE PATH
 CURRENT_DIR = os.path.dirname(
     os.path.abspath(__file__)
@@ -77,8 +53,5 @@ SAVE_PATH = os.path.join(
 
 # SAVE CSV
 df.to_csv(SAVE_PATH, index=False)
-
-# To be removed
-print("CSV size:", os.path.getsize(SAVE_PATH))
 
 print(f"Feedback data exported to {SAVE_PATH}")
