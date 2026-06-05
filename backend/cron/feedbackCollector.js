@@ -4,7 +4,7 @@ const axios = require("axios");
 const { MlFeedbackModel } = require("../config/Schemas");
 
 // 0 2 * * * - every day at 2 AM
-cron.schedule("* * * * *", async () => {
+cron.schedule("30 20 * * *", async () => {
     console.log("ML RETRAIN CHECK STARTED");
     try {
 
@@ -14,7 +14,7 @@ cron.schedule("* * * * *", async () => {
 
         console.log(`Corrected feedback count: ${correctedCount}`);
 
-        if (correctedCount < 2) {
+        if (correctedCount < 100) {
             console.log("Not enough corrections for retraining");
             return;
         }
