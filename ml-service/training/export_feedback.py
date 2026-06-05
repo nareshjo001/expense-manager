@@ -23,15 +23,6 @@ feedback_data = list(
     })
 )
 
-<<<<<<< HEAD
-=======
-# To be removed
-print(f"Feedback records fetched: {len(feedback_data)}")
-
-if len(feedback_data) > 0:
-    print("Sample document:")
-    print(feedback_data[0])
-
 collection.update_many(
     {
         "corrected": True
@@ -45,7 +36,6 @@ collection.update_many(
 
 print("Feedback flags reset")
 
->>>>>>> 7c2b00346ceba2d1ad188a7eeb6972db2ebf609c
 rows = []
 
 for item in feedback_data:
