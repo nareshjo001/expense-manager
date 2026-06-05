@@ -183,12 +183,20 @@ model = RandomForestClassifier(
 
 print("MODEL CREATED")
 
+import time
+
+start = time.time()
+
 # STEP 8 — TRAIN MODEL
 print("TRAINING MODEL...")
 
 try:
 
     model.fit(X_train, y_train)
+
+    print(
+        f"TRAINING FINISHED IN {time.time() - start:.2f} sec"
+    )
 
     print("\nMODEL TRAINING COMPLETED")
 
