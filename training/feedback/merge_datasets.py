@@ -27,6 +27,15 @@ RETRAIN_DATASET_PATH = os.path.join(
     "retrain_data.csv"
 )
 
+# To be removed
+print("Feedback file exists:", os.path.exists(FEEDBACK_DATASET_PATH))
+
+if os.path.exists(FEEDBACK_DATASET_PATH):
+    print(
+        "Feedback file size:",
+        os.path.getsize(FEEDBACK_DATASET_PATH)
+    )
+
 # LOAD DATASETS
 base_df = pd.read_csv(BASE_DATASET_PATH)
 feedback_df = pd.read_csv(FEEDBACK_DATASET_PATH)
