@@ -8,7 +8,8 @@ import {
   BudgetProvider,
   ExpenseInsightsProvider,
   ChartInsightsProvider,
-  LandingPage 
+  LandingPage,
+  expenseAddErrorToast
 } from './imports/Imports';
 import './App.css';
 
@@ -62,25 +63,52 @@ function App() {
      * Guarded to avoid invalid fetch if env variable is missing.
   */
   useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+
     const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
     if (!BASE_URL) return;
 
-    const keepAlive = () => fetch(`${BASE_URL}/ping`).catch(() => {});
-    
-    keepAlive(); // Initial warm-up ping
-    
-    const interval = setInterval(keepAlive, 10 * 60 * 1000); // Every 10 mins
-    return () => clearInterval(interval);
-  }, []);
+    const keepAlive = async () => {
+      try {
+        const response = await fetch(`${BASE_URL}/ping`);
+        const data = await response.json().catch(() => ({}));
 
-  /**
-     * Splash screen timer
-     * Ensures branding visibility even on fast connections.
-  */
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 5000);
-    return () => clearTimeout(timer);
-  }, []);
+        if (!response.ok) {
+          if(data.ml === 'down') {
+            data.message = 'ML Server Down!';
+          } else {
+            data.message = 'Backend Server Down!';
+          }
+          expenseAddErrorToast({
+            message: data.message || "Server unavailable."
+          });
+        }
+
+      } catch {
+        expenseAddErrorToast({
+          message: 'Backend Server Down!'
+        });
+      }
+    };
+
+    // Initial health check
+    keepAlive();
+
+    // Periodic health check
+    const interval = setInterval(
+      keepAlive,
+      10 * 60 * 1000
+    );
+
+    return () => clearInterval(interval);
+
+  }, [isLoading]);
 
   useEffect(() => {
     const html = document.documentElement;

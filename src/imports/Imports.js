@@ -7,3 +7,4 @@ export { default as Spinner } from '../components/alertsEffects/Spinner';
 export { BudgetProvider } from '../components/contexts/BudgetContext';
 export { ExpenseInsightsProvider } from '../components/contexts/ai-contexts/ExpenseInsightsContext';
 export { ChartInsightsProvider } from '../components/contexts/ai-contexts/ChartInsightsContext';
+export { expenseAddErrorToast } from '../components/alertsEffects/toastMessages';
