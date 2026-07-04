@@ -1,5 +1,8 @@
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
 
+// Remove
+const { generateReport } = require('../../analytics/generateReport');
+
 const cardInsights = async (req, res) => {
   try {
     // Validate user
@@ -7,6 +10,9 @@ const cardInsights = async (req, res) => {
       if (!user) {
         return res.status(401).json({ message: 'User does not exist', success: false });
       }
+
+      // Remove 
+      await generateReport(req.userId);
 
       const today = new Date();
       const startDate = new Date(today.getFullYear(), today.getMonth(), 1);

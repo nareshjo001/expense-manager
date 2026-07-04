@@ -10,5 +10,4 @@ const fetchExpense = async (startDate, endDate, userId) => {
     }).lean();
 };
 
-
 module.exports = { fetchExpense }
