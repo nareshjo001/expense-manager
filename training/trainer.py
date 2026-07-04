@@ -28,14 +28,14 @@ VECTORIZER_PATH = os.path.join(BASE_DIR, "vectorizer.pkl")
 ENCODER_PATH = os.path.join(BASE_DIR, "labelEncoder.pkl")
 
 # STEP 1 — LOAD DATASET
-print("LOADING DATASET...")
+print("\nLOADING DATASET...")
 
 try:
     df = pd.read_csv(DATASET_PATH)
 
     print("DATASET LOADED SUCCESSFULLY\n")
 
-    print("DATASET SHAPE:", df.shape)
+    # print("DATASET SHAPE:", df.shape)
 
 except Exception as e:
     print("ERROR LOADING DATASET:", e)
@@ -61,7 +61,7 @@ df["expenseName"] = (
 print("TEXT CLEANING COMPLETED")
 
 # STEP 3 — CATEGORY NORMALIZATION
-print("NORMALIZING CATEGORIES...")
+print("\nNORMALIZING CATEGORIES...")
 
 # lowercase + trim
 df["expenseCategory"] = (
@@ -123,13 +123,15 @@ print("CATEGORY NORMALIZATION COMPLETED\n")
 # STEP 4 — FEATURE EXTRACTION
 print("TF-IDF VECTORIZATION...")
 
-vectorizer = TfidfVectorizer()
+vectorizer = TfidfVectorizer(
+    max_features=1000
+)
 
 X = vectorizer.fit_transform(df["expenseName"])
 
-print("TF-IDF COMPLETED")
+print("TF-IDF COMPLETED\n")
 
-print("FEATURE MATRIX SHAPE:", X.shape)
+# print("FEATURE MATRIX SHAPE:", X.shape)
 
 # STEP 5 — LABEL ENCODING
 print("ENCODING LABELS...")
@@ -138,7 +140,7 @@ encoder = LabelEncoder()
 
 y = encoder.fit_transform(df["expenseCategory"])
 
-print("LABEL ENCODING COMPLETED")
+print("LABEL ENCODING COMPLETED\n")
 
 # print("\nAVAILABLE CATEGORIES:\n")
 
@@ -173,12 +175,12 @@ print("TRAIN SIZE:", X_train.shape[0])
 print("TEST SIZE :", X_test.shape[0])
 
 # STEP 7 — MODEL
-print("CREATING RANDOM FOREST MODEL...")
+print("\nCREATING RANDOM FOREST MODEL...")
 
 model = RandomForestClassifier(
-    n_estimators=100,
+    n_estimators=30,
     random_state=42,
-    n_jobs=-1,
+    n_jobs=1,
 )
 
 print("MODEL CREATED")
@@ -188,7 +190,7 @@ import time
 start = time.time()
 
 # STEP 8 — TRAIN MODEL
-print("TRAINING MODEL...")
+print("\nTRAINING MODEL...")
 
 try:
 
@@ -207,7 +209,7 @@ except Exception as e:
     exit()
 
 # STEP 9 — EVALUATE MODEL
-print("EVALUATING MODEL...")
+print("\nEVALUATING MODEL...")
 
 try:
 
@@ -232,7 +234,7 @@ except Exception as e:
     print("EVALUATION ERROR:", e)
 
 # STEP 10 — SAVE FILES
-print("SAVING MODEL FILES...")
+print("\nSAVING MODEL FILES...")
 
 try:
 
@@ -258,4 +260,4 @@ except Exception as e:
     print("SAVE ERROR:", e)
 
 # COMPLETED
-print("TRAINING PIPELINE COMPLETED SUCCESSFULLY")
+print("\nTRAINING PIPELINE COMPLETED SUCCESSFULLY")
