@@ -122,22 +122,35 @@ const calculateMicroSpending = (expenses = [], config = {}) => {
     const amount = toSafeNumber(e?.expenseAmount);
     return amount > 0 && amount <= threshold;
   });
+  
   const microSpent = round2(
-    microExpenses.reduce((sum, e) => sum + toSafeNumber(e?.expenseAmount), 0)
+    microExpenses.reduce(
+      (sum, e) => sum + toSafeNumber(e?.expenseAmount),
+      0
+    )
   );
+
+  // Calculate this BEFORE using it
+  const contributionPercentage =
+    totalSpent === 0
+      ? 0
+      : round2((microSpent / totalSpent) * 100);
 
   const qualifies =
     microExpenses.length >= 5 &&
     microSpent >= 300 &&
     contributionPercentage >= 10;
- 
+
   return {
     hasData: true,
     threshold,
     transactionCount: microExpenses.length,
     totalSpent: microSpent,
-    averageAmount: microExpenses.length === 0 ? 0 : round2(microSpent / microExpenses.length),
-    contributionPercentage: totalSpent === 0 ? 0 : round2((microSpent / totalSpent) * 100),
+    averageAmount:
+      microExpenses.length === 0
+        ? 0
+        : round2(microSpent / microExpenses.length),
+    contributionPercentage,
     qualifies,
   };
 };
