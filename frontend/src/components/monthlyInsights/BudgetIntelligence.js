@@ -1,4 +1,4 @@
-import { FaLightbulb, FaExclamationTriangle, FaExclamationCircle, FaCheckCircle, FaMagic, FaFireAlt, FaBullseye } from "react-icons/fa";
+import { FaLightbulb, FaExclamationTriangle, FaExclamationCircle, FaMagic, FaFireAlt, FaBullseye } from "react-icons/fa";
 import "./BudgetIntelligence.css";
 
 const DEFAULT_INSIGHT = {
