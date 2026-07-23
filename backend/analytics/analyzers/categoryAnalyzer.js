@@ -110,16 +110,28 @@ const calculateCategoryGrowth = (currentTotals = [], previousTotals = []) => {
 
 // Calculates the biggest increase and decrease in spending among categories
 const calculateBiggestChanges = (categoryGrowth = []) => {
-    const increases = categoryGrowth.filter(c => c.change > 0);
+    // Categories with positive percentage growth
+    const increases = categoryGrowth.filter(
+        c => c.growthPercentage !== null && c.growthPercentage > 0
+    );
+
+    // Categories with negative change
     const decreases = categoryGrowth.filter(c => c.change < 0);
 
     return {
+        // Highest percentage increase
         biggestJump: increases.length
-        ? increases.reduce((a, b) => (a.change > b.change ? a : b))
-        : null,
+            ? increases.reduce((a, b) =>
+                a.growthPercentage > b.growthPercentage ? a : b
+            )
+            : null,
+
+        // Largest absolute decrease
         biggestDrop: decreases.length
-        ? decreases.reduce((a, b) => (a.change < b.change ? a : b))
-        : null,
+            ? decreases.reduce((a, b) =>
+                a.change < b.change ? a : b
+            )
+            : null,
     };
 };
 

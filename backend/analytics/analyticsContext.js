@@ -24,6 +24,27 @@ const createAnalyticsContext = async (userId) => {
     const safeBudgetHistory = asArray(budgetHistory);
 
     const now = new Date();
+    
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const currentMonthKey = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+    const currentMonthBudgetDoc = safeBudgetHistory.find(
+    b => b.month === currentMonthKey
+    );
+
+    const sumExpenses = (safeCurrentMonth) =>
+        asArray(safeCurrentMonth).reduce((sum, e) => sum + (Number(e?.expenseAmount) || 0), 0);
+
+    const currentMonthEntry = {
+        month: currentMonthKey,
+        budget: Number(currentMonthBudgetDoc?.budget) || 0,
+        spent: sumExpenses(safeCurrentMonth),
+    };
+
+    const pastMonthsHistory = safeBudgetHistory.filter((b) => b?.month !== currentMonthKey);
+
+    const budgetAnalyzerHistory = [currentMonthEntry, ...pastMonthsHistory];
+
     const weekStartsOn = 1; // Monday
     
     const startOfToday = new Date(now);
@@ -89,7 +110,7 @@ const createAnalyticsContext = async (userId) => {
         previousMonthExpenses: safePreviousMonth,
         currentYearExpenses: safeCurrentYear,
         previousYearExpenses: safePreviousYear,
-        budgetHistory: safeBudgetHistory,
+        budgetHistory: budgetAnalyzerHistory,
         trendData,
         daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
     };

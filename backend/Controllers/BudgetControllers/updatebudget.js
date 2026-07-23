@@ -1,4 +1,5 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
+const { refreshReport } = require('../../Services/reportService');
 
 const updatebudget = async (req, res) => {
     try {
@@ -20,6 +21,8 @@ const updatebudget = async (req, res) => {
           { budget: budget },
           { new: true, upsert: true }
         );
+
+        await refreshReport(req.userId);
 
         // Send successful response with budget data
         res.status(200).json({ message: 'Success', data: updatedBudget, success: true });

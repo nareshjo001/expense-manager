@@ -77,14 +77,6 @@ const {
     recurring,
 } = require('../Controllers/RecurringExpenses');
 
-// INSIGHTS
-const { 
-    cardInsights,
-    budgetInsights,
-    spendingInsights,
-    overallInsights
- } = require('../Controllers/InsightControllers');
-
 // INCOME 
 const {
     addIncome,
@@ -97,23 +89,12 @@ const {
 
 // ================= AUTH ROUTES =================
 
-// User login with validation
-router.post('/login', loginValidation, login);
-
-// User signup with validation
-router.post('/signup', signupValidation, signup);
-
-// OTP verification
-router.post('/verify-otp', verifyOTP);
-
-// Resend OTP
-router.post('/resend-otp', resendOTP);
-
-// Forgot password request
-router.post('/forgot-password', forgotPassword);
-
-// Reset password
-router.post('/reset-password', resetPassword);
+router.post('/login', loginValidation, login);      // User login with validation
+router.post('/signup', signupValidation, signup);   // User signup with validation
+router.post('/verify-otp', verifyOTP);              // OTP verification
+router.post('/resend-otp', resendOTP);              // Resend OTP
+router.post('/forgot-password', forgotPassword);    // Forgot password request
+router.post('/reset-password', resetPassword);      // Reset password
 
 // ================= PROTECTED EXPENSE ROUTES =================
 
@@ -184,12 +165,6 @@ router.post('/device-token', verifyToken, deviceRegistration);
 
 // Mark expense recurring
 router.patch('/recurring', verifyToken, recurring);
-
-// Expense Insights routes
-router.get('/cardinsights', verifyToken, cardInsights);
-router.get('/budget-insights', verifyToken, budgetInsights);
-router.get('/spending-insights', verifyToken, spendingInsights);
-router.get('/overall-insights', verifyToken, overallInsights);
 
 // Income routes
 router.post('/add-income', verifyToken, addIncome);

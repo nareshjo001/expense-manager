@@ -31,6 +31,9 @@ const PORT = process.env.PORT || 8080;
 
 const billRoutes = require('./Routes/billRoutes');
 const mlRouter = require('./Routes/ml.router');
+const reportRouter = require('./Routes/report.routes');
+
+const { connectRedis } = require('./config/redis');
 
 // *** Middlewares ***
 
@@ -75,6 +78,9 @@ app.use('/auth', AuthRouter);
 app.use('/bills', billRoutes);
 app.use('/ml', mlRouter);
 
+// Report Routes
+app.use("/report", reportRouter);
+
 // Global error handler (must be last)
 app.use(errorHandler);
 
@@ -83,6 +89,8 @@ const startServer = async () => {
   try {
     // Connect to database
     await connectDB();
+
+    await connectRedis();
 
     // Start listening for requests
     app.listen(PORT, "0.0.0.0",() => {

@@ -2,6 +2,8 @@ const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { recalculateBudget } = require('../../Services/BudgetServices/budget.service');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 
+const { refreshReport } = require('../../Services/reportService');
+
 const deleteExpense = async (req, res) => {
     try {
             // Verify user from JWT (set by auth middleware)
@@ -24,6 +26,9 @@ const deleteExpense = async (req, res) => {
 
                 // CLEAR CACHE
                 clearUserExpenseCache(user._id);
+
+                // Update report
+                await refreshReport(user._id);
                 
                 return res.status(200).json({ 
                     message: "Expense deleted successfully",

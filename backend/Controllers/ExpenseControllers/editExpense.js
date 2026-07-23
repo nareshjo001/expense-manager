@@ -2,6 +2,8 @@ const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { recalculateBudget } = require('../../Services/BudgetServices/budget.service');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 
+const { refreshReport } = require('../../Services/reportService');
+
 const editexpense = async (req, res) => {
   try {
         // Check if user exists in database using authenticated userId
@@ -52,6 +54,9 @@ const editexpense = async (req, res) => {
 
         // CLEAR CACHE
         clearUserExpenseCache(user._id);
+
+        // Update report
+        await refreshReport(user._id);
 
         // Send response
         res.status(200).json({

@@ -1,18 +1,14 @@
 const { createAnalyticsContext } = require("./analyticsContext");
+const { assembleReport } = require("./reportAssembler");
 
 const spendingAnalyzer = require("./analyzers/spendingAnalyzer");
 const budgetAnalyzer = require("./analyzers/budgetAnalyzer");
 const categoryAnalyzer = require("./analyzers/categoryAnalyzer");
 const trendAnalyzer = require("./analyzers/trendAnalyzer");
-
 const habitAnalyzer = require("./analyzers/habitAnalyzer");
-
 const healthAnalyzer = require("./analyzers/healthAnalyzer");
 
-const spendingScore = require("./analyzers/scoreCal/spendingScore");
-const budgetScore = require("./analyzers/scoreCal/budgetScore");
-const categoryScore = require("./analyzers/scoreCal/categoryScore");
-const trendScore = require("./analyzers/scoreCal/trendScore");
+const { generateBudgetInsights } = require('../Services/BudgetServices/budgetInsight.service');
 
 const generateReport = async (userId) => {
   const analyticsContext = await createAnalyticsContext(userId);
@@ -24,6 +20,8 @@ const generateReport = async (userId) => {
     spending: spendingReport,
     daysInMonth: analyticsContext.daysInMonth,
   });
+
+  const budgetInsights = generateBudgetInsights(budgetReport);
 
   const monthlyCategoryReport = categoryAnalyzer.analyze(
       analyticsContext.currentMonthExpenses,
@@ -44,45 +42,66 @@ const generateReport = async (userId) => {
   const monthlyHabitReport = habitAnalyzer.analyze(analyticsContext.currentMonthExpenses);
   const yearlyHabitReport = habitAnalyzer.analyze(analyticsContext.currentYearExpenses);
 
-  // console.log(monthlyCategoryReport);
-  // console.log(yearlyCategoryReport);
-
-  // console.log(spendingReport);
-  // console.log(budgetReport);
-
-  // console.log(trendReport);
-
-  // console.log(monthlyHabitReport);
-  // console.log(yearlyHabitReport);
-
-  // console.log("Spending Score:", spendingScore.calculateSpendingScore(spendingReport));
-  // console.log("Budget Score:", budgetScore.calculateBudgetScore(budgetReport));
-  // console.log("Monthly Category Score:", categoryScore.calculateCategoryScore(monthlyCategoryReport));
-  // console.log("Yearly Category Score:", categoryScore.calculateCategoryScore(yearlyCategoryReport));
-  // console.log("Trend Score:", trendScore.calculateTrendScore(trendReport));
-
-  // const healthReport = healthAnalyzer.analyze({
-  //   spending: spendingReport,
-  //   budget: budgetReport,
-  //   trend: trendReport,
-  //   monthlyCategories: monthlyCategoryReport,
-  //   yearlyCategories: yearlyCategoryReport,
-  //   monthlyHabits: monthlyHabitReport,
-  //   yearlyHabits: yearlyHabitReport,
-  // });
-
-  // console.log(healthReport);
-
-  return {
-    spending: spendingReport,
+  const healthReport = healthAnalyzer.analyze({
     budget: budgetReport,
-    monthlyCategories: monthlyCategoryReport,
-    yearlyCategories: yearlyCategoryReport,
+    category: monthlyCategoryReport,
+    spending: spendingReport,
     trend: trendReport,
     monthlyHabits: monthlyHabitReport,
-    yearlyHabits: yearlyHabitReport,
-    // health: healthReport,
+  });
+
+  const metadata = {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+
+    reportPeriod: {
+      month: new Date().getMonth() + 1,
+      year: new Date().getFullYear(),
+    },
+
+    lastExpenseUpdate: analyticsContext.lastExpenseUpdate ?? null,
+    lastBudgetUpdate: analyticsContext.lastBudgetUpdate ?? null,
   };
+
+  const summary = {
+    totalSpent: spendingReport.totalSpent,
+    transactionCount: spendingReport.transactionCount,
+    dailyAverage: spendingReport.dailyAverage,
+    comparePastMonth: trendReport.monthlyTrend.percentageChange,
+    topCategory: monthlyCategoryReport.topCategory?.category ?? "N/A",
+
+    budgetUtilization: budgetReport.utilization,
+    budgetStatus: budgetReport.status,
+
+    healthScore: healthReport.healthScore,
+    riskLevel: healthReport.riskLevel,
+  };
+
+  return assembleReport({
+    metadata,
+
+    summary,
+
+    spending: spendingReport,
+
+    budgets: {
+      ...budgetReport,
+      budgetInsights
+    },
+
+    trends: trendReport,
+
+    monthlyCategories: monthlyCategoryReport,
+    yearlyCategories: yearlyCategoryReport,
+
+    monthlyHabits: monthlyHabitReport,
+    yearlyHabits: yearlyHabitReport,
+
+    financialHealth: healthReport,
+
+    forecast: {},
+
+  });
 };
 
 module.exports = {

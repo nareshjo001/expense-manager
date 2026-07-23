@@ -1,24 +1,21 @@
-// Safely converts any value into a valid number
 const toSafeNumber = (value, fallback = 0) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
 
-// Rounds a number to 2 decimal places
 const round2 = (value) => Number(Number(value).toFixed(2));
 
-// Calculates the budget utilization, remaining budget, and budget left percentage
 const calculateBudgetUtilization = ({ budget = 0, spent = 0 } = {}) => {
   const safeBudget = toSafeNumber(budget);
   const safeSpent = toSafeNumber(spent);
-  
+
   if (safeBudget <= 0) {
     return {
       hasBudget: false,
       utilization: null,
       remainingBudget: null,
       budgetLeft: null,
-    }; 
+    };
   }
 
   const remainingBudget = round2(safeBudget - safeSpent);
@@ -31,7 +28,10 @@ const calculateBudgetUtilization = ({ budget = 0, spent = 0 } = {}) => {
   };
 };
 
-// Calculates the budget status based on the budget and spent amounts
+// Ordered ascending — first tier whose `max` the utilization falls under wins.
+// NOTE: this ordering only decides the *status* field. Insight priority
+// (which message wins when multiple things are true) is decided in
+// generateBudgetInsights, not here.
 const STATUS_THRESHOLDS = [
   { max: 70, status: "Safe" },
   { max: 90, status: "Warning" },
@@ -62,13 +62,12 @@ const calculateBudgetStatus = ({ budget = 0, spent = 0 } = {}) => {
   };
 };
 
-// Calculates the current budget streak based on the history of budget usage
 const calculateBudgetStreak = (history = []) => {
   let currentStreak = 0;
   let longestStreak = 0;
   let running = 0;
   let stillCounting = true;
-  let brokeOnMissingBudget = false; 
+  let brokeOnMissingBudget = false;
 
   if (!Array.isArray(history)) {
     return { currentStreak: 0, longestStreak: 0, streakBrokenReason: "INVALID_HISTORY" };
@@ -79,7 +78,7 @@ const calculateBudgetStreak = (history = []) => {
     const monthSpent = toSafeNumber(month?.spent);
     const budgetWasSet = monthBudget > 0;
     const withinBudget = budgetWasSet && monthSpent <= monthBudget;
- 
+
     if (withinBudget) {
       running++;
       longestStreak = Math.max(longestStreak, running);
@@ -98,11 +97,10 @@ const calculateBudgetStreak = (history = []) => {
   };
 };
 
-// Calculates the projected budget usage and overspending based on the current spending rate
 const calculateBudgetProjection = (
   { budget = 0, spent = 0 } = {},
   dailyAverage = 0,
-  daysInMonth  = 30,
+  daysInMonth = 30,
 ) => {
   const safeBudget = toSafeNumber(budget);
   const safeSpent = toSafeNumber(spent);
@@ -116,6 +114,7 @@ const calculateBudgetProjection = (
       projectedOverspendPercent: 0,
       daysUntilExhaustion: null,
       projectionReliable: false,
+      projectionStatus: "Unknown",
     };
   }
 
@@ -127,13 +126,21 @@ const calculateBudgetProjection = (
       ? safeSpent + safeDailyAvg * Math.max(0, safeDaysInMonth - daysElapsed)
       : safeDailyAvg * safeDaysInMonth;
 
-  const projectedOverspend = Math.max(0, projectedSpent - safeBudget)
+  const projectedOverspend = Math.max(0, projectedSpent - safeBudget);
   const projectedOverspendPercent = safeBudget > 0 ? round2((projectedOverspend / safeBudget) * 100) : 0;
 
   let daysUntilExhaustion = null;
-
   if (safeBudget > 0) {
     daysUntilExhaustion = safeSpent >= safeBudget ? 0 : Math.floor((safeBudget - safeSpent) / safeDailyAvg);
+  }
+
+  let projectionStatus = "OnTrack";
+  if (safeBudget <= 0) {
+    projectionStatus = "NoBudget";
+  } else if (projectedOverspend > 0) {
+    projectionStatus = "ProjectedOverspend";
+  } else if (projectedSpent >= safeBudget * 0.9) {
+    projectionStatus = "AtRisk";
   }
 
   return {
@@ -142,23 +149,26 @@ const calculateBudgetProjection = (
     projectedOverspendPercent,
     daysUntilExhaustion,
     projectionReliable: true,
+    projectionStatus,
   };
 };
 
-// Analyzes the budget data and returns a comprehensive report including utilization, status, streaks, and projections
-const analyze = ({
-  history = [],
-  spending = {},
-  daysInMonth = 30,
-}) => {
-  if (!Array.isArray(history) || history.length === 0) {
-    return { hasData: false };
-  }
+const analyze = ({ history = [], spending = {}, daysInMonth = 30 } = {}) => {
 
-  const currentMonth = history[0] || { budget: 0, spent: 0 };
+  const now = new Date();
+
+  const currentMonthKey = `${now.toLocaleString("en-US", {
+    month: "short",
+  })} ${now.getFullYear()}`;
+
+  const currentMonth =
+    history.find(({ month }) => month === currentMonthKey) ??
+    { budget: 0, spent: 0 };
 
   return {
     hasData: true,
+    budget: currentMonth.budget,
+    spent: currentMonth.spent,
     ...calculateBudgetUtilization(currentMonth),
     ...calculateBudgetStatus(currentMonth),
     ...calculateBudgetStreak(history),
@@ -172,4 +182,4 @@ module.exports = {
   calculateBudgetStreak,
   calculateBudgetProjection,
   analyze,
-}; 
+};

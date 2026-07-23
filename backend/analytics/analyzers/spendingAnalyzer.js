@@ -16,7 +16,7 @@ const parseDate = (value) => {
 // Calculates basic statistics for the current month's expenses, including total spent, transaction count, largest and smallest expenses
 const calculateBasicStats = (currentMonthExpenses) => {
   const list = Array.isArray(currentMonthExpenses) ? currentMonthExpenses : [];
- 
+
   let totalSpent = 0;
   let totalRefunds = 0;
   let largestExpense = null;
@@ -82,7 +82,14 @@ const calculateTimeStatistics = (currentMonthExpenses = [], totalSpent = 0, opti
       ? options.periodStart
       : new Date(Math.min(...validDates.map((d) => d.getTime())));
 
-  const trackingDays = Math.max(1, Math.ceil((asOfDate - periodStart) / MS_PER_DAY) + 1);
+  const start = new Date(periodStart);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(asOfDate);
+  end.setHours(0, 0, 0, 0);
+
+  const trackingDays = Math.floor((end - start) / MS_PER_DAY) + 1;
+
   const trackingWeeks = Math.max(1, trackingDays / 7);
 
   return {

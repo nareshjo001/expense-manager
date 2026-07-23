@@ -3,6 +3,8 @@ const { recalculateBudget } = require('../../Services/BudgetServices/budget.serv
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const axios = require("axios");
 
+const { refreshReport } = require('../../Services/reportService');
+
 const addExpense = async (req, res) => {
   try {
     // Destructure expense data from request body
@@ -66,6 +68,9 @@ const addExpense = async (req, res) => {
     
     // CLEAR CACHE
     clearUserExpenseCache(user._id);
+
+    // Update report
+    await refreshReport(user._id);
     
     // Send success response
     res.status(201).json({ message: 'Expense Created Successfully', success: true });
