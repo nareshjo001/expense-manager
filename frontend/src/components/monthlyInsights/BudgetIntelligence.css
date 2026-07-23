@@ -54,20 +54,32 @@
 }
 
 /* RISK COLORS */
-.budget-intelligence-report-card.EXCEEDED{
-  border-left-color:#e11d48;
+.budget-intelligence-report-card.EXCEEDED {
+  border-left-color: #dc2626; /* Red */
 }
 
-.budget-intelligence-report-card.HIGH_RISK{
-  border-left-color:#f97316;
+.budget-intelligence-report-card.CRITICAL {
+  border-left-color: #b91c1c; /* Dark Red */
 }
 
-.budget-intelligence-report-card.WARNING{
-  border-left-color:#eab308;
+.budget-intelligence-report-card.HIGH_RISK {
+  border-left-color: #ea580c; /* Orange */
 }
 
-.budget-intelligence-report-card.SAFE{
-  border-left-color:#10b981;
+.budget-intelligence-report-card.AT_RISK {
+  border-left-color: #f97316; /* Light Orange */
+}
+
+.budget-intelligence-report-card.WARNING {
+  border-left-color: #eab308; /* Yellow */
+}
+
+.budget-intelligence-report-card.SAFE {
+  border-left-color: #10b981; /* Green */
+}
+
+.budget-intelligence-report-card.OTHERS {
+  border-left-color: #3b82f6; /* Blue */
 }
 
 /* REPORT HEADER */
@@ -98,30 +110,44 @@
 
 /* EXCEEDED */
 .budget-intelligence-report-priority.EXCEEDED {
-  background:#ffe4e6;
-  color:#e11d48;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* CRITICAL */
+.budget-intelligence-report-priority.CRITICAL {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* HIGH RISK */
 .budget-intelligence-report-priority.HIGH_RISK {
-  background:#ffedd5;
-  color:#f97316;
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+/* AT RISK */
+.budget-intelligence-report-priority.AT_RISK {
+  background: #fff7ed;
+  color: #f97316;
 }
 
 /* WARNING */
 .budget-intelligence-report-priority.WARNING {
-  background:#fef9c3;
-  color:#ca8a04;
+  background: #fef9c3;
+  color: #ca8a04;
 }
 
 /* SAFE */
 .budget-intelligence-report-priority.SAFE {
-  background:#d1fae5;
-  color:#10b981;
+  background: #d1fae5;
+  color: #10b981;
 }
 
-.budget-intelligence-report-card.WARNING{
-  border-left-color:#eab308;
+/* OTHERS */
+.budget-intelligence-report-priority.OTHERS {
+  background: #dbeafe;
+  color: #2563eb;
 }
 
 .budget-intelligence-p-text {
@@ -175,26 +201,38 @@
 
 /* PROGRESS FILL */
 .progress-fill {
-  height:100%;
-  border-radius:999px;
-  background:linear-gradient( 90deg, #22c55e, #06b6d4, #3b82f6) !important;
-  transition:width .4s ease;
+  height: 100%;
+  border-radius: 999px;
+  transition: width .4s ease;
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
 }
 
 .progress-fill.EXCEEDED {
-  background: linear-gradient(90deg,#fb7185,#e11d48) !important;
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.progress-fill.CRITICAL {
+  background: linear-gradient(90deg, #dc2626, #991b1b);
 }
 
 .progress-fill.HIGH_RISK {
-  background: linear-gradient(90deg,#fdba74,#f97316) !important;
+  background: linear-gradient(90deg, #fb923c, #ea580c);
+}
+
+.progress-fill.AT_RISK {
+  background: linear-gradient(90deg, #fdba74, #f97316);
 }
 
 .progress-fill.WARNING {
-  background: linear-gradient(90deg,#fde68a,#eab308) !important;
+  background: linear-gradient(90deg, #fde047, #ca8a04);
 }
 
 .progress-fill.SAFE {
-  background: linear-gradient(90deg,#22c55e,#06b6d4) !important;
+  background: linear-gradient(90deg, #34d399, #10b981);
+}
+
+.progress-fill.OTHERS {
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
 }
 
 /* BAR LABELS */

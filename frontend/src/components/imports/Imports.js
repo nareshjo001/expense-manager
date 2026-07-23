@@ -12,6 +12,7 @@ import { BudgetContext } from '../contexts/BudgetContext';
 import Insights from '../monthlyInsights/Insights';
 import { deleteSuccessToast, deleteErrorToast } from '../alertsEffects/toastMessages';
 import Add from '../expensesHandling/Add';
+import Spinner from '../alertsEffects/Spinner';
 
 export { 
     BudgetProvider,
@@ -28,5 +29,6 @@ export {
     Insights,
     deleteSuccessToast,
     deleteErrorToast,
-    Add
+    Add,
+    Spinner
 };

@@ -5,76 +5,34 @@ import { BudgetContext } from "../contexts/BudgetContext";
 import { useContext, useEffect, useState } from "react";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
+import { useQueryClient } from "@tanstack/react-query";
 import "./Header.css";
 
-export default function Header() {
-  const { totalBudget, spent, fetchBudgets } = useContext(BudgetContext);
+export default function Header({ summary }) {
+  const { totalBudget, fetchBudgets } = useContext(BudgetContext);
   const [editBudget, setEditBudget] = useState(false);
   const [newBudget, setNewBudget] = useState(totalBudget || "");
-  const [cardData, setCardData] = useState({
-    totalSpent: 0,
-    dailyAverage: 0,
-    transactionsCount: 0,
-    topCategory: "N/A",
-  });
 
   const [isFetching, setIsFetching] = useState(false);
   const [animate, setAnimate] = useState(false);
 
+  const queryClient = useQueryClient();
+  
   useEffect(() => {
-    if (cardData) {
-      const t = setTimeout(() => setAnimate(true), 50); // small delay = smoother paint
+    if (summary) {
+      const t = setTimeout(() => setAnimate(true), 50);
       return () => clearTimeout(t);
     }
-  }, [cardData]);
-
-  const fetchInsights = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
-      const res = await fetch(`${BASE_URL}/auth/cardinsights`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        throw new Error("Server error");
-      }
-
-      const data = await res.json();
-
-      if (data.success) {
-        setCardData(data.data);
-      }
-
-    } catch (error) {
-      console.error("Error fetching insights:", error);
-      expenseAddErrorToast({ message: "Failed to fetch insights." });
-      setCardData({
-        totalSpent: 0,
-        dailyAverage: 0,
-        transactionsCount: 0,
-        topCategory: "N/A",
-      });
-    }
-  };
-
-  useEffect(() => {
-    fetchInsights();
-  }, []);
+  }, [summary]);
 
   const currentMonthYear = new Date().toLocaleString('default', {
     month: 'long',
     year: 'numeric',
   });
 
-  const comparePastMonth = cardData.pastMonthTotal ? (cardData.totalSpent - cardData.pastMonthTotal) : null;
-  const isIncreasing = comparePastMonth !== null ? comparePastMonth > 0 : null;
-  const percentageChange = comparePastMonth !== null && cardData.pastMonthTotal > 0
-    ? Math.round((Math.abs(comparePastMonth) / cardData.pastMonthTotal) * 100)
-    : null;
-
+  const comparePastMonth = summary.comparePastMonth;
+  const percentageChange = comparePastMonth != null ? Math.abs(comparePastMonth) : null;
+ 
   const handleBudgetSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -98,7 +56,10 @@ export default function Header() {
       if (data.success) {
         setIsFetching(false);
         await fetchBudgets();
-        fetchInsights();
+        // Invalidate Report
+        await queryClient.invalidateQueries({
+          queryKey: ["report"],
+        });
 
         setNewBudget("");
         setEditBudget(false);
@@ -135,7 +96,7 @@ export default function Header() {
               </div>
               <p>Total Budget</p>
               <h1>₹ {totalBudget}</h1>
-              <span>Spent: ₹ {spent}</span>
+              <span>Spent: ₹ {summary.totalSpent}</span>
           </div>
 
       </div>
@@ -150,15 +111,21 @@ export default function Header() {
                   Spending Trend
               </div>
               <p>
-                {isIncreasing === null ? (
-                  <span style={{fontSize: "16px"}}>Insufficient data</span>
-                ) : isIncreasing ? (
+                {comparePastMonth == null ? (
+                  <span style={{ fontSize: "16px" }}>
+                    Insufficient data
+                  </span>
+                ) : comparePastMonth > 0 ? (
                   <span className="positive">
                     <FaArrowUp /> {percentageChange}% higher than last month
                   </span>
-                ) : (
+                ) : comparePastMonth < 0 ? (
                   <span className="negative">
                     <FaArrowDown /> {percentageChange}% lower than last month
+                  </span>
+                ) : (
+                  <span className="positive">
+                    No change from last month
                   </span>
                 )}
               </p>
@@ -172,12 +139,12 @@ export default function Header() {
                   Daily Average
               </div>
               <p className="daily-average">
-                {cardData.dailyAverage === 0 ? (
+                {summary.dailyAverage === 0 || summary.dailyAverage === undefined ? (
                   <span style={{ fontSize: "16px" }}>
                     Insufficient data
                   </span>
                 ) : (
-                  <>₹ {Math.round(cardData.dailyAverage)}</>
+                  <>₹ {Math.round(summary.dailyAverage)}</>
                 )}
               </p>
           </div>
@@ -189,14 +156,14 @@ export default function Header() {
                   </i>
                   Payment Count
               </div>
-              {cardData.transactionsCount === 0 ? (
+              {summary.transactionCount === 0 || summary.transactionCount === undefined ? (
                 <p className="insufficient-data">
                   <span style={{ fontSize: "16px" }}>
                     Insufficient data
                   </span>
                 </p>
               ) : (
-                <p style={{display: 'flex', alignItems: 'center', gap: '4px'}}>{cardData.transactionsCount} <span className="transaction-count"></span></p>
+                <p style={{display: 'flex', alignItems: 'center', gap: '4px'}}>{summary.transactionCount} <span className="transaction-count"></span></p>
               )}
           </div>
 
@@ -207,14 +174,14 @@ export default function Header() {
                   </i>
                   Top Category
               </div>
-              {!cardData.topCategory || cardData.topCategory === 'N/A' ? (
+              {!summary.topCategory || summary.topCategory === 'N/A' ? (
                 <p className="insufficient-data">
                   <span style={{ fontSize: "16px" }}>
                     Insufficient data
                   </span>
                 </p>
               ) : (
-                <p>{cardData.topCategory}</p>
+                <p>{summary.topCategory}</p>
               )}
           </div>
 

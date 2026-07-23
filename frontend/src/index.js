@@ -9,8 +9,20 @@ import ScrollToTopButton from './components/alertsEffects/ScrollToTopButton';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // Create the React root
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 30,   // 30 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 root.render(
   <React.StrictMode>
@@ -23,7 +35,10 @@ root.render(
       It runs certain lifecycle logic twice in DEV only (not production),
       which is intentional and useful.
     */}
-    <App />
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+    
     <Analytics />
     <SpeedInsights />
     {/*
