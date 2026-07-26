@@ -5,7 +5,7 @@ const getbudgets = async (req, res) => {
         // Check if the authenticated user exists in the database
         const user = await UserModel.findById(req.userId);
         if(!user) {
-            res.status(401).json({ message: 'User does not exist', success: false});
+            return res.status(401).json({ message: 'User does not exist', success: false});
         }
 
         // Fetch all budgets belonging to this user sorted by ascending

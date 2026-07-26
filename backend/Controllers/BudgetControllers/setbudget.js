@@ -13,13 +13,25 @@ const setbudget = async (req, res) => {
     // Extract budget value from request body
     const { budget } = req.body;
 
-    // Validate budget input
-    if (budget == null) {
+    // Validate budget input: must be present and of a numeric-compatible type
+    if (
+      budget === undefined ||
+      budget === null ||
+      budget === '' ||
+      (typeof budget !== 'number' && typeof budget !== 'string')
+    ) {
       return res.status(400).json({ message: 'Budget amount is required', success: false });
     }
 
+    const budgetAmount = Number(budget);
+
+    // Reject non-numeric strings, NaN, Infinity, and negative values
+    if (!Number.isFinite(budgetAmount) || budgetAmount < 0) {
+      return res.status(400).json({ message: 'Budget amount must be a valid, non-negative number', success: false });
+    }
+
     // Set or update budget for the current month
-    await setBudgetForCurrentMonth(user._id, budget);
+    await setBudgetForCurrentMonth(user._id, budgetAmount);
 
     // Update report
     await refreshReport(user._id);

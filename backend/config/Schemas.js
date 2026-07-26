@@ -114,6 +114,12 @@ const budgetSchema = new Schema({
     }
 });
 
+// Prevent duplicate budget documents for the same user/month, including
+// under concurrent upserts (see setBudgetForCurrentMonth / recalculateBudget /
+// updatebudget). Mirrors the same pattern already used for
+// RecurringExpenseSchema's { userId, expenseId } unique index.
+budgetSchema.index({ userId: 1, month: 1 }, { unique: true });
+
 const MlFeedbackSchema = new mongoose.Schema({
 
     expenseName: {

@@ -29,8 +29,10 @@ const recalculateBudget = async (userId, date) => {
         year: 'numeric'
     });
 
-    // Update the budget document for this user and month
-    await BudgetModel.findOneAndUpdate(
+    // Update the budget document for this user and month.
+    // Returned so callers can use the freshly recalculated document without an
+    // extra query. Existing callers that ignore the return value are unaffected.
+    return await BudgetModel.findOneAndUpdate(
         { userId, month },
         { $set: { spent: spentAmount } },
         { new: true, runValidators: true }

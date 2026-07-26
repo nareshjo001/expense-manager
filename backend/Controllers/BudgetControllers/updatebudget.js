@@ -1,4 +1,5 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
+const { recalculateBudget } = require('../../Services/BudgetServices/budget.service');
 const { refreshReport } = require('../../Services/reportService');
 
 const updatebudget = async (req, res) => {
@@ -10,17 +11,42 @@ const updatebudget = async (req, res) => {
         }
 
         const { budget } = req.body;
-        const currentMonthYear = new Date().toLocaleString("default", {
+
+        // Validate budget input: must be present and of a numeric-compatible type
+        if (
+          budget === undefined ||
+          budget === null ||
+          budget === '' ||
+          (typeof budget !== 'number' && typeof budget !== 'string')
+        ) {
+          return res.status(400).json({ message: 'Budget amount is required', success: false });
+        }
+
+        const budgetAmount = Number(budget);
+
+        // Reject non-numeric strings, NaN, Infinity, and negative values
+        if (!Number.isFinite(budgetAmount) || budgetAmount < 0) {
+          return res.status(400).json({ message: 'Budget amount must be a valid, non-negative number', success: false });
+        }
+
+        const now = new Date();
+        const currentMonthYear = now.toLocaleString("default", {
           month: "short",
           year: "numeric",
         });
-        
-        // Update the budget for the current month
-        const updatedBudget = await BudgetModel.findOneAndUpdate(
+
+        // Create/update the budget amount for the current month
+        await BudgetModel.findOneAndUpdate(
           { userId: user._id, month: currentMonthYear },
-          { budget: budget },
+          { budget: budgetAmount },
           { new: true, upsert: true, runValidators: true }
         );
+
+        // Recalculate spent from live expense data. This guarantees a budget
+        // document created here (via upsert) always ends up with a valid
+        // `spent` field, matching the same guarantee setbudget.js already
+        // provides through setBudgetForCurrentMonth.
+        const updatedBudget = await recalculateBudget(user._id, now);
 
         await refreshReport(req.userId);
 
