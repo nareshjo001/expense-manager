@@ -21,8 +21,6 @@ const generateBudgetInsights = (budgetReport = {}) => {
   const projectedOverspend = toSafeNumber(budgetReport.projectedOverspend);
   const projectedOverspendPercent = toSafeNumber(budgetReport.projectedOverspendPercent);
 
-  console.log(budgetReport)
-
   // 1. No budget configured
   if (!hasBudget) {
     return spent === 0

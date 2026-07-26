@@ -4,6 +4,7 @@ const redisClient = createClient({
   url: process.env.REDIS_URL,
 });
 
+// Log connection errors without crashing — callers treat Redis as best-effort.
 redisClient.on("error", (err) => {
   console.error("Redis Error:", err);
 });

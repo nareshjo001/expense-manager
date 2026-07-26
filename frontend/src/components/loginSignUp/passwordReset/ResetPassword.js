@@ -79,6 +79,17 @@ const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
             if (response.ok) {
                 signUpSuccessToast(data);
                 onBack(); // Return user to previous auth screen
+            } else if (response.status === 403) {
+                // The OTP authorization window has expired or was never
+                // completed. Send the user back to restart the flow.
+                logInErrorToast({
+                    message: "Verification expired. Please request a new OTP",
+                });
+                onBack();
+            } else if (response.status === 429) {
+                logInErrorToast({
+                    message: "Too many attempts. Please wait a moment and try again",
+                });
             } else {
                 logInErrorToast(data);
             }

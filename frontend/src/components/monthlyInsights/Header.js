@@ -6,6 +6,7 @@ import { useContext, useEffect, useState } from "react";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
 import { useQueryClient } from "@tanstack/react-query";
+import { handleApiError } from "../../api/handleApiError";
 import "./Header.css";
 
 export default function Header({ summary }) {
@@ -40,13 +41,19 @@ export default function Header({ summary }) {
       const token = localStorage.getItem("token");
       const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
-      const res = await fetch(`${BASE_URL}/auth/update-budget`, {
+      const res = await fetch(`${BASE_URL}/api/update-budget`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           budget: newBudget,
         }),
       });
+
+      // Handle 401 / 429 before treating this as a generic server error.
+      if (handleApiError(res)) {
+        setIsFetching(false);
+        return;
+      }
 
       if (!res.ok) {
         throw new Error("Server error");

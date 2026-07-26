@@ -19,7 +19,8 @@ require("./cron/retryPush");
 require("./cron/feedbackCollector");
 
 // Routes
-const AuthRouter = require("./Routes/api.routes");
+const authRouter = require("./Routes/auth.routes");
+const apiRouter = require("./Routes/api.routes");
 const expenseRouter = require("./Routes/expense.routes");
 const incomeRouter = require("./Routes/income.routes");
 const billRoutes = require("./Routes/bill.routes");
@@ -32,6 +33,9 @@ const connectDB = require("./config/db");
 
 // Middleware
 const errorHandler = require("./Middlewares/error.middleware");
+
+// Rate limiting for authenticated API surfaces
+const { apiLimiter } = require("./utils/rateLimiter");
 
 // Redis
 const { connectRedis } = require("./config/redis");
@@ -75,13 +79,19 @@ app.get("/ping", async (req, res) => {
 });
 
 
-app.use("/auth", AuthRouter);
-app.use("/expense", expenseRouter);
-app.use("/bills", billRoutes);
-app.use("/ml", mlRouter);
-app.use("/report", reportRouter);
-app.use("/chart", chartRouter);
-app.use("/income", incomeRouter);
+// Credential/OTP endpoints. These carry their own stricter authLimiter
+// internally, so apiLimiter (which keys on req.userId) is not applied here.
+app.use("/auth", authRouter);
+
+// apiLimiter is keyed on req.userId (falling back to req.ip), so it is
+// applied to the authenticated route groups only.
+app.use("/api", apiLimiter, apiRouter);
+app.use("/expense", apiLimiter, expenseRouter);
+app.use("/bills", apiLimiter, billRoutes);
+app.use("/ml", apiLimiter, mlRouter);
+app.use("/report", apiLimiter, reportRouter);
+app.use("/chart", apiLimiter, chartRouter);
+app.use("/income", apiLimiter, incomeRouter);
 
 // Error handler (must be last)
 app.use(errorHandler);

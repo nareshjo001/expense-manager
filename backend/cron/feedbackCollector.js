@@ -3,11 +3,12 @@ const axios = require("axios");
 
 const { MlFeedbackModel } = require("../config/Schemas");
 
-// 0 2 * * * - every day at 2 AM
+// Runs every day at 20:30 server time.
 cron.schedule("30 20 * * *", async () => {
     console.log("ML RETRAIN CHECK STARTED");
     try {
 
+        // Count user corrections accumulated since the last retrain check.
         const correctedCount = await MlFeedbackModel.countDocuments({
                 corrected: true
             });
@@ -21,6 +22,7 @@ cron.schedule("30 20 * * *", async () => {
 
         console.log("Retraining threshold reached");
 
+        // Threshold met — trigger a model retrain on the ML service.
         const response = await axios.post(`${process.env.ML_ROUTE}/retrain-model`);
 
         console.log(response.data);

@@ -12,18 +12,12 @@ const editIncome = async (req, res) => {
       return res.status(401).json({ message: 'User does not exist', success: false });
     }
 
-    // Validate the ID's format before querying the income record — a
-    // malformed id would otherwise reach Mongoose's ObjectId cast and throw
-    // a CastError, surfacing as a generic 500 instead of a clean 400. This
-    // preserves the existing order of checks (auth first, unchanged).
+    // Reject malformed income IDs.
     if (!mongoose.isValidObjectId(incomeId)) {
       return res.status(400).json({ success: false, message: 'Invalid income ID' });
     }
 
-    // Atomically find-and-update in a single ownership-scoped operation, so
-    // there's no window between reading the document and writing it back
-    // where a concurrent delete (or another concurrent edit) could race
-    // against this request.
+    // Update the caller's own income record atomically.
     const income = await IncomeModel.findOneAndUpdate(
       {
         _id: incomeId,

@@ -14,9 +14,7 @@ const deleteIncome = async (req, res) => {
       });
     }
 
-    // Validate the ID's format before querying the income record — a
-    // malformed id would otherwise reach Mongoose's ObjectId cast and throw
-    // a CastError, surfacing as a generic 500 instead of a clean 400.
+    // Reject malformed income IDs.
     if (!mongoose.isValidObjectId(deleteIncomeId)) {
       return res.status(400).json({
         success: false,
@@ -24,8 +22,7 @@ const deleteIncome = async (req, res) => {
       });
     }
 
-    // Scoped to the authenticated user so one user can never delete
-    // another user's income record by guessing its _id.
+    // Delete the caller's own income record.
     const deletedIncome = await IncomeModel.findOneAndDelete({
       _id: deleteIncomeId,
       userId: user._id

@@ -15,9 +15,7 @@ const deleteExpense = async (req, res) => {
 
             const expenseId = req.body.id;
 
-            // Reject malformed IDs before hitting the database — otherwise
-            // Mongoose throws a CastError that the generic catch below would
-            // turn into a misleading 500 for what is really a client error.
+            // Reject malformed expense IDs.
             if (!mongoose.Types.ObjectId.isValid(expenseId)) {
                 return res.status(400).json({ message: 'Invalid expense ID', success: false });
             }
@@ -31,11 +29,11 @@ const deleteExpense = async (req, res) => {
             // If expense was found and deleted
             if (deletedExpense) {
 
-                // Recalculate budget for the month of the deleted expense
-                await recalculateBudget(user._id, deletedExpense.expenseDate);
-
-                // CLEAR CACHE
-                await clearUserExpenseCache(user._id);
+                // Recalculate the budget and clear cached expense reads.
+                await Promise.all([
+                    recalculateBudget(user._id, deletedExpense.expenseDate),
+                    clearUserExpenseCache(user._id)
+                ]);
 
                 // Update report
                 await refreshReport(user._id);

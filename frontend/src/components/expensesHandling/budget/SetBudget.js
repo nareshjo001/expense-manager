@@ -5,6 +5,7 @@ import { expenseAddSuccessToast, expenseAddErrorToast } from '../../alertsEffect
 import BudgetBar from './BudgetBar';
 import { BudgetContext } from '../../contexts/BudgetContext';
 import { FetchingLoader } from '../../alertsEffects/FetchingLoader';
+import { handleApiError } from '../../../api/handleApiError';
 
 const SetBudget = () => {
   // Accessing global budget context to get and set monthly budgets
@@ -41,7 +42,7 @@ const SetBudget = () => {
 
       setIsFetching(true);
       // Save budget for current month
-      const response = await fetch(`${BASE_URL}/auth/setbudget`, {
+      const response = await fetch(`${BASE_URL}/api/setbudget`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,6 +52,12 @@ const SetBudget = () => {
           budget: Number(budget.budgetAmount)
         }),
       });
+
+      // Handle 401 / 429 before parsing a normal payload.
+      if (handleApiError(response)) {
+        setIsFetching(false);
+        return;
+      }
 
       const data = await response.json();
 
@@ -62,11 +69,16 @@ const SetBudget = () => {
       }
 
       // FETCH updated budgets AFTER backend recalculation
-      const budgetsRes = await fetch(`${BASE_URL}/auth/getbudgets`, {
+      const budgetsRes = await fetch(`${BASE_URL}/api/getbudgets`, {
         headers: {
           "Authorization": `Bearer ${token}`,
         },
       });
+
+      if (handleApiError(budgetsRes)) {
+        setIsFetching(false);
+        return;
+      }
 
       const budgetsData = await budgetsRes.json();
 

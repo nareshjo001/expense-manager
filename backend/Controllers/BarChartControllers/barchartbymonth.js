@@ -16,7 +16,7 @@ const barchartbymonth = async (req, res) => {
       return res.status(400).json({ message: 'Year is required', success: false });
     }
 
-    // Fetch budgets for the selected year (assumes month field format like "Jan 2024")
+    // Fetch budgets for the selected year
     const budgetData = await getBudgetComparison({
       userId: req.userId,
       mode: 'year',

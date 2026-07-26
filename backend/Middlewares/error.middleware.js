@@ -1,3 +1,4 @@
+// Global fallback handler for errors passed to next() from any route.
 const errorHandler = (err, req, res, next) => {
   console.error(err.stack || err);
 

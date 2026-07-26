@@ -41,6 +41,7 @@ const getInsightsHeader = async (req, res) => {
       }).sort({ expenseDate: -1 }),
     ]);
 
+    // Aggregate period totals and identify the single largest income source.
     const totalIncome = incomeRecords.reduce((sum, record) => sum + record.incomeAmount, 0);
     const totalExpenses = expenseRecords.reduce((sum, record) => sum + record.expenseAmount, 0);
     const topSource = incomeRecords.reduce((top, record) => {
@@ -51,6 +52,7 @@ const getInsightsHeader = async (req, res) => {
     const totalIncomes = incomeRecords.length;
     const balance = totalIncome - totalExpenses;
 
+    // Build the header summary response.
     const data = {
       totalIncome,
       totalExpenses,

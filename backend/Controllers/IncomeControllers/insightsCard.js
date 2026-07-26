@@ -42,6 +42,7 @@ const getInsightsCard = async (req, res) => {
       }).sort({ expenseDate: -1 }),
     ]);
 
+    // Aggregate period totals and the tracking window the runway is based on.
     const totalIncome = incomeRecords.reduce((sum, record) => sum + record.incomeAmount, 0);
     const totalExpenses = expenseRecords.reduce((sum, record) => sum + record.expenseAmount, 0);
         const trackedDays = Math.max(
@@ -51,6 +52,7 @@ const getInsightsCard = async (req, res) => {
       ) + 1
     );
 
+    // Derive the three insight cards from the aggregated totals.
     const runwayData = getFinancialRunwayData(
       totalIncome,
       totalExpenses,

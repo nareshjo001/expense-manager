@@ -63,14 +63,13 @@ const getRandomInsightMessage = () => {
   return INSIGHT_MESSAGES[index];
 };
 
-// Run once per day at 7 PM
+// Runs once per day at 13:30 server time.
 cron.schedule("30 13 * * *", async () => {
 
   console.log("Insight reminder cron:", new Date());
 
   try {
 
-    // Optimized query
     const users = await UserModel.find({}, "_id").lean();
 
     for (const user of users) {
@@ -85,7 +84,7 @@ cron.schedule("30 13 * * *", async () => {
         createdAt: { $gte: startOfDay }
       });
 
-      // if (alreadySent) continue;
+      if (alreadySent) continue;
 
       // Pick random message
       const { title, message } = getRandomInsightMessage();

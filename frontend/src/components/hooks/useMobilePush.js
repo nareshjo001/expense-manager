@@ -28,7 +28,7 @@ export function useNativePush(isLoggedIn) {
           const authToken = localStorage.getItem("token");
           if (!authToken) return;
 
-          await fetch(`${BASE_URL}/auth/device-token`, {
+          const res = await fetch(`${BASE_URL}/api/device-token`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -39,6 +39,12 @@ export function useNativePush(isLoggedIn) {
               platform: "mobile"
             })
           });
+
+          // A 409 means this device token is already claimed by another
+          // account. Log and stop — this must never trigger a retry loop.
+          if (res.status === 409) {
+            console.warn("Device token already registered to another account; skipping registration.");
+          }
         });
 
         // Notification click handler

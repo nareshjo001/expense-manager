@@ -94,6 +94,8 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
             if (res.ok) {
                 signUpSuccessToast(data);
                 onSuccess();
+            } else if (res.status === 429) {
+                throw { message: "Too many attempts. Please wait a moment and try again" };
             } else {
                 throw data;
             }
@@ -136,6 +138,10 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
                 setOtp(['', '', '', '', '', '']);
                 setCountdown(120);
                 otpRefs.current[0]?.focus();
+            } else if (res.status === 429) {
+                signUpErrorToast({
+                    message: "Too many attempts. Please wait a moment and try again",
+                });
             } else {
                 signUpErrorToast(data);
             }

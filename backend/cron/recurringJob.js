@@ -6,6 +6,9 @@ const { ExpenseModel } = require('../config/Schemas');
 const Notification = require("../models/Notification");
 
 const { sendPush } = require('../Services/push.service');
+const { recalculateBudget } = require('../Services/BudgetServices/budget.service');
+const { clearUserExpenseCache } = require('../utils/expenseCache');
+const { refreshReport } = require('../Services/reportService');
 
 cron.schedule("30 20 * * *", async () => {
 
@@ -27,10 +30,9 @@ cron.schedule("30 20 * * *", async () => {
       // Process each due recurring expense
       for (const recurring of dueExpenses) {
 
-         // Store original next due date
          const originalNextDue = recurring.nextDueDate;
 
-         // Calculate next month’s due date (1st of next month in UTC)
+         // Advance the due date to the first of next month.
          const newNextDue = new Date(Date.UTC(
             originalNextDue.getUTCFullYear(),
             originalNextDue.getUTCMonth() + 1,
@@ -38,7 +40,7 @@ cron.schedule("30 20 * * *", async () => {
             0, 0, 0
          ));
 
-         // Atomic update to prevent duplicates
+         // Claim this recurrence atomically to prevent duplicates.
          const updated = await RecurringExpenseModel.findOneAndUpdate(
             {
                _id: recurring._id,
@@ -54,7 +56,7 @@ cron.schedule("30 20 * * *", async () => {
 
          if (!updated) continue; // already processed
 
-         // Create expense AFTER safe update
+         // Log the recurring expense.
          const expense = await ExpenseModel.create({
             userId: recurring.userId,
             id: crypto.randomUUID(),
@@ -65,6 +67,20 @@ cron.schedule("30 20 * * *", async () => {
             expenseDescription: "Auto logged recurring expense",
             isRecurring: true
          });
+
+         // Refresh budget, cache and report for the new expense.
+         try {
+            await Promise.all([
+               recalculateBudget(recurring.userId, expense.expenseDate),
+               clearUserExpenseCache(recurring.userId)
+            ]);
+            await refreshReport(recurring.userId);
+         } catch (propagationErr) {
+            console.error(
+               `Recurring cron: post-create propagation failed for user ${recurring.userId}:`,
+               propagationErr
+            );
+         }
 
          // Create notification (DB FIRST)
          const notification = await Notification.create({

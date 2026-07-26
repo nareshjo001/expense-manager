@@ -7,6 +7,7 @@ import Spinner from '../alertsEffects/Spinner';
 import { expenseAddSuccessToast, expenseAddErrorToast } from '../alertsEffects/toastMessages';
 
 import BillUpload from '../billScanner/BillUpload';
+import { forceReauth } from '../../api/handleApiError';
 
 const AddExpense = ({ isEdit, setIsEdit }) => {
     // Local state hooks for form inputs
@@ -53,15 +54,32 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 setMlLoading(true);
                 
                 const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
+                const token = localStorage.getItem("token");
+
+                // This endpoint now requires authentication.
                 const response = await fetch(`${BASE_URL}/ml/predict-category`,
                     {
                         method: "POST",
                         headers: {
-                            "Content-Type": "application/json"
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${token}`
                         },
                         body: JSON.stringify({expenseName: expenseName.trim()})
                     }
                 );
+
+                // Category prediction is an optional convenience, so a 429
+                // here must stay silent rather than toasting on every
+                // keystroke. A 401 still routes through the auth flow.
+                if (response.status === 401) {
+                    forceReauth();
+                    return;
+                }
+
+                if (!response.ok) {
+                    return;
+                }
+
                 const data = await response.json();
                 console.log("ML Prediction:", data);
 

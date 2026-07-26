@@ -35,17 +35,14 @@ const updatebudget = async (req, res) => {
           year: "numeric",
         });
 
-        // Create/update the budget amount for the current month
+        // Create or update the budget amount for the current month.
         await BudgetModel.findOneAndUpdate(
           { userId: user._id, month: currentMonthYear },
           { budget: budgetAmount },
           { new: true, upsert: true, runValidators: true }
         );
 
-        // Recalculate spent from live expense data. This guarantees a budget
-        // document created here (via upsert) always ends up with a valid
-        // `spent` field, matching the same guarantee setbudget.js already
-        // provides through setBudgetForCurrentMonth.
+        // Recalculate spent from live expense data.
         const updatedBudget = await recalculateBudget(user._id, now);
 
         await refreshReport(req.userId);

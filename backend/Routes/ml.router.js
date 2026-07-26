@@ -3,14 +3,17 @@ const axios = require("axios");
 
 const router = express.Router();
 
-router.post("/predict-category", async (req, res) => {
+const verifyToken = require("../Middlewares/Auth");
+
+router.post("/predict-category", verifyToken, async (req, res) => {
     try {
 
         const { expenseName } = req.body;
 
         if (!expenseName) {
             return res.status(400).json({
-                error: "expenseName is required"
+                success: false,
+                message: "expenseName is required"
             });
         }
 
@@ -32,7 +35,8 @@ router.post("/predict-category", async (req, res) => {
         );
 
         return res.status(500).json({
-            error: "Prediction service unavailable"
+            success: false,
+            message: "Prediction service unavailable"
         });
     }
 });

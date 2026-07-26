@@ -16,7 +16,7 @@ export function useWebPush(isLoggedIn) {
       const deviceToken = await requestPushToken();
       if (!deviceToken) return;
 
-      const res = await fetch(`${BASE_URL}/auth/device-token`, {
+      const res = await fetch(`${BASE_URL}/api/device-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -27,6 +27,13 @@ export function useWebPush(isLoggedIn) {
           platform: "web"
         })
       });
+
+      // A 409 means this device token is already claimed by another account.
+      // Registration simply does not apply here — log and stop, never retry.
+      if (res.status === 409) {
+        console.warn("Device token already registered to another account; skipping registration.");
+        return;
+      }
 
       console.log("Backend response:", res.status);
 

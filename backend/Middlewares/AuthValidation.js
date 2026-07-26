@@ -88,9 +88,7 @@ const expenseValidation = (req, res, next) => {
     next();
 }
 
-// Add Income request validation middleware — mirrors expenseValidation's
-// pattern (same Joi style, same error response shape) since that's the
-// existing validation convention already used in this codebase.
+// Add Income request validation middleware
 const addIncomeValidation = (req, res, next) => {
 
     const schema = Joi.object({

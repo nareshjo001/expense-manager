@@ -22,9 +22,7 @@ const getByCustom = async (req, res) => {
         const start = new Date(startDate);
         const end = new Date(endDate);
 
-        // Reject malformed dates before querying — otherwise an Invalid Date
-        // can surface as a generic 500 from the database layer instead of a
-        // clear 400 for what is really a client input error.
+        // Reject malformed dates.
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({ message: 'startDate and endDate must be valid dates', success: false });
         }

@@ -58,6 +58,10 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
         setIsLoggedIn(true);
         loginSuccessToast(data);
 
+      } else if (response.status === 429) {
+        logInErrorToast({
+          message: "Too many attempts. Please wait a moment and try again",
+        });
       } else {
         logInErrorToast(data);
       }

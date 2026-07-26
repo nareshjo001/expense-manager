@@ -1,8 +1,10 @@
+// Estimate how long the remaining balance lasts at the current spending pace.
 const getFinancialRunwayData = (
   totalIncome,
   totalExpenses,
   trackedDays
 ) => {
+  // Runway is undefined without a tracking window or any spending to project.
   if (
     !trackedDays ||
     trackedDays <= 0 ||
@@ -11,6 +13,7 @@ const getFinancialRunwayData = (
     return null;
   }
 
+  // Derive the daily burn rate the projection is based on.
   const currentBalance = totalIncome - totalExpenses;
   const averageDailyExpense = totalExpenses / trackedDays;
 
@@ -26,6 +29,7 @@ const getFinancialRunwayData = (
     };
   }
 
+  // Project the exhaustion date from the remaining balance and burn rate.
   const runwayDays = Math.floor(
     currentBalance / averageDailyExpense
   );
@@ -53,10 +57,12 @@ const getFinancialRunwayData = (
   };
 };
 
+// Calculate the savings rate and its status band.
 const getSavingsRateData = (
   totalIncome,
   totalExpenses
 ) => {
+  // Savings rate is meaningless without income to divide by.
   if (!totalIncome || totalIncome <= 0) {
     return null;
   }
@@ -70,6 +76,7 @@ const getSavingsRateData = (
   let status = "";
   let subMessage = "";
 
+  // Band the rate into a status, strongest signal first.
   if (savingsRate < 0) {
     status = "Deficit";
 
@@ -105,6 +112,7 @@ const getSavingsRateData = (
   };
 };
 
+// Measure how concentrated income is in its single largest source.
 const getIncomeDependencyData = (
   incomeRecords = []
 ) => {
@@ -122,6 +130,7 @@ const getIncomeDependencyData = (
     return null;
   }
 
+  // Total each income source, falling back to "Unknown" when unlabelled.
   const sourceMap = {};
 
   incomeRecords.forEach((income) => {
@@ -132,6 +141,7 @@ const getIncomeDependencyData = (
       Number(income.incomeAmount || 0);
   });
 
+  // Rank sources by contribution so the largest drives the dependency risk.
   const sortedSources = Object.entries(sourceMap).sort(
     (a, b) => b[1] - a[1]
   );
@@ -155,6 +165,7 @@ const getIncomeDependencyData = (
   let riskLevel = "";
   let subMessage = "";
 
+  // Band the concentration into a risk level; a lone source always wins.
   if (sourceCount === 1) {
     riskLevel = "Single Income Source";
 

@@ -18,4 +18,18 @@ const apiLimiter = rateLimit({
     legacyHeaders: false
 });
 
-module.exports = { apiLimiter };
+// Auth limiter (IP-based) for credential and OTP endpoints
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 mins
+    max: 20,
+
+    message: {
+        success: false,
+        message: "Too many attempts. Please try again later."
+    },
+
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+module.exports = { apiLimiter, authLimiter };

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "../hooks/useIsMobile";
 
 import { signUpSuccessToast, signUpErrorToast } from "../alertsEffects/toastMessages";
+import { handleApiError } from "../../api/handleApiError";
 
 const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
 
     try {
 
-      const response = await fetch(`${BASE_URL}/auth/recurring`, {
+      const response = await fetch(`${BASE_URL}/api/recurring`, {
         method: 'PATCH',
         headers: {
           'Content-type': 'application/json',
@@ -53,6 +54,11 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
         },
         body: JSON.stringify(payload)
       })
+
+      // Handle 401 / 429 before parsing a normal payload.
+      if (handleApiError(response)) {
+        return;
+      }
 
       const data = await response.json();
 

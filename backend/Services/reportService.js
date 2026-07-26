@@ -21,13 +21,7 @@ const getReport = async (userId) => {
 
   const generatedReport = await generateReport(userId);
 
-  // Atomic find-or-create: FinancialReport.user has a unique index, so two
-  // concurrent first-time requests can both reach this point after both
-  // observing "not found" above. A plain create() would let one succeed and
-  // the other throw a duplicate-key error. upsert:true makes this a single
-  // atomic operation — whichever request's write lands first inserts the
-  // document, and the other's upsert simply updates that same document with
-  // its own freshly generated report instead of failing.
+  // Store the generated report, creating it if absent.
   const savedReport = await FinancialReport.findOneAndUpdate(
     { user: userId },
     {
@@ -42,12 +36,16 @@ const getReport = async (userId) => {
     }
   ).lean();
 
-  await reportCache.set(userId, generatedReport);
+  await reportCache.set(userId, savedReport);
 
   return savedReport;
 };
 
+// Regenerate and cache the user's financial report.
 const refreshReport = async (userId) => {
+  // Drop the stale cache before regenerating.
+  await reportCache.invalidate(userId);
+
   const generatedReport = await generateReport(userId);
 
   const updatedReport = await FinancialReport.findOneAndUpdate(
@@ -64,8 +62,8 @@ const refreshReport = async (userId) => {
     }
   ).lean();
 
-  await reportCache.set(userId, generatedReport);
-  
+  await reportCache.set(userId, updatedReport);
+
   return updatedReport;
 };
 

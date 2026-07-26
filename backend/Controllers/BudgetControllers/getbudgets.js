@@ -1,4 +1,17 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
+const { MONTH_ORDER } = require('../../Services/ChartServices/chartConstants');
+
+// Order budget records chronologically by month key.
+const sortByMonthKey = (a, b) => {
+    const [aMonth, aYear] = a.month.split(' ');
+    const [bMonth, bYear] = b.month.split(' ');
+
+    if (Number(aYear) !== Number(bYear)) {
+        return Number(aYear) - Number(bYear);
+    }
+
+    return MONTH_ORDER.indexOf(aMonth) - MONTH_ORDER.indexOf(bMonth);
+};
 
 const getbudgets = async (req, res) => {
     try {
@@ -8,8 +21,9 @@ const getbudgets = async (req, res) => {
             return res.status(401).json({ message: 'User does not exist', success: false});
         }
 
-        // Fetch all budgets belonging to this user sorted by ascending
-        const budgets = await BudgetModel.find({ userId: user._id }).sort({ month: 1 });
+        // Fetch all budgets belonging to this user, ordered chronologically
+        const budgets = (await BudgetModel.find({ userId: user._id }).lean())
+            .sort(sortByMonthKey);
 
         // Send successful response with budget data
         res.status(200).json({ message: 'Success', data: budgets, success: true });

@@ -38,12 +38,7 @@ const uploadBill = async (req, res) => {
 
   } finally {
 
-    // Remove temporary files after every outcome (success, OCR failure,
-    // parser failure) so billUploads/ and billProcessed/ never accumulate.
-    // Each removal is independently guarded: a path may be undefined if an
-    // earlier stage never ran (e.g. no file uploaded, or preprocessImage
-    // threw before producing output), and a delete error here must never
-    // override the response already returned above.
+    // Remove temporary upload and processed files.
     if (originalImagePath) {
       try {
         await fs.unlink(originalImagePath);

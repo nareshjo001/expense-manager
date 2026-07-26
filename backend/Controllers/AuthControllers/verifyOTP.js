@@ -1,7 +1,7 @@
 const { UserModel } = require('../../config/Schemas');
 
 // OTP utility functions for security and clearing otp fields control
-const { hashOTP, clearOtpFields,} = require('../../Services/AuthServices/otp.service');
+const { hashOTP, clearOtpFields, getVerificationExpiry } = require('../../Services/AuthServices/otp.service');
 
 const verifyOTP = async (req, res) => {
     try {
@@ -32,9 +32,18 @@ const verifyOTP = async (req, res) => {
             return res.status(400).json({ message: 'Invalid OTP', success: false });
         }
 
-        // Mark user as verified and clear OTP-related fields
+        const isResetFlow = user.isPasswordReset;
+
+        // Mark user as verified and clear OTP fields.
         user.isVerified = true;
         clearOtpFields(user);
+
+        // Grant a short-lived window to complete a password reset.
+        if (isResetFlow) {
+            user.isPasswordReset = true;
+            user.passwordResetExpiry = getVerificationExpiry(10);
+        }
+
         await user.save();
 
         // Successful verification response

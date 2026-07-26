@@ -5,6 +5,7 @@ client.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
 
 const tranEmailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 
+// Send an OTP email for signup or password reset.
 const sendOTPEmail = async (toEmail, otp, purpose = "verify") => {
   let subject = "Expense Tracker OTP Verification";
 

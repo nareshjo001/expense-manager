@@ -81,6 +81,10 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
             if (response.ok) {
                 signUpSuccessToast(data);
                 setShowOTPForm(true);
+            } else if (response.status === 429) {
+                signUpErrorToast({
+                    message: "Too many attempts. Please wait a moment and try again",
+                });
             } else {
                 signUpErrorToast(data);
             }

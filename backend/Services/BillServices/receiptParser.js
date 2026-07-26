@@ -1,15 +1,11 @@
+// Approximate the merchant name from the first words of the receipt.
 const extractMerchant = (text) => {
   const words = text.split(" ");
   return words.slice(0, 2).join(" ");
 };
 
+// Extract the receipt total amount.
 const extractAmount = (text) => {
-
-  // Match:
-  // GRAND TOTAL 3967.43
-  // Total: 1449
-  // Grand Total Rs 899
-
   const matches = [
     ...text.matchAll(
       /(grand total|total)[^\d]*([\d,.]+)/gi
@@ -20,7 +16,7 @@ const extractAmount = (text) => {
     return null;
   }
 
-  // Prefer GRAND TOTAL if exists
+  // Prefer grand total, else use the last match.
   const grandTotal = matches.find(match =>
     match[1].toLowerCase().includes("grand")
   );
@@ -33,14 +29,8 @@ const extractAmount = (text) => {
   );
 };
 
+// Extract the receipt date in any supported format.
 const extractDate = (text) => {
-
-  // Supports:
-  // 23/05/2026
-  // 23-05-2026
-  // 21st May 2026
-  // 12 May 2026
-
   const dateRegex =
     /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})|(\d{1,2}(st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/i;
 
@@ -53,9 +43,8 @@ const extractDate = (text) => {
   return match[0];
 };
 
+// Extract the line-item section of the receipt.
 const extractItemsBlock = (text) => {
-
-  // Remove everything before ITEM
   let itemSection = text;
 
   const itemStart =
@@ -66,7 +55,7 @@ const extractItemsBlock = (text) => {
       text.substring(itemStart);
   }
 
-  // Stop at subtotal/gst/total/payment
+  // Cut off at the totals or payment section.
   const stopRegex =
     /(subtotal|gst|grand total|total|payment|thank you)/i;
 
@@ -84,6 +73,7 @@ const extractItemsBlock = (text) => {
   return itemSection.trim();
 };
 
+// Extract the expense fields the client needs from raw OCR text.
 const parseReceipt = (text) => {
 
   return {

@@ -2,7 +2,7 @@ const { ExpenseModel, BudgetModel } = require('../../config/Schemas');
 const { getMonthRange } = require('../HelperServices/datecal.service');
 
 const recalculateBudget = async (userId, date) => {
-    // Get the start and end of the month based on the provided date
+    // Resolve the month range for the given date.
     const { monthStart, monthEnd } = getMonthRange(date);
 
     // Aggregate total expense amount for this user within the month range
@@ -23,15 +23,13 @@ const recalculateBudget = async (userId, date) => {
     // If aggregation returns data, extract total. Otherwise, default to 0
     const spentAmount = totalSpent.length > 0 ? totalSpent[0].total : 0;
     
-    // This is used as identifier in Budget collection (e.g., "Feb 2026")
+    // Build the month key used by the Budget collection.
     const month = monthStart.toLocaleString('default', {
         month: 'short',
         year: 'numeric'
     });
 
-    // Update the budget document for this user and month.
-    // Returned so callers can use the freshly recalculated document without an
-    // extra query. Existing callers that ignore the return value are unaffected.
+    // Store the recalculated spend on the budget document.
     return await BudgetModel.findOneAndUpdate(
         { userId, month },
         { $set: { spent: spentAmount } },

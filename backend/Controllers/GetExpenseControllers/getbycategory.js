@@ -5,9 +5,15 @@ const { getCache, setCache } = require('../../utils/expenseCache');
 
 const getByCategory = async (req, res) => {
     try {
+        // Validate authenticated user
+        const user = await UserModel.findById(req.userId);
+        if (!user) {
+            return res.status(401).json({ message: 'User does not exist', success: false });
+        }
+
         const cacheKey = `category:${req.userId}:${req.query.period || 'year'}`;
-        
-        // Check cache FIRST
+
+        // Check cache
         const cachedData = await getCache(cacheKey);
         if (cachedData) {
             return res.status(200).json({
@@ -15,12 +21,6 @@ const getByCategory = async (req, res) => {
                 ...cachedData,
                 success: true
             });
-        }
-
-        // Validate authenticated user
-        const user = await UserModel.findById(req.userId);
-        if (!user) {
-            return res.status(401).json({ message: 'User does not exist', success: false });
         }
 
         let startDate;
@@ -40,14 +40,13 @@ const getByCategory = async (req, res) => {
             // Go back 3 months for history
             const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
-            // Fetch all expenses for last 3 months (single DB call).
+            // Fetch expenses covering the current month and history.
             const allExpenses = await fetchExpense(threeMonthsAgo, endDate, user._id);
 
             // Generate monthly grouped history
             history = groupByMonth(allExpenses);
 
-            // Current month expenses are already present in allExpenses —
-            // filter in memory rather than re-fetching from the database.
+            // Narrow to the current month.
             rangeExpenses = allExpenses.filter(e =>
                 e.expenseDate >= startDate && e.expenseDate <= endDate
             );

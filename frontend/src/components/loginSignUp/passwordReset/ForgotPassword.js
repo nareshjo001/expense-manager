@@ -68,6 +68,10 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
                     signUpSuccessToast(data);
                     setIsOTPSent(true);
                     setCountdown(data.cooldown || 120);
+                } else if (response.status === 429) {
+                    logInErrorToast({
+                        message: "Too many attempts. Please wait a moment and try again",
+                    });
                 } else {
                     logInErrorToast(data);
                 }
@@ -84,6 +88,10 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
                 if (response.ok) {
                     signUpSuccessToast(data);
                     setIsOTPVerified(true);
+                } else if (response.status === 429) {
+                    logInErrorToast({
+                        message: "Too many attempts. Please wait a moment and try again",
+                    });
                 } else {
                     logInErrorToast(data);
                 }
@@ -118,6 +126,10 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
             if (response.ok) {
                 signUpSuccessToast(data);
                 setCountdown(data.cooldown || 120);
+            } else if (response.status === 429) {
+                logInErrorToast({
+                    message: "Too many attempts. Please wait a moment and try again",
+                });
             } else {
                 logInErrorToast(data);
             }

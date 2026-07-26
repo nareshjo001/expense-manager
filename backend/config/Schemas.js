@@ -34,6 +34,9 @@ const userSchema = new Schema({
         type: Boolean,
         default: false
     },
+    passwordResetExpiry: {
+        type: Date
+    },
 
     verificationExpiresAt: {
         type: Date,
@@ -49,8 +52,7 @@ const expenseSchema = new Schema({
     },
     id: {
         type: String,
-        required: true,
-        unique: true
+        required: true
     },
     expenseName: {
         type: String,
@@ -92,6 +94,12 @@ const expenseSchema = new Schema({
     }
 });
 
+// Prevent duplicate expense ids within a single account.
+expenseSchema.index({ userId: 1, id: 1 }, { unique: true });
+
+// Support per-user expense lookups and date range queries.
+expenseSchema.index({ userId: 1, expenseDate: 1 });
+
 const budgetSchema = new Schema({
     userId: {
         type: Schema.Types.ObjectId,
@@ -114,10 +122,7 @@ const budgetSchema = new Schema({
     }
 });
 
-// Prevent duplicate budget documents for the same user/month, including
-// under concurrent upserts (see setBudgetForCurrentMonth / recalculateBudget /
-// updatebudget). Mirrors the same pattern already used for
-// RecurringExpenseSchema's { userId, expenseId } unique index.
+// Prevent duplicate budget documents per user and month.
 budgetSchema.index({ userId: 1, month: 1 }, { unique: true });
 
 const MlFeedbackSchema = new mongoose.Schema({
@@ -177,6 +182,9 @@ const IncomeSchema = new mongoose.Schema({
 });
     
 
+
+// Support per-user income lookups and date range queries.
+IncomeSchema.index({ userId: 1, incomeDate: 1 });
 
 const ExpenseModel = mongoose.model('expenses', expenseSchema);
 const UserModel = mongoose.model('users', userSchema);

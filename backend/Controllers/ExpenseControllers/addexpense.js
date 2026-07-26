@@ -18,10 +18,7 @@ const addExpense = async (req, res) => {
 
     let finalDescription = expenseDescription;
     
-    // If no description provided, generate one using ML model.
-    // The ML-generated description is an optional enhancement — expense
-    // creation is the primary operation and must not fail because the ML
-    // service is slow, times out, or is unavailable.
+    // Generate a description via ML when none was provided.
     if (!expenseDescription || expenseDescription.trim() === '') {
         try {
             const response = await axios.post(
@@ -71,12 +68,11 @@ const addExpense = async (req, res) => {
     // Save expense to database
     await newExpense.save();
 
-    // Recalculate the user's budget for the month of this expense
-    // This ensures total spent amount stays updated
-    await recalculateBudget(user._id, newExpense.expenseDate);
-    
-    // CLEAR CACHE
-    await clearUserExpenseCache(user._id);
+    // Recalculate the budget and clear cached expense reads.
+    await Promise.all([
+      recalculateBudget(user._id, newExpense.expenseDate),
+      clearUserExpenseCache(user._id)
+    ]);
 
     // Update report
     await refreshReport(user._id);

@@ -16,9 +16,7 @@ const editexpense = async (req, res) => {
         // Get expense ID from query params
         const expenseId = req.query.editID;
 
-        // Reject malformed IDs before hitting the database — otherwise
-        // Mongoose throws a CastError that the generic catch below would
-        // turn into a misleading 500 for what is really a client error.
+        // Reject malformed expense IDs.
         if (!mongoose.Types.ObjectId.isValid(expenseId)) {
             return res.status(400).json({ message: 'Invalid expense ID', success: false });
         }
@@ -34,11 +32,7 @@ const editexpense = async (req, res) => {
             return res.status(404).json({ message: 'Expense not found', success: false });
         }
 
-        // Extract updated fields from request body.
-        // Whitelisted to user-authored content fields only — userId, _id, id,
-        // ML metadata (mlPredictedCategory/mlConfidence/wasMlCorrected), and
-        // isRecurring (set only by the recurring-expense cron job) are
-        // server-managed and must never be writable from a client request body.
+        // Accept only client-editable expense fields.
         const EDITABLE_FIELDS = [
             'expenseName',
             'expenseCategory',
@@ -61,25 +55,22 @@ const editexpense = async (req, res) => {
             { new: true }
         );
 
-        // If the expense was deleted by another request between the findOne
-        // check above and this update, treat it the same as "not found".
         if (!updatedExpense) {
             return res.status(404).json({ message: 'Expense not found', success: false });
         }
 
-        // Budget totals are derived only from expenseAmount and expenseDate,
-        // so recalculation is only needed when one of those fields changed.
+        // Recalculate only when the amount or date changed.
         const amountOrDateChanged =
             Object.prototype.hasOwnProperty.call(updates, 'expenseAmount') ||
             Object.prototype.hasOwnProperty.call(updates, 'expenseDate');
 
-        if (amountOrDateChanged) {
-            // Recalculate budget for OLD month
-            // This is needed because original expense amount/date might have changed
+        // Recalculate affected budget months.
+        const budgetWork = (async () => {
+            if (!amountOrDateChanged) return;
+
             await recalculateBudget(user._id, originalExpense.expenseDate);
 
-            // If expense moved to a different month/year,
-            // we must recalculate budget for the NEW month as well
+            // Also recalculate the new month when the expense moved.
             const oldDate = new Date(originalExpense.expenseDate);
             const newDate = new Date(updatedExpense.expenseDate);
 
@@ -89,10 +80,12 @@ const editexpense = async (req, res) => {
             ) {
                 await recalculateBudget(user._id, updatedExpense.expenseDate);
             }
-        }
+        })();
 
-        // CLEAR CACHE
-        await clearUserExpenseCache(user._id);
+        await Promise.all([
+            budgetWork,
+            clearUserExpenseCache(user._id)
+        ]);
 
         // Update report
         await refreshReport(user._id);

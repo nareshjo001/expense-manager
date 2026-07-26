@@ -2,6 +2,7 @@ const reportService = require("../Services/reportService");
 
 const getReport = async (req, res) => {
   try {
+    // Serve the user's financial report, cached or freshly generated.
     const report = await reportService.getReport(req.userId);
 
     res.status(200).json(report);
