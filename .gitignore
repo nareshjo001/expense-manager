@@ -1,0 +1,13 @@
+# Reports and audits
+*_Audit.md
+*_Report.md
+Final_Code_Review.md
+GetExpenseControllers_Redis_Migration.md
+
+# Zip archives
+*.zip
+
+# Sensitive configs
+backend/config/serviceAcount.json
+backend/config/serviceAccountKey.json
+firebase-key.json

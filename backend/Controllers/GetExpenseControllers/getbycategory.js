@@ -8,7 +8,7 @@ const getByCategory = async (req, res) => {
         const cacheKey = `category:${req.userId}:${req.query.period || 'year'}`;
         
         // Check cache FIRST
-        const cachedData = getCache(cacheKey);
+        const cachedData = await getCache(cacheKey);
         if (cachedData) {
             return res.status(200).json({
                 message: 'Success (cached)',
@@ -26,12 +26,13 @@ const getByCategory = async (req, res) => {
         let startDate;
         let endDate;
         let history = [];
+        let rangeExpenses;
 
         // Handle period-based filtering
         if (req.query.period === 'thismonth') {
-            
+
             const now = new Date();
-            
+
              // Current month range
             startDate = new Date(now.getFullYear(), now.getMonth(), 1);
             endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -39,24 +40,31 @@ const getByCategory = async (req, res) => {
             // Go back 3 months for history
             const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
-            // Fetch all expenses for last 3 months (single DB call)
+            // Fetch all expenses for last 3 months (single DB call).
             const allExpenses = await fetchExpense(threeMonthsAgo, endDate, user._id);
 
             // Generate monthly grouped history
             history = groupByMonth(allExpenses);
-        
+
+            // Current month expenses are already present in allExpenses —
+            // filter in memory rather than re-fetching from the database.
+            rangeExpenses = allExpenses.filter(e =>
+                e.expenseDate >= startDate && e.expenseDate <= endDate
+            );
+
         } else {
 
             // Default case: Full current year range
             const now = new Date();
             startDate = new Date(now.getFullYear(), 0, 1);
             endDate = new Date(now.getFullYear() + 1, 0, 0, 23, 59, 59, 999);
+
+            // Fetch expenses for the selected range (full year)
+            rangeExpenses = await fetchExpense(startDate, endDate, user._id);
         }
 
-        // Fetch expenses for selected range (current month or full year)
-        const expenses = sortDescending(
-            await fetchExpense(startDate, endDate, user._id)
-        )
+        // Sort selected-range expenses newest -> oldest
+        const expenses = sortDescending(rangeExpenses);
 
         // Group expenses by category
         const groupedExpenses = groupByCategoryHelper(expenses);
@@ -66,7 +74,7 @@ const getByCategory = async (req, res) => {
             pastThreeMonths: history
         };
 
-        setCache(cacheKey, responseData);
+        await setCache(cacheKey, responseData, 300);
 
         // Send response
         res.status(200).json({ message: 'Success', data: groupedExpenses, pastThreeMonths: history, success: true });

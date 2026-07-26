@@ -9,7 +9,7 @@ const lastWeekExpense = async (req, res) => {
         const cacheKey = `lastWeek:${req.userId}`;
         
         // Check cache first
-        const cachedData = getCache(cacheKey);
+        const cachedData = await getCache(cacheKey);
         if (cachedData) {
             return res.status(200).json({
                 message: 'Success (cached)',
@@ -66,7 +66,7 @@ const lastWeekExpense = async (req, res) => {
         };
 
         // Store in cache
-        setCache(cacheKey, responseData);
+        await setCache(cacheKey, responseData, 300);
 
         // Send response
         res.status(200).json({ message: 'Success', data: expenses, previousData: previousSeven, weeklyData: weeklyData, success: true });

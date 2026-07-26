@@ -6,7 +6,7 @@ const updatebudget = async (req, res) => {
         // Check if the authenticated user exists in the database
         const user = await UserModel.findById(req.userId);
         if(!user) {
-            res.status(401).json({ message: 'User does not exist', success: false});
+            return res.status(401).json({ message: 'User does not exist', success: false});
         }
 
         const { budget } = req.body;
@@ -19,7 +19,7 @@ const updatebudget = async (req, res) => {
         const updatedBudget = await BudgetModel.findOneAndUpdate(
           { userId: user._id, month: currentMonthYear },
           { budget: budget },
-          { new: true, upsert: true }
+          { new: true, upsert: true, runValidators: true }
         );
 
         await refreshReport(req.userId);

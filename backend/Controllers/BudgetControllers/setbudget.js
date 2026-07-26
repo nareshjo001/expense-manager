@@ -1,5 +1,6 @@
 const { UserModel } = require('../../config/Schemas');
 const { setBudgetForCurrentMonth } = require('../../Services/BudgetServices/budget.service');
+const { refreshReport } = require('../../Services/reportService');
 
 const setbudget = async (req, res) => {
   try {
@@ -18,7 +19,10 @@ const setbudget = async (req, res) => {
     }
 
     // Set or update budget for the current month
-    setBudgetForCurrentMonth(user._id, budget);
+    await setBudgetForCurrentMonth(user._id, budget);
+
+    // Update report
+    await refreshReport(user._id);
 
     // Send success response
     res.status(200).json({ message: 'Budget set successfully', success: true });

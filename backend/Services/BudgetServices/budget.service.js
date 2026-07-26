@@ -33,7 +33,7 @@ const recalculateBudget = async (userId, date) => {
     await BudgetModel.findOneAndUpdate(
         { userId, month },
         { $set: { spent: spentAmount } },
-        { new: true }
+        { new: true, runValidators: true }
     );
 };
 
@@ -50,7 +50,7 @@ const setBudgetForCurrentMonth = async (userId, budgetAmount) => {
   await BudgetModel.findOneAndUpdate(
     { userId, month },
     { $set: { budget: budgetAmount } },
-    { upsert: true }
+    { upsert: true, runValidators: true }
   );
 
   // Recalculate spent automatically

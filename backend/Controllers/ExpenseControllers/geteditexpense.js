@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
 
 const geteditexpense = async (req, res) => {
@@ -10,7 +11,14 @@ const geteditexpense = async (req, res) => {
 
             // Get expense ID from query parameters
             const expenseId = req.query.expenseId;
-            
+
+            // Reject malformed IDs before hitting the database — otherwise
+            // Mongoose throws a CastError that the generic catch below would
+            // turn into a misleading 500 for what is really a client error.
+            if (!mongoose.Types.ObjectId.isValid(expenseId)) {
+                return res.status(400).json({ message: 'Invalid expense ID', success: false });
+            }
+
             // Find the expense that belongs to this user
             const expense = await ExpenseModel.findOne({
                 userId: user._id,

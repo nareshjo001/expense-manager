@@ -13,7 +13,7 @@ const getPieCategoryData  = async (req, res) => {
         const cacheKey = `pie:${req.userId}:${year || 'month'}:${type || 'total'}`;
 
         // Check cache first
-        const cachedData = getCache(cacheKey);
+        const cachedData = await getCache(cacheKey);
         if (cachedData) {
             return res.status(200).json({
                 success: true,
@@ -48,7 +48,7 @@ const getPieCategoryData  = async (req, res) => {
         }
 
         // Store in cache
-        setCache(cacheKey, result);
+        await setCache(cacheKey, result);
         
         // Send success response
         res.status(200).json({ success: true, data: result });

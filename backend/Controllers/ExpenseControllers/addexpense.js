@@ -18,18 +18,27 @@ const addExpense = async (req, res) => {
 
     let finalDescription = expenseDescription;
     
-    // If no description provided, generate one using ML model
+    // If no description provided, generate one using ML model.
+    // The ML-generated description is an optional enhancement — expense
+    // creation is the primary operation and must not fail because the ML
+    // service is slow, times out, or is unavailable.
     if (!expenseDescription || expenseDescription.trim() === '') {
-        const response = await axios.post(
-          `${process.env.ML_ROUTE}/generate-description`,
-          {
-              expenseName,
-              expenseCategory,
-              expenseAmount
-          }
-        );
+        try {
+            const response = await axios.post(
+              `${process.env.ML_ROUTE}/generate-description`,
+              {
+                  expenseName,
+                  expenseCategory,
+                  expenseAmount
+              },
+              { timeout: 5000 }
+            );
 
-        finalDescription = response.data.description;
+            finalDescription = response.data.description;
+        } catch (mlErr) {
+            console.error('ML description generation failed, falling back to "Others":', mlErr.message);
+            finalDescription = "";
+        }
     }
 
     // Create new expense document linked to the authenticated user
@@ -67,7 +76,7 @@ const addExpense = async (req, res) => {
     await recalculateBudget(user._id, newExpense.expenseDate);
     
     // CLEAR CACHE
-    clearUserExpenseCache(user._id);
+    await clearUserExpenseCache(user._id);
 
     // Update report
     await refreshReport(user._id);

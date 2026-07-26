@@ -52,11 +52,11 @@ const ExpensesPage = ({ onDelete, refreshFlag, setIsEdit }) => {
        let url = '';
        
        if (filter === '') {
-         url = `${BASE_URL}/auth/getlastweek`;
+         url = `${BASE_URL}/expense/last-week`;
         } else if (filter === 'bycategory' && period) {
-          url = `${BASE_URL}/auth/getbycategory?period=${period}`;
+          url = `${BASE_URL}/expense/by-category?period=${period}`;
         } else if (filter === 'custom' && startDate && endDate) {
-          url = `${BASE_URL}/auth/getbycustom?startDate=${startDate}&endDate=${endDate}`;
+          url = `${BASE_URL}/expense/search?startDate=${startDate}&endDate=${endDate}`;
         } else {
           // Nothing to fetch yet
           setLoading(false);

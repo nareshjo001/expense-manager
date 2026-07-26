@@ -9,7 +9,7 @@ const getcomparisonforpie = async (req, res) => {
         const cacheKey = `pieComparison:${req.userId}:${currentMonth}`;
 
         // Check cache first
-        const cachedData = getCache(cacheKey);
+        const cachedData = await getCache(cacheKey);
         if (cachedData) {
             return res.status(200).json({
                 success: true,
@@ -47,7 +47,7 @@ const getcomparisonforpie = async (req, res) => {
         ];
 
         // Store Cache
-        setCache(cacheKey, result);
+        await setCache(cacheKey, result);
         
         // Send success response
         res.status(200).json({ success: true, data: result });

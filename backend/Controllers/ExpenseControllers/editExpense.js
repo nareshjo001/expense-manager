@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { recalculateBudget } = require('../../Services/BudgetServices/budget.service');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
@@ -15,6 +16,13 @@ const editexpense = async (req, res) => {
         // Get expense ID from query params
         const expenseId = req.query.editID;
 
+        // Reject malformed IDs before hitting the database — otherwise
+        // Mongoose throws a CastError that the generic catch below would
+        // turn into a misleading 500 for what is really a client error.
+        if (!mongoose.Types.ObjectId.isValid(expenseId)) {
+            return res.status(400).json({ message: 'Invalid expense ID', success: false });
+        }
+
         // Find the original expense that belongs to this user
         const originalExpense = await ExpenseModel.findOne({
             _id: expenseId,
@@ -26,8 +34,25 @@ const editexpense = async (req, res) => {
             return res.status(404).json({ message: 'Expense not found', success: false });
         }
 
-        // Extract updated fields from request body
-        const updates = req.body;
+        // Extract updated fields from request body.
+        // Whitelisted to user-authored content fields only — userId, _id, id,
+        // ML metadata (mlPredictedCategory/mlConfidence/wasMlCorrected), and
+        // isRecurring (set only by the recurring-expense cron job) are
+        // server-managed and must never be writable from a client request body.
+        const EDITABLE_FIELDS = [
+            'expenseName',
+            'expenseCategory',
+            'expenseAmount',
+            'expenseDate',
+            'expenseDescription'
+        ];
+
+        const updates = {};
+        for (const field of EDITABLE_FIELDS) {
+            if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+                updates[field] = req.body[field];
+            }
+        }
 
         // Update expense in database and return updated document
         const updatedExpense = await ExpenseModel.findOneAndUpdate(
@@ -36,24 +61,38 @@ const editexpense = async (req, res) => {
             { new: true }
         );
 
-        // Recalculate budget for OLD month
-        // This is needed because original expense amount/date might have changed
-        await recalculateBudget(user._id, originalExpense.expenseDate);
+        // If the expense was deleted by another request between the findOne
+        // check above and this update, treat it the same as "not found".
+        if (!updatedExpense) {
+            return res.status(404).json({ message: 'Expense not found', success: false });
+        }
 
-        // If expense moved to a different month/year,
-        // we must recalculate budget for the NEW month as well
-        const oldDate = new Date(originalExpense.expenseDate);
-        const newDate = new Date(updatedExpense.expenseDate);
+        // Budget totals are derived only from expenseAmount and expenseDate,
+        // so recalculation is only needed when one of those fields changed.
+        const amountOrDateChanged =
+            Object.prototype.hasOwnProperty.call(updates, 'expenseAmount') ||
+            Object.prototype.hasOwnProperty.call(updates, 'expenseDate');
 
-        if (
-            oldDate.getMonth() !== newDate.getMonth() ||
-            oldDate.getFullYear() !== newDate.getFullYear()
-        ) {
-            await recalculateBudget(user._id, updatedExpense.expenseDate);
+        if (amountOrDateChanged) {
+            // Recalculate budget for OLD month
+            // This is needed because original expense amount/date might have changed
+            await recalculateBudget(user._id, originalExpense.expenseDate);
+
+            // If expense moved to a different month/year,
+            // we must recalculate budget for the NEW month as well
+            const oldDate = new Date(originalExpense.expenseDate);
+            const newDate = new Date(updatedExpense.expenseDate);
+
+            if (
+                oldDate.getMonth() !== newDate.getMonth() ||
+                oldDate.getFullYear() !== newDate.getFullYear()
+            ) {
+                await recalculateBudget(user._id, updatedExpense.expenseDate);
+            }
         }
 
         // CLEAR CACHE
-        clearUserExpenseCache(user._id);
+        await clearUserExpenseCache(user._id);
 
         // Update report
         await refreshReport(user._id);

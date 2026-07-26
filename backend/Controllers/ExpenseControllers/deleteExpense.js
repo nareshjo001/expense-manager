@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { recalculateBudget } = require('../../Services/BudgetServices/budget.service');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
@@ -12,9 +13,18 @@ const deleteExpense = async (req, res) => {
                 return res.status(401).json({ message: 'User does not exist', success: false});
             }
 
+            const expenseId = req.body.id;
+
+            // Reject malformed IDs before hitting the database — otherwise
+            // Mongoose throws a CastError that the generic catch below would
+            // turn into a misleading 500 for what is really a client error.
+            if (!mongoose.Types.ObjectId.isValid(expenseId)) {
+                return res.status(400).json({ message: 'Invalid expense ID', success: false });
+            }
+
             // Find and delete expense that belongs to this user
             const deletedExpense = await ExpenseModel.findOneAndDelete({
-                _id: req.body.id,
+                _id: expenseId,
                 userId: req.userId
             });
 
@@ -25,7 +35,7 @@ const deleteExpense = async (req, res) => {
                 await recalculateBudget(user._id, deletedExpense.expenseDate);
 
                 // CLEAR CACHE
-                clearUserExpenseCache(user._id);
+                await clearUserExpenseCache(user._id);
 
                 // Update report
                 await refreshReport(user._id);

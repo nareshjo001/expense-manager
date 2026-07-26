@@ -1,63 +1,72 @@
-// In-memory cache using Maps
-const cache = new Map();
+const { redisClient } = require('../config/redis');
 
-const MAX_CACHE_SIZE = 100; // limit total entries
+const DEFAULT_TTL_SECONDS = 300;
+
+// All keys written through this module follow "<feature>:<userId>[:<variant>...]"
+// (e.g. "lastWeek:<userId>", "category:<userId>:<period>", "pie:<userId>:<year>:<type>").
+// This lets clearUserExpenseCache find every key for a user without a KEYS/SCAN
+const getUserIdFromKey = (key) => key.split(':')[1];
+const userKeySetName = (userId) => `cachekeys:${userId}`;
 
 // Set Cache
-const setCache = (key, data, ttl = 300000) => {
-    // Remove oldest entry if cache is full
-    if (cache.size >= MAX_CACHE_SIZE) {
-        const oldestKey = cache.keys().next().value; // Gets the first inserted key in the Map
-        cache.delete(oldestKey);
-    }
+const setCache = async (key, data, ttl = DEFAULT_TTL_SECONDS) => {
+    try {
+        // Queue the value SET and its tracking-set SADD/EXPIRE into a single
+        // MULTI/EXEC transaction so they're sent to Redis as one atomic unit —
+        // a partial failure (e.g. the connection dropping between commands)
+        // can no longer leave the cached value written but untracked in
+        // cachekeys:<userId>, which would make it invisible to
+        // clearUserExpenseCache until it expired on its own.
+        const multi = redisClient.multi().set(key, JSON.stringify(data), { EX: ttl });
 
-    cache.set(key, {
-        data,
-        expiry: Date.now() + ttl
-    });
-    console.log(`Cache set: ${key}`);
+        const userId = getUserIdFromKey(key);
+        if (userId) {
+            const setKey = userKeySetName(userId);
+            multi.sAdd(setKey, key).expire(setKey, ttl);
+        }
+
+        await multi.exec();
+
+        console.log(`Cache set: ${key}`);
+    } catch (err) {
+        // Caching is best-effort — a Redis hiccup should not fail the request.
+        console.error(`Cache set failed for ${key}:`, err.message);
+    }
 };
 
 // Get Cache
-const getCache = (key) => {
-    const entry = cache.get(key);
+const getCache = async (key) => {
+    try {
+        const raw = await redisClient.get(key);
 
-    if (!entry) return null;
+        if (!raw) return null;
 
-    // Remove expired entry
-    if (Date.now() > entry.expiry) {
-        cache.delete(key);
+        console.log(`Cache hit: ${key}`);
+        return JSON.parse(raw);
+    } catch (err) {
+        // Treat a Redis error the same as a cache miss so the caller falls
+        // through to the live DB path instead of throwing.
+        console.error(`Cache get failed for ${key}:`, err.message);
         return null;
     }
-
-    console.log(`Cache hit: ${key}`);
-    return entry.data;
 };
 
 // Clear all cache for a user
-const clearUserExpenseCache = (userId) => {
-    for (const key of cache.keys()) {
-        if (key.includes(`:${userId}`)) {
-            cache.delete(key);
-        }
-    }
+const clearUserExpenseCache = async (userId) => {
+    try {
+        const setKey = userKeySetName(userId);
+        const keys = await redisClient.sMembers(setKey);
 
-    console.log(`Cache cleared for user: ${userId}`);
+        if (keys.length > 0) {
+            await redisClient.del(keys);
+        }
+
+        await redisClient.del(setKey);
+
+        console.log(`Cache cleared for user: ${userId}`);
+    } catch (err) {
+        console.error(`Cache clear failed for user ${userId}:`, err.message);
+    }
 };
-
-// Auto cleanup expired entries every 1 min
-setInterval(() => {
-    const now = Date.now();
-
-    for (const [key, value] of cache.entries()) {
-        if (value.expiry < now) {
-            cache.delete(key);
-        }
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-        console.log('Expired cache cleaned');
-    }
-}, 60000);
 
 module.exports = { setCache, getCache, clearUserExpenseCache };

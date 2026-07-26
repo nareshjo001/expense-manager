@@ -20,13 +20,6 @@ const {
   resetPassword
 } = require('../Controllers/AuthControllers');
 
-// ---------------- EXPENSE FETCH CONTROLLERS ----------------
-// Used to get expense data
-const {
-    lastWeekExpense,
-    getByCustom, 
-    getByCategory
-} = require('../Controllers/GetExpenseControllers');
 
 // ---------------- EXPENSE CRUD CONTROLLERS ----------------
 // Used to add, edit, delete expenses and manage budgets
@@ -100,15 +93,6 @@ router.post('/reset-password', resetPassword);      // Reset password
 
 // Add new expense (validated)
 router.post('/expenses', verifyToken, expenseValidation, addExpense);
-
-// Get last week's expenses
-router.get('/getlastweek', verifyToken, lastWeekExpense);
-
-// Get expenses by category
-router.get('/getbycategory', verifyToken, getByCategory);
-
-// Get expenses using custom filters
-router.get('/getbycustom', verifyToken, getByCustom);
 
 // Delete an expense
 router.delete('/delete', verifyToken, deleteExpense);

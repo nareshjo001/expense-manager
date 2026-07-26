@@ -1,59 +1,60 @@
-// Import Express framework
-const express = require('express'); 
+// Fix MongoDB Atlas SRV DNS resolution before anything else
+const dns = require("dns");
 
-// Import CORS middleware (allows requests from other origins)
-const cors = require('cors');
+dns.setServers([
+  "8.8.8.8",
+  "1.1.1.1"
+]);
 
+require("dotenv").config();
+
+// Import packages
+const express = require("express");
+const cors = require("cors");
 const axios = require("axios");
 
-// Load environment variables from .env file
-require('dotenv').config();
+// Cron jobs
+require("./cron/recurringJob");
+require("./cron/retryPush");
+require("./cron/feedbackCollector");
 
-// cron jobs
-require('./cron/recurringJob');
-require('./cron/retryPush');
-require('./cron/feedbackCollector');
+// Routes
+const AuthRouter = require("./Routes/api.routes");
+const expenseRouter = require("./Routes/expense.routes");
+const billRoutes = require("./Routes/billRoutes");
+const mlRouter = require("./Routes/ml.router");
+const reportRouter = require("./Routes/report.routes");
 
-// Import authenticated routes
-const AuthRouter = require('./Routes/api.routes');
+// Database
+const connectDB = require("./config/db");
 
-// Import database connection function
-const connectDB = require('./config/db');
+// Middleware
+const errorHandler = require("./Middlewares/error.middleware");
 
-// Import global error handling middleware
-const errorHandler = require('./Middlewares/error.middleware');
+// Redis
+const { connectRedis } = require("./config/redis");
 
-// Create Express app
+// Create app
 const app = express();
 
-// Get port from environment or use 8080
+// Port
 const PORT = process.env.PORT || 8080;
 
-const billRoutes = require('./Routes/billRoutes');
-const mlRouter = require('./Routes/ml.router');
-const reportRouter = require('./Routes/report.routes');
 
-const { connectRedis } = require('./config/redis');
-
-// *** Middlewares ***
-
-// Enable CORS for all requests
+// Middlewares
 app.use(cors());
-
-// Parse incoming JSON requests
 app.use(express.json());
 
-// *** Routes ***
 
-// Default route (for testing)
-app.get('/', (req, res) => {
-  res.send('Welcome! Connected to DB...');
+// Routes
+app.get("/", (req, res) => {
+  res.send("Welcome! Connected to DB...");
 });
 
-// Health check route
-app.get('/ping', async (req, res) => {
+
+app.get("/ping", async (req, res) => {
   try {
-    const mlResponse = await axios.get(`${process.env.ML_ROUTE}/`);
+    await axios.get(`${process.env.ML_ROUTE}/`);
 
     res.status(200).json({
       success: true,
@@ -71,36 +72,38 @@ app.get('/ping', async (req, res) => {
   }
 });
 
-// Authentication routes
-app.use('/auth', AuthRouter);
 
-// Bill & Ml Routes
-app.use('/bills', billRoutes);
-app.use('/ml', mlRouter);
-
-// Report Routes
+app.use("/auth", AuthRouter);
+app.use("/expense", expenseRouter);
+app.use("/bills", billRoutes);
+app.use("/ml", mlRouter);
 app.use("/report", reportRouter);
 
-// Global error handler (must be last)
+
+// Error handler (must be last)
 app.use(errorHandler);
 
-// Function to start server
+
+// Start Server
 const startServer = async () => {
   try {
-    // Connect to database
+
     await connectDB();
 
     await connectRedis();
 
-    // Start listening for requests
-    app.listen(PORT, "0.0.0.0",() => {
-      console.log(`Server is running on port ${PORT}`);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
     });
+
+
   } catch (err) {
-    console.error('Failed to start server due to DB error', err);
+
+    console.error("Failed to start server:", err);
+
     process.exit(1);
   }
 };
 
-// Call function to start server
+
 startServer();
