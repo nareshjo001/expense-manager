@@ -19,7 +19,7 @@ export default function OverallInsight({ period }) {
           const token = localStorage.getItem("token");
           const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
     
-          const res = await fetch(`${BASE_URL}/auth/income-insights-card`, {
+          const res = await fetch(`${BASE_URL}/income/insights-card`, {
             method: "POST",
             headers: { 
               "Content-Type": "application/json",

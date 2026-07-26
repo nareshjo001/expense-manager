@@ -88,4 +88,61 @@ const expenseValidation = (req, res, next) => {
     next();
 }
 
-module.exports = { signupValidation, loginValidation, expenseValidation };
+// Add Income request validation middleware — mirrors expenseValidation's
+// pattern (same Joi style, same error response shape) since that's the
+// existing validation convention already used in this codebase.
+const addIncomeValidation = (req, res, next) => {
+
+    const schema = Joi.object({
+        incomeSource: Joi.string().trim().min(1).required(),
+        incomeAmount: Joi.number().positive().required(),
+        incomeDate: Joi.date().required(),
+    }).unknown(true); // Allow extra fields in request body
+
+    const { error } = schema.validate(req.body, { abortEarly: true });
+
+    if (error) {
+        // Capitalize the first letter of the error message
+        const rawMessage = error.details[0].message.replace(/"/g, '');
+        const message = rawMessage.charAt(0).toUpperCase() + rawMessage.slice(1);
+
+        return res.status(400).json({
+            success: false,
+            message
+        });
+    }
+
+    next();
+};
+
+// Edit Income request validation middleware
+const editIncomeValidation = (req, res, next) => {
+
+    const schema = Joi.object({
+        incomeId: Joi.string().required(),
+        newAmount: Joi.number().positive().required(),
+    }).unknown(true); // Allow extra fields in request body
+
+    const { error } = schema.validate(req.body, { abortEarly: true });
+
+    if (error) {
+        // Capitalize the first letter of the error message
+        const rawMessage = error.details[0].message.replace(/"/g, '');
+        const message = rawMessage.charAt(0).toUpperCase() + rawMessage.slice(1);
+
+        return res.status(400).json({
+            success: false,
+            message
+        });
+    }
+
+    next();
+};
+
+module.exports = {
+    signupValidation,
+    loginValidation,
+    expenseValidation,
+    addIncomeValidation,
+    editIncomeValidation
+};

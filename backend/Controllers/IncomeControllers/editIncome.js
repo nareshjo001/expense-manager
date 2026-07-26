@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { UserModel, IncomeModel } = require('../../config/Schemas');
 
 const editIncome = async (req, res) => {
@@ -11,17 +12,35 @@ const editIncome = async (req, res) => {
       return res.status(401).json({ message: 'User does not exist', success: false });
     }
 
-    // Find the income document to edit
-    const income = await IncomeModel.findById(incomeId);
+    // Validate the ID's format before querying the income record — a
+    // malformed id would otherwise reach Mongoose's ObjectId cast and throw
+    // a CastError, surfacing as a generic 500 instead of a clean 400. This
+    // preserves the existing order of checks (auth first, unchanged).
+    if (!mongoose.isValidObjectId(incomeId)) {
+      return res.status(400).json({ success: false, message: 'Invalid income ID' });
+    }
+
+    // Atomically find-and-update in a single ownership-scoped operation, so
+    // there's no window between reading the document and writing it back
+    // where a concurrent delete (or another concurrent edit) could race
+    // against this request.
+    const income = await IncomeModel.findOneAndUpdate(
+      {
+        _id: incomeId,
+        userId: user._id
+      },
+      {
+        $set: { incomeAmount: newAmount }
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
     if (!income) {
       return res.status(404).json({ message: 'Income not found', success: false });
     }
-
-    // Update the income amount
-    income.incomeAmount = newAmount;
-
-    // Save the updated income document
-    await income.save();
 
     // Send success response
     res.status(200).json({ message: 'Income updated successfully', success: true });

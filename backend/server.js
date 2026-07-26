@@ -21,6 +21,7 @@ require("./cron/feedbackCollector");
 // Routes
 const AuthRouter = require("./Routes/api.routes");
 const expenseRouter = require("./Routes/expense.routes");
+const incomeRouter = require("./Routes/income.routes");
 const billRoutes = require("./Routes/bill.routes");
 const mlRouter = require("./Routes/ml.router");
 const reportRouter = require("./Routes/report.routes");
@@ -80,6 +81,7 @@ app.use("/bills", billRoutes);
 app.use("/ml", mlRouter);
 app.use("/report", reportRouter);
 app.use("/chart", chartRouter);
+app.use("/income", incomeRouter);
 
 // Error handler (must be last)
 app.use(errorHandler);

@@ -38,7 +38,7 @@ const AddIncome = () => {
 
           if (true) {
               // ADD INCOME
-              response = await fetch(`${BASE_URL}/auth/add-income`, {
+              response = await fetch(`${BASE_URL}/income/add`, {
                   method: 'POST',
                   headers: {
                       'Content-Type': 'application/json',

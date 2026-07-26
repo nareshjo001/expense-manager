@@ -44,7 +44,7 @@ export default function IncomeModal({ isOpen, onClose }) {
       const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
       const response = await fetch(
-        `${BASE_URL}/auth/get-income`,
+        `${BASE_URL}/income/get`,
         {
           method: "GET",
           headers: {
@@ -86,7 +86,7 @@ export default function IncomeModal({ isOpen, onClose }) {
       const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
       const response = await fetch(
-        `${BASE_URL}/auth/edit-income`,
+        `${BASE_URL}/income/edit`,
         {
           method: "PUT",
           headers: {
@@ -127,7 +127,7 @@ export default function IncomeModal({ isOpen, onClose }) {
       const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
       const response = await fetch(
-        `${BASE_URL}/auth/delete-income`,
+        `${BASE_URL}/income/delete`,
         {
           method: "DELETE",
           headers: {

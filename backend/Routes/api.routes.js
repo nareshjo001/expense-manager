@@ -6,7 +6,7 @@ const router = require('express').Router();
 const {
   signupValidation,
   loginValidation,
-  expenseValidation
+  expenseValidation,
 } = require('../Middlewares/AuthValidation');
 
 // ---------------- AUTH CONTROLLERS ----------------
@@ -38,14 +38,7 @@ const {
 } = require('../Controllers/RecurringExpenses');
 
 // INCOME 
-const {
-    addIncome,
-    getIncome,
-    editIncome,
-    deleteIncome,
-    getInsightsHeader,
-    getInsightsCard
-} = require('../Controllers/IncomeControllers');
+
 
 // ================= AUTH ROUTES =================
 
@@ -73,13 +66,5 @@ router.post('/device-token', verifyToken, deviceRegistration);
 
 // Mark expense recurring
 router.patch('/recurring', verifyToken, recurring);
-
-// Income routes
-router.post('/add-income', verifyToken, addIncome);
-router.get('/get-income', verifyToken, getIncome);
-router.put('/edit-income', verifyToken, editIncome);
-router.delete('/delete-income', verifyToken, deleteIncome);
-router.post('/income-insights-header', verifyToken, getInsightsHeader);
-router.post('/income-insights-card', verifyToken, getInsightsCard);
 
 module.exports = router;

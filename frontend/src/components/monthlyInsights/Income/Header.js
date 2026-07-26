@@ -34,7 +34,7 @@ export default function Header({ period, setPeriod }) {
         const token = localStorage.getItem("token");
         const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
-        const res = await fetch(`${BASE_URL}/auth/income-insights-header`, {
+        const res = await fetch(`${BASE_URL}/income/insights-header`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

@@ -1,5 +1,6 @@
 const { UserModel, IncomeModel, ExpenseModel } = require('../../config/Schemas');
 const { getFinancialRunwayData, getSavingsRateData, getIncomeDependencyData } = require('../../Services/InsightServices/income.service');
+const { resolvePeriod } = require('../../Services/InsightServices/periodResolver');
 
 const getInsightsCard = async (req, res) => {
   try {
@@ -11,64 +12,35 @@ const getInsightsCard = async (req, res) => {
 
     const { period } = req.body || {};
 
-    const now = new Date();
-    let startDate;
-    let endDate;
+    const range = resolvePeriod(period);
 
-    switch (period) {
-      case 'current_month':
-        startDate = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          1
-        );
-
-        // First day of next month
-        endDate = new Date(
-          now.getFullYear(),
-          now.getMonth() + 1,
-          1
-        );
-        break;
-
-      case 'financial_year': {
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth(); // 0-11
-
-        // Indian FY: Apr 1 -> Mar 31
-        const fyStartYear =
-          currentMonth >= 3
-            ? currentYear
-            : currentYear - 1;
-
-        startDate = new Date(fyStartYear, 3, 1); // Apr 1
-        endDate = new Date(fyStartYear + 1, 3, 1); // Apr 1 next year
-
-        break;
-      }
-
-      default:
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid period. Use current_month or financial_year.',
-        });
+    if (!range) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid period. Use current_month or financial_year.',
+      });
     }
 
-    const incomeRecords = await IncomeModel.find({
-      userId: user._id,
-      incomeDate: {
-        $gte: startDate,
-        $lt: endDate,
-      },
-    }).sort({ incomeDate: -1 });
+    const { startDate, endDate } = range;
 
-    const expenseRecords = await ExpenseModel.find({
-      userId: user._id,
-      expenseDate: {
-        $gte: startDate,
-        $lt: endDate,
-      },
-    }).sort({ expenseDate: -1 }); 
+    // Independent queries — run concurrently instead of sequentially.
+    const [incomeRecords, expenseRecords] = await Promise.all([
+      IncomeModel.find({
+        userId: user._id,
+        incomeDate: {
+          $gte: startDate,
+          $lt: endDate,
+        },
+      }).sort({ incomeDate: -1 }),
+
+      ExpenseModel.find({
+        userId: user._id,
+        expenseDate: {
+          $gte: startDate,
+          $lt: endDate,
+        },
+      }).sort({ expenseDate: -1 }),
+    ]);
 
     const totalIncome = incomeRecords.reduce((sum, record) => sum + record.incomeAmount, 0);
     const totalExpenses = expenseRecords.reduce((sum, record) => sum + record.expenseAmount, 0);
@@ -103,7 +75,7 @@ const getInsightsCard = async (req, res) => {
     // Implementation for fetching insights card data
   } catch (error) {
     console.error("Error fetching insights card:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
