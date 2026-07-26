@@ -1,8 +1,12 @@
+const fs = require("fs/promises");
 const { preprocessImage } = require("../../Services/BillServices/imageProcessor");
 const { extractTextFromImage } = require("../../Services/BillServices/ocrService");
 const { parseReceipt } = require("../../Services/BillServices/receiptParser");
 
 const uploadBill = async (req, res) => {
+  let originalImagePath;
+  let processedImagePath;
+
   try {
 
     if (!req.file) {
@@ -12,8 +16,8 @@ const uploadBill = async (req, res) => {
       });
     }
 
-    const originalImagePath = req.file.path;
-    const processedImagePath = await preprocessImage(originalImagePath);
+    originalImagePath = req.file.path;
+    processedImagePath = await preprocessImage(originalImagePath);
     const extractedText = await extractTextFromImage(processedImagePath);
     const parsedReceipt = parseReceipt(extractedText);
 
@@ -31,6 +35,34 @@ const uploadBill = async (req, res) => {
       success: false,
       message: "Failed to process bill",
     });
+
+  } finally {
+
+    // Remove temporary files after every outcome (success, OCR failure,
+    // parser failure) so billUploads/ and billProcessed/ never accumulate.
+    // Each removal is independently guarded: a path may be undefined if an
+    // earlier stage never ran (e.g. no file uploaded, or preprocessImage
+    // threw before producing output), and a delete error here must never
+    // override the response already returned above.
+    if (originalImagePath) {
+      try {
+        await fs.unlink(originalImagePath);
+      } catch (cleanupError) {
+        if (cleanupError.code !== "ENOENT") {
+          console.error("Failed to remove uploaded file:", cleanupError);
+        }
+      }
+    }
+
+    if (processedImagePath) {
+      try {
+        await fs.unlink(processedImagePath);
+      } catch (cleanupError) {
+        if (cleanupError.code !== "ENOENT") {
+          console.error("Failed to remove processed file:", cleanupError);
+        }
+      }
+    }
   }
 };
 
