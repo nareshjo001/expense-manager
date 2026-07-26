@@ -28,18 +28,18 @@ const PieChartPage = ({ expenses }) => {
 
                 if (show === 'distribution') {
                     if (viewBy === 'thismonth') {
-                        url = `${BASE_URL}/auth/getPieCategoryData?type=total`;
+                        url = `${BASE_URL}/chart/getPieCategoryData?type=total`;
                     } else if (viewBy === 'thisyear') {
-                        url = `${BASE_URL}/auth/getPieCategoryData?year=${new Date().getFullYear()}&type=total`;
+                        url = `${BASE_URL}/chart/getPieCategoryData?year=${new Date().getFullYear()}&type=total`;
                     }
                 } else if (show === 'count') {
                     if (viewBy === 'thismonth') {
-                        url = `${BASE_URL}/auth/getPieCategoryData?type=count`;
+                        url = `${BASE_URL}/chart/getPieCategoryData?type=count`;
                     } else if (viewBy === 'thisyear') {
-                        url = `${BASE_URL}/auth/getPieCategoryData?year=${new Date().getFullYear()}&type=count`;
+                        url = `${BASE_URL}/chart/getPieCategoryData?year=${new Date().getFullYear()}&type=count`;
                     }
                 } else if (show === 'comparison') {
-                    url = `${BASE_URL}/auth/getcomparisonforpie`;
+                    url = `${BASE_URL}/chart/getcomparisonforpie`;
                 }
 
                 if (!url) return;

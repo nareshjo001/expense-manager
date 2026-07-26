@@ -83,7 +83,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
         }
 
         try {
-            const response = await fetch(`${BASE_URL}/auth/delete`, {
+            const response = await fetch(`${BASE_URL}/expense/delete-expense`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

@@ -90,7 +90,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
             const token = localStorage.getItem("token");
             const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
-            const response =  await fetch(`${BASE_URL}/auth/geteditexpense?expenseId=${isEdit.expense_id}`, {
+            const response =  await fetch(`${BASE_URL}/expense/expense-edit-data?expenseId=${isEdit.expense_id}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type' : 'application/json',
@@ -147,7 +147,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
         if (!isEdit.enableEdit) {
             // ----------- ADD NEW EXPENSE -----------
-            response = await fetch(`${BASE_URL}/auth/expenses`, {
+            response = await fetch(`${BASE_URL}/expense/add-expense`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -157,7 +157,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
             });
         } else {
             // ----------- EDIT EXISTING EXPENSE -----------
-            response = await fetch(`${BASE_URL}/auth/editexpense?editID=${editID}`, {
+            response = await fetch(`${BASE_URL}/expense/update-expense?editID=${editID}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',

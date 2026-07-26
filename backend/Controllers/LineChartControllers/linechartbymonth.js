@@ -1,6 +1,5 @@
 const { UserModel } = require('../../config/Schemas');
-const { monthlyTotals } = require('../../Services/ChartServices/chart.service');
-const { fetchExpense } = require('../GetExpenseControllers/fetchExpenses');
+const { getMonthlyLineChart } = require('../../Services/ChartServices/chart.service');
 
 const linechartbymonth = async (req, res) => {
     try {
@@ -17,20 +16,8 @@ const linechartbymonth = async (req, res) => {
             return res.status(400).json({ message: 'Valid selectedYear is required', success: false });
         }
 
-        // Define full year date range
-        const startDate = new Date(selectedYear, 0, 1);
-        const endDate = new Date(selectedYear + 1, 0, 0, 23, 59, 59, 999);
-
-        // Fetch expenses for the selected year
-        const expenses = await fetchExpense(startDate, endDate, req.userId);
-
-        // If no data, return empty array
-        if (!expenses.length) {
-            return res.status(200).json({ success: true, data: [] });
-        }
-
-        // Group expenses into monthly totals
-        const result = monthlyTotals(expenses);
+        // Resolve range, fetch expenses, and generate monthly totals
+        const result = await getMonthlyLineChart(req.userId, selectedYear);
 
         // Success response
         res.status(200).json({ success: true, data: result });

@@ -36,11 +36,11 @@ const BarChartPage = ({ expenses }) => {
         let url = "";
 
         if (viewBy === 'bycategory' && !specificMonth) {
-          url = `${BASE_URL}/auth/barchartbycategory`;
+          url = `${BASE_URL}/chart/barchartbycategory`;
         } else if (viewBy === 'bycategory' && specificMonth && month) {
-          url = `${BASE_URL}/auth/barchartbycategory?month=${month}`;
+          url = `${BASE_URL}/chart/barchartbycategory?month=${month}`;
         } else if (viewBy === 'bymonth' && selectedYear.length === 4) {
-          url = `${BASE_URL}/auth/barchartbymonth?year=${selectedYear}`;
+          url = `${BASE_URL}/chart/barchartbymonth?year=${selectedYear}`;
         }
 
         if (!url) return;

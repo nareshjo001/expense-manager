@@ -1,4 +1,6 @@
-const { UserModel, BudgetModel } = require('../../config/Schemas');
+const { UserModel } = require('../../config/Schemas');
+const { getBudgetComparison } = require('../../Services/ChartServices/chart.service');
+const { MONTH_ORDER: monthOrder } = require('../../Services/ChartServices/chartConstants');
 
 const barchartbymonth = async (req, res) => {
   try {
@@ -14,25 +16,19 @@ const barchartbymonth = async (req, res) => {
       return res.status(400).json({ message: 'Year is required', success: false });
     }
 
-    // Fetch budgets for the selected year
-    // Assumes month field format like "Jan 2024"
-    const budgets = await BudgetModel.find({
+    // Fetch budgets for the selected year (assumes month field format like "Jan 2024")
+    const budgetData = await getBudgetComparison({
       userId: req.userId,
-      month: new RegExp(selectedYear + '$', 'i'),
+      mode: 'year',
+      year: selectedYear
     });
 
-    // Map database results into chart-friendly structure
-    const result = budgets.map(b => ({
+    // Map into chart-friendly structure
+    const result = budgetData.map(b => ({
       month: b.month.split(' ')[0],
-      budget: b.budget || 0,
-      total: b.spent || 0,
+      budget: b.budget,
+      total: b.spent,
     }));
-
-    // Define correct calendar month order
-    const monthOrder = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
 
     // Sort results chronologically by month
     result.sort(
@@ -41,9 +37,9 @@ const barchartbymonth = async (req, res) => {
 
     // Send success response
     return res.status(200).json({ success: true, data: result });
-  
+
   } catch (err) {
-    // Handle server errors 
+    // Handle server errors
     console.error('Error in barchartbymonth:', err);
     return res.status(500).json({ message: 'Internal Server Error', success: false });
   }

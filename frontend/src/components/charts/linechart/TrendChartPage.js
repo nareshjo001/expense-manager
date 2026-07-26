@@ -41,14 +41,14 @@ const TrendChartPage = ({ expenses }) => {
 
         if (viewBy === 'week' && selectedMonthYear) {
           const [year, month] = selectedMonthYear.split('-');
-          url = `${BASE_URL}/auth/linechartbyweek?selectedYear=${year}&selectedMonth=${month}`;
+          url = `${BASE_URL}/chart/linechartbyweek?selectedYear=${year}&selectedMonth=${month}`;
         } else if(viewBy === 'bymonth' && selectedYear.length === 4) {
-          url = `${BASE_URL}/auth/linechartbymonth?selectedYear=${selectedYear}`;
+          url = `${BASE_URL}/chart/linechartbymonth?selectedYear=${selectedYear}`;
         } else if(viewBy === 'byyear' && !compareByYear) {
-          url = `${BASE_URL}/auth/linechartbyyear`;
+          url = `${BASE_URL}/chart/linechartbyyear`;
         } else if (viewBy === 'byyear' && compareByYear && selectedYears.length > 0) {
           const yearsQuery = selectedYears.join(',');
-          url = `${BASE_URL}/auth/linechartbetweenyears?years=${yearsQuery}`;
+          url = `${BASE_URL}/chart/linechartbetweenyears?years=${yearsQuery}`;
         }
 
         if (!url) return;
@@ -79,7 +79,7 @@ const TrendChartPage = ({ expenses }) => {
       try {
         const token = localStorage.getItem('token');
         const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
-        let url = `${BASE_URL}/auth/getloggedyears`;
+        let url = `${BASE_URL}/chart/getloggedyears`;
 
         const response = await fetch(url, {
           method: 'GET',

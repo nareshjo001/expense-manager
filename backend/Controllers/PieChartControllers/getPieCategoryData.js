@@ -1,8 +1,6 @@
 const { UserModel } = require('../../config/Schemas');
-const { fetchExpense } = require('../GetExpenseControllers/fetchExpenses');
-const { groupByCategoryHelper } = require('../../Services/HelperServices/getexpense.service'); 
-const { categoryTotals, categoryCounts } = require('../../Services/ChartServices/chart.service');
-const { getPieDateRange } = require('../../Services/HelperServices/datecal.service');
+const { getCategoryBreakdown } = require('../../Services/ChartServices/chart.service');
+const { resolveYearRange, resolveCurrentMonthRange } = require('../../Services/ChartServices/chartRangeResolver');
 const { getCache, setCache } = require('../../utils/expenseCache');
 
 const getPieCategoryData  = async (req, res) => {
@@ -27,34 +25,28 @@ const getPieCategoryData  = async (req, res) => {
         if (!user) {
             return res.status(401).json({ message: 'User does not exist', success: false });
         }
-  
-        // Get start and end date
-        const { startDate, endDate } = getPieDateRange(year);
 
-        // Fetch expenses for user within calculated date range
-        const expenses = await fetchExpense(startDate, endDate, req.userId);
-        
-        // Group expenses by category
-        const grouped = groupByCategoryHelper(expenses);
-        
-        let result;
+        // Resolve date range: selected year if provided, else current month
+        const { startDate, endDate } = year
+            ? resolveYearRange(Number(year))
+            : resolveCurrentMonthRange();
 
-        // Choose transformation based on query type
-        if (type === 'count') {
-            result = categoryCounts(grouped);
-        } else {
-            // Default → totals
-            result = categoryTotals(grouped);
-        }
+        // Category totals or counts for the resolved range
+        const result = await getCategoryBreakdown({
+            userId: req.userId,
+            startDate,
+            endDate,
+            type
+        });
 
         // Store in cache
         await setCache(cacheKey, result);
-        
+
         // Send success response
         res.status(200).json({ success: true, data: result });
 
     } catch(err) {
-        // Handle server errors 
+        // Handle server errors
         console.error("Error in getcountforpie:", err);
         res.status(500).json({ message: "Internal Server Error", success: false });
     }

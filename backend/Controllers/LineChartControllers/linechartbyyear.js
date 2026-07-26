@@ -1,5 +1,5 @@
-const { UserModel, ExpenseModel } = require('../../config/Schemas');
-const { groupByYear } = require('../../Services/ChartServices/chart.service');
+const { UserModel } = require('../../config/Schemas');
+const { getYearlyLineChart } = require('../../Services/ChartServices/chart.service');
 
 const linechartbyyear = async (req, res) => {
     try {
@@ -9,11 +9,8 @@ const linechartbyyear = async (req, res) => {
             return res.status(401).json({ message: 'User does not exist', success: false });
         }
 
-        // Fetch all expenses for the user
-        const expenses = await ExpenseModel.find({ userId: req.userId }).lean();
-
-        // Group expenses by year for line chart visualization
-        const result = groupByYear(expenses);
+        // Fetch all expenses for the user and group by year
+        const result = await getYearlyLineChart(req.userId);
 
         // Send successful response
         res.status(200).json({ success: true, data: result });

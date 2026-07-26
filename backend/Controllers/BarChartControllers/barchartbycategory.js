@@ -1,7 +1,6 @@
 const { UserModel } = require('../../config/Schemas');
-const { fetchExpense } = require('../GetExpenseControllers/fetchExpenses');
-const { categoryTotals } = require('../../Services/ChartServices/chart.service');
-const { groupByCategoryHelper } = require('../../Services/HelperServices/getexpense.service');
+const { getCategoryBreakdown } = require('../../Services/ChartServices/chart.service');
+const { resolveMonthRange, resolveCurrentYearRange } = require('../../Services/ChartServices/chartRangeResolver');
 
 const barchartbycategory = async (req, res) => {
   try {
@@ -11,38 +10,32 @@ const barchartbycategory = async (req, res) => {
       return res.status(401).json({ message: 'User does not exist', success: false });
     }
 
-    let expenses;
     const month = req.query.month; // Expected format: "YYYY-MM"
+    let startDate, endDate;
 
     if (month) {
       // Parse year and month from query
       const [year, monthNum] = month.split("-").map(Number);
 
-      // Create date range for selected month
-      const startDate = new Date(year, monthNum - 1, 1);
-      const endDate = new Date(year, monthNum, 0);
+      // Resolve date range for the selected month
+      ({ startDate, endDate } = resolveMonthRange(year, monthNum));
 
-      // Fetch expenses within selected month
-      expenses = await fetchExpense(startDate, endDate, req.userId);
-    
     } else {
-      // Default: use full current year
-      const currentYear = new Date().getFullYear();
-      const startDate = new Date(currentYear, 0, 1);
-      const endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
-
-      expenses = await fetchExpense(startDate, endDate, req.userId);
+      // Default: full current year
+      ({ startDate, endDate } = resolveCurrentYearRange());
     }
 
-    // Group expenses by category
-    const groupedByCategory = groupByCategoryHelper(expenses);
-
-    // Calculate total amount per category
-    const result = categoryTotals(groupedByCategory);
+    // Category totals for the resolved range
+    const result = await getCategoryBreakdown({
+      userId: req.userId,
+      startDate,
+      endDate,
+      type: 'total'
+    });
 
     // Send success response
     res.status(200).json({ success: true, data: result });
-  
+
   } catch (err) {
       // Handle server errors
       console.error("Error in barchartbycategory:", err);

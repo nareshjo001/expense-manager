@@ -20,16 +20,6 @@ const {
   resetPassword
 } = require('../Controllers/AuthControllers');
 
-
-// ---------------- EXPENSE CRUD CONTROLLERS ----------------
-// Used to add, edit, delete expenses and manage budgets
-const { 
-    addExpense,
-    deleteExpense, 
-    geteditexpense, 
-    editexpense, 
-} = require('../Controllers/ExpenseControllers');
-
 const { 
     getbudgets, 
     setbudget,
@@ -40,29 +30,6 @@ const {
 // Verifies JWT token before allowing access
 const verifyToken = require('../Middlewares/Auth');
 
-// ---------------- LINE CHART CONTROLLERS ----------------
-// Used for line chart analytics
-const {
-    getloggedyears,
-    linechartbyweek,
-    linechartbymonth, 
-    linechartbyyear, 
-    linechartbetweenyears,
-} = require('../Controllers/LineChartControllers');
-
-// ---------------- BAR CHART CONTROLLERS ----------------
-// Used for bar chart analytics
-const { 
-    barchartbycategory, 
-    barchartbymonth 
-} = require('../Controllers/BarChartControllers');
-
-// ---------------- PIE CHART CONTROLLERS ----------------
-// Used for pie chart analytics
-const { 
-    getPieCategoryData,
-    getcomparisonforpie 
-} = require('../Controllers/PieChartControllers');
 
 // PUSH NOTIFICATIONS & EXPENSE RECURRING
 const { deviceRegistration } = require('../Controllers/PushNotifications/deviceRegistration');
@@ -89,14 +56,7 @@ router.post('/resend-otp', resendOTP);              // Resend OTP
 router.post('/forgot-password', forgotPassword);    // Forgot password request
 router.post('/reset-password', resetPassword);      // Reset password
 
-// ================= PROTECTED EXPENSE ROUTES =================
-
-// Add new expense (validated)
-router.post('/expenses', verifyToken, expenseValidation, addExpense);
-
-// Delete an expense
-router.delete('/delete', verifyToken, deleteExpense);
-
+// ================= PROTECTED ROUTES =================
 // Get budgets
 router.get('/getbudgets', verifyToken, getbudgets);
 
@@ -106,43 +66,7 @@ router.post('/setbudget', verifyToken, setbudget);
 // Update budget
 router.put('/update-budget', verifyToken, updatebudget);
 
-// Get expense data for editing
-router.get('/geteditexpense', verifyToken, geteditexpense);
-
-// Edit an expense
-router.put('/editexpense', verifyToken, editexpense);
-
 // ================= PROTECTED ANALYTICS ROUTES =================
-
-// LINE CHART
-// Get years where user has expense data
-router.get('/getloggedyears', verifyToken, getloggedyears);
-
-// Line chart data by week (protected)
-router.get('/linechartbyweek', verifyToken, linechartbyweek);
-
-// Line chart data by month
-router.get('/linechartbymonth', verifyToken, linechartbymonth);
-
-// Line chart data by year
-router.get('/linechartbyyear', verifyToken, linechartbyyear);
-
-// Line chart data between years
-router.get('/linechartbetweenyears', verifyToken, linechartbetweenyears);
-
-// BAR CHART
-// Bar chart by category
-router.get('/barchartbycategory', verifyToken, barchartbycategory);
-
-// Bar chart by month
-router.get('/barchartbymonth', verifyToken, barchartbymonth);
-
-// PIE CHART
-// Pie chart by category or count data
-router.get('/getPieCategoryData', verifyToken, getPieCategoryData);
-
-// Pie chart budget comparison data
-router.get('/getcomparisonforpie', verifyToken, getcomparisonforpie);
 
 // Device registration for push notifications
 router.post('/device-token', verifyToken, deviceRegistration);

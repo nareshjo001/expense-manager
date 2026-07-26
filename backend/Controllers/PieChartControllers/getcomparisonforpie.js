@@ -1,4 +1,5 @@
-const { UserModel, BudgetModel } = require('../../config/Schemas');
+const { UserModel } = require('../../config/Schemas');
+const { getBudgetComparison } = require('../../Services/ChartServices/chart.service');
 const { getCache, setCache } = require('../../utils/expenseCache');
 
 const getcomparisonforpie = async (req, res) => {
@@ -24,11 +25,16 @@ const getcomparisonforpie = async (req, res) => {
             return res.status(401).json({ message: 'User does not exist', success: false });
         }
 
-        // Find budget document for current user & current month
-        const budgetDoc = await BudgetModel.findOne({ userId: req.userId, month: currentMonth });
+        // Find budget comparison for current user & current month
+        const comparison = await getBudgetComparison({
+            userId: req.userId,
+            mode: 'month',
+            monthKey: currentMonth
+        });
 
         // If no budget record exists → return zero values for pie chart
-        if (!budgetDoc) {
+        // (not cached, matching the original behavior)
+        if (!comparison) {
             return res.status(200).json({
                 success: true,
                 data: [
@@ -38,17 +44,15 @@ const getcomparisonforpie = async (req, res) => {
             });
         }
 
-        const remaining = Math.max(0, budgetDoc.budget - budgetDoc.spent);
-
         // Prepare response array for Pie Chart
         const result = [
-            { category: 'Remaining', total: Number(remaining) || 0 },
-            { category: 'Spent', total: Number(budgetDoc.spent) || 0 }
+            { category: 'Remaining', total: comparison.remaining },
+            { category: 'Spent', total: comparison.spent }
         ];
 
         // Store Cache
         await setCache(cacheKey, result);
-        
+
         // Send success response
         res.status(200).json({ success: true, data: result });
 
