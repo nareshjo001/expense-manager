@@ -1,3 +1,4 @@
+// Maps expense-pattern findings (weekly comparison, category dominance/stability/concentration) to user-facing insight text.
 export const expenseInsightTemplates = {
   LAST_7_DAYS_SUMMARY: ({
   totalSpent,

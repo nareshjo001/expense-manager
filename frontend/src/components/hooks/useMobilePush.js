@@ -2,28 +2,33 @@ import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 
+// Registers this device for native push notifications and wires up the notification-tap handler.
 export function useNativePush(isLoggedIn) {
 
   useEffect(() => {
 
     if (!isLoggedIn) return;
 
-    // Only run in native
     if (!Capacitor.isNativePlatform()) return;
 
     const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
     if (!BASE_URL) return;
+
+    // Tracks the listeners this run registers, so cleanup removes exactly those; isCancelled covers cleanup firing while initPush is still awaiting.
+    let isCancelled = false;
+    const listenerHandles = [];
 
     async function initPush() {
       try {
 
         const permission = await PushNotifications.requestPermissions();
         if (permission.receive !== "granted") return;
+        if (isCancelled) return;
 
         await PushNotifications.register();
+        if (isCancelled) return;
 
-        // Registration listener
-        PushNotifications.addListener("registration", async (token) => {
+        listenerHandles.push(await PushNotifications.addListener("registration", async (token) => {
 
           const authToken = localStorage.getItem("token");
           if (!authToken) return;
@@ -40,30 +45,34 @@ export function useNativePush(isLoggedIn) {
             })
           });
 
-          // A 409 means this device token is already claimed by another
-          // account. Log and stop — this must never trigger a retry loop.
+          // A 409 means this device token is already claimed by another account — log and stop, never retry.
           if (res.status === 409) {
             console.warn("Device token already registered to another account; skipping registration.");
           }
-        });
+        }));
 
-        // Notification click handler
-        PushNotifications.addListener(
+        listenerHandles.push(await PushNotifications.addListener(
           "pushNotificationActionPerformed",
           (notification) => {
             console.log("Notification tapped:", notification);
 
             const route =
               notification.notification?.data?.route ||
-              notification.data?.route || // fallback
+              notification.data?.route ||
               "/";
 
-            // Small delay ensures React is ready
+            // Small delay ensures React is ready to handle the navigation.
             setTimeout(() => {
               window.location.replace(route);
             }, 300);
           }
-        );
+        ));
+
+        // Cleanup already ran while these listeners were being registered — drop them now so they don't outlive this effect run.
+        if (isCancelled) {
+          listenerHandles.forEach((handle) => handle.remove());
+          listenerHandles.length = 0;
+        }
 
       } catch (err) {
         console.error("Native push error:", err);
@@ -71,6 +80,13 @@ export function useNativePush(isLoggedIn) {
     }
 
     initPush();
+
+    // Removes this run's listeners so a logout/login cycle can't accumulate duplicates; register() is deliberately not undone, since unregister() would delete the device's FCM/APNS token.
+    return () => {
+      isCancelled = true;
+      listenerHandles.forEach((handle) => handle.remove());
+      listenerHandles.length = 0;
+    };
 
   }, [isLoggedIn]);
 }

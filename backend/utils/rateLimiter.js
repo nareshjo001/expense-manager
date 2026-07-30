@@ -1,12 +1,11 @@
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 
-// API limiter (user-based)
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 mins
+    windowMs: 15 * 60 * 1000,
     max: 150,
 
     keyGenerator: (req) => {
-        return req.userId || req.ip;
+        return req.userId || ipKeyGenerator(req.ip);
     },
 
     message: {
@@ -17,6 +16,7 @@ const apiLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false
 });
+
 
 // Auth limiter (IP-based) for credential and OTP endpoints
 const authLimiter = rateLimit({

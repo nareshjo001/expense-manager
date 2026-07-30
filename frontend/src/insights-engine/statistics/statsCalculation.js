@@ -1,3 +1,4 @@
+// Shared statistical helpers (mean, variance, median, period-over-period percent changes) used across the insights engine.
 export const findMean = (data = []) => {
     const mean = data.reduce((a,b)=>a+b,0) / data.length;
     return mean;

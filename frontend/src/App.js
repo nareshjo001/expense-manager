@@ -5,7 +5,6 @@ import {
   Spinner,
   Login,
   SignUp,
-  BudgetProvider,
   ExpenseInsightsProvider,
   ChartInsightsProvider,
   LandingPage,
@@ -20,31 +19,27 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import { useWebPush } from "./components/hooks/useWebPush";
 import { useNativePush } from "./components/hooks/useMobilePush";
+import ErrorBoundary from "./components/ErrorBoundary";
 
+// Root app shell: gates the splash screen, authentication state, and global providers/routing.
 function App() {
   // Controls initial splash screen visibility
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Auth-related UI state
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLogout, setIsLogout] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  
+
   // Global blocking spinner (API calls, auth actions, etc.)
   const [isSpinnerLoad, setIsSpinnerLoad] = useState(false);
 
-  // For Web Push
   const {
     showNotificationPrompt,
     handleEnable,
     handleLater
   } = useWebPush(isLoggedIn);
 
-  /**
-     * Authentication bootstrap
-     * Checks token presence on first app mount.
-     * If logout or missing → clears storage to avoid stale state.
-  */
+  // Restores login state from a stored token on mount, or clears it after logout.
   useEffect(() => {
     const token = localStorage.getItem("token");
 
@@ -57,11 +52,7 @@ function App() {
 
   useNativePush(isLoggedIn);
 
-  /**
-     * Backend keep-alive ping
-     * Prevents cold-start delay on platforms like Render.
-     * Guarded to avoid invalid fetch if env variable is missing.
-  */
+  // Pings the backend on load and periodically, to avoid cold-start delays and surface server-down errors.
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 2000);
 
@@ -97,10 +88,8 @@ function App() {
       }
     };
 
-    // Initial health check
     keepAlive();
 
-    // Periodic health check
     const interval = setInterval(
       keepAlive,
       10 * 60 * 1000
@@ -110,6 +99,7 @@ function App() {
 
   }, [isLoading]);
 
+  // Locks page scroll while the notification prompt is open.
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -135,7 +125,6 @@ function App() {
 
   return (
     <ThemeProvider>
-      {/* Global toast container (used across the app) */}
       <ToastContainer
         enableMultiContainer
         containerId="below-header"
@@ -162,10 +151,8 @@ function App() {
         </div>
       )}
 
-      {/* Full-screen spinner overlay for blocking operations */}
       {isSpinnerLoad && <Spinner />}
 
-      {/* Login screen */}
       {!isLoggedIn && !isSignUp && (
         <div className='align-login-signup'>
           <Login 
@@ -176,7 +163,6 @@ function App() {
         </div>
       )}
 
-      {/* Sign-up screen */}
       {!isLoggedIn && isSignUp && (
         <div className='align-login-signup'>
           <SignUp 
@@ -186,16 +172,15 @@ function App() {
         </div>
       )}
 
-      {/* Main application (mounted only after authentication) */}
       {isLoggedIn && !isSignUp && (
         <BrowserRouter>
+          <ErrorBoundary>
             <ExpenseInsightsProvider>
               <ChartInsightsProvider>
-                <BudgetProvider>
-                  <LandingPage setIsSpinnerLoad={setIsSpinnerLoad} setIsLogout={setIsLogout} setIsLoggedIn={setIsLoggedIn} />
-                </BudgetProvider>
+                <LandingPage setIsSpinnerLoad={setIsSpinnerLoad} setIsLogout={setIsLogout} setIsLoggedIn={setIsLoggedIn} />
               </ChartInsightsProvider>
             </ExpenseInsightsProvider>
+          </ErrorBoundary>
         </BrowserRouter>
       )}
     </ThemeProvider>

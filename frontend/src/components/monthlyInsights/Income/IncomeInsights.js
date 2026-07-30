@@ -3,6 +3,7 @@ import Header from "./Header";
 import OverallInsight from "./OverallInsight";
 import '../Layout.css';
 
+// Income analysis page: header summary cards plus the overall income/expense breakdown.
 export default function IncomeInsights () {
 
   const [period, setPeriod] = useState("financial_year");

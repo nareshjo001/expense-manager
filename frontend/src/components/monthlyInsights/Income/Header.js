@@ -5,22 +5,27 @@ import "../Header.css";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import IncomeModal from '../../IncomeHandling/IncomeModal';
 import { expenseAddErrorToast } from "../../alertsEffects/toastMessages";
+import { useIncomeSummaryQuery } from "../../../hooks/queries/useIncomeSummaryQuery";
 
+// Falls back to zeroed-out totals until the summary query resolves.
+const DEFAULT_CARD_DATA = {
+  totalIncome: 0,
+  totalExpenses: 0,
+  totalIncomes: 0,
+  balance: 0,
+  topSource: "N/A",
+};
+
+// Income insights header: summary cards plus a link into IncomeModal for viewing recorded incomes.
 export default function Header({ period, setPeriod }) {
-  // const [editBudget, setEditBudget] = useState(false);
-  const [cardData, setCardData] = useState({
-    totalIncome: 0,
-    totalExpenses: 0,
-    totalIncomes: 0,
-    balance: 0,
-    topSource: "N/A",
-  });
+  const summaryQuery = useIncomeSummaryQuery(period);
+  const cardData = summaryQuery.data?.data ?? DEFAULT_CARD_DATA;
 
   const [animate, setAnimate] = useState(false);
 
   const isMobile = useIsMobile();
   const [showIncomeModal, setShowIncomeModal] = useState(false);
-  
+
   useEffect(() => {
     if (cardData) {
       const t = setTimeout(() => setAnimate(true), 50); // small delay = smoother paint
@@ -29,37 +34,13 @@ export default function Header({ period, setPeriod }) {
   }, [cardData]);
 
   useEffect(() => {
-    const fetchInsights = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
-        const res = await fetch(`${BASE_URL}/income/insights-header`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ period }),
-        });
-
-        if (!res.ok) {
-          throw new Error("Failed to fetch insights");
-        }
-
-        const data = await res.json();
-
-        if (data.success) {
-          setCardData(data.data);
-        }
-      } catch (error) {
-        expenseAddErrorToast({ message: "Failed to load insights." });
-        console.error(error);
-      }
-    };
-
-    fetchInsights();
-  }, [period]);
+    if (!summaryQuery.isError) return;
+    // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+    const status = summaryQuery.error?.response?.status;
+    if (status !== 401 && status !== 429 && status !== 409) {
+      expenseAddErrorToast({ message: "Failed to load insights." });
+    }
+  }, [summaryQuery.isError, summaryQuery.error]);
 
   const currentMonthYear = new Date().toLocaleString('default', {
     month: 'long',

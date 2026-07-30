@@ -1,3 +1,4 @@
+// Downward trend arrow icon.
 const TrendDownIcon = ({ size = 18, color = "currentColor" }) => (
   <svg
     width={size}

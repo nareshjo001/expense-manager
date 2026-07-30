@@ -12,19 +12,19 @@ import icons from '../../imports/iconsImport';
 
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
 import InlineChartInsight from '../../insights/InlineChartInsight';
+import { useTrendChartQuery } from '../../../hooks/queries/useTrendChartQuery';
+import { useLoggedYearsQuery } from '../../../hooks/queries/useLoggedYearsQuery';
 
+// Trend line chart (week/month/year, with optional multi-year comparison) with cancellable data fetching per filter change.
 const TrendChartPage = ({ expenses }) => {
 
   const { theme } = useContext(ThemeContext);
 
-  // State for user-selected filters
-  const [viewBy, setViewBy] = useState(''); // current view filter: week/month/year
+  const [viewBy, setViewBy] = useState('');
   const [selectedMonthYear, setSelectedMonthYear] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
-  const [compareByYear, setCompareByYear] = useState(false); // if comparing multiple years
-  const [selectedYears, setSelectedYears] = useState([]); // years selected for comparison
-  const [fetchedData, setFetchedData] = useState([]);
-  const [availableYears, setAvailableYears] = useState([]);
+  const [compareByYear, setCompareByYear] = useState(false);
+  const [selectedYears, setSelectedYears] = useState([]);
 
   const { notifyChartFilterApplied, clearChartInsights, isChartInsightReady, chartInsightText } =  useChartInsights();
 
@@ -32,82 +32,27 @@ const TrendChartPage = ({ expenses }) => {
     clearChartInsights();
   }, [clearChartInsights]);
 
+  const trendChartQuery = useTrendChartQuery(viewBy, selectedMonthYear, selectedYear, compareByYear, selectedYears);
+
+  // useQuery no longer supports an onSuccess callback, so the chart insight notification runs here instead, once per new successful fetch.
   useEffect(() => {
-    const getExpenses = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
-        let url = "";
-
-        if (viewBy === 'week' && selectedMonthYear) {
-          const [year, month] = selectedMonthYear.split('-');
-          url = `${BASE_URL}/chart/linechartbyweek?selectedYear=${year}&selectedMonth=${month}`;
-        } else if(viewBy === 'bymonth' && selectedYear.length === 4) {
-          url = `${BASE_URL}/chart/linechartbymonth?selectedYear=${selectedYear}`;
-        } else if(viewBy === 'byyear' && !compareByYear) {
-          url = `${BASE_URL}/chart/linechartbyyear`;
-        } else if (viewBy === 'byyear' && compareByYear && selectedYears.length > 0) {
-          const yearsQuery = selectedYears.join(',');
-          url = `${BASE_URL}/chart/linechartbetweenyears?years=${yearsQuery}`;
-        }
-
-        if (!url) return;
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const backendData = await response.json();
-
-        if (backendData.success && Array.isArray(backendData.data)) {
-          setFetchedData(backendData.data);
-          notifyChartFilterApplied(backendData.data, 'line', viewBy, compareByYear);
-        } else {
-          setFetchedData([]);
-        }
-      } catch (err) {
-        console.error("Network error:", err);
-      }
-    };
-
-    getExpenses();
-  }, [viewBy, selectedMonthYear, selectedYear, selectedYears, compareByYear, notifyChartFilterApplied]);
-
-  useEffect(() => {
-    const getAvailableYears = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
-        let url = `${BASE_URL}/chart/getloggedyears`;
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const backendData = await response.json();
-
-        if (backendData.success) {
-          setAvailableYears(backendData.data);
-        } else {
-          setAvailableYears([]);
-        }
-      } catch(err) {
-        console.error("Network error:", err);
-      }
+    if (trendChartQuery.data?.success && Array.isArray(trendChartQuery.data.data)) {
+      notifyChartFilterApplied(trendChartQuery.data.data, 'line', viewBy, compareByYear);
     }
+  }, [trendChartQuery.data, viewBy, compareByYear, notifyChartFilterApplied]);
 
-    getAvailableYears();
-  }, [compareByYear]);
+  const loggedYearsQuery = useLoggedYearsQuery();
+  const availableYears = loggedYearsQuery.data?.success ? loggedYearsQuery.data.data : [];
 
-  let data = fetchedData;
+  const data =
+    trendChartQuery.data?.success && Array.isArray(trendChartQuery.data.data)
+      ? trendChartQuery.data.data
+      : [];
 
   const average = data.length > 0
     ? data.reduce((sum, d) => sum + (d.total || 0), 0) / data.length
     : 0;
 
-  // Tooltip shown when hovering chart points
   const customTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const item = payload[0].payload;
@@ -133,7 +78,6 @@ const TrendChartPage = ({ expenses }) => {
 
   const shouldRenderChart = data.length > 0;
 
-  // Handle dropdown change (Week / Month / Year)
   const handleViewChange = (e) => {
     const newView = e.target.value;
     setViewBy(newView);
@@ -142,11 +86,9 @@ const TrendChartPage = ({ expenses }) => {
     setSelectedYear('');
     setSelectedMonthYear('');
 
-    setFetchedData([]);
     clearChartInsights();
   };
 
-  // Header icon and title based on current view
   const getHeaderDetails = (viewBy) => {
     switch (viewBy) {
       case 'week':
@@ -166,7 +108,6 @@ const TrendChartPage = ({ expenses }) => {
     <div className="chart-container">
       <div className="chart-header">
 
-        {/* Animated chart heading */}
         <motion.div
           key={viewBy}
           initial={{ opacity: 0, y: 20 }}
@@ -181,7 +122,6 @@ const TrendChartPage = ({ expenses }) => {
           </div>
         </motion.div>
 
-        {/* Filter controls */}
         <div className="chart-filters">
           {viewBy === 'week' && (
             <input
@@ -217,7 +157,6 @@ const TrendChartPage = ({ expenses }) => {
         </div>
       </div>
 
-      {/* Toggle for year comparison */}
       {viewBy === 'byyear' && (
         <div className="compare-by-year">
           <input
@@ -231,7 +170,6 @@ const TrendChartPage = ({ expenses }) => {
 
               if (!checked) {
                 setSelectedYears([]);
-                setFetchedData([]);
               }
             }}
           />
@@ -239,14 +177,12 @@ const TrendChartPage = ({ expenses }) => {
         </div>
       )}
 
-      {/* Default message before any view is selected */}
       {viewBy === '' && (
         <p style={{ textAlign: 'center', fontSize: '20px' }}>
           Select desirable filter to visualize!
         </p>
       )}
 
-      {/* Dropdown for selecting years in comparison mode */}
       {viewBy === 'byyear' && compareByYear && (
         <div className="compare-year-select">
           <label>Select years to compare:</label>
@@ -261,7 +197,6 @@ const TrendChartPage = ({ expenses }) => {
         </div>
       )}
 
-      {/* Single trend chart (non-comparison mode) */}
       <AnimatePresence mode="wait">
         {shouldRenderChart && !compareByYear && (
           <motion.div
@@ -289,7 +224,6 @@ const TrendChartPage = ({ expenses }) => {
         )}
       </AnimatePresence>
 
-      {/* Multiple trend chart (comparison mode) */}
       <AnimatePresence>
         {shouldRenderChart && compareByYear && (
           <motion.div

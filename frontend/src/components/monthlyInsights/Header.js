@@ -1,24 +1,23 @@
 import { FaCalendarAlt, FaCreditCard, FaThLarge, FaArrowUp, FaArrowDown, } from "react-icons/fa";
 import { FaArrowTrendUp, FaPen  } from "react-icons/fa6";
 import { HiSparkles } from "react-icons/hi2";
-import { BudgetContext } from "../contexts/BudgetContext";
-import { useContext, useEffect, useState } from "react";
+import { useBudgetSummary } from "../../hooks/queries/useBudgetSummary";
+import { useEffect, useState } from "react";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
-import { useQueryClient } from "@tanstack/react-query";
-import { handleApiError } from "../../api/handleApiError";
+import { useUpdateBudgetMutation } from "../../hooks/mutations/useUpdateBudgetMutation";
 import "./Header.css";
 
+// Monthly budget insights header: summary cards plus an inline budget-edit modal.
 export default function Header({ summary }) {
-  const { totalBudget, fetchBudgets } = useContext(BudgetContext);
+  const { totalBudget } = useBudgetSummary();
   const [editBudget, setEditBudget] = useState(false);
   const [newBudget, setNewBudget] = useState(totalBudget || "");
 
-  const [isFetching, setIsFetching] = useState(false);
   const [animate, setAnimate] = useState(false);
 
-  const queryClient = useQueryClient();
-  
+  const updateBudgetMutation = useUpdateBudgetMutation();
+
   useEffect(() => {
     if (summary) {
       const t = setTimeout(() => setAnimate(true), 50);
@@ -34,49 +33,27 @@ export default function Header({ summary }) {
   const comparePastMonth = summary.comparePastMonth;
   const percentageChange = comparePastMonth != null ? Math.abs(comparePastMonth) : null;
  
-  const handleBudgetSubmit = async (e) => {
+  const handleBudgetSubmit = (e) => {
     e.preventDefault();
-    try {
-      setIsFetching(true);
-      const token = localStorage.getItem("token");
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
-      const res = await fetch(`${BASE_URL}/api/update-budget`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          budget: newBudget,
-        }),
-      });
-
-      // Handle 401 / 429 before treating this as a generic server error.
-      if (handleApiError(res)) {
-        setIsFetching(false);
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error("Server error");
-      }
-
-      const data = await res.json();
-      if (data.success) {
-        setIsFetching(false);
-        await fetchBudgets();
-        // Invalidate Report
-        await queryClient.invalidateQueries({
-          queryKey: ["report"],
-        });
+    updateBudgetMutation.mutate(newBudget, {
+      onSuccess: (data) => {
+        if (!data.success) {
+          expenseAddErrorToast({ message: "Failed to update budget." });
+          console.error("Error updating budget:", data.message);
+          return;
+        }
 
         setNewBudget("");
         setEditBudget(false);
-      }
-
-    } catch (error) {
-      expenseAddErrorToast({ message: "Failed to update budget." });
-      setIsFetching(false);
-      console.error("Error updating budget:", error);
-    }
+      },
+      onError: (error) => {
+        // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+        const status = error.response?.status;
+        if (status === 401 || status === 429 || status === 409) return;
+        expenseAddErrorToast({ message: "Failed to update budget." });
+        console.error("Error updating budget:", error);
+      },
+    });
   };
 
   return (
@@ -237,7 +214,7 @@ export default function Header({ summary }) {
                   type="submit"
                   className="save-btn"
                 >
-                  {isFetching ? <FetchingLoader /> : "Update Budget"}
+                  {updateBudgetMutation.isPending ? <FetchingLoader /> : "Update Budget"}
                 </button>
               </div>
             </form>

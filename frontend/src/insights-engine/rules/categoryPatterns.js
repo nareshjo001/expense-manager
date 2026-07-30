@@ -1,5 +1,6 @@
 import { calculateMedian } from "../statistics/statsCalculation";
 
+// Category-spend business rules: dominant/top category detection, spike/habit classification, and yearly stability/concentration.
 const findTopAndDominantCategory = (
   categoryTotals = [],
   filterMeta = '',
@@ -37,7 +38,6 @@ const findTopAndDominantCategory = (
       dominant: dominantCategory, // nullable
     };
   } else {
-    // Dominance Level
     let dominanceLevel = '';
     if(topCategory.percent >= 40) dominanceLevel = 'Strong';
     else if(topCategory.percent >= 25 && topCategory.percent < 40) dominanceLevel = 'Moderate';
@@ -63,12 +63,11 @@ const habitOrSpike = (dominant, pastThreeMonths) => {
 
     const currentTotal = dominant.total;
 
-    // Step 1: mean and std
     const mean = pastTotals.reduce((sum, x) => sum + x, 0) / pastTotals.length;
     const variance = pastTotals.reduce((sum, x) => sum + (x - mean) ** 2, 0) / pastTotals.length;
     const std = Math.sqrt(variance);
 
-    // Step 2: thresholds based on volatility
+    // Thresholds scale with volatility (std) around the mean, so a spike is relative to this category's own history.
     const CONSISTENT_LOWER = mean - std;
     const CONSISTENT_UPPER = mean + std;
     const MODERATE_SPIKE_UPPER = mean + 2 * std;
@@ -97,7 +96,6 @@ const habitOrSpike = (dominant, pastThreeMonths) => {
 };
 
 const detectMicroTransactions = (expensesByCategory = {}) => {
-  // Find category with the most transactions
   const categoryWithMostTransactions = Object.entries(expensesByCategory)
     .reduce(
       (maxCat, [cat, expenses]) => {
@@ -113,26 +111,23 @@ const detectMicroTransactions = (expensesByCategory = {}) => {
 
   const categoryExpenses = expensesByCategory[categoryWithMostTransactions];
 
-  // Extract positive expense amounts
   const amounts = categoryExpenses
     .map(exp => Number(exp.expenseAmount || 0))
     .filter(val => val > 0);
 
   const n = amounts.length;
 
-  // Guard: not enough data
   if (n < 6) {
     return { hasMicroTransactions: false, meta: { transactionCount: n } };
   }
 
-  // Compute mean and median
   const total = amounts.reduce((sum, x) => sum + x, 0);
   const mean = total / n;
 
   const median = calculateMedian(amounts);
 
-  // Define "small transaction"
-  const SMALL_FACTOR = 0.6; // 60% of mean
+  // A "small" transaction is one at or below 60% of the category's mean amount.
+  const SMALL_FACTOR = 0.6;
   const smallThreshold = mean * SMALL_FACTOR;
 
   const smallCount = amounts.filter(a => a <= smallThreshold).length;
@@ -198,7 +193,7 @@ const yearlyCategoryStablity = (expenses, top) => {
       .flat()
       .reduce((sum, e) => sum + Number(e.expenseAmount || 0), 0);
 
-    if (Tj === 0) return; // skip empty month
+    if (Tj === 0) return;
 
     totalMonthsWithSpend++;
 
@@ -344,12 +339,11 @@ export const categorySpend = ({
             return {
               type: "THIS_YEAR_CATEGORY_SUMMARY",
               payload: {
-                // --- Insight #1: Dominance (always present)
+                // Dominance is always present; stability and concentration are optional, computed only when the underlying pattern was detected.
                 topCategory: top.category,
                 topPercent: Number(top.percent.toFixed(1)),
                 dominanceLevel, // "Strong" | "Moderate" | "Balanced"
 
-                // --- Insight #2: Stability (optional)
                 stability: stablity
                   ? {
                       isStable: true,
@@ -358,7 +352,6 @@ export const categorySpend = ({
                     }
                   : null,
 
-                // --- Insight #3: Concentration (optional)
                 concentration: heavyConcentration
                   ? {
                       level: heavyConcentration.concentrationLevel, // High | Moderate

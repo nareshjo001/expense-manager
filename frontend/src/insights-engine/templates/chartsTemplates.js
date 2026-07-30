@@ -1,3 +1,4 @@
+// Maps chart-pattern findings to user-facing insight text and severity, per chart type.
 export const chartInsightTemplates = {
   LINE_CHART_SUMMARY: ({
     isEnoughData,
@@ -14,7 +15,7 @@ export const chartInsightTemplates = {
       };
     }
 
-    // 🔺 Recent momentum first
+    // Recent momentum takes priority over the overall-period direction below.
     if (ending === "rising") {
       if (isVolatile) {
         return {
@@ -45,7 +46,6 @@ export const chartInsightTemplates = {
       };
     }
 
-    // ➖ Stable ending → look at overall direction
     if (direction === "up") {
       if (isVolatile) {
         return {
@@ -76,7 +76,6 @@ export const chartInsightTemplates = {
       };
     }
 
-    // ➖ Flat direction
     if (isVolatile) {
       return {
         text: "Spending fluctuated noticeably during this period.",
@@ -166,7 +165,6 @@ export const chartInsightTemplates = {
         return { severity: "LOW", text };
       }
 
-      // ---- Budget vs Spent ----
       if (filter === "comparison") {
         if (ratio >= 1) {
           return { severity: "HIGH", text: "You exceeded your budget this month." };

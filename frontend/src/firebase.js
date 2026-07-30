@@ -1,7 +1,7 @@
 import { initializeApp  } from 'firebase/app';
 import { getMessaging } from "firebase/messaging";
 
-// Firebase configuration
+// Firebase project config and messaging instance used for web push notifications.
 const firebaseConfig = {
   apiKey: "AIzaSyCLdiBKVOyiSxeT9stpDjcmK5aO99ZAXtw",
   authDomain: "balensia-001.firebaseapp.com",
@@ -11,6 +11,5 @@ const firebaseConfig = {
   appId: "1:478316007747:web:eb36adde0e901f1494dff6"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const messaging = getMessaging(app);

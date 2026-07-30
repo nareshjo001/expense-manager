@@ -148,8 +148,66 @@ const MlFeedbackSchema = new mongoose.Schema({
     },
 
     corrected: {
+        // Kept temporarily for backward compatibility: the current backend cron
+        // (feedbackCollector.js) and the ML-service export script
+        // (training/export_feedback.py) still read/write this boolean directly.
+        // Do not remove until those readers are migrated to `status` (Phase C).
         type: Boolean,
         default: false
+    },
+
+    // --- Feedback lifecycle (Phase A) ---
+    // Explicit lifecycle state for the retraining pipeline. Deliberately has
+    // no schema-level default of "pending" — a document only becomes
+    // "pending" when the server has confirmed a genuine ML correction
+    // occurred. Ordinary accepted-prediction records are left with
+    // status: null so they are never mistaken for training-eligible feedback.
+    status: {
+        type: String,
+        enum: {
+            values: ['pending', 'reserved', 'trained', 'needs_review'],
+            message: '{VALUE} is not a valid feedback status'
+        },
+        default: null
+    },
+
+    // Will reference an ML training-run record once training-run persistence
+    // exists (Phase B). Stored as ObjectId, consistent with how every other
+    // cross-document reference in this schema file (userId, ref: "users") is
+    // represented, rather than as a free-form string.
+    trainingRunId: {
+        type: Schema.Types.ObjectId,
+        default: null
+    },
+
+    // Number of times this document has been reserved by a training run
+    // that did not end in "trained". Used by later phases to detect
+    // chronically-failing feedback and route it to "needs_review".
+    attempts: {
+        type: Number,
+        default: 0,
+        min: [0, 'attempts cannot be negative']
+    },
+
+    // Short description of the most recent failure/rejection reason for
+    // this document, if any (e.g. an unmapped category). Null when there
+    // has been no failure.
+    lastError: {
+        type: String,
+        default: null
+    },
+
+    // When this document was last reserved by a training run's export step.
+    reservedAt: {
+        type: Date,
+        default: null
+    },
+
+    // When this document was confirmed to be part of a successfully
+    // activated training run.
+    trainedAt: {
+        type: Date,
+        default: null
     },
 
     userId: {

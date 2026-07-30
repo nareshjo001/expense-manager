@@ -1,6 +1,5 @@
 import { ThemeContext } from '../contexts/ThemeContext';
-import { BudgetContext } from '../contexts/BudgetContext';
-import { 
+import {
     customStyles,
     getSelectStyles
 } from '../charts/essentials/chartEssentials';
@@ -11,9 +10,9 @@ import MultiTrendChartWrapper from '../charts/linechart/MultiTrendChartWrapper';
 import BarChartWrapper from '../charts/barchart/BarChartWrapper';
 import PieChartWrapper from '../charts/piechart/PieChartWrapper';
 
+// Barrel re-export of chart wrappers, styles, and gradients used by the chart pages.
 export {
     ThemeContext,
-    BudgetContext,
     customStyles,
     getSelectStyles,
     TrendChartWrapper,

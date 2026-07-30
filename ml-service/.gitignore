@@ -17,6 +17,28 @@ __pycache__/
 *.pyc
 
 # =====================================================
+# GENERATED MODEL ARTIFACTS (Phase G item 1 audit finding)
+# =====================================================
+# Versioned candidate bundles + the active-model manifest (training/models/)
+# are produced entirely at runtime by the retraining pipeline -- they were
+# never present in the repo as of Phase G and must never be committed
+# (each bundle can be tens of MB of joblib artifacts, and active.json is
+# environment-specific). The pre-Phase-D fixed legacy artifacts at
+# training/model.pkl, training/vectorizer.pkl, training/labelEncoder.pkl
+# are NOT covered by this rule -- those are the shipped bootstrap model and
+# are intentionally tracked in git.
+training/models/
+
+# Run-specific immutable dataset snapshots (training/dataset_builder.py's
+# RUNS_DIR output, training/dataset/runs/) -- also generated at runtime,
+# never hand-authored, never meant to be committed. The BASE dataset at
+# training/dataset/merged_expenses.csv is intentionally NOT covered by
+# this rule -- see the Phase G final report's audit of usedDatasets/ and
+# training/dataset/ for which base datasets are (and, arguably, should
+# reconsider being) tracked in git.
+training/dataset/runs/
+
+# =====================================================
 # OS / EDITOR
 # =====================================================
 

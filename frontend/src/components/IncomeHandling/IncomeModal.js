@@ -3,22 +3,32 @@ import "./IncomeModel.css";
 import { FaTimes, FaEdit, FaTrash } from "react-icons/fa";
 import { expenseAddErrorToast, expenseAddSuccessToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
+import { useIncomeListQuery } from "../../hooks/queries/useIncomeListQuery";
+import { useUpdateIncomeMutation } from "../../hooks/mutations/useUpdateIncomeMutation";
+import { useDeleteIncomeMutation } from "../../hooks/mutations/useDeleteIncomeMutation";
 
+// Modal for viewing, editing, and deleting income records.
 export default function IncomeModal({ isOpen, onClose }) {
 
-  const [incomeList, setIncomeList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const listQuery = useIncomeListQuery(isOpen);
+  const updateMutation = useUpdateIncomeMutation();
+  const deleteMutation = useDeleteIncomeMutation();
+
+  const incomeList = listQuery.data?.data ?? [];
+  const loading = listQuery.isLoading || updateMutation.isPending || deleteMutation.isPending;
 
   const [isEdit, setIsEdit] = useState(false);
   const [editIncomeId, setEditIncomeId] = useState(null);
   const [updatedAmount, setUpdatedAmount] = useState("");
 
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
   useEffect(() => {
-    if (!isOpen) return;
-    fetchIncomeSources();
-  }, [isOpen]);
+    if (!listQuery.isError) return;
+    // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+    const status = listQuery.error?.response?.status;
+    if (status !== 401 && status !== 429 && status !== 409) {
+      expenseAddErrorToast({ message: "Failed to fetch income sources." });
+    }
+  }, [listQuery.isError, listQuery.error]);
 
   useEffect(() => {
     if (isOpen) {
@@ -35,125 +45,57 @@ export default function IncomeModal({ isOpen, onClose }) {
     };
   }, [isOpen]);
 
-  const fetchIncomeSources = async () => {
-    try {
-
-      setLoading(true);
-
-      const token = localStorage.getItem("token");
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
-      const response = await fetch(
-        `${BASE_URL}/income/get`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            'Authorization': `Bearer ${token}`,
-          }
-        }
-      );
-
-      const data = await response.json();
-
-      if(!response.ok) {
-        throw new Error("Failed to fetch income sources");
-      }
-
-      if (response.ok) {
-        setIncomeList(data.data);
-      }
-
-    } catch (error) {
-      expenseAddErrorToast({ message: "Failed to fetch income sources." });
-      console.log(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEdit = (income) => {
     setIsEdit(true);
     setEditIncomeId(income._id);
+    // Seeds the controlled input so saving without typing submits the unchanged value, not "".
+    setUpdatedAmount(income.incomeAmount ?? "");
   }
 
-  const  handleSaveChanges = async () => {
-    try {
-      setLoading(true);
-      setDeleteLoading(true);
-      
-      const token = localStorage.getItem("token");
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
-      const response = await fetch(
-        `${BASE_URL}/income/edit`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            incomeId: editIncomeId,
-            newAmount: updatedAmount
-          })
-        }
-      );
-
-      if(!response.ok) {
-        throw new Error("Failed to update income");
+  const handleSaveChanges = () => {
+    updateMutation.mutate(
+      { incomeId: editIncomeId, newAmount: updatedAmount },
+      {
+        onSuccess: () => {
+          expenseAddSuccessToast({ message: "Income updated successfully." });
+          setIsEdit(false);
+          setEditIncomeId(null);
+          setUpdatedAmount("");
+        },
+        onError: (error) => {
+          // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+          const status = error.response?.status;
+          if (status !== 401 && status !== 429 && status !== 409) {
+            expenseAddErrorToast({ message: "Failed to update income." });
+            console.log(error);
+          }
+        },
       }
-
-      if (response.ok) {
-        expenseAddSuccessToast({ message: "Income updated successfully." });
-        fetchIncomeSources();
-        setIsEdit(false);
-        setEditIncomeId(null);
-      }
-    } catch (error) {
-      expenseAddErrorToast({ message: "Failed to update income." });
-      console.log(error);
-    } finally {
-      setDeleteLoading(false);
-      setLoading(false);
-    }
+    );
   }
 
-  const handleDelete = async (incomeId) => {
-    try {
-      setLoading(true);
-
-      const token = localStorage.getItem("token");
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
-      const response = await fetch(
-        `${BASE_URL}/income/delete`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ deleteIncomeId: incomeId }),
+  const handleDelete = (incomeId) => {
+    deleteMutation.mutate(incomeId, {
+      onSuccess: (data) => {
+        if (data.success) {
+          expenseAddSuccessToast({ message: "Income deleted successfully." });
         }
-      );
+      },
+      onError: (error) => {
+        // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+        const status = error.response?.status;
+        if (status !== 401 && status !== 429 && status !== 409) {
+          expenseAddErrorToast({ message: "Failed to delete income." });
+          console.error(error);
+        }
+      },
+    });
+  };
 
-      if(!response.ok) {
-        throw new Error("Failed to delete income");
-      }
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        expenseAddSuccessToast({ message: "Income deleted successfully." });
-        fetchIncomeSources();
-      }
-    } catch (error) {
-      expenseAddErrorToast({ message: "Failed to delete income." });
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+  // Falls back to "0" for null/undefined/non-numeric incomeAmount values instead of crashing.
+  const formatIncomeAmount = (amount) => {
+    const num = Number(amount);
+    return Number.isFinite(num) ? num.toLocaleString() : "0";
   };
 
   const formatDate = (date) =>
@@ -176,6 +118,7 @@ export default function IncomeModal({ isOpen, onClose }) {
         onClick={() => {
           onClose();
           setIsEdit(false);
+          setUpdatedAmount("");
         }}
     >
       {isEdit ?
@@ -191,9 +134,7 @@ export default function IncomeModal({ isOpen, onClose }) {
               <input
                 type="number"
                 placeholder="Enter amount"
-                defaultValue={
-                  incomeList.find(i => i._id === editIncomeId)?.incomeAmount || ""
-                }
+                value={updatedAmount}
                 min="0"
                 onChange={(e) => setUpdatedAmount(e.target.value)}
               />
@@ -205,13 +146,14 @@ export default function IncomeModal({ isOpen, onClose }) {
                 onClick={() => {
                   setIsEdit(false);
                   setEditIncomeId(null);
+                  setUpdatedAmount("");
                 }}
               >
                 Cancel
               </button>
 
               <button className="save-btn" onClick={() => {handleSaveChanges()}}>
-                {deleteLoading ? <FetchingLoader /> : "Save Changes"}
+                {updateMutation.isPending ? <FetchingLoader /> : "Save Changes"}
               </button>
             </div>
           </div>
@@ -240,7 +182,7 @@ export default function IncomeModal({ isOpen, onClose }) {
                     </span>
 
                     <span className="income-amount">
-                      ₹{income.incomeAmount.toLocaleString()}
+                      ₹{formatIncomeAmount(income.incomeAmount)}
                     </span>
                   </div>
 

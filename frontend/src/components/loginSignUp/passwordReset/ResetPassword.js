@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import back from '../../../icons/left-arrow.png';
 import { signUpSuccessToast, logInErrorToast } from "../../alertsEffects/toastMessages";
 
-// Inline style for errors
 const styles = {
     resetPassError: {
         color: "#dc2626",
@@ -12,21 +11,15 @@ const styles = {
     }
 }
 
+// Final step of the forgot-password flow: sets a new password after OTP verification.
 const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
-    // Controlled input state
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    
-    // Validation error message
+
     const [error, setError] = useState("");
 
-    /**
-     * Client-side password validation
-     * Runs whenever user types in either field.
-     * Keeps submit button state and error message in sync.
-    */
+    // Re-validates the password fields on every keystroke, keeping the error message and submit state in sync.
     useEffect(() => {
-        // Start validating only when user types something
         if (!password && !confirmPassword) {
             setError("");
             return;
@@ -41,27 +34,18 @@ const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
         }
     }, [password, confirmPassword]);
 
-    /**
-     * Submit button disabled when:
-     * - fields are empty
-     * - validation error exists
-    */
     const isDisabled =
         !password ||
         !confirmPassword ||
         error.length > 0;
 
-    /**
-     * Submits new password to backend.
-     * Uses global spinner from App level.
-    */
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (isDisabled) return;
 
         setIsSpinnerLoad(true);
         
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
+        const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
         if (!BASE_URL) {
             setIsSpinnerLoad(false);
             return;
@@ -80,8 +64,7 @@ const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
                 signUpSuccessToast(data);
                 onBack(); // Return user to previous auth screen
             } else if (response.status === 403) {
-                // The OTP authorization window has expired or was never
-                // completed. Send the user back to restart the flow.
+                // The OTP authorization window expired or was never completed — send the user back to restart the flow.
                 logInErrorToast({
                     message: "Verification expired. Please request a new OTP",
                 });

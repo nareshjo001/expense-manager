@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./BillUpload.css";
 import { FaArrowLeft } from "react-icons/fa";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
+import { useBillUploadMutation } from "../../hooks/mutations/useBillUploadMutation";
 
+// Bill image upload with OCR-based receipt parsing and preview lifecycle management.
 const BillUpload = ({ setIsBillUpload, setBillData }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
+
+  const billUploadMutation = useBillUploadMutation();
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -16,6 +19,15 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
       setPreview(URL.createObjectURL(file));
     }
   };
+
+  // Revokes the previous preview's Blob URL when it's replaced, and the active one on unmount.
+  useEffect(() => {
+    return () => {
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
   
   const formatDateForInput = (dateString) => {
 
@@ -33,34 +45,26 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
     return "";
   };
 
-  const handleUpload = async () => {
+  const handleUpload = () => {
     if (!selectedFile) return;
 
-    setLoading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("bill", selectedFile);
-
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-      const response = await fetch(`${BASE_URL}/bills/bill-upload`, {
-        method: "POST",
-        body: formData,
-      });
-      
-      if(response.ok) {
-        const result = await response.json();
+    billUploadMutation.mutate(selectedFile, {
+      onSuccess: (result) => {
         result.parsedReceipt.expenseDate = formatDateForInput(result.parsedReceipt.expenseDate);
         setBillData(result.parsedReceipt);
         setIsBillUpload(false);
-      }
-      
-    } catch (error) {
-      console.error(error);
-      expenseAddErrorToast({ message: "Failed to upload bill. Please try again." });
-    } finally {
-      setLoading(false);
-    }
+      },
+      onError: (error) => {
+        // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+        const status = error.response?.status;
+        if (status === 401 || status === 429 || status === 409) {
+          return;
+        }
+
+        console.error(error);
+        expenseAddErrorToast({ message: "Failed to upload bill. Please try again." });
+      },
+    });
   };
 
   return (
@@ -104,9 +108,9 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
           type="button"
           className="bill-upload-btn"
           onClick={handleUpload}
-          disabled={loading}
+          disabled={billUploadMutation.isPending}
         >
-          {loading ? "Uploading..." : "Upload Bill"}
+          {billUploadMutation.isPending ? "Uploading..." : "Upload Bill"}
         </button>
       </div>
     </div>

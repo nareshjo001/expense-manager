@@ -4,6 +4,7 @@ import { FaFire, FaAward, FaArrowRight } from "react-icons/fa";
 import { FaArrowTrendUp } from "react-icons/fa6";
 import { useInView } from 'react-intersection-observer';
 
+// Derives the biggest spending jump, budget streak, and stability score cards from the report data.
 function buildSpendingJump(categoriesMonthly) {
   const jump = categoriesMonthly?.biggestJump;
   if (!jump?.category || !Number.isFinite(jump?.growthPercentage) || jump.growthPercentage <= 0) {

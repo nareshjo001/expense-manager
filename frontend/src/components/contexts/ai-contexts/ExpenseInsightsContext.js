@@ -4,6 +4,7 @@ import { overallSpend } from '../../../insights-engine/rules/overallSpend';
 import { categorySpend } from '../../../insights-engine/rules/categoryPatterns';
 import { expenseInsightTemplates } from '../../../insights-engine/templates/expenseTemplates';
 
+// Derives and provides AI-generated expense insight text on initial load and filter changes.
 const ExpenseInsightsContext = createContext();
 
 export const ExpenseInsightsProvider = ({ children }) => {

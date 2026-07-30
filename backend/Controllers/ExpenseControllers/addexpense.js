@@ -5,6 +5,32 @@ const axios = require("axios");
 
 const { refreshReport } = require('../../Services/reportService');
 
+// Lowercases + trims for comparison only; never throws on missing/non-string input.
+const normalizeForComparison = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim().toLowerCase();
+};
+
+// Server-derived source of truth for whether a genuine ML correction occurred.
+// The client-supplied `wasMlCorrected` flag is no longer trusted directly —
+// it is recomputed here from the actual predicted vs. saved category.
+// Returns { hasPrediction, corrected }:
+//   hasPrediction=false  -> no valid ML prediction was involved at all
+//   hasPrediction=true, corrected=false -> prediction accepted as-is
+//   hasPrediction=true, corrected=true  -> user's saved category differs from the prediction
+const deriveMlCorrection = (mlPredictedCategory, expenseCategory) => {
+  const predicted = normalizeForComparison(mlPredictedCategory);
+
+  if (!predicted) {
+    return { hasPrediction: false, corrected: false };
+  }
+
+  const actual = normalizeForComparison(expenseCategory);
+  return { hasPrediction: true, corrected: predicted !== actual };
+};
+
 const addExpense = async (req, res) => {
   try {
     // Destructure expense data from request body
@@ -52,14 +78,30 @@ const addExpense = async (req, res) => {
         wasMlCorrected
     });
 
-    // Create new ML feedback document if ML predictions are available
-    if (mlPredictedCategory && mlConfidence !== undefined) {
+    // Create new ML feedback document if a genuine ML prediction is available.
+    // `corrected` and `status` are derived server-side from the actual
+    // predicted vs. saved category — the client-supplied `wasMlCorrected`
+    // flag is not trusted for this decision (see deriveMlCorrection above).
+    const { hasPrediction, corrected: mlCorrected } = deriveMlCorrection(
+      mlPredictedCategory,
+      expenseCategory
+    );
+
+    if (hasPrediction && mlConfidence !== undefined) {
         const mlFeedback = new MlFeedbackModel({
             expenseName,
             predictedCategory: mlPredictedCategory,
             actualCategory: expenseCategory,
             confidence: mlConfidence,
-            corrected: wasMlCorrected,
+            // Backward compatibility: the current cron and export_feedback.py
+            // still read this boolean directly (Phase A keeps it in sync with
+            // `status` rather than migrating those readers yet).
+            corrected: mlCorrected,
+            // "pending" only for a genuine, server-confirmed correction.
+            // Accepted predictions are left as status: null — never assigned
+            // "trained" at creation time; that only happens once a real
+            // training run has consumed this document (later phases).
+            status: mlCorrected ? 'pending' : null,
             userId: user._id
         });
         await mlFeedback.save();

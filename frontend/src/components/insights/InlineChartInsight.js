@@ -3,6 +3,7 @@ import TrendUpIcon from "./TrenUpIcon";
 import TrendDownIcon from './TrendDownIcon';
 import './inlineExpenseInsight.css';
 
+// Animated inline card showing a single chart insight with a trend icon.
 const cardVariants = {
   hidden: { opacity: 0, scale: 0.98 },
   visible: {
@@ -27,13 +28,13 @@ const itemVariants = {
   },
 };
 
-// 🔹 Severity → CSS class map
 const severityClassMap = {
   HIGH: "severity-high",
   MEDIUM: "severity-medium",
   LOW: "severity-low",
 };
 
+// Renders the up/down/none trend icon for a given trend value.
 const TrendIcon = ({ trend }) => {
   if (trend === "UP") return <TrendUpIcon size={14} />;
   if (trend === "DOWN") return <TrendDownIcon size={14} />;
@@ -53,7 +54,6 @@ const InlineChartInsight = ({ item = {} }) => {
         animate="visible"
         exit="exit"
       >
-        {/* Header */}
         <div className="insight-header">
           <span className="insight-title">Insight</span>
           <span className="insight-header-icon" 
@@ -67,7 +67,6 @@ const InlineChartInsight = ({ item = {} }) => {
           </span>
         </div>
 
-        {/* Insight */}
         <motion.div className="insight-list">
           <motion.div
             className={`insight-item ${severityClassMap[item.severity]}`}

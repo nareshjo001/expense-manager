@@ -6,14 +6,13 @@ import { Spinner } from "../imports/Imports";
 import { useReport } from "../../hooks/useReport";
 import './Layout.css';
 
+// Assembles the budget insights dashboard from the shared report query.
 export default function MonthlyInsightPage () {
   const { data: report, isLoading, error } = useReport();
 
   if (isLoading) return <Spinner />;
 
   if (error || !report) return <p>Failed to load report.</p>;
-
-  console.log(report)
 
   return (
     <div className="monthly-page-container">

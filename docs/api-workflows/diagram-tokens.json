@@ -1,0 +1,308 @@
+{
+  "$meta": {
+    "name": "BALENISA API Workflow Diagram Tokens",
+    "version": "2.0.0",
+    "purpose": "Single source of truth for every API workflow diagram in docs/api-workflows. Each endpoint gets two diagrams that share this one token set: a Level 1 overview (fast read) and a Level 2 detailed engineering view.",
+    "consumedBy": "workflow_diagram.py"
+  },
+  "canvas": {
+    "width": 1680,
+    "height": 1210,
+    "background": "#F1F5F9",
+    "titleBandHeight": 62,
+    "handoffLaneY": 66,
+    "regionTop": 74,
+    "regionBottom": 886,
+    "footerTop": 1130,
+    "margin": 20,
+    "regionGap": 14,
+    "gutterTop": 886,
+    "gutterBottom": 940,
+    "bandTop": 940,
+    "bandBottom": 1114
+  },
+  "layout": {
+    "cardWidth": 224,
+    "cardHeight": 90,
+    "cardPitch": 104,
+    "cardRadius": 10,
+    "regionRadius": 14,
+    "regionPaddingX": 24,
+    "subColumnGap": 16,
+    "railInset": 12,
+    "pillHeight": 24,
+    "pillPitch": 28,
+    "chipHeight": 66,
+    "chipRadius": 8,
+    "firstCardY": 128,
+    "bandCardWidth": 253,
+    "bandCardHeight": 118,
+    "bandCardGap": 16
+  },
+  "semantic": {
+    "frontend": {
+      "role": "Frontend / request layer",
+      "line": "#2563EB",
+      "fill": "#EFF6FF",
+      "border": "#BFDBFE",
+      "ink": "#1E3A8A"
+    },
+    "auth": {
+      "role": "Authentication / security",
+      "line": "#D97706",
+      "fill": "#FFFBEB",
+      "border": "#FDE68A",
+      "ink": "#92400E"
+    },
+    "backend": {
+      "role": "Backend processing",
+      "line": "#7C3AED",
+      "fill": "#F5F3FF",
+      "border": "#DDD6FE",
+      "ink": "#5B21B6"
+    },
+    "database": {
+      "role": "Database / cache operations",
+      "line": "#059669",
+      "fill": "#ECFDF5",
+      "border": "#A7F3D0",
+      "ink": "#065F46"
+    },
+    "insights": {
+      "role": "Analytics / insights",
+      "line": "#0D9488",
+      "fill": "#F0FDFA",
+      "border": "#99F6E4",
+      "ink": "#115E59"
+    },
+    "response": {
+      "role": "Response / data transfer",
+      "line": "#0891B2",
+      "fill": "#ECFEFF",
+      "border": "#A5F3FC",
+      "ink": "#155E75"
+    },
+    "ui": {
+      "role": "UI / output",
+      "line": "#DB2777",
+      "fill": "#FDF2F8",
+      "border": "#FBCFE8",
+      "ink": "#9D174D"
+    },
+    "error": {
+      "role": "Errors / alternate paths",
+      "line": "#DC2626",
+      "fill": "#FEF2F2",
+      "border": "#FECACA",
+      "ink": "#991B1B"
+    }
+  },
+  "neutral": {
+    "regionFill": "#FFFFFF",
+    "regionBorder": "#CBD5E1",
+    "regionLabel": "#334155",
+    "subRegionBorder": "#E2E8F0",
+    "ink": "#0F172A",
+    "inkMuted": "#475569",
+    "inkMono": "#334155",
+    "inkFaint": "#64748B",
+    "connector": "#94A3B8",
+    "divider": "#E2E8F0"
+  },
+  "typography": {
+    "sans": "Inter, 'Segoe UI', Arial, Helvetica, sans-serif",
+    "mono": "'JetBrains Mono', 'Cascadia Mono', 'Liberation Mono', Consolas, monospace",
+    "title": {
+      "size": 19,
+      "weight": 700,
+      "letterSpacing": -0.2
+    },
+    "subtitle": {
+      "size": 11.5,
+      "weight": 400,
+      "letterSpacing": 0
+    },
+    "regionLabel": {
+      "size": 10.5,
+      "weight": 700,
+      "letterSpacing": 1.1,
+      "transform": "uppercase"
+    },
+    "subLabel": {
+      "size": 8.8,
+      "weight": 700,
+      "letterSpacing": 0.9,
+      "transform": "uppercase"
+    },
+    "kicker": {
+      "size": 8.6,
+      "weight": 700,
+      "letterSpacing": 0.8,
+      "transform": "uppercase"
+    },
+    "stage": {
+      "size": 13.0,
+      "weight": 650,
+      "letterSpacing": -0.1
+    },
+    "impl": {
+      "size": 10.6,
+      "weight": 400,
+      "family": "mono"
+    },
+    "purpose": {
+      "size": 10.4,
+      "weight": 400,
+      "lineHeight": 12.4,
+      "maxLines": 2
+    },
+    "pill": {
+      "size": 9.2,
+      "weight": 400
+    },
+    "railLabel": {
+      "size": 8.6,
+      "weight": 700,
+      "letterSpacing": 0.7
+    },
+    "legend": {
+      "size": 9.2,
+      "weight": 400
+    },
+    "badge": {
+      "size": 9.6,
+      "weight": 700,
+      "letterSpacing": 0.2
+    }
+  },
+  "stroke": {
+    "cardBorder": 1,
+    "regionBorder": 1,
+    "primaryPath": 2.8,
+    "branchPath": 2.2,
+    "errorPath": 1.2,
+    "errorDash": "5 4",
+    "cornerRadius": 8,
+    "icon": 1.5,
+    "internalPath": 1.8,
+    "responsePath": 3.0,
+    "errorOpacity": 0.62
+  },
+  "shadow": {
+    "card": {
+      "dy": 1,
+      "blur": 2.5,
+      "color": "#0F172A",
+      "opacity": 0.07
+    },
+    "region": {
+      "dy": 1,
+      "blur": 3,
+      "color": "#0F172A",
+      "opacity": 0.04
+    }
+  },
+  "icons": {
+    "note": "18x18 stroke-only vector glyphs defined in workflow_diagram.py ICONS. No emoji.",
+    "available": [
+      "cursor",
+      "window",
+      "layout",
+      "refresh",
+      "key",
+      "send",
+      "shield",
+      "gauge",
+      "server",
+      "gears",
+      "bolt",
+      "user-check",
+      "database",
+      "layers",
+      "save",
+      "chart",
+      "sigma",
+      "alert",
+      "file-text",
+      "monitor",
+      "list"
+    ]
+  },
+  "conventions": {
+    "flowDirection": "left-to-right across regions; top-to-bottom within a region",
+    "regionHandoff": "exit source card right edge -> vertical run in the inter-region gap -> horizontal run in the handoff lane above the region boxes -> down into the top edge of the next region's first card",
+    "primaryPath": "solid, semantic colour of the target card, arrowhead at destination",
+    "branchPath": "solid green rail on the region's right inset, used for cache short-circuits",
+    "errorPath": "red dashed, routed on a region rail, terminating in a red chip inside the region where the failure occurs",
+    "cacheDistinction": "Redis = database green + bolt/save icon + 'REDIS' kicker; MongoDB = database green + database icon + 'MONGODB' kicker; TanStack = frontend blue + refresh icon + 'TANSTACK' kicker. Never interchangeable.",
+    "levels": "Level 1 overview answers where/auth/cache/miss/returns/consumers in 10-15 s. Level 2 keeps every real function and file name.",
+    "stageNumbers": "The 12 Level 1 stage numbers are reused as badges on Level 2 cards, so the two diagrams cross-reference. Several Level 2 cards may share a badge.",
+    "errorPlacement": "Level 2 errors live in a dedicated 'Exceptions and Current Limitations' band beneath the regions, linked back by thin red dashed references routed through the gutter so they never cross a card.",
+    "arrowWeight": "Inter-region hand-offs are heavier than within-region steps. The 200 OK hand-off is cyan and heaviest."
+  },
+  "overview": {
+    "note": "Level 1 canvas. Same palette, icons and rounded-card system as Level 2; only the density changes. Must stay readable at ~1200 px wide.",
+    "canvas": {
+      "width": 1600,
+      "height": 645,
+      "titleBandHeight": 56,
+      "margin": 34,
+      "footerTop": 576
+    },
+    "grid": {
+      "note": "Nine-column Level 1 grid shared by every endpoint in the set. One row-1 column is normally left empty to carry a cache short-circuit forward, which keeps the flow monotonically left-to-right.",
+      "columns": 9,
+      "cardWidth": 156,
+      "cardHeight": 132,
+      "cardGap": 16,
+      "columnX": [
+        34,
+        206,
+        378,
+        550,
+        722,
+        894,
+        1066,
+        1238,
+        1418
+      ],
+      "rowOneY": 112,
+      "rowTwoY": 306,
+      "labelBandY": 268,
+      "lowerBandY": 276,
+      "lowerBandH": 280
+    },
+    "typography": {
+      "badge": {
+        "size": 11.0,
+        "weight": 700
+      },
+      "title": {
+        "size": 15.0,
+        "weight": 650,
+        "lineHeight": 17.5,
+        "maxLines": 2
+      },
+      "label": {
+        "size": 11.2,
+        "weight": 700,
+        "letterSpacing": 0.2
+      },
+      "desc": {
+        "size": 11.0,
+        "weight": 400,
+        "lineHeight": 13.0,
+        "maxLines": 2
+      },
+      "panelKey": {
+        "size": 10.4,
+        "weight": 700
+      },
+      "panelVal": {
+        "size": 10.8,
+        "weight": 400,
+        "family": "mono"
+      }
+    }
+  }
+}

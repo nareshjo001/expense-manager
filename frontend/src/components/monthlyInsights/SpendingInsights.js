@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { FaChartPie, FaTrophy, FaTint } from "react-icons/fa";
 import { FaArrowTrendUp } from "react-icons/fa6";
 
+// Derives the top-category, micro-spending, and weekend-vs-weekday panels from the report data.
 function buildLeftPanel(categoriesMonthly, totalSpent) {
   const topCategory = categoriesMonthly?.topCategory;
   if (!categoriesMonthly?.hasData || !topCategory?.category || !Number.isFinite(topCategory?.total)) {
@@ -69,7 +70,6 @@ export default function SpendingInsights({ report }) {
       </div>
 
       <div className="spending-insights-grid">
-        {/* LEFT CARD */}
         <div className='spending-insights-left'>
           <div className='spending-insights-card-head'>
             <div className="heading-icon">
@@ -120,7 +120,6 @@ export default function SpendingInsights({ report }) {
             )}
         </div>
 
-        {/* MIDDLE CARD */}
         <div className='spending-insights-middle'>
           <div className='spending-insights-card-head'>
             <div className="heading-icon" style={{background: ""}}>
@@ -149,7 +148,6 @@ export default function SpendingInsights({ report }) {
             )} 
         </div>
 
-        {/* RIGHT CARD */}
         <div className='spending-insights-right'>
           <div className='spending-insights-card-head'>
             <div className="heading-icon">

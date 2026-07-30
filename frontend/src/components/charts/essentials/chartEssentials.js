@@ -1,3 +1,4 @@
+// Theme-aware style/color presets shared by the chart pages (react-select styles, average-line dot icons, palettes).
 export const getSelectStyles = (theme) => {
   const isDark = theme === 'dark-theme';
 

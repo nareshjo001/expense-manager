@@ -1,6 +1,6 @@
 import { toast } from 'react-toastify';
 
-// Toast for successful login
+// Preconfigured react-toastify variants for auth, expense, and income feedback messages.
 const loginSuccessToast = (data = {}) => {
     toast.dismiss();
     toast.success(
@@ -29,7 +29,6 @@ const loginSuccessToast = (data = {}) => {
     );
 };
 
-// Show toast notification for login error
 const logInErrorToast = (data = {}) => {
     toast.dismiss();
     toast.error(
@@ -56,7 +55,6 @@ const logInErrorToast = (data = {}) => {
     );
 };
 
-// Toast for successful signup
 const signUpSuccessToast = (data = {}) => {
     toast.dismiss();
     toast.success(
@@ -83,7 +81,6 @@ const signUpSuccessToast = (data = {}) => {
     );
 };
 
-// Toast for signup error (e.g., user already exists)
 const signUpErrorToast = (data = {}) => {
     toast.dismiss();
     toast.error(
@@ -160,7 +157,6 @@ const expenseAddErrorToast = (data = {}) => {
     );
 };
 
-// Toast for successful deletion
 const deleteSuccessToast = () => {
     toast.dismiss();
     toast.success(
@@ -187,7 +183,6 @@ const deleteSuccessToast = () => {
     );
 };
 
-// Toast for deletion error
 const deleteErrorToast = () => {
     toast.dismiss();
     toast.error(

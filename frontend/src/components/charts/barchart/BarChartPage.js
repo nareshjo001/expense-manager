@@ -2,7 +2,6 @@ import React, { useState, useContext, useEffect } from 'react';
 import '../ChartPage.css';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Chart-related utility functions and components
 import {
   ThemeContext,
   BarChartWrapper
@@ -12,70 +11,36 @@ import icons from '../../imports/iconsImport';
 
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
 import InlineChartInsight from '../../insights/InlineChartInsight';
+import { useBarChartQuery } from '../../../hooks/queries/useBarChartQuery';
 
+// Bar chart view of expenses by month or category, with cancellable data fetching per filter change.
 const BarChartPage = ({ expenses }) => {
-  const { theme } = useContext(ThemeContext); // Get current theme (light/dark)
+  const { theme } = useContext(ThemeContext);
   const { notifyChartFilterApplied, clearChartInsights, isChartInsightReady, chartInsightText } =  useChartInsights();
 
-  // State variables for filters
-  const [viewBy, setViewBy] = useState(''); // Filter type (bymonth/bycategory)
-  const [selectedYear, setSelectedYear] = useState(''); // Year for monthly view
-  const [month, setMonth] = useState(''); // Month for specific category view
-  const [specificMonth, setSpecificMonth] = useState(false); // Toggle for specific month view
-  const [fetchedDataForBar, setFetchedDataForBar] = useState([]);
+  const [viewBy, setViewBy] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [month, setMonth] = useState('');
+  const [specificMonth, setSpecificMonth] = useState(false);
 
   useEffect(() => {
     clearChartInsights();
   }, [clearChartInsights]);
 
+  const barChartQuery = useBarChartQuery(viewBy, month, specificMonth, selectedYear);
+
+  // useQuery no longer supports an onSuccess callback, so the chart insight notification runs here instead, once per new successful fetch.
   useEffect(() => {
-    const getExpensesForBar = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
-        let url = "";
-
-        if (viewBy === 'bycategory' && !specificMonth) {
-          url = `${BASE_URL}/chart/barchartbycategory`;
-        } else if (viewBy === 'bycategory' && specificMonth && month) {
-          url = `${BASE_URL}/chart/barchartbycategory?month=${month}`;
-        } else if (viewBy === 'bymonth' && selectedYear.length === 4) {
-          url = `${BASE_URL}/chart/barchartbymonth?year=${selectedYear}`;
-        }
-
-        if (!url) return;
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const backendData = await response.json();
-
-        if (backendData.success && Array.isArray(backendData.data)) {
-          setFetchedDataForBar(backendData.data);
-          notifyChartFilterApplied(backendData.data, 'bar', viewBy);
-        } else {
-          setFetchedDataForBar([]);
-        }
-
-      } catch (err) {
-        console.error("Network error:", err);
-      }
-    };
-
-    getExpensesForBar();
-  }, [viewBy, month, specificMonth, selectedYear, notifyChartFilterApplied]);
-
-  useEffect(() => {
-    if (specificMonth && !month) {
-      setFetchedDataForBar([]);
+    if (barChartQuery.data?.success && Array.isArray(barChartQuery.data.data)) {
+      notifyChartFilterApplied(barChartQuery.data.data, 'bar', viewBy);
     }
-  }, [specificMonth, month]);
+  }, [barChartQuery.data, viewBy, notifyChartFilterApplied]);
 
-  let data = fetchedDataForBar;
+  const data =
+    barChartQuery.data?.success && Array.isArray(barChartQuery.data.data)
+      ? barChartQuery.data.data
+      : [];
 
-  // Handler for changing the "View By" filter
   const handleViewChange = (e) => {
     const newView = e.target.value;
     setViewBy(newView);
@@ -83,14 +48,11 @@ const BarChartPage = ({ expenses }) => {
     setMonth('');
     setSpecificMonth(false);
 
-    setFetchedDataForBar([]);
     clearChartInsights();
   };
 
-  // Only show chart if data is available
   const shouldRenderChart = data.length > 0;
 
-  // Determine header title and icon based on selected view
   const getHeaderDetails = (viewBy) => {
     switch (viewBy) {
       case 'bymonth':
@@ -106,9 +68,7 @@ const BarChartPage = ({ expenses }) => {
  
   return (
     <div className="chart-container">
-      {/* Header Section */}
       <div className="chart-header">
-        {/* Animate header change based on view type */}
         <motion.div
           key={viewBy}
           initial={{ opacity: 0, y: 20 }}
@@ -123,9 +83,7 @@ const BarChartPage = ({ expenses }) => {
           </div>
         </motion.div>
 
-        {/* Filter Controls */}
         <div className="chart-filters">
-          {/* Show month selector if category + specific month is selected */}
           {viewBy === 'bycategory' && specificMonth && (
             <input
               type="month"
@@ -135,7 +93,6 @@ const BarChartPage = ({ expenses }) => {
             />
           )}
 
-          {/* Show year selector for monthly view */}
           {viewBy === 'bymonth' && (
             <input
               type="number"
@@ -148,7 +105,6 @@ const BarChartPage = ({ expenses }) => {
             />
           )}
 
-          {/* View By dropdown */}
           <select
             className="select-button filter-button"
             value={viewBy}
@@ -161,7 +117,6 @@ const BarChartPage = ({ expenses }) => {
         </div>
       </div>
 
-      {/* Checkbox to toggle specific month filter */}
       {viewBy === 'bycategory' && (
         <div className="compare-by-year">
           <input
@@ -179,7 +134,6 @@ const BarChartPage = ({ expenses }) => {
         </div>
       )}
 
-      {/* Message for no filter selected */}
       {viewBy === '' && (
         <p style={{ textAlign: 'center', fontSize: '20px' }}>
           Select desirable filter to visualize!
@@ -192,7 +146,6 @@ const BarChartPage = ({ expenses }) => {
         </p>
       )}
 
-      {/* Chart Rendering */}
       <AnimatePresence mode="wait">
         {shouldRenderChart && (
           <motion.div

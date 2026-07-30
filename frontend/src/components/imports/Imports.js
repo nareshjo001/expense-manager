@@ -6,19 +6,16 @@ import AddExpense from '../expensesHandling/AddExpense';
 import DeleteAlert from '../alertsEffects/DeleteAlert';
 import SplashScreen from '../landingPage/SplashScreen';
 import ScrollToTopButton from '../alertsEffects/ScrollToTopButton';
-import  { BudgetProvider }  from '../contexts/BudgetContext';
 import { ThemeContext } from '../contexts/ThemeContext';
-import { BudgetContext } from '../contexts/BudgetContext';
 import Insights from '../monthlyInsights/Insights';
 import { deleteSuccessToast, deleteErrorToast } from '../alertsEffects/toastMessages';
 import Add from '../expensesHandling/Add';
 import Spinner from '../alertsEffects/Spinner';
 
-export { 
-    BudgetProvider,
+// Barrel re-export of top-level page/context/util modules used across the app.
+export {
     ThemeContext,
-    BudgetContext,
-    TrendChartPage, 
+    TrendChartPage,
     BarChartPage, 
     PieChartPage, 
     ExpensesPage, 

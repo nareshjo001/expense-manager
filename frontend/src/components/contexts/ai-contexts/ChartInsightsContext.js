@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useState } from 'react';
 import { lineChartFinding, barChartFinding, pieChartFinding} from '../../../insights-engine/rules/chartPatterns';
 import { chartInsightTemplates } from '../../../insights-engine/templates/chartsTemplates';
 
+// Derives and provides AI-generated chart insight text whenever a chart filter is applied.
 const ChartInsightsContext = createContext();
 
 export const ChartInsightsProvider = ({ children }) => {

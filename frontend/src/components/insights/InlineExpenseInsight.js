@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import TrendUpIcon from "./TrenUpIcon";
 import './inlineExpenseInsight.css';
 
+// Animated inline card listing spending overview insight items.
 const cardVariants = {
   hidden: { opacity: 0, scale: 0.98 },
   visible: {
@@ -26,7 +27,6 @@ const itemVariants = {
   },
 };
 
-// 🔹 Severity → CSS class map
 const severityClassMap = {
   HIGH: "severity-high",
   MEDIUM: "severity-medium",
@@ -47,7 +47,6 @@ const InlineExpenseInsight = ({ items = [] }) => {
         animate="visible"
         exit="exit"
       >
-        {/* Header */}
         <div className="insight-header">
           <span className="insight-icon">
             <TrendUpIcon size={16} />
@@ -55,7 +54,6 @@ const InlineExpenseInsight = ({ items = [] }) => {
           <span className="insight-title">Spending Overview</span>
         </div>
 
-        {/* Insights */}
         <motion.div className="insight-list">
           {safeItems.map((item, idx) => (
             <motion.div

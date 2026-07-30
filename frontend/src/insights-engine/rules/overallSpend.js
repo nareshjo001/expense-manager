@@ -1,6 +1,7 @@
 import { detectExpenseAnomaly } from "../knowledge/anomalyDetection";
 import { buildWeeklyBaseline } from "../learning/thresholdAdapter/buildWeeklyBaseline";
 
+// Compares this week's spend to last week's using a volatility-adaptive threshold, and flags an anomaly source when the change is significant.
 export const overallSpend = ({
   expenses = [],
   previousExpenses = [],

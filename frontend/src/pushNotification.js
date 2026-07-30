@@ -2,12 +2,11 @@ import { getToken } from "firebase/messaging";
 import { messaging } from "./firebase";
 import { Capacitor } from "@capacitor/core";
 
+// Requests a web push (FCM) token; native apps use useMobilePush instead, so this bails out on native platforms.
 export async function requestPushToken() {
   try {
-    // Do not run inside native app
     if (Capacitor.isNativePlatform()) return null;
 
-    // Ensure browser supports notifications
     if (!("Notification" in window)) return null;
 
     const permission = await Notification.requestPermission();

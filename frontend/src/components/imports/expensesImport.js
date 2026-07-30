@@ -1,6 +1,7 @@
 import ExpenseItem from '../expensesHandling/ExpenseItem';
 import SetBudget from '../expensesHandling/budget/SetBudget';
 
+// Formats a date range as a single short label, collapsing shared month/year where possible.
 function formatDateRange(startDate, endDate) {
   const from = new Date(startDate);
   const to = new Date(endDate);

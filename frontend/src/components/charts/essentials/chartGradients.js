@@ -1,5 +1,6 @@
 import React from 'react';
 
+// SVG gradient <defs> sets shared by chart wrappers for light and dark themes.
 export const LightThemeGradients = () => (
   <defs>
     <radialGradient id="lt-pink-highlight" fx="30%" fy="30%">

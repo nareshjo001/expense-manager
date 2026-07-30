@@ -14,6 +14,7 @@ import categoryIcon from '../../icons/category.png'
 import countIcon from '../../icons/counting.png';
 import compareIcon from '../../icons/comparison.png';
 
+// Central lookup of icon image assets used throughout the app.
 const icons = {
   expenseIcon,
   addExpense,

@@ -11,6 +11,7 @@ import {
 import { getColors } from '../linechart/MultiTrendChartWrapper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
+// Renders the category/month bar chart with an optional second (budget) bar series.
 const BarChartWrapper = ({
   data,
   xKey,
@@ -19,13 +20,12 @@ const BarChartWrapper = ({
   showDoubleBar,
   theme
 }) => {
-  const colors = getColors(theme); // Get theme-based colors
+  const colors = getColors(theme);
   const isDark = theme === 'dark-theme';
-  const gradientId = isDark ? 'darkBlueGradient' : 'vibrantMetalPink'; // Primary gradient fill ID
+  const gradientId = isDark ? 'darkBlueGradient' : 'vibrantMetalPink';
 
   const isMobile = useIsMobile();
 
-  // Custom tooltip to match theme
   const CustomLineTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -90,7 +90,6 @@ const BarChartWrapper = ({
             data={data}
             margin={{ top: 30, right: 10, left: 0, bottom: 70 }}
           >
-            {/* Gradient fills for bars */}
             <defs>
               <linearGradient id="vibrantMetalPink" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#f472b6" />
@@ -120,13 +119,11 @@ const BarChartWrapper = ({
               </linearGradient>
             </defs>
 
-            {/* Grid behind the bars */}
             <CartesianGrid
               strokeDasharray="3 3"
               stroke={isDark ? "#374151" : "#f9a8d4"}
             />
 
-            {/* X-Axis config */}
             <XAxis
               dataKey={xKey}
               stroke={isDark ? "#F9FAFB" : "#9d174d"}
@@ -138,24 +135,21 @@ const BarChartWrapper = ({
               }}
             />
 
-            {/* Y-Axis config */}
             <YAxis
               stroke={colors.axisColor}
-              width={50}                 // still required
+              width={50}
               tick={{
                 fill: colors.axisColor,
                 fontSize: isMobile ? 14 : 15,
-                angle: -45,             // rotate ticks
-                textAnchor: 'end',       // IMPORTANT
+                angle: -45,
+                textAnchor: 'end',
               }}
               tickMargin={7}
               tickFormatter={(v) => `₹${v}`}
             />
 
-            {/* Hover Tooltip */}
             <Tooltip content={<CustomLineTooltip />} />
 
-            {/* Main bar (e.g., Spent) */}
             <Bar
               dataKey={barKey}
               fill={`url(#${gradientId})`}
@@ -165,7 +159,6 @@ const BarChartWrapper = ({
               name={barKey === 'total' ? 'Spent' : barKey}
             />
 
-            {/* Optional second bar (e.g., Budget) */}
             {showDoubleBar && secondBarKey && (
               <Bar
                 dataKey={secondBarKey}

@@ -4,23 +4,19 @@ import './OTPForm.css';
 import { signUpSuccessToast, signUpErrorToast } from '../alertsEffects/toastMessages';
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
 
+// Six-digit OTP entry with auto-advance/paste handling, resend countdown, and backend verification.
 const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
-    // Stores each OTP digit separately for UX control
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
-    
-    // Triggers shake + error styles
+
     const [otpError, setOtpError] = useState(false);
-    
-    // Countdown for resend
+
     const [countdown, setCountdown] = useState(120);
-    
-    // Prevents duplicate resend requests
+
     const [isFetching, setIsFetching] = useState(false);
-    
-    // References for auto-focus navigation
+
     const otpRefs = useRef([]);
-    
-    // Countdown timer for resend OTP
+
+    // Ticks the resend countdown down to zero, one second at a time.
     useEffect(() => {
         if (countdown <= 0) return;
 
@@ -31,11 +27,7 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
         return () => clearTimeout(timer);
     }, [countdown]);
 
-    /**
-     * Handles OTP digit input
-     * - Allows only numbers
-     * - Auto-moves focus forward
-    */
+    // Accepts only a single digit per box and auto-advances focus to the next box.
     const handleOtpChange = (index, value) => {
         if (value && !/^\d$/.test(value)) return;
 
@@ -46,14 +38,13 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
         if (value && index < 5) otpRefs.current[index + 1]?.focus();
     };
 
-    // Moves focus backward on backspace
     const handleOtpKeyDown = (index, e) => {
         if (e.key === 'Backspace' && !otp[index] && index > 0) {
             otpRefs.current[index - 1]?.focus();
         }
     };
 
-    // Handles full OTP paste
+    // Distributes a pasted 6-digit code across the individual OTP boxes.
     const handleOtpPaste = (e) => {
         e.preventDefault();
         
@@ -70,7 +61,6 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
         otpRefs.current[nextIndex]?.focus();
     };
 
-    // Verifies OTP with backend
     const handleVerify = async () => {
         if (otp.join('').length !== 6) return;
         
@@ -95,7 +85,9 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
                 signUpSuccessToast(data);
                 onSuccess();
             } else if (res.status === 429) {
-                throw { message: "Too many attempts. Please wait a moment and try again" };
+                throw new Error(
+                    "Too many attempts. Please wait a moment and try again"
+                );
             } else {
                 throw data;
             }
@@ -105,20 +97,19 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
             setOtp(['', '', '', '', '', '']);
             otpRefs.current[0]?.focus();
 
-            // Remove shake class after animation
+            // Removes the shake class once its animation finishes.
             setTimeout(() => setOtpError(false), 400);
         } finally {
             setIsSpinnerLoad(false);
         }
     };
 
-    // Resends OTP after countdown ends
     const handleResend = async () => {
         if (countdown > 0 || isFetching) return;
 
         setIsFetching(true);
         
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
+        const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
         if (!BASE_URL) {
             setIsFetching(false);
             return;

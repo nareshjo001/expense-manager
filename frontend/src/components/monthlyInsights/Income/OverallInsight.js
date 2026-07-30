@@ -1,52 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import '../OverallInsight.css';
 import { FaFire, FaChartPie } from "react-icons/fa";
 import { FaPiggyBank } from "react-icons/fa6";
 import { useInView } from 'react-intersection-observer';
+import { useIncomeInsightsQuery } from '../../../hooks/queries/useIncomeInsightsQuery';
 
+// Savings rate, runway forecast, and income-dependency cards for the income insights page.
 export default function OverallInsight({ period }) {
 
-  const [insight, setInsight] = useState(null);
+  const insightsQuery = useIncomeInsightsQuery(period);
+  const insight = insightsQuery.data?.success ? (insightsQuery.data.data ?? null) : null;
 
   const { ref, inView } = useInView({
     triggerOnce: true,
     threshold: 0.5
   });
-  
+
   useEffect(() => {
-    const fetchOverallInsight = async () => {
-      try {
-          const token = localStorage.getItem("token");
-          const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-    
-          const res = await fetch(`${BASE_URL}/income/insights-card`, {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ period }),
-          });
-    
-          if (!res.ok) {
-            throw new Error("Server error");
-          }
-
-          const data = await res.json();
-    
-          if (data.success) {
-            setInsight(data.data ?? null);
-          } else {
-            setInsight(null);
-          }
-    
-      } catch (error) {
-          console.error("Error fetching insights:", error);
-          setInsight(null);
-        }
-    };
-
-    fetchOverallInsight();
-  }, [period]);
+    if (insightsQuery.isError) {
+      console.error("Error fetching insights:", insightsQuery.error);
+    }
+  }, [insightsQuery.isError, insightsQuery.error]);
 
   return (
     <div className='overall-insights-container'>

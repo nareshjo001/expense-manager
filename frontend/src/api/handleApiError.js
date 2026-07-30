@@ -1,23 +1,17 @@
 import { expenseAddErrorToast } from "../components/alertsEffects/toastMessages";
+import { queryClient } from "../query/queryClient";
 
-// Session teardown for an expired/invalid token. Mirrors the existing logout
-// in LandingPage.js (localStorage.clear()), then sends the user back through
-// the normal auth screen by reloading the app shell.
+// Centralized handling for expired sessions and shared HTTP error statuses (401/429/409).
+
+// Clears the session and returns to the auth screen, mirroring LandingPage.js's manual logout.
 export const forceReauth = () => {
   localStorage.clear();
+  // Clears authenticated server state before a new session can begin.
+  queryClient.clear();
   window.location.replace("/");
 };
 
-/**
- * Handles the response statuses introduced by the backend remediation.
- *
- * Returns true if the status was handled here (caller should stop), false if
- * the caller should continue with its own handling.
- *
- * Deliberately shows fixed UI copy rather than the raw backend message, so
- * server wording is never surfaced to users in places that didn't already
- * do so.
- */
+// Returns true if the status was handled here (caller should stop), false if the caller should handle it itself.
 export const handleApiError = (response, { onConflict } = {}) => {
   // Expired or invalid JWT — route back through the existing auth flow.
   if (response.status === 401) {

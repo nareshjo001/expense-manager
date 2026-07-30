@@ -6,7 +6,6 @@ import {
     PieChartPage,
     ExpensesPage,
     DeleteAlert,
-    BudgetContext,
     Insights,
     deleteSuccessToast,
     deleteErrorToast,
@@ -18,26 +17,22 @@ import './LandingPage.css';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
 import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars } from "react-icons/fa";
+import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
+import { queryClient } from '../../query/queryClient';
 
+// Main authenticated app shell: header/nav, mobile menus, routed pages, and expense-delete confirmation flow.
 const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
-    // Theme handling (global UI concern)
     const { theme, toggleTheme } = useContext(ThemeContext);
-    
-    // Budget re-fetch after delete
-    const { fetchBudgets } = useContext(BudgetContext);
 
-    // Delete confirmation state
+    const deleteExpenseMutation = useDeleteExpenseMutation();
+
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-    
-    // Mobile UI state
+
     const [showMobileDropdown, setShowMobileDropdown] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 600);
-    
-    // Used to force refresh in ExpensesPage after deletion
-    const [refreshFlag, setRefreshFlag] = useState(false);
 
-    // Edit state shared between ExpensesPage and AddExpense
+    // Shared with AddExpense so it can load and edit a specific expense.
     const [isEdit, setIsEdit] = useState({
         enableEdit: false,
         expense_id: ''
@@ -45,14 +40,13 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
     const location = useLocation();
 
-    // Reset edit mode when navigating away from Add Expense page
+    // Clears edit mode whenever the user navigates away from the Add Expense page.
     useEffect(() => {
     if (location.pathname !== '/add') {
         setIsEdit({ enableEdit: false, expense_id: '' });
     }
     }, [location.pathname]);
 
-    // Watch window resize to update isMobile dynamically
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 600);
         
@@ -60,64 +54,44 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Trigger delete confirmation modal
     const onDelete = (id) => {
         setConfirmDeleteId(id);
     };
 
-    /**
-     * Confirms expense deletion
-     * - Shows global spinner
-     * - Triggers expense + budget refresh
-    */
-    const confirmDeleteHandler = async () => {
+    // Deletes the confirmed expense; the mutation's own invalidation refreshes the expense list and budget totals.
+    const confirmDeleteHandler = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
-        
+
         setIsSpinnerLoad(true);
-        
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-        if (!BASE_URL) {
-            setIsSpinnerLoad(false);
-            return;
-        }
 
-        try {
-            const response = await fetch(`${BASE_URL}/expense/delete-expense`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ id: confirmDeleteId })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
+        deleteExpenseMutation.mutate(confirmDeleteId, {
+            onSuccess: () => {
                 deleteSuccessToast();
                 setConfirmDeleteId(null);
+            },
+            onError: (error) => {
+                // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+                const status = error.response?.status;
+                if (status === 401 || status === 429 || status === 409) {
+                    return;
+                }
 
-                // Force ExpensesPage re-fetch
-                setRefreshFlag(prev => !prev);
-
-                // Sync budget values
-                fetchBudgets();
-            } else {
-                deleteErrorToast(data);
-            }
-        } catch (error) {
-            deleteErrorToast({ message: "Failed to delete expense" });
-        } finally {
-            setIsSpinnerLoad(false);
-        }
+                if (error.response?.data) {
+                    deleteErrorToast(error.response.data);
+                } else {
+                    deleteErrorToast({ message: "Failed to delete expense" });
+                }
+            },
+            onSettled: () => setIsSpinnerLoad(false),
+        });
     };
 
     const cancelDeleteHandler = () => {
         setConfirmDeleteId(null);
     };
 
-    // Dropdown links (reused for desktop and mobile views)
+    // Chart dropdown links, shared by the desktop nav and mobile dropdown.
     const renderDropdownLinks = () => (
         <>
             <Link
@@ -151,6 +125,8 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
     const handleLogout = () => {
         localStorage.clear();
+        // Clears cached server state so the next login on this tab never sees the previous user's data.
+        queryClient.clear();
         const data = {
             "message": "Logged out successfully"
         }
@@ -192,12 +168,9 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
     return (
         <>
             <>
-                {/* Theme and delete blur wrapper */}
                 <div className={`app-container ${theme} ${confirmDeleteId ? 'blur-background' : ''}`}>
-                    
-                    {/* Header navigation bar */}
+
                     <header className="app-header">
-                        {/* Desktop Navigation */}
                         <div className="desktop-header">
                             <div className="app-nav-toggle">
                                 <nav className="app-navigation">
@@ -256,7 +229,6 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <p>Track your expenses easily!</p>
                         </div>
 
-                        {/* Mobile Header */}
                         <div className="mobile-header">
                             <div className="typewriter">
                                 <p>Track your expenses easily!</p>
@@ -271,10 +243,9 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                         </div>
                     </header>
 
-                    {/* Page content rendered via routes */}
                     <main className="app-main">
                         <Routes>
-                            <Route path="/" element={<ExpensesPage onDelete={onDelete} refreshFlag={refreshFlag} setIsEdit={setIsEdit} />} />
+                            <Route path="/" element={<ExpensesPage onDelete={onDelete} setIsEdit={setIsEdit} />} />
                             <Route path="/add" element={<Add isEdit={isEdit} setIsEdit={setIsEdit} />} />
                             <Route path="/chart/line" element={<TrendChartPage />} />
                             <Route path="/chart/bar" element={<BarChartPage />} />
@@ -334,7 +305,6 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                     }
                 </div>
 
-                {/* Delete confirmation modal */}
                 {confirmDeleteId && (
                     <DeleteAlert
                         confirmDeleteId={confirmDeleteId}

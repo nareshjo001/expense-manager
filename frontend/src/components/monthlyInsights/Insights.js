@@ -3,6 +3,7 @@ import MonthlyInsightPage from './MonthlyInsightPage';
 import IncomeInsights from './Income/IncomeInsights';
 import '../expensesHandling/AddExpense.css';
 
+// Toggles between the Budget Insights and Income Insights pages.
 const Insights = () => {
   const [type, setType] = useState("budget");
 

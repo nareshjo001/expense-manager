@@ -4,6 +4,7 @@ import { ThemeContext, LightThemeGradients, DarkThemeGradients } from '../../imp
 
 import { useIsMobile } from '../../hooks/useIsMobile';
 
+// Pie chart wrapper; renders the enlarged active slice's labels via polar-to-cartesian positioning.
 const renderActiveShape = (theme, isCount, isMobile) => (props) => {
   const {
     cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle,
@@ -21,7 +22,6 @@ const renderActiveShape = (theme, isCount, isMobile) => (props) => {
   if (isMobile) {
     return (
       <g>
-        {/* Outer Line */}
         <Sector
           cx={cx}
           cy={cy}
@@ -32,7 +32,6 @@ const renderActiveShape = (theme, isCount, isMobile) => (props) => {
           fill={fill}
         />
 
-        {/* active slice */}
         <Sector
           cx={cx}
           cy={cy}
@@ -43,7 +42,6 @@ const renderActiveShape = (theme, isCount, isMobile) => (props) => {
           fill={fill}
         />
 
-        {/* category */}
         <text
           x={cx}
           y={cy - 14}
@@ -55,7 +53,6 @@ const renderActiveShape = (theme, isCount, isMobile) => (props) => {
           {payload.category}
         </text>
 
-        {/* value */}
         <text
           x={cx}
           y={cy + 7}
@@ -66,7 +63,6 @@ const renderActiveShape = (theme, isCount, isMobile) => (props) => {
           {isCount ? value : `₹${value}`}
         </text>
 
-        {/* percentage */}
         <text
           x={cx}
           y={cy + 26}

@@ -4,74 +4,52 @@ import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "../hooks/useIsMobile";
 
 import { signUpSuccessToast, signUpErrorToast } from "../alertsEffects/toastMessages";
-import { handleApiError } from "../../api/handleApiError";
+import { useUpdateRecurringMutation } from "../../hooks/mutations/useUpdateRecurringMutation";
 
+// Single expense card with edit, delete, and recurring-toggle actions.
 const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  
-  // Controls mobile action menu visibility
+
   const [showMenu, setShowMenu] = useState(false);
 
-  const [isRecurring, setIsRecurring] = useState(expense.isRecurring);
+  const updateRecurringMutation = useUpdateRecurringMutation();
+  const isRecurring = expense.isRecurring;
 
-  /**
-   * Close mobile menu automatically when switching
-   * from mobile → desktop view.
-  */
+  // Closes the mobile action menu automatically when switching from mobile to desktop view.
   useEffect(() => {
     if (!isMobile && showMenu) {
       setShowMenu(false);
     }
   }, [isMobile, showMenu]);
 
-  // Navigate to AddExpense page in edit mode
   const handleEdit = () => {
     setIsEdit({ enableEdit: true, expense_id: expense._id });
     navigate("/add");
   };
 
-  // Recurring feature
-  const handleRecurring = async () => {
-    
-    const token = localStorage.getItem("token");
-    const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
+  const handleRecurring = () => {
     const newRecurringState = !isRecurring;
 
-    const payload = {
-      expenseId: expense._id,
-      isRecurring: newRecurringState
-    };
+    updateRecurringMutation.mutate(
+      { expenseId: expense._id, isRecurring: newRecurringState },
+      {
+        onSuccess: (data) => signUpSuccessToast(data),
+        onError: (err) => {
+          // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+          const status = err.response?.status;
+          if (status === 401 || status === 429 || status === 409) {
+            return;
+          }
 
-    try {
-
-      const response = await fetch(`${BASE_URL}/api/recurring`, {
-        method: 'PATCH',
-        headers: {
-          'Content-type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          if (err.response?.data) {
+            signUpErrorToast(err.response.data);
+          } else {
+            console.log("Error Make recurring: ", err);
+          }
         },
-        body: JSON.stringify(payload)
-      })
-
-      // Handle 401 / 429 before parsing a normal payload.
-      if (handleApiError(response)) {
-        return;
       }
-
-      const data = await response.json();
-
-      if(response.ok) {
-        setIsRecurring(newRecurringState);
-        signUpSuccessToast(data);
-      } else {
-        signUpErrorToast(data);
-      }
-
-    } catch(err) {
-      console.log("Error Make recurring: ", err);
-    }
+    );
   };
 
   // Formats date as: "Today / X days ago • DD Mon YYYY"
@@ -103,18 +81,12 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
     return `${relative} • ${absolute}`;
   };
 
-  useEffect(() => {
-    setIsRecurring(expense.isRecurring);
-  }, [expense.isRecurring]);
-
   return (
     <div className={`expense-card ${showMenu ? "menu-open" : ""}`}>
       <div className="expense-header">
         <span className="expense-title">{expense.expenseName}</span>
 
-        {/* RIGHT SIDE */}
         <div className="expense-actions">
-          {/* Amount (moves on hover) */}
           <span className="expense-amount">
             {isMobile ? (
                 <span>₹{expense.expenseAmount}</span>
@@ -123,7 +95,6 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
               )}
           </span>
 
-          {/* Desktop actions (overlay, no layout space) */}
           <div className="desktop-actions">
             
             <button className="icon-btn edit" onClick={handleEdit} title="Edit">
@@ -165,7 +136,6 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
             </button>
           </div>
 
-          {/* Mobile menu */}
           <button
             className="mobile-menu-btn"
             onClick={() => setShowMenu((prev) => !prev)}
@@ -180,10 +150,6 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
       </div>
 
       <div className="expense-details">
-        {/* <span className="expense-description">
-          {expense.expenseCategory}
-        </span> */}
-
         <span className="expense-description">
           {expense.expenseDescription}
         </span>
@@ -192,15 +158,9 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
           <span className="date-text">
             {formatDate(expense.expenseDate)}
           </span>
-
-          {/* <svg viewBox="0 0 24 24" className="icon clock">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 3" />
-          </svg> */}
         </span>
       </div>
 
-      {/* Mobile menu */}
       {showMenu && (
         <div className="mobile-menu">
           <button onClick={handleEdit}>Edit</button>

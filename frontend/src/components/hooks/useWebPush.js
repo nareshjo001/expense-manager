@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { requestPushToken } from "../../pushNotification";
 
+// Registers this browser for web push and manages the "enable notifications" prompt.
 export function useWebPush(isLoggedIn) {
 
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
@@ -28,8 +29,7 @@ export function useWebPush(isLoggedIn) {
         })
       });
 
-      // A 409 means this device token is already claimed by another account.
-      // Registration simply does not apply here — log and stop, never retry.
+      // A 409 means this device token is already claimed by another account — log and stop, never retry.
       if (res.status === 409) {
         console.warn("Device token already registered to another account; skipping registration.");
         return;

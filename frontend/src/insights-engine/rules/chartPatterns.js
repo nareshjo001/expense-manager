@@ -1,5 +1,6 @@
 import { findPercentChanges } from "../statistics/statsCalculation";
 
+// Chart-insight business rules: trend direction/volatility for line charts, budget pressure/concentration for bar charts, and share concentration for pie charts.
 export const lineChartFinding = (data = []) => {
 
   const values = data.map(d => d.total);
@@ -17,7 +18,6 @@ export const lineChartFinding = (data = []) => {
     }
   }
 
-  // 1. Percentage changes
   const deltas = findPercentChanges(values);
 
   if (deltas.length === 0) {
@@ -33,7 +33,6 @@ export const lineChartFinding = (data = []) => {
 
   const MOVEMENT_THRESHOLD = 0.15;
 
-  // 2. Classify movements
   const up = deltas.filter(d => d > MOVEMENT_THRESHOLD).length;
   const down = deltas.filter(d => d < -MOVEMENT_THRESHOLD).length;
 
@@ -41,15 +40,14 @@ export const lineChartFinding = (data = []) => {
   if (up > down) direction = "up";
   else if (down > up) direction = "down";
 
-  // 3. Volatility
   const avgChange =
     deltas.reduce((s, d) => s + Math.abs(d), 0) / deltas.length;
-  
+
   const VOLATILITY_THRESHOLD = 0.3;
 
   const isVolatile = avgChange >= VOLATILITY_THRESHOLD;
 
-  // 4. Ending momentum
+  // Momentum looks only at the last 3 data points, and only if all 3 move the same direction.
   const recent = deltas.slice(-3);
   let ending = "stable";
 
@@ -162,7 +160,6 @@ export const pieChartFinding = (data =[], filter = '') => {
     };
   }
 
-  // ---- Budget vs Spent ----
   if (filter === "comparison") {
     const budget = data.find(d => d.category === "Budget")?.total || 0;
     const spent = data.find(d => d.category === "Spent")?.total || 0;
@@ -181,7 +178,6 @@ export const pieChartFinding = (data =[], filter = '') => {
     };
   }
 
-  // ---- Category based pies (amount or count) ----
   const totals = data.map(d => d.total);
   const overall = totals.reduce((a, b) => a + b, 0);
   if (overall === 0) return null;

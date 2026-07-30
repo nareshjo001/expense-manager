@@ -11,48 +11,45 @@ import {
 
 import { useIsMobile } from '../../hooks/useIsMobile';
 
-// Color theme for light mode
 export const lightThemeColorsTrend = {
-  gridColor: 'rgba(157, 23, 77, 0.15)', // Pinkish grid color
-  axisColor: '#9d174d', // Dark pink axis
+  gridColor: 'rgba(157, 23, 77, 0.15)',
+  axisColor: '#9d174d',
   lineColors: [
-    '#d946ef', // Fuchsia
-    '#f97316', // Orange
-    '#14b8a6', // Teal
-    '#3b82f6', // Blue
-    '#be185d', // Dark Pink
+    '#d946ef',
+    '#f97316',
+    '#14b8a6',
+    '#3b82f6',
+    '#be185d',
   ],
 };
 
-// Color theme for dark mode
 export const darkThemeColorsTrend = {
-  gridColor: 'rgba(255, 255, 255, 0.1)', // Light grid on dark bg
-  axisColor: '#cbd5e1', // Soft white axis
+  gridColor: 'rgba(255, 255, 255, 0.1)',
+  axisColor: '#cbd5e1',
   lineColors: [
-    '#fb923c', // Orange
-    '#a3e635', // Lime
-    '#c084fc', // Purple
-    '#facc15', // Yellow
-    '#67e8f9', // Cyan
+    '#fb923c',
+    '#a3e635',
+    '#c084fc',
+    '#facc15',
+    '#67e8f9',
   ],
 };
 
-// Function to pick the right color palette based on theme
 export const getColors = (theme) => {
   return theme === 'dark-theme' ? darkThemeColorsTrend : lightThemeColorsTrend;
 };
 
+// Multi-series line chart for comparing expense trends across selected years.
 const MultiLineChartWrapper = ({
   theme,
   data,
-  xKey = 'month',         // Default X-axis key
-  linesData = [],         // Array of { dataKey, name }
+  xKey = 'month',
+  linesData = [], // { dataKey, name } per line
   animationDuration = 3000,
   animationEasing = 'linear',
 }) => {
   const colors = getColors(theme);
 
-  // Custom Tooltip for line chart
   const CustomLineTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -96,10 +93,8 @@ const MultiLineChartWrapper = ({
       
       <ResponsiveContainer width="100%" height={isMobile ? 280 : 400}>
         <LineChart data={data} margin={{ top: 30, right: 10, left: 0, bottom: 30 }}>
-          {/* Grid lines */}
           <CartesianGrid stroke={colors.gridColor} strokeDasharray="3 3" />
 
-          {/* X-Axis configuration */}
           <XAxis
             dataKey={xKey}
             stroke={colors.axisColor}
@@ -107,38 +102,35 @@ const MultiLineChartWrapper = ({
               fill: colors.axisColor,
               fontSize: isMobile ? 14 : 16,
             }}
-            tickMargin={9}  
+            tickMargin={9}
             interval="preserveStartEnd"
           />
 
-          {/* Y-Axis configuration with label */}
           <YAxis
               stroke={colors.axisColor}
-              width={50}                 // still required
+              width={50}
               tick={{
                 fill: colors.axisColor,
                 fontSize: isMobile ? 14 : 15,
-                angle: -45,             // rotate ticks
-                textAnchor: 'end',       // IMPORTANT
+                angle: -45,
+                textAnchor: 'end',
               }}
               tickMargin={7}
               tickFormatter={(v) => `₹${v}`}
           />
 
-          {/* Custom tooltip component */}
           <Tooltip content={<CustomLineTooltip />} />
 
-          {/* Dynamic rendering of multiple lines */}
           {linesData.map((line, index) => (
             <Line
               key={line.dataKey}
               type="monotone"
               dataKey={line.dataKey}
               name={line.name}
-              stroke={colors.lineColors[index % colors.lineColors.length]} // Rotate colors
+              stroke={colors.lineColors[index % colors.lineColors.length]}
               strokeWidth={2}
-              dot={{ r: 3 }}       // Normal dots
-              activeDot={{ r: 6 }} // Enlarged dot on hover
+              dot={{ r: 3 }}
+              activeDot={{ r: 6 }}
               animationDuration={animationDuration}
               animationEasing={animationEasing}
             />

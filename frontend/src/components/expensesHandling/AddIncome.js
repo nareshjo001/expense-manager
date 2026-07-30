@@ -4,7 +4,9 @@ import './AddExpense.css';
 
 import Spinner from '../alertsEffects/Spinner';
 import { expenseAddSuccessToast, expenseAddErrorToast } from '../alertsEffects/toastMessages';
+import { useAddIncomeMutation } from '../../hooks/mutations/useAddIncomeMutation';
 
+// Income creation form.
 const AddIncome = () => {
 
   const [incomeSource, setSource] = useState('');
@@ -12,7 +14,7 @@ const AddIncome = () => {
   const [incomeDate, setDate] = useState('');
 
   const navigate = useNavigate();
-  const [isSpinnerLoading, setIsSpinnerLoading] = useState(false);
+  const addIncomeMutation = useAddIncomeMutation();
 
   const sanitizeText = (text = '') => {
     return text
@@ -20,68 +22,51 @@ const AddIncome = () => {
         .replace(/\s+/g, ' ');
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
       e.preventDefault();
-      setIsSpinnerLoading(true);
-
-      const token = localStorage.getItem("token");
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
       const payload = {
           incomeSource: sanitizeText(incomeSource),
           incomeAmount: +incomeAmount,
-          incomeDate
+          incomeDate,
+          id: Date.now().toString()
       };
 
-      try {
-          let response;
-
-          if (true) {
-              // ADD INCOME
-              response = await fetch(`${BASE_URL}/income/add`, {
-                  method: 'POST',
-                  headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`,
-                  },
-                  body: JSON.stringify({
-                      ...payload,
-                      id: Date.now().toString()
-                  }),
-              });
-          } 
-
-          const data = await response.json();
-
-          if (response.ok) {
+      addIncomeMutation.mutate(payload, {
+          onSuccess: (data) => {
               setSource('');
               setAmount('');
               setDate('');
 
               navigate('/');
               expenseAddSuccessToast(data);
-          } else {
-              expenseAddErrorToast(data);
-          }
+          },
+          onError: (error) => {
+              // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+              const status = error.response?.status;
+              if (status === 401 || status === 429 || status === 409) {
+                  return;
+              }
 
-      } catch (error) {
-          console.error("Income submission error:", error);
+              console.error("Income submission error:", error);
 
-          expenseAddErrorToast({
-              message: "Server error. Please try again later."
-          });
-      } finally {
-          setIsSpinnerLoading(false);
-      }
+              if (error.response?.data) {
+                  expenseAddErrorToast(error.response.data);
+              } else {
+                  expenseAddErrorToast({
+                      message: "Server error. Please try again later."
+                  });
+              }
+          },
+      });
   };
 
   return (
     <>
-      {isSpinnerLoading && <Spinner />}
+      {addIncomeMutation.isPending && <Spinner />}
         <div className="add-expense-wrapper">
             <form className="add-expense" onSubmit={handleSubmit}>
                 
-                {/* Income Source Input */}
                 <div className="field">
                     <label htmlFor="name">Source of the Income</label>
                     <input
@@ -93,7 +78,6 @@ const AddIncome = () => {
                     />
                 </div>
 
-                {/* Income Amount Input */}
                 <div className="field">
                     <label htmlFor="number">Amount Received</label>
                     <input
@@ -106,7 +90,6 @@ const AddIncome = () => {
                     />
                 </div>
 
-                {/* Income Date Input */}
                 <div className="field">
                     <label htmlFor="date">Date Received</label>
                     <input
@@ -118,7 +101,6 @@ const AddIncome = () => {
                     />
                 </div>
 
-                {/* Submit Button */}
                 <button className="submit-btn" type="submit">
                   "Add Income"
                 </button>

@@ -3,6 +3,7 @@ import AddExpense from './AddExpense';
 import AddIncome from './AddIncome';
 import './AddExpense.css';
 
+// Toggles between the Add Expense and Add Income forms.
 const Add = ({ isEdit, setIsEdit }) => {
   const [type, setType] = useState("expense");
 

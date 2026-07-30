@@ -1,5 +1,6 @@
 import { findMean, findVariance } from "../../statistics/statsCalculation";
 
+// Computes the mean, standard deviation, and volatility (coefficient of variation) of weekly totals.
 export const buildWeeklyBaseline =  (weeklyData = []) => {
     if (!Array.isArray(weeklyData)) return null;
 

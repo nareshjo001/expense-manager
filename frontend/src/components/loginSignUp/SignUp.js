@@ -6,20 +6,18 @@ import OTPForm from "./OTPForm";
 import { FetchingLoader }from '../alertsEffects/FetchingLoader';
 import { signUpSuccessToast, signUpErrorToast } from '../alertsEffects/toastMessages';
 
+// Signup form with client-side validation, then hands off to OTPForm for verification.
 const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
-    // Controlled signup form state
     const [enteredUserInfo, setEnteredUserInfo] = useState({
         fullName:"",
         email:"",
         password:""
     })
 
-    // Local async + validation state
     const [isFetching, setIsFetching] = useState(false);
     const [errors, setErrors] = useState({});
     const [showOTPForm, setShowOTPForm] = useState(false);
 
-    // Client-side validation before API call
     const validateForm = () => {
         const newErrors = {};
 
@@ -43,27 +41,21 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
         return Object.keys(newErrors).length === 0;
     };
 
-    /**
-     * Handles controlled input updates
-     * Clears field-specific error when user edits input
-    */
+    // Updates the field and clears its error as soon as the user edits it.
     const handleChange = (field) => (e) => {
         setEnteredUserInfo({ ...enteredUserInfo, [field]: e.target.value });
         
         if (errors[field]) setErrors({ ...errors, [field]: undefined });
     };
 
-    /**
-     * Submits signup request to backend
-     * On success → moves to OTP verification screen
-    */
+    // On success, advances to the OTP verification screen.
     const handleSubmit = async (e) => {
         e.preventDefault();
         
         if (!validateForm()) return;
         setIsFetching(true);
 
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
+        const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
         if (!BASE_URL) {
             setIsFetching(false);
             return;
@@ -95,7 +87,6 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
         }
     };
 
-    // OTP verification step
     if (showOTPForm) {
         return (
             <OTPForm

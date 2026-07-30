@@ -4,21 +4,16 @@ import "./Auth.css";
 import ForgotPassword from "./passwordReset/ForgotPassword";
 import { loginSuccessToast, logInErrorToast } from '../alertsEffects/toastMessages';
 
+// Login form with an inline Forgot Password flow.
 const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
 
-  // Toggles the Forgot Password flow within the same auth feature
   const [forgotPassword, setForgotPassword] = useState(false);
 
-  // Stores controlled form input values
   const [enteredLoginInfo, setEnteredLoginInfo] = useState({
     email: "",
     password: ""
   })
 
-  /**
-     * Handles controlled input updates.
-     * Uses input `name` attribute to update corresponding state field.
-  */
   const handleChange = (e) => {
     setEnteredLoginInfo(prev => ({
       ...prev,
@@ -26,12 +21,6 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
     }));
   }
 
-  /**
-     * Submits login credentials to backend.
-     * - Shows global spinner during request
-     * - Persists auth data on success
-     * - Handles success/error toasts
-  */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSpinnerLoad(true);
@@ -66,18 +55,12 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
         logInErrorToast(data);
       }
     } catch (error) {
-      // Network or unexpected failure
       logInErrorToast({ message: "Something went wrong. Please try again." });
     } finally {
-      // Ensure spinner always stops
       setIsSpinnerLoad(false);
     }
   };
 
-  /**
-     * Conditional render for Forgot Password flow.
-     * Keeps auth-related screens within the same feature boundary.
-  */
   if (forgotPassword) {
     return (
       <ForgotPassword

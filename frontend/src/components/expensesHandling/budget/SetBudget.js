@@ -1,30 +1,25 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { format } from 'date-fns';
 import './SetBudget.css';
 import { expenseAddSuccessToast, expenseAddErrorToast } from '../../alertsEffects/toastMessages';
 import BudgetBar from './BudgetBar';
-import { BudgetContext } from '../../contexts/BudgetContext';
+import { useBudgetSummary } from '../../../hooks/queries/useBudgetSummary';
 import { FetchingLoader } from '../../alertsEffects/FetchingLoader';
-import { handleApiError } from '../../../api/handleApiError';
+import { useCreateBudgetMutation } from '../../../hooks/mutations/useCreateBudgetMutation';
 
+// Sets or displays the current month's budget, reading from the shared budgets query.
 const SetBudget = () => {
-  // Accessing global budget context to get and set monthly budgets
-  const { monthlyBudgets, setMonthlyBudgets, budgetStatus, fetchBudgets } = useContext(BudgetContext);
+  const { monthlyBudgets, budgetStatus } = useBudgetSummary();
+  const createBudgetMutation = useCreateBudgetMutation();
 
-  // Local state to hold input budget and toggle view
   const [budget, setBudget] = useState({ month: "", budgetAmount: "" });
   const [isSetBudget, setIsSetBudget] = useState(true);
-  
-  const [isFetching, setIsFetching] = useState(false); 
 
-  // Current month key (single source of truth)
   const currentMonth = format(new Date(), 'MMM yyyy');
 
-  // Checks whether current month's budget already exists
   const isCurrentMonthSet = () =>
     monthlyBudgets.some(b => b.month === currentMonth);
 
-  // Handle budget input change
   const handleBudgetChange = (e) => {
     setBudget({
       month: currentMonth,
@@ -32,70 +27,28 @@ const SetBudget = () => {
     });
   };
 
-  // Save the entered budget and update the context
-  const handleBudgetSubmit = async () => {
-    try {
-      const token = localStorage.getItem("token");
+  const handleBudgetSubmit = () => {
+    createBudgetMutation.mutate(Number(budget.budgetAmount), {
+      onSuccess: (data) => {
+        if (!data.success) {
+          expenseAddErrorToast(data);
+          console.error("Error setting budget:", data.message);
+          return;
+        }
 
-      const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-      if (!token || !BASE_URL) return;
-
-      setIsFetching(true);
-      // Save budget for current month
-      const response = await fetch(`${BASE_URL}/api/setbudget`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          budget: Number(budget.budgetAmount)
-        }),
-      });
-
-      // Handle 401 / 429 before parsing a normal payload.
-      if (handleApiError(response)) {
-        setIsFetching(false);
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setIsFetching(false);
-        expenseAddErrorToast(data);
-        console.error("Error setting budget:", data.message);
-        return;
-      }
-
-      // FETCH updated budgets AFTER backend recalculation
-      const budgetsRes = await fetch(`${BASE_URL}/api/getbudgets`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-
-      if (handleApiError(budgetsRes)) {
-        setIsFetching(false);
-        return;
-      }
-
-      const budgetsData = await budgetsRes.json();
-
-      if (budgetsData.success) {
-        fetchBudgets(); // Refresh context with latest budgets
-        setIsFetching(false);
         expenseAddSuccessToast(data);
-        setMonthlyBudgets(budgetsData.data);
-      }
 
-      // Reset UI state
-      setIsSetBudget(true);
-      setBudget({ month: "", budgetAmount: "" });
-
-    } catch (err) {
-      console.error("Network error while saving budget:", err);
-    }
+        // Reset UI state only after a verified successful save
+        setIsSetBudget(true);
+        setBudget({ month: "", budgetAmount: "" });
+      },
+      onError: (error) => {
+        // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+        const status = error.response?.status;
+        if (status === 401 || status === 429 || status === 409) return;
+        console.error("Network error while saving budget:", error);
+      },
+    });
   };
 
   if (budgetStatus === "loading") {
@@ -118,7 +71,6 @@ const SetBudget = () => {
 
   return (
     <div>
-       {/* Show 'Set Budget' icon if not already set */}
       {isSetBudget && !isCurrentMonthSet() && (
         <div className="set-budget">
           <h1>Set Your Monthly Budget!</h1>
@@ -131,7 +83,6 @@ const SetBudget = () => {
         </div>
       )}
 
-      {/* Input field for setting budget */}
       {!isSetBudget && (
         <div className="set-budget">
           <input
@@ -147,12 +98,11 @@ const SetBudget = () => {
             onClick={handleBudgetSubmit}
             disabled={!budget.budgetAmount || budget.budgetAmount <= 0}
           >
-            {isFetching ? <FetchingLoader /> :  "Confirm"}
+            {createBudgetMutation.isPending ? <FetchingLoader /> :  "Confirm"}
           </button>
         </div>
       )}
 
-      {/* Show BudgetBar if budget is already set */}
       {isCurrentMonthSet() && (
         <div className="budget-notify set-budget">
           <BudgetBar monthlyBudgets={monthlyBudgets} />

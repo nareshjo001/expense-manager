@@ -1,6 +1,7 @@
 import api from "./axios";
 
-export const getReport = async () => {
-  const { data } = await api.get("/report");
+// Fetches the aggregated financial report used by the monthly insights dashboard.
+export const getReport = async (signal) => {
+  const { data } = await api.get("/report", { signal });
   return data;
 };

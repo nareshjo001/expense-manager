@@ -1,6 +1,5 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BudgetContext } from '../contexts/BudgetContext';
 import './AddExpense.css';
 
 import Spinner from '../alertsEffects/Spinner';
@@ -8,30 +7,39 @@ import { expenseAddSuccessToast, expenseAddErrorToast } from '../alertsEffects/t
 
 import BillUpload from '../billScanner/BillUpload';
 import { forceReauth } from '../../api/handleApiError';
+import { getExpenseEditData } from '../../api/expenseApi';
+import { queryClient } from '../../query/queryClient';
+import { queryKeys } from '../../query/queryKeys';
+import { useAddExpenseMutation } from '../../hooks/mutations/useAddExpenseMutation';
+import { useUpdateExpenseMutation } from '../../hooks/mutations/useUpdateExpenseMutation';
 
+// Expense creation/editing form with debounced ML category prediction and bill-scan/edit-load auto-fill.
 const AddExpense = ({ isEdit, setIsEdit }) => {
-    // Local state hooks for form inputs
     const [expenseName, setName] = useState('');
     const [expenseCategory, setCategory] = useState('');
     const [expenseAmount, setAmount] = useState('');
     const [expenseDate, setDate] = useState('');
     const [expenseDescription, setDescription] = useState('');
     const [isSpinnerLoading, setIsSpinnerLoading] = useState(false);
-    const [editID, setEditID] = useState('');
     const [isBillUpload, setIsBillUpload] = useState(false);
-    const [billData, setBillData] = useState(null); // State to hold data extracted from bill upload
+    const [billData, setBillData] = useState(null);
 
     const [mlLoading, setMlLoading] = useState(false);
     const [mlConfidence, setMlConfidence] = useState(null);
     const [mlPredictedCategory, setMlPredictedCategory] = useState('');
 
-    const { fetchBudgets } = useContext(BudgetContext);
-    const navigate = useNavigate(); // Hook to programmatically navigate to another route
+    // Tracks a programmatically-set expenseName (edit load / bill scan) so ML prediction doesn't run or overwrite the loaded category until the user actually types.
+    const programmaticNameRef = useRef(null);
+
+    const navigate = useNavigate();
+
+    const addExpenseMutation = useAddExpenseMutation();
+    const updateExpenseMutation = useUpdateExpenseMutation();
 
     const sanitizeText = (text = '') => {
         return text
-            .trim()                 // remove start/end spaces
-            .replace(/\s+/g, ' '); // remove extra inner spaces
+            .trim()
+            .replace(/\s+/g, ' ');
     };
 
     const normalizeCategory = (category = '') => {
@@ -40,23 +48,32 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
             .replace(/\b\w/g, c => c.toUpperCase());
     };
 
+    // Debounced ML category prediction: skips programmatic name changes and short text, and cancels an in-flight prediction when superseded.
     useEffect(() => {
-        // DON'T CALL API FOR SHORT TEXT
+        if (programmaticNameRef.current === expenseName) {
+            return;
+        }
+        programmaticNameRef.current = null;
+
         if (expenseName.trim().length < 3) {
             return;
         }
 
-        // DEBOUNCE TIMER
+        const controller = new AbortController();
+
         const debounceTimer = setTimeout(async () => {
             try {
-                setCategory(''); // Clear category while loading new prediction
-                setMlConfidence(null); // Clear confidence score
+                setCategory('');
+                setMlConfidence(null);
                 setMlLoading(true);
-                
-                const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
+
+                const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
+                if (!BASE_URL) {
+                    // Reuses the existing silent-failure path below via the catch block.
+                    throw new Error("Missing backend URL");
+                }
                 const token = localStorage.getItem("token");
 
-                // This endpoint now requires authentication.
                 const response = await fetch(`${BASE_URL}/ml/predict-category`,
                     {
                         method: "POST",
@@ -64,13 +81,12 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                             "Content-Type": "application/json",
                             "Authorization": `Bearer ${token}`
                         },
-                        body: JSON.stringify({expenseName: expenseName.trim()})
+                        body: JSON.stringify({expenseName: expenseName.trim()}),
+                        signal: controller.signal
                     }
                 );
 
-                // Category prediction is an optional convenience, so a 429
-                // here must stay silent rather than toasting on every
-                // keystroke. A 401 still routes through the auth flow.
+                // A 429 here stays silent (no toast per keystroke); only 401 routes through the auth flow.
                 if (response.status === 401) {
                     forceReauth();
                     return;
@@ -83,7 +99,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 const data = await response.json();
                 console.log("ML Prediction:", data);
 
-                // AUTO-FILL CATEGORY
                 if (data.predictedCategory) {
                     setCategory(data.predictedCategory);
                     setMlConfidence(data.confidence);
@@ -91,44 +106,54 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 }
 
             } catch (err) {
+                // An aborted request was superseded by a newer one — not an error.
+                if (err.name === "AbortError") {
+                    return;
+                }
                 console.log("ML Prediction Error:", err);
             } finally {
                 setMlLoading(false);
             }
         }, 500);
 
-        // CLEANUP FUNCTION
-        return () => clearTimeout(debounceTimer);
+        return () => {
+            clearTimeout(debounceTimer);
+            controller.abort();
+        };
     }, [expenseName]);
 
     // Fetch Edit Expense
     useEffect(() => {
         const fetchEditExpense = async () => {
             setIsSpinnerLoading(true);
-            const token = localStorage.getItem("token");
-            const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
 
-            const response =  await fetch(`${BASE_URL}/expense/expense-edit-data?expenseId=${isEdit.expense_id}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type' : 'application/json',
-                    'Authorization': `Bearer ${token}`
+            try {
+                // Routed through the query cache so a repeat edit-open within staleTime skips the network round-trip.
+                const data = await queryClient.fetchQuery({
+                    queryKey: queryKeys.expenses.detail(isEdit.expense_id),
+                    queryFn: ({ signal }) => getExpenseEditData(isEdit.expense_id, signal),
+                });
+
+                if (data.data) {
+                    const exp = data.data;
+                    // Marks this name as programmatic so prediction doesn't overwrite the stored category being loaded.
+                    programmaticNameRef.current = exp.expenseName || '';
+                    setName(exp.expenseName || '');
+                    setCategory(exp.expenseCategory || '');
+                    setAmount(exp.expenseAmount || '');
+                    setDate(exp.expenseDate?.split('T')[0] || '');
+                    setDescription(exp.expenseDescription || '');
+                } else {
+                    console.error("Fetch failed:", data.message);
                 }
-            });
-
-            const data = await response.json();
-            if (response.ok && data.data) {
-                const exp = data.data;
-                setEditID(exp._id);
-                setName(exp.expenseName || '');
-                setCategory(exp.expenseCategory || '');
-                setAmount(exp.expenseAmount || '');
-                setDate(exp.expenseDate?.split('T')[0] || '');
-                setDescription(exp.expenseDescription || '');
+            } catch (err) {
+                // 401/429/409 are already surfaced by the shared axios interceptor — avoid a second error path.
+                const status = err.response?.status;
+                if (status !== 401 && status !== 429 && status !== 409) {
+                    console.error("Fetch failed:", err.response?.data?.message || err.message);
+                }
+            } finally {
                 setIsSpinnerLoading(false);
-            } else {
-                setIsSpinnerLoading(false);
-                console.error("Fetch failed:", data.message);
             }
         }
         if (isEdit.enableEdit && isEdit.expense_id) {
@@ -137,81 +162,66 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     }, [isEdit]);
 
     // Handles form submission
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
         setIsSpinnerLoading(true);
 
-        const token = localStorage.getItem("token");
-        const BASE_URL = process.env.REACT_APP_BACKEND_URL.replace(/\/$/, "");
-
         const wasMlCorrected = mlPredictedCategory && mlPredictedCategory !== normalizeCategory(expenseCategory);
 
-        // Common payload structure
         const payload = {
             expenseName: sanitizeText(expenseName),
             expenseCategory: normalizeCategory(expenseCategory),
             expenseAmount: +expenseAmount,
             expenseDate,
             expenseDescription: sanitizeText(expenseDescription),
-
-            // ML-related fields
             mlPredictedCategory,
             mlConfidence,
             wasMlCorrected
         };
 
-        try {
-        let response;
+        const mutationCallbacks = {
+            onSuccess: (data) => {
+                setName('');
+                setCategory('');
+                setAmount('');
+                setDate('');
+                setDescription('');
+                // ML telemetry belongs to the expense just submitted — clear it so the next expense can't inherit a stale prediction.
+                setMlPredictedCategory('');
+                setMlConfidence(null);
+                setIsEdit({ enableEdit: false, expense_id: '' });
+
+                navigate('/');
+                expenseAddSuccessToast(data);
+            },
+            onError: (error) => {
+                // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
+                const status = error.response?.status;
+                if (status === 401 || status === 429 || status === 409) {
+                    return;
+                }
+
+                console.error("Expense submission error:", error);
+                if (error.response?.data) {
+                    expenseAddErrorToast(error.response.data);
+                } else {
+                    expenseAddErrorToast({ message: "Unexpected error occurred!" });
+                }
+            },
+            onSettled: () => setIsSpinnerLoading(false),
+        };
 
         if (!isEdit.enableEdit) {
-            // ----------- ADD NEW EXPENSE -----------
-            response = await fetch(`${BASE_URL}/expense/add-expense`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ ...payload, id: Date.now().toString() }),
-            });
+            addExpenseMutation.mutate({ ...payload, id: Date.now().toString() }, mutationCallbacks);
         } else {
-            // ----------- EDIT EXISTING EXPENSE -----------
-            response = await fetch(`${BASE_URL}/expense/update-expense?editID=${editID}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-            });
-        }
-
-        const data = await response.json();
-
-        if (response.ok) {
-            // Reset form and context
-            setName('');
-            setCategory('');
-            setAmount('');
-            setDate('');
-            setDescription('');
-            setIsEdit({ enableEdit: false, expense_id: '' });
-            fetchBudgets();
-
-            navigate('/'); // Go back to expense list
-            expenseAddSuccessToast(data);
-        } else {
-            expenseAddErrorToast(data);
-        }
-        } catch (error) {
-        console.error("Expense submission error:", error);
-        expenseAddErrorToast({ message: "Unexpected error occurred!" });
-        } finally {
-        setIsSpinnerLoading(false);
+            updateExpenseMutation.mutate({ editID: isEdit.expense_id, payload }, mutationCallbacks);
         }
     };
 
     useEffect(() => {
         if (billData) {
+            // Marks this name as programmatic so prediction doesn't overwrite the category parsed from the receipt.
+            programmaticNameRef.current = billData.expenseName || '';
             setName(billData.expenseName || '');
             setCategory(billData.expenseCategory || '');
             setAmount(billData.expenseAmount || '');
@@ -236,7 +246,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     </button>
                 </div>
                 
-                {/* Expense Name Input */}
                 <div className="field">
                     <label htmlFor="name">Name of the Expense</label>
                     <input
@@ -248,7 +257,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     />
                 </div>
 
-                {/* Expense Category Input */}
                 <div className="field category-input-wrapper">
                     <label htmlFor="category" className="category-label">
                         Category
@@ -280,7 +288,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     }
                 </div>
 
-                {/* Expense Amount Input */}
                 <div className="field">
                     <label htmlFor="number">Amount Spent</label>
                     <input
@@ -293,7 +300,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     />
                 </div>
 
-                {/* Expense Date Input */}
                 <div className="field">
                     <label htmlFor="date">Date Spent</label>
                     <input
@@ -305,7 +311,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     />
                 </div>
 
-                {/* Expense Description Input */}
                 <div className="field">
                     <label htmlFor="description">Description <span className="optional-add">(optional)</span></label>
                     <input
@@ -317,7 +322,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     />
                 </div>
 
-                {/* Submit Button */}
                 <button className="submit-btn" type="submit">
                     {isEdit.enableEdit ? "Update Expense" : "Add Expense"}
                 </button>

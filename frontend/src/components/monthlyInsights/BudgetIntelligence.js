@@ -1,6 +1,7 @@
 import { FaLightbulb, FaExclamationTriangle, FaExclamationCircle, FaMagic, FaFireAlt, FaBullseye } from "react-icons/fa";
 import "./BudgetIntelligence.css";
 
+// Falls back to a generic "no insights yet" message when no budget insight data is available.
 const DEFAULT_INSIGHT = {
   type: "OTHERS",
   title: "No Budget Insights Yet",

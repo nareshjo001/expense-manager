@@ -1,6 +1,7 @@
 import React from 'react';
-import './SplashScreen.css'; 
+import './SplashScreen.css';
 
+// Animated boot splash shown while the app initializes.
 const SplashScreen = () => {
   return (
     <div className="splash-screen">
