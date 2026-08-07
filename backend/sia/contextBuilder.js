@@ -14,6 +14,11 @@
 // from report.budgets (the canonical analytics/analyzers/budgetAnalyzer.js
 // output). Context foundation only -- no intent classification, prompts,
 // controller wiring, or response formatting are added in this milestone.
+//
+// M2-4A scope: adds a fourth intent, CATEGORY_SPENDING_EXPLANATION, sourced
+// from report.categories.monthly (the canonical
+// analytics/analyzers/categoryAnalyzer.js output for the user's current
+// month). Context foundation only -- same restriction as M2-3A.
 "use strict";
 
 const reportService = require("../Services/reportService");
@@ -22,6 +27,7 @@ const SUPPORTED_INTENTS = new Set([
   "HEALTH_EXPLANATION",
   "SPENDING_CHANGE_EXPLANATION",
   "BUDGET_STATUS_EXPLANATION",
+  "CATEGORY_SPENDING_EXPLANATION",
 ]);
 
 // Deliberately `!== undefined && !== null`, not a truthiness check -- a
@@ -252,10 +258,203 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // Unreachable: SUPPORTED_INTENTS above only ever admits the three
+  // intent === "CATEGORY_SPENDING_EXPLANATION" -- M2-4A scope (context
+  // foundation only; no classifier/prompt/response-formatting work belongs
+  // here). Sourced exclusively from report.categories.monthly, the
+  // canonical analytics/analyzers/categoryAnalyzer.js output for the
+  // user's current month vs. previous month, assembled verbatim by
+  // analytics/reportAssembler.js as `categories: { monthly:
+  // monthlyCategoryReport, yearly: yearlyCategoryReport }`.
+  // summary.topCategory is NOT used -- confirmed to be a lossy derived
+  // alias (`monthlyCategoryReport.topCategory?.category ?? "N/A"`, the
+  // category NAME only, with a fallback that indistinguishably conflates
+  // "no data" with a real category literally named "N/A"), so the
+  // canonical monthly object (which carries the full {category, total}
+  // pair and cannot be confused with a missing value) is preferred, per
+  // this milestone's grounding rules.
+  //
+  // report.categories.yearly is deliberately NOT included in this
+  // context: while it shares the exact same guaranteed, safe
+  // categoryAnalyzer.js contract as monthly, every other SIA intent so
+  // far (health, spending-change, budget) is scoped to the current
+  // reporting period only, and gating success on *both* monthly and
+  // yearly independently having hasData === true would make this intent
+  // spuriously return no-data for a user who has full current-month
+  // category data but, e.g., is in their first year of using the app.
+  // Adding yearly is left to a future milestone that can justify and
+  // scope it on its own, per "do not include data merely because it
+  // exists".
+  //
+  // Deliberately excluded from the selected fields below, and why:
+  //  - biggestJump / biggestDrop: unlike every other field
+  //    categoryAnalyzer.js's analyze() returns in its hasData: true
+  //    branch, these two are genuinely nullable even then (e.g. when
+  //    every current category is brand new -- no previous-period data to
+  //    compare against -- categoryGrowth's growthPercentage/change values
+  //    exclude every entry from both the "increases" and "decreases"
+  //    lists that calculateBiggestChanges filters over, so both come back
+  //    null). Their absence is not provable the way the fields below are,
+  //    so they are excluded rather than guessed at or used to gate the
+  //    whole context to no-data over an otherwise-valid month.
+  //  - No pre-written insights/recommendations/advisory text exists
+  //    anywhere in categoryAnalyzer.js's output (confirmed by reading its
+  //    full source) -- unlike budgetAnalyzer.js, there is no sibling
+  //    "generateCategoryInsights"-style service to separately exclude
+  //    here.
+  //
+  // M2-4A reconciliation remediation: an earlier draft of this branch only
+  // validated the outer monthly-object shape (isPresent + Array.isArray on
+  // the six top-level fields) and then returned topCategory/leastCategory/
+  // categoryDistribution/categoryGrowth by direct reference into the
+  // stored Report -- neither validating each record's own nested contract
+  // (categoryAnalyzer.js's exact {category, total} /
+  // {category, amount, percentage} / {category, previous, current, change,
+  // growthPercentage, isNewCategory, trend} shapes) nor copying them, so a
+  // malformed nested record could reach the success context and a caller
+  // mutating the returned context could silently corrupt the
+  // cached/stored Report. The isFiniteNumber/isPlainObject/isValid*/copy*
+  // helpers below fix both: every nested record is validated against its
+  // exact analyzer contract before being trusted, and every returned
+  // object/array is a newly-constructed, explicit-field-selection copy
+  // that shares no reference with `report`.
+
+  // True only for a genuine finite number -- rejects undefined, null,
+  // NaN, +/-Infinity, and numeric strings (Number.isFinite never coerces,
+  // unlike the global isFinite). Accepts legitimate zero, negative, and
+  // decimal values, matching categoryAnalyzer.js's real value ranges
+  // (e.g. total/amount/change/previous/current can all be negative --
+  // refunds -- or exactly 0).
+  function isFiniteNumber(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+
+  // True only for a real, non-array, non-null object -- excludes arrays
+  // (which a naive `typeof value === "object"` check would wrongly admit)
+  // and null (also `typeof null === "object"`).
+  function isPlainObject(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  // Validates a categoryAnalyzer.js {category, total} record (topCategory
+  // or leastCategory) against its exact contract. `category` is accepted
+  // as-is -- no trimming, normalization, or allowlist -- and `total` must
+  // be a finite number (zero/negative/decimal all valid).
+  function isValidCategoryTotal(value) {
+    return isPlainObject(value) && typeof value.category === "string" && isFiniteNumber(value.total);
+  }
+
+  // Builds a new {category, total} object containing only the two
+  // approved fields -- breaks reference sharing with the stored Report
+  // and silently excludes any unexpected/extra properties from leaking.
+  function copyCategoryTotal(value) {
+    return { category: value.category, total: value.total };
+  }
+
+  // Validates a single categoryDistribution record against
+  // calculateCategoryDistribution()'s exact {category, amount, percentage}
+  // contract.
+  function isValidDistributionRecord(value) {
+    return (
+      isPlainObject(value) &&
+      typeof value.category === "string" &&
+      isFiniteNumber(value.amount) &&
+      isFiniteNumber(value.percentage)
+    );
+  }
+
+  function copyDistributionRecord(value) {
+    return { category: value.category, amount: value.amount, percentage: value.percentage };
+  }
+
+  const VALID_CATEGORY_TRENDS = new Set(["up", "down", "same"]);
+
+  // Validates a single categoryGrowth record against
+  // calculateCategoryGrowth()'s exact contract. growthPercentage is the
+  // one field analyzer.js can legitimately leave null (whenever
+  // `previous <= 0`) -- accepted as null OR a finite number, nothing else.
+  function isValidGrowthRecord(value) {
+    return (
+      isPlainObject(value) &&
+      typeof value.category === "string" &&
+      isFiniteNumber(value.previous) &&
+      isFiniteNumber(value.current) &&
+      isFiniteNumber(value.change) &&
+      (value.growthPercentage === null || isFiniteNumber(value.growthPercentage)) &&
+      typeof value.isNewCategory === "boolean" &&
+      VALID_CATEGORY_TRENDS.has(value.trend)
+    );
+  }
+
+  function copyGrowthRecord(value) {
+    return {
+      category: value.category,
+      previous: value.previous,
+      current: value.current,
+      change: value.change,
+      growthPercentage: value.growthPercentage,
+      isNewCategory: value.isNewCategory,
+      trend: value.trend,
+    };
+  }
+
+  if (intent === "CATEGORY_SPENDING_EXPLANATION") {
+    const monthlyCategories = report.categories && report.categories.monthly;
+
+    if (!isPresent(monthlyCategories) || monthlyCategories.hasData !== true) {
+      return noDataResult(intent);
+    }
+
+    const topCategory = monthlyCategories.topCategory;
+    const leastCategory = monthlyCategories.leastCategory;
+    const categoryDistribution = monthlyCategories.categoryDistribution;
+    const concentrationIndex = monthlyCategories.concentrationIndex;
+    const top3Concentration = monthlyCategories.top3Concentration;
+    const categoryGrowth = monthlyCategories.categoryGrowth;
+
+    // Every nested record is validated against categoryAnalyzer.js's exact
+    // contract -- not just checked for top-level presence -- so a stale,
+    // differently-shaped, or partially-corrupted stored Report document
+    // returns no-data instead of leaking malformed data into the context.
+    if (
+      !isValidCategoryTotal(topCategory) ||
+      !isValidCategoryTotal(leastCategory) ||
+      !isFiniteNumber(concentrationIndex) ||
+      !isFiniteNumber(top3Concentration) ||
+      !Array.isArray(categoryDistribution) ||
+      categoryDistribution.length === 0 ||
+      !categoryDistribution.every(isValidDistributionRecord) ||
+      !Array.isArray(categoryGrowth) ||
+      categoryGrowth.length === 0 ||
+      !categoryGrowth.every(isValidGrowthRecord)
+    ) {
+      return noDataResult(intent);
+    }
+
+    // Explicit field selection into newly-constructed objects/arrays --
+    // shares no reference with `report`, and cannot leak any unexpected or
+    // sensitive extra property a stored record might carry. Array order is
+    // preserved exactly (.map() never reorders); no value is coerced,
+    // rounded, formatted, or recalculated.
+    return {
+      intent,
+      fields: {
+        categories: {
+          topCategory: copyCategoryTotal(topCategory),
+          leastCategory: copyCategoryTotal(leastCategory),
+          categoryDistribution: categoryDistribution.map(copyDistributionRecord),
+          concentrationIndex,
+          top3Concentration,
+          categoryGrowth: categoryGrowth.map(copyGrowthRecord),
+        },
+      },
+      sourceReportGeneratedAt,
+    };
+  }
+
+  // Unreachable: SUPPORTED_INTENTS above only ever admits the four
   // intents handled explicitly above. Kept as an explicit, honest
   // fallback rather than an assumption, matching this module's existing
-  // "never assume" convention -- if a fourth intent is ever added to
+  // "never assume" convention -- if a fifth intent is ever added to
   // SUPPORTED_INTENTS without a matching branch here, this returns the
   // same safe no-data shape instead of silently returning undefined.
   return noDataResult(intent);
