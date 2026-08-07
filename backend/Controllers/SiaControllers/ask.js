@@ -12,6 +12,11 @@
 // by intent as of M2-2 (no per-intent branching beyond the
 // SYSTEM_PROMPTS_BY_INTENT lookup), so this milestone only adds the new
 // prompt and map entry below -- still no new route, no new endpoint.
+// M2-4B scope: adds a fourth intent, CATEGORY_SPENDING_EXPLANATION -- the
+// exact identifier already established by
+// backend/sia/contextBuilder.js's M2-4A implementation. Same as M2-3:
+// only a new prompt and map entry, no controller-flow change, no new
+// route, no new endpoint.
 //
 // Strictly read-only -- no database writes, no direct MongoDB, Redis,
 // Expense, Income, Budget, analytics, or ML-service imports.
@@ -38,6 +43,7 @@ const {
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
 const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
+const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 
 // Minimum orchestration prompts required for this milestone -- not final
 // prompt-engineering work. Each is fixed and intent-specific; a small
@@ -93,10 +99,41 @@ const BUDGET_STATUS_SYSTEM_PROMPT =
   "data. If the context does not support a claim, say so. Keep the " +
   "explanation concise, clear, and non-judgmental.";
 
+// Scopes the model to exactly the six aggregates
+// backend/sia/contextBuilder.js's M2-4A CATEGORY_SPENDING_EXPLANATION
+// context carries, and names their distinct meanings so totals, share
+// percentages, concentration, and period-over-period growth are not
+// conflated. "accounted for" / "is associated with" remains the strongest
+// causal language permitted (same standard as
+// SPENDING_CHANGE_SYSTEM_PROMPT): a category's size or growth is a
+// correlation in a completed monthly report, never a demonstrated
+// real-world cause.
+const CATEGORY_SPENDING_SYSTEM_PROMPT =
+  "You are SIA, BALENISA's read-only financial explanation assistant. " +
+  "Answer the user's question about their category spending using only " +
+  "the supplied structured context of validated monthly category " +
+  "aggregates. Treat the context as authoritative. You may describe only " +
+  "the highest and lowest spending categories, each category's total " +
+  "amount, each category's share percentage of the distribution, the " +
+  "concentration values, and the per-category previous, current, change, " +
+  "growth percentage, new-category flag, and trend values explicitly " +
+  "present in the context. Keep these distinct: a total amount, a share " +
+  "percentage, a concentration value, and a growth value each mean " +
+  "different things, so never present one as another. Do not invent " +
+  "transactions, merchants, causes, intentions, income, budgets, missing " +
+  "categories, or lifestyle assumptions. Do not recalculate financial " +
+  "values, rank or re-order categories yourself, draw financial-health " +
+  "conclusions, or predict future spending. Do not present a category " +
+  "being large or growing as a proven real-world cause -- describe only " +
+  "what the context shows. If the context does not support a claim the " +
+  "question asks for, say so plainly. Keep the explanation concise, " +
+  "clear, and non-judgmental.";
+
 const SYSTEM_PROMPTS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_SYSTEM_PROMPT,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_SYSTEM_PROMPT,
   [BUDGET_STATUS_EXPLANATION]: BUDGET_STATUS_SYSTEM_PROMPT,
+  [CATEGORY_SPENDING_EXPLANATION]: CATEGORY_SPENDING_SYSTEM_PROMPT,
 };
 
 // Deliberately the same generic body for every failure/unavailable path
@@ -127,7 +164,8 @@ const ask = async (req, res) => {
 
   // Whatever classifyIntent returns is used as-is -- no hard-coded intent,
   // no guessed fallback. classifyIntent's own contract guarantees exactly
-  // HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION, or null.
+  // HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION,
+  // BUDGET_STATUS_EXPLANATION, CATEGORY_SPENDING_EXPLANATION, or null.
   const intent = classifyIntent(trimmedQuestion);
   if (intent === null) {
     return res.status(422).json({

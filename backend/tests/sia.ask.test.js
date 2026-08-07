@@ -93,6 +93,7 @@ function loadApp({ configOverrides = {}, classifyIntentImpl, buildContextImpl, a
 const HEALTH_QUESTION = "Why is my financial health score low?";
 const SPENDING_QUESTION = "Why did my spending increase?";
 const BUDGET_QUESTION = "Explain my current budget status.";
+const CATEGORY_QUESTION = "Which category am I spending the most on?";
 
 function fakeHealthContext(overrides = {}) {
   return {
@@ -153,6 +154,58 @@ function fakeBudgetContext(overrides = {}) {
     ...overrides,
   };
 }
+
+// Mirrors the exact CATEGORY_SPENDING_EXPLANATION context shape confirmed
+// in the committed backend/sia/contextBuilder.js (M2-4A): a single
+// fields.categories object carrying exactly six validated, defensively
+// copied aggregates sourced from report.categories.monthly --
+// topCategory, leastCategory, categoryDistribution, concentrationIndex,
+// top3Concentration, and categoryGrowth. biggestJump/biggestDrop and the
+// yearly branch are deliberately absent, matching M2-4A's own exclusions.
+function fakeCategoryContext(overrides = {}) {
+  return {
+    intent: "CATEGORY_SPENDING_EXPLANATION",
+    fields: {
+      categories: {
+        topCategory: { category: "Groceries", total: 1234.56 },
+        leastCategory: { category: "Books", total: 12.34 },
+        categoryDistribution: [
+          { category: "Groceries", amount: 1234.56, percentage: 61.7 },
+          { category: "Rent", amount: 700, percentage: 35 },
+          { category: "Books", amount: 12.34, percentage: 3.3 },
+        ],
+        concentrationIndex: 49.2,
+        top3Concentration: 100,
+        categoryGrowth: [
+          {
+            category: "Groceries",
+            previous: 1000,
+            current: 1234.56,
+            change: 234.56,
+            growthPercentage: 23.46,
+            isNewCategory: false,
+            trend: "up",
+          },
+          {
+            category: "Books",
+            previous: 0,
+            current: 12.34,
+            change: 12.34,
+            growthPercentage: null,
+            isNewCategory: true,
+            trend: "up",
+          },
+        ],
+      },
+    },
+    sourceReportGeneratedAt: "2026-01-15T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+// The exact fixed no-data answer approved for this intent.
+const CATEGORY_NO_DATA_ANSWER =
+  "I don't have enough monthly category spending data to explain your category spending yet.";
 
 describe("POST /sia/ask", () => {
   it(
@@ -1154,5 +1207,357 @@ describe("POST /sia/ask", () => {
     expect(askLlmMock.mock.calls[0][0].context.intent).toBe("HEALTH_EXPLANATION");
     expect(askLlmMock.mock.calls[1][0].context.intent).toBe("SPENDING_CHANGE_EXPLANATION");
     expect(askLlmMock.mock.calls[2][0].context.intent).toBe("BUDGET_STATUS_EXPLANATION");
+  });
+
+  // -- M2-4B: CATEGORY_SPENDING_EXPLANATION -----------------------------------
+  // Exposes the already-committed M2-4A category context through the same
+  // POST /sia/ask pipeline. No new route, no controller-flow change --
+  // only a new prompt, grounding path, and no-data message exist.
+
+  it("calls buildContext exactly once with the authenticated req.userId and CATEGORY_SPENDING_EXPLANATION, ignoring a malicious body/query userId", async () => {
+    const { app, buildContextMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeCategoryContext(),
+    });
+
+    const token = signToken("user-cat-1");
+
+    await request(app)
+      .post("/sia/ask?userId=attacker-query")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION, userId: "attacker-body", user: "attacker-body-2" });
+
+    expect(buildContextMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).toHaveBeenCalledWith("user-cat-1", "CATEGORY_SPENDING_EXPLANATION");
+  });
+
+  it("calls askLlm exactly once with the fixed category system prompt, the narrow category context result, and the trimmed question", async () => {
+    const categoryContext = fakeCategoryContext();
+    const { app, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => categoryContext,
+      askLlmImpl: async () => ({ answer: "Groceries is your largest category.", model: "test", latencyMs: 1 }),
+    });
+
+    const token = signToken("user-cat-2");
+
+    await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: `   ${CATEGORY_QUESTION}   ` });
+
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+    const callArg = askLlmMock.mock.calls[0][0];
+    expect(callArg.question).toBe(CATEGORY_QUESTION);
+    expect(callArg.context).toBe(categoryContext);
+    expect(typeof callArg.systemPrompt).toBe("string");
+    expect(callArg.systemPrompt.length).toBeGreaterThan(0);
+    // Scoped to the six M2-4A aggregates, and explicitly read-only.
+    expect(callArg.systemPrompt).toEqual(expect.stringContaining("category spending"));
+    expect(callArg.systemPrompt).toEqual(expect.stringContaining("read-only"));
+    expect(callArg.systemPrompt).toEqual(expect.stringContaining("Treat the context as authoritative"));
+  });
+
+  it("returns the exact category 200 public contract with the real grounding path on a mocked LLM success", async () => {
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeCategoryContext(),
+      askLlmImpl: async () => ({ answer: "Groceries accounted for the largest share.", model: "test", latencyMs: 1 }),
+    });
+
+    const token = signToken("user-cat-3");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      answer: "Groceries accounted for the largest share.",
+      intent: "CATEGORY_SPENDING_EXPLANATION",
+      basedOn: ["categories.monthly"],
+    });
+    // Specifically the monthly path -- not the bare parent, which would
+    // wrongly imply the excluded yearly branch is grounded too.
+    expect(res.body.basedOn).not.toContain("categories");
+    expect(res.body.basedOn).not.toContain("categories.yearly");
+  });
+
+  it("returns the exact fixed category 200 no-data response and does not call askLlm", async () => {
+    const { app, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => ({
+        intent: "CATEGORY_SPENDING_EXPLANATION",
+        fields: null,
+        reason: "no_data",
+      }),
+    });
+
+    const token = signToken("user-cat-4");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      answer: CATEGORY_NO_DATA_ANSWER,
+      intent: "CATEGORY_SPENDING_EXPLANATION",
+      basedOn: [],
+    });
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 for an ambiguous cross-domain category question and calls neither buildContext nor askLlm", async () => {
+    const ambiguousQuestions = [
+      "Which category should I cut to stay under budget?",
+      "Which category is hurting my financial health?",
+      "Predict my highest spending category next month.",
+      "Show my categories.",
+      "Create a category.",
+    ];
+
+    for (const question of ambiguousQuestions) {
+      const { app, buildContextMock, askLlmMock } = loadApp({
+        configOverrides: { enabled: true },
+      });
+
+      const token = signToken("user-cat-5");
+
+      const res = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ question });
+
+      expect(res.status).toBe(422);
+      expect(res.body).toEqual({
+        success: false,
+        message: "Question not recognized for the intents SIA currently supports.",
+      });
+      expect(buildContextMock).not.toHaveBeenCalled();
+      expect(askLlmMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it("returns a generic 503 for category when askLlm rejects with LlmProviderError", async () => {
+    const { app, LlmProviderError } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeCategoryContext(),
+      askLlmImpl: async () => {
+        throw new LlmProviderError("SIA has no LLM provider configured.", {
+          code: "PROVIDER_NOT_CONFIGURED",
+          provider: null,
+        });
+      },
+    });
+
+    const token = signToken("user-cat-6");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("returns a generic 503 for category when askLlm resolves with a blank, missing, or non-string answer", async () => {
+    for (const badResult of [
+      { answer: "   ", model: "test", latencyMs: 1 },
+      { model: "test", latencyMs: 1 },
+      { answer: 42, model: "test", latencyMs: 1 },
+      null,
+    ]) {
+      const { app } = loadApp({
+        configOverrides: { enabled: true },
+        buildContextImpl: async () => fakeCategoryContext(),
+        askLlmImpl: async () => badResult,
+      });
+
+      const token = signToken("user-cat-7");
+
+      const res = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ question: CATEGORY_QUESTION });
+
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+    }
+  });
+
+  it("returns a generic 503 for category when buildContext unexpectedly rejects", async () => {
+    const { app, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => {
+        throw new Error("reportService exploded with 4321 and user-cat-8");
+      },
+    });
+
+    const token = signToken("user-cat-8");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it("category error responses never expose prompts, questions, context, provider details, stack traces, or financial values", async () => {
+    const { app, LlmProviderError } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeCategoryContext(),
+      askLlmImpl: async () => {
+        throw new LlmProviderError("Provider acme-llm rejected the request.", {
+          code: "PROVIDER_NOT_IMPLEMENTED",
+          provider: "acme-llm",
+        });
+      },
+    });
+
+    const token = signToken("user-cat-9");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION });
+
+    const serialized = JSON.stringify(res.body);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+    for (const leak of [
+      "acme-llm",
+      "PROVIDER_NOT_IMPLEMENTED",
+      "Groceries",
+      "categoryDistribution",
+      "concentrationIndex",
+      "1234.56",
+      "user-cat-9",
+      "stack",
+      "SIA, BALENISA",
+      CATEGORY_QUESTION,
+    ]) {
+      expect(serialized).not.toContain(leak);
+    }
+  });
+
+  it("public category success responses contain no context, fields, sourceReportGeneratedAt, userId, or raw data", async () => {
+    const authenticatedUserId = "user-cat-should-not-leak-10";
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeCategoryContext(),
+      askLlmImpl: async () => ({ answer: "Category answer.", model: "test", latencyMs: 1 }),
+    });
+
+    const token = signToken(authenticatedUserId);
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: CATEGORY_QUESTION });
+
+    const serialized = JSON.stringify(res.body);
+    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "intent", "success"]);
+    expect(res.body).not.toHaveProperty("fields");
+    expect(res.body).not.toHaveProperty("context");
+    expect(res.body).not.toHaveProperty("sourceReportGeneratedAt");
+    for (const leak of [
+      authenticatedUserId,
+      "sourceReportGeneratedAt",
+      "categoryDistribution",
+      "categoryGrowth",
+      "concentrationIndex",
+      "top3Concentration",
+      "topCategory",
+      "Groceries",
+      "1234.56",
+      "expenseAmount",
+      "rawExpenses",
+    ]) {
+      expect(serialized).not.toContain(leak);
+    }
+  });
+
+  it("does not mutate the request body or the buildContext-returned context object for a category question", async () => {
+    const categoryContext = fakeCategoryContext();
+    const contextSnapshot = JSON.parse(JSON.stringify(categoryContext));
+    const { app, buildContextMock, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => categoryContext,
+      askLlmImpl: async () => ({ answer: "Category answer.", model: "test", latencyMs: 1 }),
+    });
+    const token = signToken("user-cat-11");
+
+    const body = { question: CATEGORY_QUESTION, extra: "keep-me" };
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    // The immutability assertions below are only meaningful if the request
+    // actually reached the controller and exercised the full pipeline --
+    // an authentication rejection would leave both objects untouched and
+    // pass vacuously. These three assertions make that impossible.
+    expect(res.status).toBe(200);
+    expect(buildContextMock).toHaveBeenCalledTimes(1);
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+
+    expect(body).toEqual({ question: CATEGORY_QUESTION, extra: "keep-me" });
+    expect(categoryContext).toEqual(contextSnapshot);
+  });
+
+  it("keeps all four intents' prompts, contexts, and formatters isolated across back-to-back requests on the same app instance", async () => {
+    const contextsByIntent = {
+      HEALTH_EXPLANATION: fakeHealthContext(),
+      SPENDING_CHANGE_EXPLANATION: fakeSpendingContext(),
+      BUDGET_STATUS_EXPLANATION: fakeBudgetContext(),
+      CATEGORY_SPENDING_EXPLANATION: fakeCategoryContext(),
+    };
+    const answersByIntent = {
+      HEALTH_EXPLANATION: "Health answer.",
+      SPENDING_CHANGE_EXPLANATION: "Spending answer.",
+      BUDGET_STATUS_EXPLANATION: "Budget answer.",
+      CATEGORY_SPENDING_EXPLANATION: "Category answer.",
+    };
+    const { app, buildContextMock, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async (_userId, intent) => contextsByIntent[intent],
+      askLlmImpl: async ({ context }) => ({
+        answer: answersByIntent[context.intent],
+        model: "test",
+        latencyMs: 1,
+      }),
+    });
+
+    const token = signToken("user-cat-12");
+    const healthRes = await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send({ question: HEALTH_QUESTION });
+    const spendingRes = await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send({ question: SPENDING_QUESTION });
+    const budgetRes = await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send({ question: BUDGET_QUESTION });
+    const categoryRes = await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send({ question: CATEGORY_QUESTION });
+
+    expect(healthRes.body.intent).toBe("HEALTH_EXPLANATION");
+    expect(spendingRes.body.intent).toBe("SPENDING_CHANGE_EXPLANATION");
+    expect(budgetRes.body.intent).toBe("BUDGET_STATUS_EXPLANATION");
+    expect(categoryRes.body).toEqual({
+      success: true,
+      answer: "Category answer.",
+      intent: "CATEGORY_SPENDING_EXPLANATION",
+      basedOn: ["categories.monthly"],
+    });
+
+    expect(buildContextMock).toHaveBeenNthCalledWith(4, "user-cat-12", "CATEGORY_SPENDING_EXPLANATION");
+    expect(askLlmMock.mock.calls[3][0].systemPrompt).toEqual(expect.stringContaining("category spending"));
+    expect(askLlmMock.mock.calls[3][0].context.intent).toBe("CATEGORY_SPENDING_EXPLANATION");
+    // Each intent kept its own prompt -- no cross-contamination.
+    expect(askLlmMock.mock.calls[0][0].systemPrompt).not.toBe(askLlmMock.mock.calls[3][0].systemPrompt);
+    expect(askLlmMock.mock.calls[1][0].systemPrompt).not.toBe(askLlmMock.mock.calls[3][0].systemPrompt);
+    expect(askLlmMock.mock.calls[2][0].systemPrompt).not.toBe(askLlmMock.mock.calls[3][0].systemPrompt);
   });
 });

@@ -15,11 +15,15 @@
 // M2-3 scope: adds the BUDGET_STATUS_EXPLANATION shapes alongside them,
 // using the exact intent identifier already established by
 // backend/sia/contextBuilder.js's M2-3A implementation.
+// M2-4B scope: adds the CATEGORY_SPENDING_EXPLANATION shapes alongside
+// them, using the exact intent identifier already established by
+// backend/sia/contextBuilder.js's M2-4A implementation.
 "use strict";
 
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
 const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
+const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 
 // The real Report/context source paths each answer is grounded in. Fixed,
 // server-owned, and allowlisted -- never accepted from the client or the
@@ -81,10 +85,27 @@ const SPENDING_CHANGE_EXPLANATION_GROUNDING_PATHS = [
 // separately cite.
 const BUDGET_STATUS_EXPLANATION_GROUNDING_PATHS = ["budgets"];
 
+// CATEGORY_SPENDING_EXPLANATION: contextBuilder.js's M2-4A `fields` for
+// this intent carry exactly one top-level key, `categories` -- but, as with
+// `budget` above, that key is only this SIA context's own field label. The
+// canonical Report branch it is populated from is specifically
+// `report.categories.monthly` (analytics/reportAssembler.js's
+// `categories: { monthly, yearly }`, of which M2-4A deliberately selects
+// the monthly branch alone). The bare parent `categories` would wrongly
+// imply the yearly branch is also grounded here, so the precise
+// monthly path is used instead. All six of the branch's selected fields
+// (topCategory, leastCategory, categoryDistribution, concentrationIndex,
+// top3Concentration, categoryGrowth) come from that one path and are
+// co-guaranteed by contextBuilder.js's own validation gates -- a valid
+// context always carries every one of them at once -- so a single accurate
+// source path is both the smallest and the most honest grounding set.
+const CATEGORY_SPENDING_EXPLANATION_GROUNDING_PATHS = ["categories.monthly"];
+
 const GROUNDING_PATHS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_EXPLANATION_GROUNDING_PATHS,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_EXPLANATION_GROUNDING_PATHS,
   [BUDGET_STATUS_EXPLANATION]: BUDGET_STATUS_EXPLANATION_GROUNDING_PATHS,
+  [CATEGORY_SPENDING_EXPLANATION]: CATEGORY_SPENDING_EXPLANATION_GROUNDING_PATHS,
 };
 
 // The fixed, truthful no-data answer per intent. No LLM was called, so
@@ -102,6 +123,13 @@ const NO_DATA_ANSWERS_BY_INTENT = {
     "I do not have enough financial report data yet to explain how your spending changed.",
   [BUDGET_STATUS_EXPLANATION]:
     "I do not have enough financial report data yet to explain your budget status.",
+  // Deliberately names the monthly category data specifically -- M2-4A's
+  // no-data contract is reached by no report, a missing/invalid
+  // categories.monthly branch, hasData !== true, or a malformed nested
+  // record alike, so this message claims nothing more precise than "not
+  // enough monthly category spending data".
+  [CATEGORY_SPENDING_EXPLANATION]:
+    "I don't have enough monthly category spending data to explain your category spending yet.",
 };
 
 function formatNoDataResponse(intent) {

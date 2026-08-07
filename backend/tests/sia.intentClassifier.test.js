@@ -89,9 +89,16 @@ describe("backend/sia/intentClassifier", () => {
     );
   });
 
-  it("recognizes a category-contribution spending question", () => {
+  // M2-4B deliberate contract correction (approved): a question whose
+  // primary subject is a CATEGORY now belongs to
+  // CATEGORY_SPENDING_EXPLANATION, because only that context carries
+  // category-level aggregates and categoryGrowth -- the spending-change
+  // context has no category breakdown at all (see responseFormatter.js).
+  // The non-category half of this original test is unchanged: a
+  // contribution question that names no category stays spending-change.
+  it("routes a category-contribution question to the category intent, while a non-category contribution question stays spending-change", () => {
     expect(classifyIntent("Which category contributed most to my spending increase?")).toBe(
-      "SPENDING_CHANGE_EXPLANATION"
+      "CATEGORY_SPENDING_EXPLANATION"
     );
     expect(classifyIntent("What contributed to my expenses this month?")).toBe(
       "SPENDING_CHANGE_EXPLANATION"
@@ -272,11 +279,12 @@ describe("backend/sia/intentClassifier", () => {
     expect(classifyIntent("Explain my current budget status.")).toBe("BUDGET_STATUS_EXPLANATION");
   });
 
-  it("returns only HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION, BUDGET_STATUS_EXPLANATION, or null -- never a guessed fallback", () => {
+  it("returns only HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION, BUDGET_STATUS_EXPLANATION, CATEGORY_SPENDING_EXPLANATION, or null -- never a guessed fallback", () => {
     const sampleQuestions = [
       "Why is my financial health score low?",
       "Why did my spending increase?",
       "Explain my current budget status.",
+      "Which category am I spending the most on?",
       "How much did I spend?",
       "",
       null,
@@ -285,15 +293,270 @@ describe("backend/sia/intentClassifier", () => {
       "Explain how my spending changed this month.",
       "What's the weather today?",
       "Create a budget.",
+      "Create a category.",
+      "Which category should I cut to stay under budget?",
     ];
     const allowed = new Set([
       "HEALTH_EXPLANATION",
       "SPENDING_CHANGE_EXPLANATION",
       "BUDGET_STATUS_EXPLANATION",
+      "CATEGORY_SPENDING_EXPLANATION",
       null,
     ]);
     for (const question of sampleQuestions) {
       expect(allowed.has(classifyIntent(question))).toBe(true);
     }
+  });
+
+  // -- M2-4B: CATEGORY_SPENDING_EXPLANATION -----------------------------------
+  // Grounded exclusively in backend/sia/contextBuilder.js's M2-4A context
+  // (topCategory, leastCategory, categoryDistribution, concentrationIndex,
+  // top3Concentration, categoryGrowth) -- no concept is recognized here
+  // that the context cannot actually answer.
+
+  it("recognizes category ranking and identity questions", () => {
+    expect(classifyIntent("Which category am I spending the most on?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Which category drove my spending this month?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("What is my top spending category?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("What is my biggest category?")).toBe("CATEGORY_SPENDING_EXPLANATION");
+  });
+
+  it("recognizes category share, distribution, and concentration questions", () => {
+    expect(classifyIntent("Which category takes the largest share?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Why does Rent account for so much of my spending?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Explain my category distribution.")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Why is my category spending so concentrated?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  it("recognizes why-a-named-category-is-high questions without any hard-coded category list", () => {
+    expect(classifyIntent("Why is my Food category so high?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Why is my grocery spending so high?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Why are my dining expenses high?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    // A user-defined category name the codebase has never seen must work
+    // exactly the same way -- proof no fixed BALENISA category list exists.
+    expect(classifyIntent("Why is my zorblatt spending so high?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  it("recognizes category-level growth, increase, and decrease questions (categoryGrowth)", () => {
+    expect(classifyIntent("Which category increased the most?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Which category decreased the most?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Why did my grocery spending increase?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  it("handles case and surrounding whitespace for category questions", () => {
+    expect(classifyIntent("   WHICH CATEGORY AM I SPENDING THE MOST ON?   ")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("\nWhat Is My Top Spending Category?\t")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  // Precedence: these all satisfy the broad spending topic+verb gate too,
+  // but a clear category focus must win, because only the category context
+  // carries category-level aggregates.
+  it("gives a clearly category-focused question precedence over the broad spending-change branch", () => {
+    expect(classifyIntent("Which category contributed most to my spending increase?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Why is my grocery spending so high?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("Which category drove my spending this month?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  // The mirror image: overall/aggregate spending questions name no
+  // category and must be completely unaffected by the new branch.
+  it("leaves overall spending-change questions with SPENDING_CHANGE_EXPLANATION", () => {
+    expect(classifyIntent("Why did my overall spending increase?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+    expect(classifyIntent("How has my spending changed?")).toBe("SPENDING_CHANGE_EXPLANATION");
+    expect(classifyIntent("Why are my total expenses higher this month?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+    expect(classifyIntent("Why did I spend more this month?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+  });
+
+  // False-positive protection: "monthly"/"overall"/"total"/"my" are
+  // time-or-aggregate modifiers, never category names.
+  it("does not treat overall or time-based spending phrases as category-named", () => {
+    expect(classifyIntent("Why is my spending so high?")).toBe("SPENDING_CHANGE_EXPLANATION");
+    expect(classifyIntent("Why is my monthly spending high?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+    expect(classifyIntent("Why are my total expenses high?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+  });
+
+  it("returns null for category questions that also require budget data (cross-domain)", () => {
+    expect(classifyIntent("Which category should I cut to stay under budget?")).toBeNull();
+    expect(classifyIntent("Which category is pushing me over budget?")).toBeNull();
+  });
+
+  it("returns null for category questions that also require financial-health data (cross-domain)", () => {
+    expect(classifyIntent("Which category is hurting my financial health?")).toBeNull();
+    expect(classifyIntent("Which category is raising my financial risk?")).toBeNull();
+  });
+
+  it("returns null for category advice questions", () => {
+    expect(classifyIntent("Which category should I cut?")).toBeNull();
+    expect(classifyIntent("Which category should I reduce?")).toBeNull();
+    expect(classifyIntent("Recommend a category to save money in.")).toBeNull();
+  });
+
+  it("returns null for category prediction questions", () => {
+    expect(classifyIntent("Predict my highest spending category next month.")).toBeNull();
+    expect(classifyIntent("Forecast my category spending.")).toBeNull();
+    expect(classifyIntent("What will my top category be next month?")).toBeNull();
+  });
+
+  it("returns null for category lookup questions", () => {
+    expect(classifyIntent("Show my categories.")).toBeNull();
+    expect(classifyIntent("List my top categories.")).toBeNull();
+    expect(classifyIntent("What are my categories?")).toBeNull();
+  });
+
+  it("returns null for category mutation questions", () => {
+    expect(classifyIntent("Create a category.")).toBeNull();
+    expect(classifyIntent("Delete my Food category.")).toBeNull();
+    expect(classifyIntent("Rename my grocery category.")).toBeNull();
+  });
+
+  it("returns null for a bare category topic with no explanation or ranking concept", () => {
+    expect(classifyIntent("category")).toBeNull();
+    expect(classifyIntent("categories")).toBeNull();
+    expect(classifyIntent("my spending categories")).toBeNull();
+  });
+
+  it("rejects ambiguous, empty, and non-string input for category-spending", () => {
+    expect(classifyIntent("")).toBeNull();
+    expect(classifyIntent("   ")).toBeNull();
+    expect(classifyIntent(null)).toBeNull();
+    expect(classifyIntent(undefined)).toBeNull();
+    expect(classifyIntent(42)).toBeNull();
+    expect(classifyIntent({})).toBeNull();
+    expect(classifyIntent(["Which category am I spending the most on?"])).toBeNull();
+  });
+
+  // -- M2-4B remediation: trailing-category share questions ------------------
+  // The category name TRAILS the phrase here ("...of my spending is
+  // Groceries"), so the possessive patterns above cannot see it. Without a
+  // dedicated shape these fell through to the spending-change branch and
+  // were answered from a context with no category breakdown, even though
+  // categoryDistribution's own percentages are exactly what they ask for.
+
+  it("recognizes share/percentage questions whose category trails the phrase", () => {
+    expect(classifyIntent("What percentage of my spending is Groceries?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("What share of my spending is Groceries?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("How much of my spending comes from Dining?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+    expect(classifyIntent("What percentage of my expenses went to Travel?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  it("recognizes a trailing user-defined category name with no hard-coded list", () => {
+    expect(classifyIntent("What percentage of my spending is zorblatt?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
+  });
+
+  // Nearby shapes that look similar but are NOT category-share questions.
+  // Each asserts the exact deterministic result the classifier already
+  // produced before this remediation -- not a loose "is not category" check.
+  it("does not treat nearby non-category share/percentage shapes as category questions", () => {
+    // Overall spending change that merely mentions a percentage.
+    expect(classifyIntent("What percentage did my overall spending increase?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+    // Income is a different, unsupported domain.
+    expect(classifyIntent("What share of my income did I spend?")).toBeNull();
+    // Trailing value is a time period, not a category.
+    expect(classifyIntent("How much of my spending comes from last month?")).toBeNull();
+    // "went up" is a direction, not the "went to <category>" connector.
+    expect(classifyIntent("What percentage of my expenses went up this month?")).toBeNull();
+  });
+
+  // -- M2-4B remediation: full month names are never category names ----------
+  // A month scopes a question in time; the category context has no time
+  // dimension, so these must stay with the spending-change intent.
+
+  it("does not treat a full month name as a category name", () => {
+    expect(classifyIntent("Why is my January spending high?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+    expect(classifyIntent("Why is my December expenses high?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+  });
+
+  it.each([
+    ["January"],
+    ["February"],
+    ["March"],
+    ["April"],
+    ["May"],
+    ["June"],
+    ["July"],
+    ["August"],
+    ["September"],
+    ["October"],
+    ["November"],
+    ["December"],
+  ])("classifies \"Why is my %s spending high?\" as SPENDING_CHANGE_EXPLANATION, not category", (month) => {
+    expect(classifyIntent(`Why is my ${month} spending high?`)).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+  });
+
+  it("never misclassifies a health or budget question as category-spending", () => {
+    expect(classifyIntent("Why is my financial health score low?")).toBe("HEALTH_EXPLANATION");
+    expect(classifyIntent("Why is my financial risk level high?")).toBe("HEALTH_EXPLANATION");
+    expect(classifyIntent("Explain my current budget status.")).toBe("BUDGET_STATUS_EXPLANATION");
+    expect(classifyIntent("How much budget do I have remaining?")).toBe(
+      "BUDGET_STATUS_EXPLANATION"
+    );
+    expect(classifyIntent("Which category am I spending the most on?")).toBe(
+      "CATEGORY_SPENDING_EXPLANATION"
+    );
   });
 });

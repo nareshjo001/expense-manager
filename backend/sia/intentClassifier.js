@@ -10,6 +10,10 @@
 // current budget status -- using the exact intent identifier already
 // established by backend/sia/contextBuilder.js's M2-3A implementation
 // ("BUDGET_STATUS_EXPLANATION").
+// M2-4B scope: additionally recognizes clear requests to explain
+// category-level spending -- using the exact intent identifier already
+// established by backend/sia/contextBuilder.js's M2-4A implementation
+// ("CATEGORY_SPENDING_EXPLANATION").
 // No LLM is used for classification, no general NLP framework, no
 // classifier registry -- just small, explicit sets of phrase checks, one
 // per intent.
@@ -22,6 +26,7 @@
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
 const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
+const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 
 // The question must ask for an explanation/meaning/reason (not just
 // mention the topic in passing) AND mention "financial health" or
@@ -83,6 +88,154 @@ const BUDGET_ACTION_EXCLUSION_PATTERN = new RegExp(
   `\\b(?:${BUDGET_MUTATION_VERBS}|${BUDGET_ADVICE_VERBS})\\b(?:\\s+\\S+){0,4}\\s+budget\\b`
 );
 
+// -- M2-4B: CATEGORY_SPENDING_EXPLANATION ------------------------------------
+//
+// Every concept below maps to a field backend/sia/contextBuilder.js's
+// M2-4A CATEGORY_SPENDING_EXPLANATION context actually guarantees
+// (topCategory/leastCategory, categoryDistribution's amount+percentage,
+// concentrationIndex, top3Concentration, and categoryGrowth's
+// previous/current/change/growthPercentage/isNewCategory/trend) --
+// classification is never broader than what the context can support.
+//
+// Two distinct ways a question can be category-focused:
+//
+// (1) It says "category"/"categories" explicitly ("Which category am I
+//     spending the most on?", "What is my biggest category?").
+const CATEGORY_WORD_PATTERN = /\bcategor(?:y|ies)\b/;
+// (2) It names a specific spending area possessively/attributively rather
+//     than asking about spending overall -- "my grocery spending", "my
+//     dining expenses", "Rent account for". Deliberately NOT a hard-coded
+//     list of BALENISA category names (categories are user-defined and
+//     variable): this matches the grammatical SHAPE of a modifier word
+//     sitting directly before spending/expenses, or a capitalized-in-the-
+//     original noun preceding "account(s) for". The overall/time-based
+//     modifier words below are excluded so "my monthly spending" and "my
+//     total expenses" never look category-named.
+// Includes pronouns and auxiliaries ("did I spend", "we spend") so a
+// possessive-looking verb phrase is never mistaken for a category name --
+// "Why did I spend more this month?" must stay a spending-change question.
+// Also includes the twelve full month names, so a time-scoped question
+// ("Why is my January spending high?") is never treated as naming a
+// category -- the category context has no time dimension to answer it
+// with. Month ABBREVIATIONS are deliberately not listed: "may"/"march"
+// are already covered as full names, and abbreviations like "jan"/"mar"
+// are plausible user-defined category names. Likewise weekend/holiday/
+// season/merchant words stay unlisted -- BALENISA categories are
+// user-defined, so those remain deliberately unresolved rather than
+// guessed at.
+const OVERALL_MODIFIERS =
+  "overall|total|monthly|month|weekly|week|yearly|year|annual|daily|day|average|general|entire|whole|all|my|our|your|their|its|the|a|an|this|that|these|those|last|past|current|previous|recent|much|more|less|high|higher|low|lower|big|bigger|biggest|large|larger|largest|small|smaller|smallest|i|you|we|they|he|she|it|who|did|do|does|to|of|in|on|and|or|" +
+  "january|february|march|april|may|june|july|august|september|october|november|december";
+const NAMED_AREA_SPENDING_PATTERN = new RegExp(
+  `\\b(?!(?:${OVERALL_MODIFIERS})\\b)([a-z][a-z'-]*)\\s+(?:spending|spend|expenses|expense|costs|cost)\\b`
+);
+// "<Something> account(s) for ... spending/expenses" -- e.g. "Why does
+// Rent account for so much of my spending?". The subject word is again
+// shape-matched, never taken from a fixed category list.
+const ACCOUNTS_FOR_PATTERN =
+  /\b(?!(?:the|my|this|that|it|they|these|those)\b)([a-z][a-z'-]*)\s+accounts?\s+for\b/;
+// (3) It asks what share/portion of spending a category represents, with
+//     the category TRAILING the phrase -- "What percentage of my spending
+//     is Groceries?", "How much of my spending comes from Dining?". The
+//     two patterns above only find a category sitting immediately BEFORE
+//     "spending"/"expenses", so this shape would otherwise fall through to
+//     the broad spending branch and be answered from a context with no
+//     category breakdown at all. The trailing word reuses the same
+//     OVERALL_MODIFIERS guard, so a time-scoped tail ("...comes from last
+//     month?") is rejected, and the connector list is closed -- "went to"
+//     matches, "went up" does not. No category name is hard-coded, and no
+//     category entity is extracted or returned; the LLM still receives the
+//     whole distribution.
+const CATEGORY_SHARE_OF_SPENDING_PATTERN = new RegExp(
+  "\\b(?:percentage|percent|share|portion|proportion|how much)\\s+of\\s+my\\s+" +
+    "(?:spending|expenses|expense|costs|cost)\\s+" +
+    "(?:is|was|comes\\s+from|came\\s+from|goes\\s+to|went\\s+to)\\s+" +
+    `(?!(?:${OVERALL_MODIFIERS})\\b)[a-z][a-z'-]*`
+);
+
+// The question must additionally ask for an explanation, a ranking, a
+// share/concentration, or a category-level change -- not merely name a
+// category. "which/what ... most/top/biggest/largest/highest/drove" covers
+// ranking; "share/portion/percentage/proportion/concentration/dominat*"
+// covers distribution; the change verbs mirror categoryGrowth's own
+// fields.
+const CATEGORY_INTENT_VERB_PATTERN =
+  /\b(why|explain|most|top|biggest|largest|highest|greatest|drove|drive|driving|driven|share|portion|percentage|percent|proportion|concentration|concentrated|dominat\w*|breakdown|distribution|contributed|contribute|contributing|increase|increased|decrease|decreased|grew|grow|growth|changed|change|high|higher|low|lower|account|accounts)\b/;
+
+// Vetoes questions whose primary subject is NOT a category explanation the
+// M2-4A context can ground, even though they mention a category:
+//  - advice/mutation/lookup: "Which category should I cut?", "Create a
+//    category.", "Show my categories." -- no advisory, write, or raw-list
+//    capability exists.
+//  - prediction: "Predict my highest spending category next month." -- the
+//    context is a completed monthly report, never a forecast.
+//  - cross-domain: "Which category should I cut to stay under budget?",
+//    "Which category is hurting my financial health?" -- answering would
+//    require combining category data with budget/health domains the
+//    category context does not carry. These deliberately fall through to
+//    null (the existing 422), rather than being guessed into any single
+//    intent.
+const CATEGORY_ADVICE_PATTERN =
+  /\b(should|recommend|recommendation|advice|advise|suggest|suggestion|cut|reduce|trim|save|savings|optimi[sz]e|better|worth|ought)\b/;
+const CATEGORY_PREDICTION_PATTERN =
+  /\b(predict|prediction|forecast|forecasting|project(?:ed|ion)?|next month|next year|future|will i|expect(?:ed)?)\b/;
+const CATEGORY_MUTATION_PATTERN =
+  /\b(create|add|set|update|edit|rename|delete|remove|merge|split|modify)\b(?:\s+\S+){0,3}\s+categor(?:y|ies)\b/;
+// A bare listing/lookup request with no explanatory or ranking concept.
+const CATEGORY_LOOKUP_PATTERN = /\b(show|list|display|give me|what are)\b/;
+const CATEGORY_CROSS_DOMAIN_PATTERN = /\b(budget|financial (?:health|risk))\b/;
+
+const CATEGORY_EXCLUSION_PATTERNS = [
+  CATEGORY_ADVICE_PATTERN,
+  CATEGORY_PREDICTION_PATTERN,
+  CATEGORY_MUTATION_PATTERN,
+  CATEGORY_LOOKUP_PATTERN,
+  CATEGORY_CROSS_DOMAIN_PATTERN,
+];
+
+// Three-way result, because a category question that this intent cannot
+// ground must NOT silently fall through to the broader spending/budget
+// branches below -- "Which category should I cut to stay under budget?"
+// mentions "budget" and would otherwise be answered as a pure budget-status
+// question, hiding the fact that the category half of the request was
+// never addressed. Genuine cross-domain/advice/prediction/lookup/mutation
+// requests are returned as AMBIGUOUS so classifyIntent can stop at null
+// (the existing 422) rather than guess a single domain.
+const CATEGORY_MATCH = "CATEGORY_MATCH";
+const CATEGORY_AMBIGUOUS = "CATEGORY_AMBIGUOUS";
+const CATEGORY_NOT_APPLICABLE = "CATEGORY_NOT_APPLICABLE";
+
+function evaluateCategoryQuestion(normalized) {
+  // The share-of-spending shape encodes BOTH the category topic and the
+  // share question in one pattern, so it needs no separate intent verb --
+  // "How much of my spending comes from Dining?" contains no word from
+  // CATEGORY_INTENT_VERB_PATTERN, yet is unambiguously a category-share
+  // question that categoryDistribution's percentages can answer.
+  const asksCategoryShare = CATEGORY_SHARE_OF_SPENDING_PATTERN.test(normalized);
+
+  const namesCategory =
+    asksCategoryShare ||
+    CATEGORY_WORD_PATTERN.test(normalized) ||
+    NAMED_AREA_SPENDING_PATTERN.test(normalized) ||
+    ACCOUNTS_FOR_PATTERN.test(normalized);
+
+  if (!namesCategory) {
+    return CATEGORY_NOT_APPLICABLE;
+  }
+
+  if (CATEGORY_EXCLUSION_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return CATEGORY_AMBIGUOUS;
+  }
+
+  if (asksCategoryShare) {
+    return CATEGORY_MATCH;
+  }
+
+  return CATEGORY_INTENT_VERB_PATTERN.test(normalized)
+    ? CATEGORY_MATCH
+    : CATEGORY_NOT_APPLICABLE;
+}
+
 function classifyIntent(question) {
   if (typeof question !== "string") {
     return null;
@@ -98,6 +251,34 @@ function classifyIntent(question) {
   // be reclassified as a spending question.
   if (HEALTH_TOPIC_PATTERN.test(normalized) && EXPLANATION_VERB_PATTERN.test(normalized)) {
     return HEALTH_EXPLANATION;
+  }
+
+  // M2-4B deliberate contract correction: a clearly category-focused
+  // question is checked BEFORE the broad spending-change branch. Many
+  // category questions ("Which category contributed most to my spending
+  // increase?", "Why is my grocery spending so high?") also satisfy the
+  // spending topic+verb gate, but only
+  // CATEGORY_SPENDING_EXPLANATION's context carries category-level
+  // aggregates and categoryGrowth -- answering them from the
+  // spending-change context would ground the answer in data that has no
+  // category breakdown at all (see responseFormatter.js's note that the
+  // spending context "carr[ies] no category-level data"). Overall
+  // spending-change questions ("Why did my overall spending increase?",
+  // "Why are my total expenses higher this month?") name no category and
+  // are unaffected -- they fall through to the branch below exactly as
+  // before.
+  const categoryResult = evaluateCategoryQuestion(normalized);
+
+  if (categoryResult === CATEGORY_MATCH) {
+    return CATEGORY_SPENDING_EXPLANATION;
+  }
+
+  // A category question this intent cannot ground (advice, prediction,
+  // lookup, mutation, or category+budget / category+health) stops here at
+  // null rather than falling through to a branch that would answer only
+  // half of it.
+  if (categoryResult === CATEGORY_AMBIGUOUS) {
+    return null;
   }
 
   if (SPENDING_TOPIC_PATTERN.test(normalized) && SPENDING_CHANGE_VERB_PATTERN.test(normalized)) {
