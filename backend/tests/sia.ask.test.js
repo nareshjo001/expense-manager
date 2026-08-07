@@ -92,6 +92,7 @@ function loadApp({ configOverrides = {}, classifyIntentImpl, buildContextImpl, a
 
 const HEALTH_QUESTION = "Why is my financial health score low?";
 const SPENDING_QUESTION = "Why did my spending increase?";
+const BUDGET_QUESTION = "Explain my current budget status.";
 
 function fakeHealthContext(overrides = {}) {
   return {
@@ -115,6 +116,38 @@ function fakeSpendingContext(overrides = {}) {
     fields: {
       trends: { monthlyTrend: [{ month: "2025-12", total: 900 }, { month: "2026-01", total: 1200 }] },
       summary: { comparePastMonth: { changePercent: 33.3, direction: "increase" }, totalSpent: 1200 },
+    },
+    sourceReportGeneratedAt: "2026-01-15T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+// Mirrors the exact BUDGET_STATUS_EXPLANATION context shape confirmed in
+// the committed backend/sia/contextBuilder.js (M2-3A): a single
+// fields.budget object carrying all fourteen budgetAnalyzer.js-derived
+// fields at once (contextBuilder.js's own gates make them co-guaranteed --
+// there is no scenario where only some of them are present in a valid
+// context).
+function fakeBudgetContext(overrides = {}) {
+  return {
+    intent: "BUDGET_STATUS_EXPLANATION",
+    fields: {
+      budget: {
+        budget: 5000,
+        spent: 3200,
+        hasBudget: true,
+        status: "Warning",
+        isOverspent: false,
+        exceededBy: 0,
+        utilization: 64,
+        remainingBudget: 1800,
+        budgetLeft: 36,
+        projectionStatus: "AtRisk",
+        projectionReliable: true,
+        projectedSpent: 4300,
+        projectedOverspend: 0,
+        projectedOverspendPercent: 0,
+      },
     },
     sourceReportGeneratedAt: "2026-01-15T10:00:00.000Z",
     ...overrides,
@@ -736,5 +769,390 @@ describe("POST /sia/ask", () => {
     expect(buildContextMock).toHaveBeenNthCalledWith(2, "user-24", "SPENDING_CHANGE_EXPLANATION");
     expect(askLlmMock.mock.calls[0][0].systemPrompt).toEqual(expect.stringContaining("financial-health result"));
     expect(askLlmMock.mock.calls[1][0].systemPrompt).toEqual(expect.stringContaining("spending change"));
+  });
+
+  // -- M2-3: BUDGET_STATUS_EXPLANATION ----------------------------------------
+  // Mirrors the HEALTH_EXPLANATION/SPENDING_CHANGE_EXPLANATION cases above
+  // one-for-one, using the exact intent identifier already established by
+  // backend/sia/contextBuilder.js's M2-3A implementation. Every
+  // HEALTH_EXPLANATION/SPENDING_CHANGE_EXPLANATION test above is untouched
+  // -- these are additive.
+
+  it("calls buildContext exactly once with the authenticated req.userId and BUDGET_STATUS_EXPLANATION, ignoring a malicious body/query userId", async () => {
+    const { app, buildContextMock } = loadApp({ configOverrides: { enabled: true } });
+    const authenticatedUserId = "real-authenticated-user-id-budget";
+    const token = signToken(authenticatedUserId);
+
+    await request(app)
+      .post("/sia/ask?userId=attacker-supplied-query-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION, userId: "attacker-supplied-body-id" });
+
+    expect(buildContextMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).toHaveBeenCalledWith(authenticatedUserId, "BUDGET_STATUS_EXPLANATION");
+    expect(buildContextMock.mock.calls[0][0]).not.toBe("attacker-supplied-query-id");
+    expect(buildContextMock.mock.calls[0][0]).not.toBe("attacker-supplied-body-id");
+  });
+
+  it("calls askLlm exactly once with the fixed budget system prompt, the narrow budget context result, and the trimmed question", async () => {
+    const fakeContext = fakeBudgetContext();
+    const { app, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeContext,
+      askLlmImpl: async () => ({ answer: "Mocked budget explanation.", model: "mock-model", latencyMs: 5 }),
+    });
+    const token = signToken("user-25");
+
+    await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: `  ${BUDGET_QUESTION}  ` });
+
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+    expect(askLlmMock).toHaveBeenCalledWith({
+      systemPrompt: expect.stringContaining("You are SIA"),
+      context: fakeContext,
+      question: BUDGET_QUESTION,
+    });
+    // The budget prompt must never be the health or spending prompt, and
+    // must reflect this milestone's "do not present a projection as
+    // certain" / "no affordability, investment, or debt advice" constraints.
+    const usedPrompt = askLlmMock.mock.calls[0][0].systemPrompt;
+    expect(usedPrompt).toEqual(expect.stringContaining("current budget status"));
+    expect(usedPrompt).toEqual(expect.stringContaining("Do not give affordability, investment, debt"));
+    expect(usedPrompt).not.toEqual(expect.stringContaining("financial-health result"));
+    expect(usedPrompt).not.toEqual(expect.stringContaining("spending change"));
+  });
+
+  it("returns the exact budget 200 public contract with the real grounding path on a mocked LLM success", async () => {
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeBudgetContext(),
+      askLlmImpl: async () => ({
+        answer: "You've used 64% of your budget, with ₹1800 remaining and a Warning status.",
+        model: "mock-model",
+        latencyMs: 5,
+      }),
+    });
+    const token = signToken("user-26");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      answer: "You've used 64% of your budget, with ₹1800 remaining and a Warning status.",
+      intent: "BUDGET_STATUS_EXPLANATION",
+      basedOn: ["budgets"],
+    });
+    // "budgets" (plural) is the canonical report.budgets source path;
+    // "budget" (singular) is only this context's own internal field name
+    // and must never be returned as a basedOn path.
+    expect(res.body.basedOn).not.toContain("budget");
+  });
+
+  it("returns the exact fixed budget 200 no-data response and does not call askLlm", async () => {
+    const { app, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => ({
+        intent: "BUDGET_STATUS_EXPLANATION",
+        fields: null,
+        reason: "no_data",
+      }),
+    });
+    const token = signToken("user-27");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      answer: "I do not have enough financial report data yet to explain your budget status.",
+      intent: "BUDGET_STATUS_EXPLANATION",
+      basedOn: [],
+    });
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 for an unrecognized budget-style question and calls neither buildContext nor askLlm", async () => {
+    const { app, buildContextMock, askLlmMock } = loadApp({ configOverrides: { enabled: true } });
+    const token = signToken("user-28");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "What is a budget?" });
+
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({
+      success: false,
+      message: "Question not recognized for the intents SIA currently supports.",
+    });
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic 503 for budget when askLlm resolves with a missing answer", async () => {
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeBudgetContext(),
+      askLlmImpl: async () => ({ model: "mock-model", latencyMs: 5 }),
+    });
+    const token = signToken("user-29");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("returns a generic 503 for budget when askLlm resolves with a non-string answer", async () => {
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeBudgetContext(),
+      askLlmImpl: async () => ({ answer: null, model: "mock-model", latencyMs: 5 }),
+    });
+    const token = signToken("user-30");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("returns a generic 503 for budget when askLlm resolves with a blank answer", async () => {
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeBudgetContext(),
+      askLlmImpl: async () => ({ answer: "   ", model: "mock-model", latencyMs: 5 }),
+    });
+    const token = signToken("user-31");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("returns a generic 503 for budget when askLlm rejects with LlmProviderError", async () => {
+    const { app, LlmProviderError } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeBudgetContext(),
+      askLlmImpl: async () => {
+        throw new LlmProviderError("SIA has no implemented adapter for the configured LLM provider.", {
+          code: "PROVIDER_NOT_IMPLEMENTED",
+          provider: "openai",
+        });
+      },
+    });
+    const token = signToken("user-32");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("returns a generic 503 for budget when buildContext unexpectedly rejects", async () => {
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => {
+        throw new Error("unexpected budget failure");
+      },
+    });
+    const token = signToken("user-33");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("budget error responses never expose prompts, questions, context, provider details, stack traces, or financial values", async () => {
+    const { app, LlmProviderError } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () =>
+        fakeBudgetContext({
+          fields: {
+            budget: {
+              budget: 7777,
+              spent: 6666,
+              hasBudget: true,
+              status: "SENSITIVE_STATUS_MARKER",
+              isOverspent: false,
+              exceededBy: 0,
+              utilization: 85.5,
+              remainingBudget: 1111,
+              budgetLeft: 14.5,
+              projectionStatus: "AtRisk",
+              projectionReliable: true,
+              projectedSpent: 7500,
+              projectedOverspend: 0,
+              projectedOverspendPercent: 0,
+            },
+          },
+        }),
+      askLlmImpl: async () => {
+        throw new LlmProviderError("internal budget provider detail that must not leak", {
+          code: "PROVIDER_NOT_IMPLEMENTED",
+          provider: "SENSITIVE_BUDGET_PROVIDER_NAME",
+        });
+      },
+    });
+    const token = signToken("user-34");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: `SENSITIVE_BUDGET_QUESTION_MARKER ${BUDGET_QUESTION}` });
+
+    const serialized = JSON.stringify(res.body);
+    expect(res.body).not.toHaveProperty("context");
+    expect(res.body).not.toHaveProperty("fields");
+    expect(res.body).not.toHaveProperty("sourceReportGeneratedAt");
+    expect(res.body).not.toHaveProperty("userId");
+    expect(serialized).not.toContain("SENSITIVE_BUDGET_PROVIDER_NAME");
+    expect(serialized).not.toContain("SENSITIVE_STATUS_MARKER");
+    expect(serialized).not.toContain("SENSITIVE_BUDGET_QUESTION_MARKER");
+    expect(serialized).not.toContain("internal budget provider detail");
+    expect(serialized).not.toContain("7777");
+    expect(serialized).not.toContain("6666");
+    expect(serialized).not.toContain("85.5");
+    expect(Object.keys(res.body).sort()).toEqual(["message", "success"]);
+  });
+
+  it("public budget success responses contain no context, fields, sourceReportGeneratedAt, userId, or raw data", async () => {
+    const authenticatedUserId = "user-should-not-leak-budget-35";
+    const token = signToken(authenticatedUserId);
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeBudgetContext(),
+      askLlmImpl: async () => ({ answer: "Budget explanation text.", model: "m", latencyMs: 1 }),
+    });
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    const serialized = JSON.stringify(res.body);
+    // Structural leak checks -- not contradictory substring assertions
+    // against the legitimate, server-owned basedOn path name "budgets".
+    expect(res.body).not.toHaveProperty("context");
+    expect(res.body).not.toHaveProperty("fields");
+    expect(res.body).not.toHaveProperty("sourceReportGeneratedAt");
+    expect(res.body).not.toHaveProperty("userId");
+    expect(serialized).not.toContain(authenticatedUserId);
+    // Raw context values (never the field names, which legitimately appear
+    // nowhere in this fixture's basedOn path anyway) are absent.
+    expect(serialized).not.toContain("5000"); // fixture's raw budget limit
+    expect(serialized).not.toContain("3200"); // fixture's raw spent amount
+    expect(res.body.basedOn).toEqual(["budgets"]);
+    // "budgets" (plural, the canonical report.budgets source path) must be
+    // used -- never the singular "budget", which is only this context's
+    // own internal field name.
+    expect(res.body.basedOn).not.toContain("budget");
+    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "intent", "success"]);
+  });
+
+  it("does not mutate the request body or the buildContext-returned context object for a budget question", async () => {
+    const fakeContext = fakeBudgetContext();
+    const contextSnapshot = JSON.parse(JSON.stringify(fakeContext));
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeContext,
+      askLlmImpl: async () => ({ answer: "Budget explanation text.", model: "m", latencyMs: 1 }),
+    });
+    const token = signToken("user-36");
+    const requestBody = { question: BUDGET_QUESTION };
+    const bodySnapshot = JSON.parse(JSON.stringify(requestBody));
+
+    await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send(requestBody);
+
+    expect(requestBody).toEqual(bodySnapshot);
+    expect(fakeContext).toEqual(contextSnapshot);
+  });
+
+  it("keeps health, spending, and budget prompts, contexts, and formatters isolated across three back-to-back requests on the same app instance", async () => {
+    const { app, askLlmMock, buildContextMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async (userId, intent) => {
+        if (intent === "HEALTH_EXPLANATION") return fakeHealthContext();
+        if (intent === "SPENDING_CHANGE_EXPLANATION") return fakeSpendingContext();
+        return fakeBudgetContext();
+      },
+      askLlmImpl: async ({ systemPrompt }) => {
+        let answer = "Health answer.";
+        if (systemPrompt.includes("spending change")) answer = "Spending answer.";
+        else if (systemPrompt.includes("current budget status")) answer = "Budget answer.";
+        return { answer, model: "mock-model", latencyMs: 1 };
+      },
+    });
+    const token = signToken("user-37");
+
+    const healthRes = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+    const spendingRes = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: SPENDING_QUESTION });
+    const budgetRes = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: BUDGET_QUESTION });
+
+    expect(healthRes.body).toEqual({
+      success: true,
+      answer: "Health answer.",
+      intent: "HEALTH_EXPLANATION",
+      basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+    });
+    expect(spendingRes.body).toEqual({
+      success: true,
+      answer: "Spending answer.",
+      intent: "SPENDING_CHANGE_EXPLANATION",
+      basedOn: ["trends", "trends.monthlyTrend", "summary.comparePastMonth", "summary.totalSpent"],
+    });
+    expect(budgetRes.body).toEqual({
+      success: true,
+      answer: "Budget answer.",
+      intent: "BUDGET_STATUS_EXPLANATION",
+      basedOn: ["budgets"],
+    });
+
+    expect(buildContextMock).toHaveBeenNthCalledWith(1, "user-37", "HEALTH_EXPLANATION");
+    expect(buildContextMock).toHaveBeenNthCalledWith(2, "user-37", "SPENDING_CHANGE_EXPLANATION");
+    expect(buildContextMock).toHaveBeenNthCalledWith(3, "user-37", "BUDGET_STATUS_EXPLANATION");
+    expect(askLlmMock.mock.calls[0][0].systemPrompt).toEqual(expect.stringContaining("financial-health result"));
+    expect(askLlmMock.mock.calls[1][0].systemPrompt).toEqual(expect.stringContaining("spending change"));
+    expect(askLlmMock.mock.calls[2][0].systemPrompt).toEqual(expect.stringContaining("current budget status"));
+    // Each intent's context argument is exactly its own fixture, never a
+    // different intent's context.
+    expect(askLlmMock.mock.calls[0][0].context.intent).toBe("HEALTH_EXPLANATION");
+    expect(askLlmMock.mock.calls[1][0].context.intent).toBe("SPENDING_CHANGE_EXPLANATION");
+    expect(askLlmMock.mock.calls[2][0].context.intent).toBe("BUDGET_STATUS_EXPLANATION");
   });
 });

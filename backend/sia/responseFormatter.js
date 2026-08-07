@@ -12,10 +12,14 @@
 // transaction data; it only arranges already-computed values (an LLM answer
 // string, or a fixed no-data message) into the public contract, and never
 // includes the structured context object itself.
+// M2-3 scope: adds the BUDGET_STATUS_EXPLANATION shapes alongside them,
+// using the exact intent identifier already established by
+// backend/sia/contextBuilder.js's M2-3A implementation.
 "use strict";
 
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
+const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
 
 // The real Report/context source paths each answer is grounded in. Fixed,
 // server-owned, and allowlisted -- never accepted from the client or the
@@ -51,19 +55,53 @@ const SPENDING_CHANGE_EXPLANATION_GROUNDING_PATHS = [
   "summary.totalSpent",
 ];
 
+// BUDGET_STATUS_EXPLANATION: contextBuilder.js's `fields` for this intent
+// carry exactly one top-level key, `budget` -- but that key name is only
+// this SIA context's own field label, not the real Report source path.
+// The canonical Report branch it is populated from is `report.budgets`
+// (analytics/reportGenerator.js's budgetAnalyzer.js output, plural,
+// confirmed in backend/sia/contextBuilder.js's M2-3A implementation and
+// backend/models/Report.js's schema) -- so "budgets" (plural) is the
+// correct grounding path here, not the singular "budget".
+// contextBuilder.js's own isPresent gates make all fourteen of
+// report.budgets's leaf fields (budget, spent, hasBudget, status,
+// isOverspent, exceededBy, utilization, remainingBudget, budgetLeft,
+// projectionStatus, projectionReliable, projectedSpent, projectedOverspend,
+// projectedOverspendPercent) co-guaranteed: a valid BUDGET_STATUS_EXPLANATION
+// context always carries every one of them at once, or contextBuilder.js
+// returns no-data instead -- there is no scenario where only some of them
+// are present. Listing a curated subset of those fourteen leaf paths here
+// would arbitrarily privilege some of them over the rest, when the LLM is
+// given (and may ground its answer in) all fourteen -- so the single
+// parent path is both the smallest and the only fully honest grounding set
+// for this intent. This differs from HEALTH_EXPLANATION/
+// SPENDING_CHANGE_EXPLANATION above, whose extra child paths document
+// specific values separately promoted into a sibling `summary` object;
+// BUDGET_STATUS_EXPLANATION's context has no such promoted siblings to
+// separately cite.
+const BUDGET_STATUS_EXPLANATION_GROUNDING_PATHS = ["budgets"];
+
 const GROUNDING_PATHS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_EXPLANATION_GROUNDING_PATHS,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_EXPLANATION_GROUNDING_PATHS,
+  [BUDGET_STATUS_EXPLANATION]: BUDGET_STATUS_EXPLANATION_GROUNDING_PATHS,
 };
 
 // The fixed, truthful no-data answer per intent. No LLM was called, so
 // there is no generated answer to include -- each message says exactly
 // that, for the specific thing the user asked about, and nothing more.
+// BUDGET_STATUS_EXPLANATION's message deliberately does not claim "no
+// budget is configured" -- contextBuilder.js's no-data contract is shared
+// by no report, invalid/incomplete budget data, AND hasBudget !== true
+// alike, so only the generic "not enough report data" framing is accurate
+// here.
 const NO_DATA_ANSWERS_BY_INTENT = {
   [HEALTH_EXPLANATION]:
     "I do not have enough financial report data yet to explain your financial health score.",
   [SPENDING_CHANGE_EXPLANATION]:
     "I do not have enough financial report data yet to explain how your spending changed.",
+  [BUDGET_STATUS_EXPLANATION]:
+    "I do not have enough financial report data yet to explain your budget status.",
 };
 
 function formatNoDataResponse(intent) {

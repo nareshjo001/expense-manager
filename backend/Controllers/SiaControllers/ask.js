@@ -6,6 +6,12 @@
 // SPENDING_CHANGE_EXPLANATION -- the exact identifier already established
 // by backend/sia/contextBuilder.js's M1-2 implementation. No new route was
 // added; POST /sia/ask remains the only SIA endpoint.
+// M2-3 scope: adds a third intent, BUDGET_STATUS_EXPLANATION -- the exact
+// identifier already established by backend/sia/contextBuilder.js's
+// M2-3A implementation. The controller's flow was already fully generic
+// by intent as of M2-2 (no per-intent branching beyond the
+// SYSTEM_PROMPTS_BY_INTENT lookup), so this milestone only adds the new
+// prompt and map entry below -- still no new route, no new endpoint.
 //
 // Strictly read-only -- no database writes, no direct MongoDB, Redis,
 // Expense, Income, Budget, analytics, or ML-service imports.
@@ -31,6 +37,7 @@ const {
 
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
+const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
 
 // Minimum orchestration prompts required for this milestone -- not final
 // prompt-engineering work. Each is fixed and intent-specific; a small
@@ -63,9 +70,33 @@ const SPENDING_CHANGE_SYSTEM_PROMPT =
   "the context does not support a claim, say so. Keep the explanation " +
   "concise, clear, and non-judgmental.";
 
+// Mirrors the exact fixed text approved for this milestone; only the
+// existing string-concatenation style (not the wording) was adapted to
+// match HEALTH_SYSTEM_PROMPT/SPENDING_CHANGE_SYSTEM_PROMPT above.
+// Deliberately scopes the model to only the fields
+// BUDGET_STATUS_EXPLANATION's context actually carries (configured
+// budget, amount spent, remaining budget, utilization, status,
+// overspending values, and existing projection/reliability values), and
+// explicitly forbids forecasting, affordability, investment, or debt
+// advice, or presenting a projection as certain.
+const BUDGET_STATUS_SYSTEM_PROMPT =
+  "You are SIA, BALENISA's read-only financial explanation assistant. " +
+  "Explain the user's current budget status using only the supplied " +
+  "structured context. Treat the context as authoritative. You may " +
+  "describe only the configured budget, amount spent, remaining budget, " +
+  "utilization, current status, overspending values, and existing " +
+  "projection or reliability values explicitly present in the context. " +
+  "Do not invent causes, transactions, income, intentions, missing data, " +
+  "or lifestyle assumptions. Do not recalculate financial values, create " +
+  "forecasts, or present a projection as certain. Do not give " +
+  "affordability, investment, debt, or instructions to change financial " +
+  "data. If the context does not support a claim, say so. Keep the " +
+  "explanation concise, clear, and non-judgmental.";
+
 const SYSTEM_PROMPTS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_SYSTEM_PROMPT,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_SYSTEM_PROMPT,
+  [BUDGET_STATUS_EXPLANATION]: BUDGET_STATUS_SYSTEM_PROMPT,
 };
 
 // Deliberately the same generic body for every failure/unavailable path
