@@ -1,3 +1,4 @@
+// UNUSED: Superseded by reportGenerator.js; retained temporarily for reference.
 const { createAnalyticsContext } = require("./analyticsContext");
 
 const spendingAnalyzer = require("./analyzers/spendingAnalyzer");
