@@ -11,6 +11,7 @@ const billRoutes = require("./Routes/bill.routes");
 const mlRouter = require("./Routes/ml.router");
 const reportRouter = require("./Routes/report.routes");
 const chartRouter = require("./Routes/chart.routes");
+const siaRouter = require("./Routes/sia.routes");
 
 // Middleware
 const errorHandler = require("./Middlewares/error.middleware");
@@ -67,6 +68,7 @@ app.use("/ml", apiLimiter, mlRouter);
 app.use("/report", apiLimiter, reportRouter);
 app.use("/chart", apiLimiter, chartRouter);
 app.use("/income", apiLimiter, incomeRouter);
+app.use("/sia", apiLimiter, siaRouter);
 
 // Error handler (must be last)
 app.use(errorHandler);
