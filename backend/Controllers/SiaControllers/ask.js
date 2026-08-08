@@ -22,6 +22,14 @@
 // req.userId-keyed rate limiter (Routes/sia.routes.js's siaLimiter) in
 // front of this controller. No change to the classifier/context/provider
 // contracts, and unsupported-question 422 behavior is unchanged.
+// M3-3 scope: wraps only the askLlm() call with safe structured logging
+// (backend/sia/safeLogger.js) -- exactly one "provider_request_completed"
+// or "provider_request_failed" record per provider attempt, carrying only
+// the normalized provider identifier, the normalized error code, and an
+// elapsed-time measurement taken locally in this controller. A caught
+// provider error is always rethrown unchanged immediately after logging,
+// so the existing outer catch's generic 503 response is byte-for-byte
+// unchanged. No new field, response shape, or status code is introduced.
 //
 // Strictly read-only -- no database writes, no direct MongoDB, Redis,
 // Expense, Income, Budget, analytics, or ML-service imports.
@@ -44,6 +52,7 @@ const {
   formatNoDataResponse,
   formatExplanationResponse,
 } = require("../../sia/responseFormatter");
+const { logSiaEvent, SIA_LOG_EVENTS } = require("../../sia/safeLogger");
 
 // M3-1: the maximum accepted question length, measured after trimming.
 // Exactly this many characters remains valid; anything longer is rejected
@@ -203,19 +212,43 @@ const ask = async (req, res) => {
       return res.status(200).json(formatNoDataResponse(intent));
     }
 
-    const llmResult = await askLlm({
-      systemPrompt: SYSTEM_PROMPTS_BY_INTENT[intent],
-      context: contextResult,
-      question: trimmedQuestion,
-    });
+    const providerStartedAt = Date.now();
+    let llmResult;
+    try {
+      llmResult = await askLlm({
+        systemPrompt: SYSTEM_PROMPTS_BY_INTENT[intent],
+        context: contextResult,
+        question: trimmedQuestion,
+      });
+    } catch (providerErr) {
+      // Exactly one failure record per provider attempt -- never logged
+      // again by the outer catch below. Only the normalized error code and
+      // provider identifier are ever passed; the caught error itself is
+      // never logged and is always rethrown unchanged.
+      logSiaEvent({
+        event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
+        provider: config.provider,
+        errorCode: providerErr && providerErr.code,
+        latencyMs: Date.now() - providerStartedAt,
+      });
+      throw providerErr;
+    }
 
     if (!llmResult || typeof llmResult.answer !== "string" || llmResult.answer.trim() === "") {
       // Defensive: a resolved-but-unusable provider result is treated the
       // same as a rejection. Unreachable under the current M1-3 stub
       // (which never resolves), but required by this milestone's
-      // controller-flow contract for when a real provider exists.
+      // controller-flow contract for when a real provider exists. Not
+      // logged as a normalized-code failure since no LlmProviderError was
+      // thrown here.
       return res.status(503).json(UNAVAILABLE_RESPONSE);
     }
+
+    logSiaEvent({
+      event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED,
+      provider: config.provider,
+      latencyMs: Date.now() - providerStartedAt,
+    });
 
     return res.status(200).json(formatExplanationResponse(intent, llmResult.answer));
   } catch (err) {

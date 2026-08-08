@@ -34,6 +34,27 @@ afterEach(() => {
   jest.resetModules();
 });
 
+// M3-3: ask.js's real (unmocked) backend/sia/safeLogger.js writes one
+// structured JSON line via console.log per provider attempt. A single
+// suite-wide spy -- installed before every test in this file and restored
+// after every test -- both keeps that expected operational output out of
+// the Jest console (every earlier, pre-M3-3 test in this file never
+// asserted on console.log and would otherwise now print it) and gives the
+// M3-3 describe block below a single, already-installed spy to inspect via
+// loggedRecords(). Individual tests that need the sink itself to fail
+// reconfigure this same spy's implementation (consoleLogSpy.mockImplementation(...))
+// rather than calling jest.spyOn again, so there is never more than one
+// spy on console.log at a time.
+let consoleLogSpy;
+
+beforeEach(() => {
+  consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  consoleLogSpy.mockRestore();
+});
+
 // Mirrors Controllers/AuthControllers/login.js's JWT payload shape
 // ({ email, _id }), same as tests/fixtures/reportFixtures.js's
 // signTestToken, reimplemented locally so this route-level test file has no
@@ -1802,5 +1823,232 @@ describe("POST /sia/ask -- M3-2 timeout and graceful degradation", () => {
     expect(res.body.answer).toBeUndefined();
     expect(res.body.intent).toBeUndefined();
     expect(res.body.basedOn).toBeUndefined();
+  });
+});
+
+// M3-3: safe structured logging around the askLlm() call site. loadApp()
+// leaves backend/sia/safeLogger.js real (unmocked) so these tests observe
+// the actual console.log output, not a mock's call arguments. The
+// suite-wide consoleLogSpy (installed/restored by the file-level
+// beforeEach/afterEach above) is reused here rather than re-spied.
+describe("POST /sia/ask -- M3-3 safe structured logging", () => {
+  function loggedRecords() {
+    return consoleLogSpy.mock.calls
+      .map(([line]) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter((record) => record && record.scope === "sia");
+  }
+
+  it("logs exactly one provider_request_completed record on a successful answer, and the 200 response is unchanged", async () => {
+    const { app } = loadApp({
+      // provider must be explicitly mocked as "openai" here: loadApp()'s
+      // base config mock defaults provider to null, and the controller logs
+      // config.provider verbatim (the normalized configured provider), so
+      // an incomplete mock would wrongly assert on a null provider instead
+      // of exercising the real "openai" logging contract.
+      configOverrides: { enabled: true, provider: "openai" },
+      buildContextImpl: async () => fakeHealthContext(),
+      askLlmImpl: async () => ({ answer: "Your score reflects Low risk.", model: "mock-model", latencyMs: 5 }),
+    });
+    const token = signToken("m3-3-success");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const records = loggedRecords();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      scope: "sia",
+      level: "info",
+      event: "provider_request_completed",
+      provider: "openai",
+    });
+    expect(typeof records[0].timestamp).toBe("string");
+    expect(typeof records[0].latencyMs).toBe("number");
+    expect(records[0].latencyMs).toBeGreaterThanOrEqual(0);
+    expect(records[0].errorCode).toBeNull();
+  });
+
+  it.each([
+    ["PROVIDER_TIMEOUT", "SIA's request to the LLM provider timed out."],
+    ["PROVIDER_NETWORK_ERROR", "SIA could not reach the LLM provider."],
+    ["PROVIDER_HTTP_ERROR", "The LLM provider returned an error response."],
+  ])(
+    "logs exactly one provider_request_failed record with only the normalized code %s, and the 503 response is unchanged",
+    async (code, internalMessage) => {
+      const { app, LlmProviderError } = loadApp({
+        configOverrides: { enabled: true, provider: "openai" },
+        buildContextImpl: async () => fakeHealthContext(),
+        askLlmImpl: async () => {
+          throw new LlmProviderError(internalMessage, { code, provider: "openai" });
+        },
+      });
+      const token = signToken(`m3-3-${code.toLowerCase()}`);
+
+      const res = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ question: HEALTH_QUESTION });
+
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+
+      const records = loggedRecords();
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({
+        scope: "sia",
+        level: "error",
+        event: "provider_request_failed",
+        provider: "openai",
+        errorCode: code,
+      });
+      expect(typeof records[0].latencyMs).toBe("number");
+
+      // The internal message, stack, and raw error are never logged.
+      const serializedLog = JSON.stringify(records[0]);
+      expect(serializedLog).not.toContain(internalMessage);
+      expect(serializedLog).not.toContain("Error");
+      expect(serializedLog).not.toContain("stack");
+    }
+  );
+
+  it("logs no financial context, question, answer, userId, or provider message in any emitted record", async () => {
+    const sensitiveContext = fakeHealthContext({
+      fields: { financialHealth: { overall: 12, risk: { label: "SENSITIVE_RISK_MARKER", color: "red" } } },
+    });
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => sensitiveContext,
+      askLlmImpl: async () => ({ answer: "SENSITIVE_ANSWER_MARKER", model: "mock-model", latencyMs: 3 }),
+    });
+    const token = signToken("m3-3-no-leak-user-id-marker");
+    const sensitiveQuestion = "SENSITIVE_QUESTION_MARKER";
+
+    await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: sensitiveQuestion });
+
+    const allLoggedLines = consoleLogSpy.mock.calls.map(([line]) => line).join("\n");
+    expect(allLoggedLines).not.toContain(sensitiveQuestion);
+    expect(allLoggedLines).not.toContain("SENSITIVE_ANSWER_MARKER");
+    expect(allLoggedLines).not.toContain("SENSITIVE_RISK_MARKER");
+    expect(allLoggedLines).not.toContain("m3-3-no-leak-user-id-marker");
+    expect(allLoggedLines).not.toContain("mock-model");
+  });
+
+  it("a console.log/sink failure never alters the successful API response", async () => {
+    // Reconfigures the already-installed suite-wide spy rather than
+    // creating a second, nested spy on console.log.
+    consoleLogSpy.mockImplementation(() => {
+      throw new Error("sink failure");
+    });
+    const { app } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeHealthContext(),
+      askLlmImpl: async () => ({ answer: "Your score reflects Low risk.", model: "mock-model", latencyMs: 5 }),
+    });
+    const token = signToken("m3-3-sink-failure-success");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.answer).toBe("Your score reflects Low risk.");
+  });
+
+  it("a console.log/sink failure never alters the degraded 503 response", async () => {
+    // Reconfigures the already-installed suite-wide spy rather than
+    // creating a second, nested spy on console.log.
+    consoleLogSpy.mockImplementation(() => {
+      throw new Error("sink failure");
+    });
+    const { app, LlmProviderError } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeHealthContext(),
+      askLlmImpl: async () => {
+        throw new LlmProviderError("SIA's request to the LLM provider timed out.", {
+          code: "PROVIDER_TIMEOUT",
+          provider: "openai",
+        });
+      },
+    });
+    const token = signToken("m3-3-sink-failure-degraded");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+  });
+
+  it("does not log any SIA event for a disabled-feature (503), invalid-input (400), or unsupported-intent (422) request", async () => {
+    const { app: disabledApp } = loadApp({ configOverrides: { enabled: false } });
+    const disabledRes = await request(disabledApp)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${signToken("m3-3-disabled")}`)
+      .send({ question: HEALTH_QUESTION });
+    expect(disabledRes.status).toBe(503);
+
+    const { app: invalidApp } = loadApp({ configOverrides: { enabled: true } });
+    const invalidRes = await request(invalidApp)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${signToken("m3-3-invalid")}`)
+      .send({ question: "   " });
+    expect(invalidRes.status).toBe(400);
+
+    const { app: unsupportedApp } = loadApp({ configOverrides: { enabled: true } });
+    const unsupportedRes = await request(unsupportedApp)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${signToken("m3-3-unsupported")}`)
+      .send({ question: "How much did I spend?" });
+    expect(unsupportedRes.status).toBe(422);
+
+    expect(loggedRecords()).toHaveLength(0);
+  });
+
+  it("does not log any SIA event for a no-data (200) response", async () => {
+    // Reuses the exact mock arrangement and expected response contract from
+    // the already-established "returns the exact fixed 200 no-data
+    // response and does not call askLlm" test above: formatNoDataResponse()
+    // returns success: true with a fixed canned explanation, not
+    // success: false -- there is no error here, just insufficient report
+    // data. This test only adds the M3-3 zero-logging assertion on top of
+    // that unchanged, already-passing contract.
+    const { app, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => ({ intent: "HEALTH_EXPLANATION", fields: null, reason: "no_data" }),
+    });
+    const token = signToken("m3-3-no-data");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      answer: "I do not have enough financial report data yet to explain your financial health score.",
+      intent: "HEALTH_EXPLANATION",
+      basedOn: [],
+    });
+    expect(askLlmMock).not.toHaveBeenCalled();
+    expect(loggedRecords()).toHaveLength(0);
   });
 });
