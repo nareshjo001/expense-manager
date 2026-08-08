@@ -37,6 +37,7 @@ const jwt = require("jsonwebtoken");
 const request = require("supertest");
 
 const { assembleReport } = require("../analytics/reportAssembler");
+const { CURRENT_REPORT_VERSION } = require("../analytics/reportContractVersion");
 
 const REPORT_SERVICE_PATH = "../Services/reportService";
 const REPORT_CACHE_PATH = "../cache/reportCache";
@@ -164,7 +165,7 @@ function loadAppWithMockedServiceDependencies({
 function buildAssembledReport(overrides = {}) {
   return assembleReport({
     metadata: {
-      version: 1,
+      version: CURRENT_REPORT_VERSION,
       generatedAt: "2026-01-01T00:00:00.000Z",
       reportPeriod: { month: 1, year: 2026 },
     },
@@ -192,6 +193,13 @@ function buildAssembledReport(overrides = {}) {
       risk: { label: "Unknown", color: "gray" },
       signals: [],
     },
+    // Additive: analytics/reportAssembler.js's own `anomalies = {}` / `risk
+    // = {}` default parameters mean omitting these overrides still
+    // produces `{}`, exactly as before either key existed -- no existing
+    // call site of buildAssembledReport() is affected.
+    ...(overrides.anomalies !== undefined ? { anomalies: overrides.anomalies } : {}),
+    ...(overrides.forecast !== undefined ? { forecast: overrides.forecast } : {}),
+    ...(overrides.risk !== undefined ? { risk: overrides.risk } : {}),
   });
 }
 
@@ -334,7 +342,10 @@ describe("GET /report -- authenticated identity propagation (D)", () => {
 describe("GET /report -- real reportService cache/store/generate branches (E)", () => {
   it("cache hit: returns the cached report, never queries Mongo or generates, keyed on the authenticated user ID", async () => {
     const userId = "report-contract-cache-hit-user";
-    const cachedReport = { __probe: "CACHE_HIT_REPORT" };
+    // A current-contract probe (metadata.version stamped): must be
+    // returned as-is. A legacy probe without this is covered separately
+    // below (describe block H).
+    const cachedReport = { __probe: "CACHE_HIT_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
 
     const { app, cacheGetMock, findOneMock, generateReportMock } =
       loadAppWithMockedServiceDependencies({
@@ -354,7 +365,9 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
 
   it("cache miss, stored report found: returns the stored report, never generates, and populates the cache with it", async () => {
     const userId = "report-contract-stored-user";
-    const storedReport = { __probe: "STORED_REPORT" };
+    // Current-contract probe -- the legacy case is covered separately
+    // below (describe block H).
+    const storedReport = { __probe: "STORED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
     const leanMock = jest.fn().mockResolvedValue(storedReport);
 
     const { app, cacheGetMock, findOneMock, cacheSetMock, generateReportMock } =
@@ -425,6 +438,351 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
     expect(findOneAndUpdateLeanMock).toHaveBeenCalledTimes(1);
 
     expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport);
+  });
+});
+
+describe("GET /report -- legacy report-contract-version compatibility (H)", () => {
+  // A "legacy" probe deliberately has NO metadata.version at all (the
+  // shape a document/cache entry generated before this field existed would
+  // have) -- not version:1, to also prove the check does not depend on a
+  // specific old number being present.
+  const LEGACY_CACHED_REPORT = { __probe: "LEGACY_CACHED_REPORT", metadata: { generatedAt: "old" } };
+  const LEGACY_STORED_REPORT = { __probe: "LEGACY_STORED_REPORT", metadata: { generatedAt: "old" } };
+
+  it("rejects a legacy cached report (no metadata.version) as stale, falls through to Mongo, and does not return it", async () => {
+    const userId = "report-contract-legacy-cache-user";
+    const storedReport = { __probe: "CURRENT_STORED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
+    const leanMock = jest.fn().mockResolvedValue(storedReport);
+
+    const { app, cacheGetMock, findOneMock, generateReportMock, cacheSetMock } =
+      loadAppWithMockedServiceDependencies({
+        cacheGetImpl: async () => LEGACY_CACHED_REPORT,
+        findOneImpl: () => ({ lean: leanMock }),
+      });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    // The legacy cached probe is never returned to the client.
+    expect(res.body).not.toEqual(LEGACY_CACHED_REPORT);
+    expect(res.body).toEqual(storedReport);
+    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    expect(findOneMock).toHaveBeenCalledWith({ user: userId });
+    // The current stored report found underneath the stale cache entry is
+    // re-cached, overwriting (not flushing) just this user's key.
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport);
+    expect(generateReportMock).not.toHaveBeenCalled();
+  });
+
+  it("regenerates a legacy persisted report (no metadata.version), persists it, and caches the regenerated result", async () => {
+    const userId = "report-contract-legacy-stored-user";
+    const generatedReport = { __probe: "REGENERATED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
+    const persistedReport = { __probe: "REGENERATED_PERSISTED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
+
+    const findOneLeanMock = jest.fn().mockResolvedValue(LEGACY_STORED_REPORT);
+    const findOneAndUpdateLeanMock = jest.fn().mockResolvedValue(persistedReport);
+
+    const {
+      app,
+      cacheGetMock,
+      findOneMock,
+      findOneAndUpdateMock,
+      generateReportMock,
+      cacheSetMock,
+    } = loadAppWithMockedServiceDependencies({
+      cacheGetImpl: async () => null,
+      findOneImpl: () => ({ lean: findOneLeanMock }),
+      generateReportImpl: async () => generatedReport,
+      findOneAndUpdateImpl: () => ({ lean: findOneAndUpdateLeanMock }),
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toEqual(LEGACY_STORED_REPORT);
+    expect(res.body).toEqual(persistedReport);
+
+    expect(findOneMock).toHaveBeenCalledWith({ user: userId });
+    // Regeneration happened exactly once for this stale document -- not
+    // zero (it must regenerate) and not more than once (no loop).
+    expect(generateReportMock).toHaveBeenCalledTimes(1);
+    expect(generateReportMock).toHaveBeenCalledWith(userId);
+
+    // The legacy document is replaced in place via the existing user-scoped
+    // upsert convention -- same filter/options as every other write path,
+    // no bespoke migration query.
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: userId },
+      { user: userId, ...generatedReport },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      }
+    );
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport);
+  });
+
+  it("accepts a current report whose anomaly section is hasData:false as present, not legacy", async () => {
+    const userId = "report-contract-nodata-anomaly-user";
+    const cachedReport = {
+      __probe: "NO_DATA_ANOMALY_REPORT",
+      metadata: { version: CURRENT_REPORT_VERSION },
+      anomalies: { hasData: false, reasonCode: "NO_ELIGIBLE_CURRENT_EXPENSES", anomalies: [] },
+    };
+
+    const { app, findOneMock, generateReportMock } = loadAppWithMockedServiceDependencies({
+      cacheGetImpl: async () => cachedReport,
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(cachedReport);
+    // hasData:false is a valid, current section -- must not trigger a
+    // fallthrough to Mongo/regeneration.
+    expect(findOneMock).not.toHaveBeenCalled();
+    expect(generateReportMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts a current report whose anomaly section is hasData:true with zero flagged anomalies as present, not legacy", async () => {
+    const userId = "report-contract-zero-anomaly-user";
+    const cachedReport = {
+      __probe: "ZERO_ANOMALY_REPORT",
+      metadata: { version: CURRENT_REPORT_VERSION },
+      anomalies: { hasData: true, reasonCode: null, flaggedCount: 0, anomalies: [] },
+    };
+
+    const { app, findOneMock, generateReportMock } = loadAppWithMockedServiceDependencies({
+      cacheGetImpl: async () => cachedReport,
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(cachedReport);
+    expect(findOneMock).not.toHaveBeenCalled();
+    expect(generateReportMock).not.toHaveBeenCalled();
+  });
+
+  it("does not regenerate an already-current report even when its own anomalies section defaulted to an empty object", async () => {
+    // Proves the Mongoose `anomalies: { default: {} }` scenario from the
+    // task directly: a document whose stored `anomalies` reads back as `{}`
+    // (indistinguishable by truthiness/key-presence from a legacy document)
+    // must still be treated as current, because presence is decided by
+    // metadata.version alone, not by inspecting `anomalies`.
+    const userId = "report-contract-defaulted-anomalies-user";
+    const storedReport = {
+      __probe: "DEFAULTED_ANOMALIES_BUT_CURRENT",
+      metadata: { version: CURRENT_REPORT_VERSION },
+      anomalies: {},
+    };
+    const leanMock = jest.fn().mockResolvedValue(storedReport);
+
+    const { app, findOneMock, generateReportMock, cacheSetMock } = loadAppWithMockedServiceDependencies({
+      cacheGetImpl: async () => null,
+      findOneImpl: () => ({ lean: leanMock }),
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(storedReport);
+    expect(findOneMock).toHaveBeenCalledWith({ user: userId });
+    expect(generateReportMock).not.toHaveBeenCalled();
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport);
+  });
+
+  it("never calls a global Redis flush -- only the per-user cache.set/get/invalidate seam is used, even along the legacy-regeneration path", async () => {
+    const userId = "report-contract-no-flush-user";
+    const generatedReport = { __probe: "NO_FLUSH_GENERATED", metadata: { version: CURRENT_REPORT_VERSION } };
+    const persistedReport = { __probe: "NO_FLUSH_PERSISTED", metadata: { version: CURRENT_REPORT_VERSION } };
+
+    const findOneLeanMock = jest.fn().mockResolvedValue(LEGACY_STORED_REPORT);
+    const findOneAndUpdateLeanMock = jest.fn().mockResolvedValue(persistedReport);
+
+    const { app, cacheGetMock, cacheSetMock, cacheInvalidateMock } = loadAppWithMockedServiceDependencies({
+      cacheGetImpl: async () => null,
+      findOneImpl: () => ({ lean: findOneLeanMock }),
+      generateReportImpl: async () => generatedReport,
+      findOneAndUpdateImpl: () => ({ lean: findOneAndUpdateLeanMock }),
+    });
+
+    await request(app).get("/report").set("Authorization", `Bearer ${signToken(userId)}`);
+
+    // reportCache.js's real module surface is exactly get/set/invalidate,
+    // each always scoped to one `report:${userId}` key -- there is no
+    // flush/flushAll/flushDb method to call in the first place, and this
+    // request only ever invoked the per-user get/set here.
+    expect(cacheGetMock).toHaveBeenCalledTimes(1);
+    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    expect(cacheSetMock).toHaveBeenCalledTimes(1);
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport);
+    expect(cacheInvalidateMock).not.toHaveBeenCalled();
+
+    const reportCacheSource = require("fs").readFileSync(
+      require("path").join(__dirname, "../cache/reportCache.js"),
+      "utf8"
+    );
+    expect(reportCacheSource).not.toMatch(/flushAll|flushDb|FLUSHALL|FLUSHDB/);
+  });
+});
+
+describe("GET /report -- anomalies section contract (G)", () => {
+  it("includes the anomalies section as an object alongside every other stable top-level key", async () => {
+    const assembledReport = buildAssembledReport();
+    const { app } = loadAppWithMockedService({
+      getReportImpl: async () => assembledReport,
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-anomalies-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.anomalies).toBe("object");
+    // Every pre-existing stable key remains present alongside the new one --
+    // adding `anomalies` did not rename or remove anything.
+    expect(typeof res.body.metadata).toBe("object");
+    expect(typeof res.body.summary).toBe("object");
+    expect(typeof res.body.forecast).toBe("object");
+  });
+
+  it("does not expose raw historical expenses, userId, description, client id, or internal sort fields on a flagged anomaly", async () => {
+    const anomalies = {
+      hasData: true,
+      reasonCode: null,
+      baselineWindow: { months: 12, start: "2025-08-01T00:00:00.000Z", endExclusive: "2026-08-01T00:00:00.000Z" },
+      evaluatedExpenseCount: 1,
+      eligibleCategoryCount: 1,
+      insufficientHistoryCategoryCount: 0,
+      flaggedCount: 1,
+      anomalies: [
+        {
+          expenseId: "64f1a2b3c4d5e6f7a8b9c0d1",
+          expenseName: "Dinner",
+          category: "Food",
+          amount: 3500,
+          expenseDate: "2026-08-15T00:00:00.000Z",
+          severity: "high",
+          reasonCode: "CATEGORY_AMOUNT_SPIKE",
+          baseline: { scope: "category", sampleCount: 10, medianAmount: 500 },
+          detection: { method: "MODIFIED_Z", score: 5, threshold: 3.5, thresholdMultiple: 1.43, amountRatio: 7 },
+        },
+      ],
+    };
+    const assembledReport = buildAssembledReport({ anomalies });
+    const { app } = loadAppWithMockedService({
+      getReportImpl: async () => assembledReport,
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-anomalies-shape-user")}`);
+
+    expect(res.status).toBe(200);
+    const [returnedAnomaly] = res.body.anomalies.anomalies;
+    expect(returnedAnomaly).not.toHaveProperty("userId");
+    expect(returnedAnomaly).not.toHaveProperty("id");
+    expect(returnedAnomaly).not.toHaveProperty("description");
+    expect(returnedAnomaly.baseline).not.toHaveProperty("expenses");
+    expect(returnedAnomaly.expenseId).toBe("64f1a2b3c4d5e6f7a8b9c0d1");
+  });
+});
+
+describe("GET /report -- forecast and risk sections contract (I, Batch 2)", () => {
+  it("includes both forecast and risk as objects alongside every other stable top-level key", async () => {
+    const assembledReport = buildAssembledReport();
+    const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-forecast-risk-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.forecast).toBe("object");
+    expect(typeof res.body.risk).toBe("object");
+    // Every pre-existing stable key remains present -- adding `risk` did
+    // not rename or remove anything, including Batch 1's `anomalies`.
+    expect(typeof res.body.anomalies).toBe("object");
+    expect(typeof res.body.metadata).toBe("object");
+  });
+
+  it("a populated forecast never claims to be anything other than an estimate, and carries no leaked expense/user data", async () => {
+    const forecast = {
+      hasData: true,
+      method: "TRAILING_MEDIAN_MAD_V1",
+      historyMonthsAvailable: 6,
+      currentPartialMonth: { included: false, totalSoFar: 250, note: "excluded" },
+      nextMonthForecast: { hasData: true, method: "TRAILING_MEDIAN_MAD_V1", estimate: 1000, range: { lower: 800, upper: 1200 }, historyMonthsUsed: 6, horizonMonths: 1 },
+      nextQuarterForecast: { hasData: true, method: "TRAILING_MEDIAN_MAD_V1", estimate: 3000, range: { lower: 2400, upper: 3600 }, historyMonthsUsed: 6, horizonMonths: 3 },
+      nextYearForecast: { hasData: false, reasonCode: "INSUFFICIENT_HISTORY_FOR_NEXT_YEAR", method: "TRAILING_MEDIAN_MAD_V1", estimate: null, range: null, historyMonthsUsed: 6, horizonMonths: 12 },
+    };
+    const assembledReport = buildAssembledReport({ forecast });
+    const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-forecast-shape-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.forecast.method).toBe("TRAILING_MEDIAN_MAD_V1");
+    expect(res.body.forecast.nextMonthForecast.range.lower).toBeLessThanOrEqual(res.body.forecast.nextMonthForecast.range.upper);
+    const serialized = JSON.stringify(res.body.forecast);
+    expect(serialized).not.toContain("userId");
+    expect(serialized.toLowerCase()).not.toMatch(/\btrained\b|\baccuracy\b/);
+  });
+
+  it("a populated risk section exposes only bounded, allowlisted evidence with no raw records or user identifiers", async () => {
+    const risk = {
+      hasData: true,
+      reasonCode: null,
+      riskLevel: "high",
+      signalCount: 1,
+      signals: [
+        {
+          reasonCode: "BUDGET_ALREADY_OVERSPENT",
+          severity: "high",
+          evidence: { exceededBy: 200, utilization: 110 },
+        },
+      ],
+    };
+    const assembledReport = buildAssembledReport({ risk });
+    const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-risk-shape-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.risk.riskLevel).toBe("high");
+    const serialized = JSON.stringify(res.body.risk);
+    expect(serialized).not.toContain("userId");
+    expect(serialized.toLowerCase()).not.toMatch(/probability|likely to/);
+  });
+
+  it("a no-data risk section (hasData:false) is a valid response, not an error", async () => {
+    const risk = { hasData: false, reasonCode: "NO_REPORT_DATA", riskLevel: "none", signalCount: 0, signals: [] };
+    const assembledReport = buildAssembledReport({ risk });
+    const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-risk-nodata-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.risk.hasData).toBe(false);
   });
 });
 

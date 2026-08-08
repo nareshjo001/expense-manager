@@ -24,6 +24,10 @@ const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
 const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
 const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
+// Batch 2: additive only.
+const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
+const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
+const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 
 // The real Report/context source paths each answer is grounded in. Fixed,
 // server-owned, and allowlisted -- never accepted from the client or the
@@ -101,11 +105,29 @@ const BUDGET_STATUS_EXPLANATION_GROUNDING_PATHS = ["budgets"];
 // source path is both the smallest and the most honest grounding set.
 const CATEGORY_SPENDING_EXPLANATION_GROUNDING_PATHS = ["categories.monthly"];
 
+// Batch 2: contextBuilder.js's `fields` for each new intent carry exactly
+// one top-level key named after the source Report branch it was populated
+// from (`anomalies`, `forecast`, `risk`) -- unlike BUDGET_STATUS_EXPLANATION/
+// CATEGORY_SPENDING_EXPLANATION above, the field label and the source path
+// happen to already match, so no translation is needed here.
+const ANOMALY_EXPLANATION_GROUNDING_PATHS = ["anomalies"];
+const SPENDING_FORECAST_EXPLANATION_GROUNDING_PATHS = ["forecast"];
+// FINANCIAL_RISK_EXPLANATION also carries two directly-referenced summary
+// fields (see contextBuilder.js) -- both cited explicitly.
+const FINANCIAL_RISK_EXPLANATION_GROUNDING_PATHS = [
+  "risk",
+  "summary.totalSpent",
+  "summary.budgetStatus",
+];
+
 const GROUNDING_PATHS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_EXPLANATION_GROUNDING_PATHS,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_EXPLANATION_GROUNDING_PATHS,
   [BUDGET_STATUS_EXPLANATION]: BUDGET_STATUS_EXPLANATION_GROUNDING_PATHS,
   [CATEGORY_SPENDING_EXPLANATION]: CATEGORY_SPENDING_EXPLANATION_GROUNDING_PATHS,
+  [ANOMALY_EXPLANATION]: ANOMALY_EXPLANATION_GROUNDING_PATHS,
+  [SPENDING_FORECAST_EXPLANATION]: SPENDING_FORECAST_EXPLANATION_GROUNDING_PATHS,
+  [FINANCIAL_RISK_EXPLANATION]: FINANCIAL_RISK_EXPLANATION_GROUNDING_PATHS,
 };
 
 // The fixed, truthful no-data answer per intent. No LLM was called, so
@@ -130,6 +152,12 @@ const NO_DATA_ANSWERS_BY_INTENT = {
   // enough monthly category spending data".
   [CATEGORY_SPENDING_EXPLANATION]:
     "I don't have enough monthly category spending data to explain your category spending yet.",
+  [ANOMALY_EXPLANATION]:
+    "I do not have enough financial report data yet to explain unusual spending.",
+  [SPENDING_FORECAST_EXPLANATION]:
+    "I do not have enough financial report data yet to provide a spending forecast.",
+  [FINANCIAL_RISK_EXPLANATION]:
+    "I do not have enough financial report data yet to explain your financial risk.",
 };
 
 // M3-4: per the blueprint's exact M3-4 contract addition ("Extends basedOn

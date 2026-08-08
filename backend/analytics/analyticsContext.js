@@ -1,4 +1,8 @@
 const dataProvider = require("./dataProvider");
+const {
+    buildCompletedMonthSeries,
+    computeCurrentPartialMonthTotal,
+} = require("./forecastInputAggregator");
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -92,6 +96,18 @@ const createAnalyticsContext = async (userId) => {
     // spike in the trend report. Pool both years before filtering.
     const recentExpensePool = [...safePreviousYear, ...safeCurrentYear];
 
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Forecasting V2 (architecture-closure correction): forecastAnalyzer.js
+    // never receives `recentExpensePool` (transaction-shaped, includes
+    // _id/expenseName/expenseCategory/userId) directly -- this is the
+    // aggregation boundary that reduces it to a bounded, aggregate-only
+    // `{ monthKey, totalAmount }` series and a single scalar partial-month
+    // total before either ever reaches the analyzer. recentExpensePool
+    // itself remains available below for anomaly detection only.
+    const forecastMonthlySeries = buildCompletedMonthSeries(recentExpensePool, currentMonthStart);
+    const forecastCurrentPartialMonthTotal = computeCurrentPartialMonthTotal(safeCurrentMonth);
+
     const trendData = {
         today: filterBetween(recentExpensePool, startOfToday, startOfTomorrow),
         yesterday: filterBetween(recentExpensePool, startOfYesterday, startOfToday),
@@ -113,6 +129,20 @@ const createAnalyticsContext = async (userId) => {
         budgetHistory: budgetAnalyzerHistory,
         trendData,
         daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+        // Anomaly detection (V1): recentExpensePool already pools the full
+        // previous + current calendar year (see the CRITICAL FIX note
+        // above), which always fully contains any "preceding 12 complete
+        // calendar months" window ending at the first instant of any month
+        // within the current year -- so no new database query is needed
+        // here, only exposing this already-computed pool and the shared
+        // month anchor.
+        recentExpensePool,
+        currentMonthStart,
+        // Forecasting V2's only inputs -- aggregate-only, bounded, never
+        // transaction-shaped. forecastAnalyzer.js must never be passed
+        // recentExpensePool/currentMonthExpenses directly.
+        forecastMonthlySeries,
+        forecastCurrentPartialMonthTotal,
     };
 
 };

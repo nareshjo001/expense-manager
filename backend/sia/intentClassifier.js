@@ -27,6 +27,14 @@ const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
 const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
 const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
+// Batch 2: three new report-backed intents, added strictly ADDITIVELY --
+// every existing identifier/alias above, and every existing branch below,
+// is unchanged. Each new check is positioned so it can never steal a query
+// the four intents above already claim (see the placement notes at each
+// check site).
+const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
+const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
+const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 
 // The question must ask for an explanation/meaning/reason (not just
 // mention the topic in passing) AND mention "financial health" or
@@ -123,8 +131,15 @@ const CATEGORY_WORD_PATTERN = /\bcategor(?:y|ies)\b/;
 // season/merchant words stay unlisted -- BALENISA categories are
 // user-defined, so those remain deliberately unresolved rather than
 // guessed at.
+// Batch 2 addition: forecast-qualifier words ("projected", "predicted",
+// "forecasted", "forecast", "estimated", "expected") are appended here so
+// e.g. "projected spending" is never mistaken for a category named
+// "projected" -- these describe a forward-looking QUALIFIER of spending
+// (the SPENDING_FORECAST_EXPLANATION intent's own territory below), the
+// same category this list already excludes "monthly"/"total"/etc for.
 const OVERALL_MODIFIERS =
   "overall|total|monthly|month|weekly|week|yearly|year|annual|daily|day|average|general|entire|whole|all|my|our|your|their|its|the|a|an|this|that|these|those|last|past|current|previous|recent|much|more|less|high|higher|low|lower|big|bigger|biggest|large|larger|largest|small|smaller|smallest|i|you|we|they|he|she|it|who|did|do|does|to|of|in|on|and|or|" +
+  "projected|predicted|forecasted|forecast|estimated|expected|" +
   "january|february|march|april|may|june|july|august|september|october|november|december";
 const NAMED_AREA_SPENDING_PATTERN = new RegExp(
   `\\b(?!(?:${OVERALL_MODIFIERS})\\b)([a-z][a-z'-]*)\\s+(?:spending|spend|expenses|expense|costs|cost)\\b`
@@ -236,6 +251,47 @@ function evaluateCategoryQuestion(normalized) {
     : CATEGORY_NOT_APPLICABLE;
 }
 
+// -- Batch 2: ANOMALY_EXPLANATION --------------------------------------
+// "unusual"/"anomaly"/etc. is already a distinctive, low-collision word in
+// this domain (never used by any of the four existing topic/verb
+// patterns), so a single topic pattern is sufficient -- no separate verb
+// gate is required, mirroring CATEGORY_WORD_PATTERN's directness.
+const ANOMALY_TOPIC_PATTERN =
+  /\b(unusual|anomaly|anomalies|abnormal|strange|weird|suspicious|out of the ordinary|spike|spiked|flagged)\b/;
+
+// -- Batch 2: SPENDING_FORECAST_EXPLANATION -----------------------------
+// Either an explicit forecasting keyword, OR a spending-topic question
+// paired with a forward-looking time horizon / future-tense spend phrase.
+// The AND-with-spending-topic branch prevents an unrelated "next month"
+// mention (e.g. "What's my budget next month?" -- already
+// BUDGET_STATUS_EXPLANATION's territory once "budget" is present) from
+// being misread as a forecast request when spending is not the subject.
+const FORECAST_KEYWORD_PATTERN = /\b(forecast|forecasted|forecasting|predict|prediction|projected|projection)\b/;
+const FORECAST_TIME_HORIZON_PATTERN = /\b(next month|next quarter|next year|coming month|coming quarter|coming year)\b/;
+const FORECAST_FUTURE_SPEND_PATTERN =
+  /\b(will i spend|might i spend|how much will i|how much might i|expect to spend|expected to spend)\b/;
+
+function isForecastQuestion(normalized) {
+  if (FORECAST_KEYWORD_PATTERN.test(normalized)) return true;
+  if (!SPENDING_TOPIC_PATTERN.test(normalized)) return false;
+  return FORECAST_TIME_HORIZON_PATTERN.test(normalized) || FORECAST_FUTURE_SPEND_PATTERN.test(normalized);
+}
+
+// -- Batch 2: FINANCIAL_RISK_EXPLANATION --------------------------------
+// Deliberately checked AFTER HEALTH_EXPLANATION and BUDGET_STATUS_EXPLANATION
+// below, so this can never steal "explain my financial risk" (already
+// HEALTH_EXPLANATION's exact existing contract, see HEALTH_TOPIC_PATTERN)
+// or a budget-scoped risk question ("Is there a risk with my budget?",
+// already BUDGET_STATUS_EXPLANATION's territory via its own "risk" verb).
+// `risks?` (not a bare `risk`) intentionally also catches the plural form
+// HEALTH_TOPIC_PATTERN's singular-only `\brisk\b` does not.
+const RISK_TOPIC_PATTERN = /\b(financial risks?|risks?|risky)\b/;
+// Deliberately narrow to genuine question/explanation shapes -- a bare
+// topic+adjective mention ("financial risk level", "My risk level is
+// Low.") must NOT match, mirroring HEALTH_EXPLANATION's own existing
+// "topic mention alone is not a question" conservatism.
+const RISK_VERB_PATTERN = /\b(why|explain|do i have|have any|is there|risk status|current risk|financial risk status)\b/;
+
 function classifyIntent(question) {
   if (typeof question !== "string") {
     return null;
@@ -281,6 +337,15 @@ function classifyIntent(question) {
     return null;
   }
 
+  // Batch 2: anomaly questions are checked before the broad spending-change
+  // branch for the same reason category questions are (above) -- "Why was
+  // this expense considered unusual?" satisfies SPENDING_CHANGE's own
+  // topic+verb gate ("expense" + "why"), but only the anomaly context
+  // actually carries flagged-anomaly detail.
+  if (ANOMALY_TOPIC_PATTERN.test(normalized)) {
+    return ANOMALY_EXPLANATION;
+  }
+
   if (SPENDING_TOPIC_PATTERN.test(normalized) && SPENDING_CHANGE_VERB_PATTERN.test(normalized)) {
     return SPENDING_CHANGE_EXPLANATION;
   }
@@ -293,9 +358,36 @@ function classifyIntent(question) {
     return BUDGET_STATUS_EXPLANATION;
   }
 
+  // Batch 2: forecast is checked AFTER spending-change AND budget-status
+  // (not before, as an earlier draft had it) -- FORECAST_KEYWORD_PATTERN
+  // includes "projected"/"projection", which BUDGET_STATUS_VERB_PATTERN
+  // already used for an unrelated, pre-existing concept (a budget-overrun
+  // PROJECTION, not a spending forecast -- e.g. "Is my budget projection
+  // reliable?", "Explain my projected budget status."). Checking budget
+  // first preserves that exact pre-existing routing; none of the required
+  // forecast example questions ("How much might I spend next month?",
+  // "What is my spending forecast for the next quarter?") mention
+  // "budget" at all, so moving this check later never prevents them from
+  // matching.
+  if (isForecastQuestion(normalized)) {
+    return SPENDING_FORECAST_EXPLANATION;
+  }
+
+  // Batch 2: checked last, strictly after HEALTH_EXPLANATION (which already
+  // owns the exact "financial risk"+explanation-verb phrasing) and
+  // BUDGET_STATUS_EXPLANATION (which already owns budget-scoped risk
+  // questions) -- so this can only ever catch a genuine, non-budget,
+  // non-health-explanation risk question.
+  if (RISK_TOPIC_PATTERN.test(normalized) && RISK_VERB_PATTERN.test(normalized)) {
+    return FINANCIAL_RISK_EXPLANATION;
+  }
+
   return null;
 }
 
 module.exports = {
   classifyIntent,
+  ANOMALY_EXPLANATION,
+  SPENDING_FORECAST_EXPLANATION,
+  FINANCIAL_RISK_EXPLANATION,
 };

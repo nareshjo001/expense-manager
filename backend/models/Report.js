@@ -55,6 +55,16 @@ const financialReportSchema = new mongoose.Schema(
       default: {},
     },
 
+    anomalies: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    risk: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
   },
   {
     timestamps: true,

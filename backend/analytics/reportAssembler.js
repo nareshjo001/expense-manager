@@ -10,6 +10,8 @@ const assembleReport = ({
   yearlyHabits,
   financialHealth,
   forecast = {},
+  anomalies = {},
+  risk = {},
 }) => {
   return {
     metadata,
@@ -35,6 +37,10 @@ const assembleReport = ({
     financialHealth,
 
     forecast,
+
+    anomalies,
+
+    risk,
   };
 };
 

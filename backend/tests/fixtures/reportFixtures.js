@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const { ExpenseModel, BudgetModel } = require("../../config/Schemas");
 const FinancialReport = require("../../models/Report");
+const { CURRENT_REPORT_VERSION } = require("../../analytics/reportContractVersion");
 
 function freshUserId() {
   return new mongoose.Types.ObjectId();
@@ -50,7 +51,12 @@ function previousMonthDate(dayOfMonth = 10) {
 function buildFakeCachedReport(marker) {
   return {
     metadata: {
-      version: 1,
+      // Reuses the same shared current-version constant reportService.js's
+      // isCurrentReport() checks -- a fake cache-hit fixture must be
+      // current, or the version-aware read path (Batch 1) would correctly
+      // reject it as stale and fall through to Mongo instead of returning
+      // it, breaking these cache-hit tests for an unrelated reason.
+      version: CURRENT_REPORT_VERSION,
       generatedAt: new Date().toISOString(),
       reportPeriod: { month: new Date().getMonth() + 1, year: new Date().getFullYear() },
       lastExpenseUpdate: null,
@@ -71,7 +77,9 @@ function buildFakeCachedReport(marker) {
     trends: {},
     habits: { monthly: { hasData: false }, yearly: { hasData: false } },
     financialHealth: { scores: {}, overall: null, dataCompleteness: {}, risk: { label: "Unknown", color: "gray" }, signals: [] },
-    forecast: {},
+    forecast: { hasData: false },
+    anomalies: { hasData: false, reasonCode: "NO_ELIGIBLE_CURRENT_EXPENSES", anomalies: [] },
+    risk: { hasData: false, reasonCode: "NO_REPORT_DATA", riskLevel: "none", signals: [] },
   };
 }
 

@@ -44,6 +44,8 @@
 // response to make the endpoint appear more capable than it is.
 "use strict";
 
+const { isSessionStoreAvailable } = require("../../sia/sessionStoreAvailability");
+
 const config = require("../../sia/config");
 const { classifyIntent } = require("../../sia/intentClassifier");
 const { buildContext } = require("../../sia/contextBuilder");
@@ -53,6 +55,63 @@ const {
   formatExplanationResponse,
 } = require("../../sia/responseFormatter");
 const { logSiaEvent, SIA_LOG_EVENTS } = require("../../sia/safeLogger");
+const sessionService = require("../../sia/sessionService");
+const { validateGroundedAnswer } = require("../../sia/responseValidator");
+
+// Batch 2: bounded conversation session support, additive only.
+//
+// Guarded by sia/sessionStoreAvailability.js's live Mongoose connection
+// check rather than always attempted: none of the pre-existing SIA test
+// suites connect to a real MongoDB (they mock
+// config/intentClassifier/contextBuilder/llmService only), so an
+// unconditional session lookup/write would hang those tests against a
+// disconnected/buffering Mongoose connection. Checking availability first
+// means the session feature behaves exactly like any other optional-data
+// boundary in this codebase: unavailable is a valid, safe state, never a
+// thrown error, and the pre-existing question/answer contract is
+// completely unaffected when it is unavailable. In production (a
+// connected database) this is always true and the feature is fully
+// active. See tests/sia.ask.activeSession.test.js for the connected-state
+// proof (achieved by mocking sessionStoreAvailability.js itself, never by
+// mutating the real global mongoose connection).
+
+// Every session-store interaction is best-effort: a failure here must
+// never fail the user's actual question, and must never leave a
+// half-written turn (a question persisted with no matching answer, or vice
+// versa) -- appendTurn() is only ever called once a real, usable answer
+// already exists, and both of its writes happen together.
+async function safeGetOrCreateSession(userId, sessionId) {
+  if (!isSessionStoreAvailable()) return null;
+  try {
+    return await sessionService.getOrCreateSession(userId, sessionId);
+  } catch (_err) {
+    return null;
+  }
+}
+
+async function safeAppendTurn(args) {
+  if (!isSessionStoreAvailable()) return;
+  try {
+    await sessionService.appendTurn(args);
+  } catch (_err) {
+    // Best-effort only -- the response the user already received is not
+    // retracted or altered because history could not be persisted.
+  }
+}
+
+// Loads the bounded recent-turn window for LLM conversational continuity
+// ONLY -- never a source of current financial facts (buildContext() above
+// is always called fresh, every turn, regardless of whether history loaded
+// successfully). A failure here degrades to "no history this turn", never
+// a failed request -- the user still gets a real, freshly-grounded answer.
+async function safeLoadRecentTurns(sessionId, userId) {
+  if (!isSessionStoreAvailable()) return [];
+  try {
+    return await sessionService.loadRecentTurns(sessionId, userId);
+  } catch (_err) {
+    return [];
+  }
+}
 
 // M3-1: the maximum accepted question length, measured after trimming.
 // Exactly this many characters remains valid; anything longer is rejected
@@ -64,6 +123,10 @@ const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
 const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
 const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
+// Batch 2: additive only.
+const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
+const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
+const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 
 // Minimum orchestration prompts required for this milestone -- not final
 // prompt-engineering work. Each is fixed and intent-specific; a small
@@ -149,11 +212,66 @@ const CATEGORY_SPENDING_SYSTEM_PROMPT =
   "question asks for, say so plainly. Keep the explanation concise, " +
   "clear, and non-judgmental.";
 
+// Batch 2: "rule-detected unusual spending", never "fraud" or any
+// wrongdoing-implying word -- matches
+// expenseAnomalyAnalyzer.js's own module-level framing exactly
+// ("a personal-history observation, not a fraud, wrongdoing, or 'financial
+// problem' signal").
+const ANOMALY_SYSTEM_PROMPT =
+  "You are SIA, BALENISA's read-only financial explanation assistant. " +
+  "Explain the user's flagged unusual spending using only the supplied " +
+  "structured context of rule-detected anomalies. Treat the context as " +
+  "authoritative. Describe each flagged expense as unusual relative to the " +
+  "user's own category spending history, detected by a fixed statistical " +
+  "rule -- never as fraud, theft, error, or any other wrongdoing, and " +
+  "never as certain. Do not invent transactions, merchants, causes, or " +
+  "intentions beyond what the context shows. Do not recalculate values or " +
+  "predict future spending. If the context does not support a claim, say " +
+  "so. Keep the explanation concise, clear, and non-judgmental.";
+
+// Every value the model receives here is explicitly `isEstimate: true` --
+// the prompt reinforces that framing in words as well, and forbids the
+// model from presenting any forecast number as guaranteed or certain.
+const FORECAST_SYSTEM_PROMPT =
+  "You are SIA, BALENISA's read-only financial explanation assistant. " +
+  "Answer the user's spending forecast question using only the supplied " +
+  "structured forecast context. Treat the context as authoritative. Every " +
+  "number in the context is a statistical ESTIMATE derived from the " +
+  "user's own historical monthly totals, not a guarantee, not a trained " +
+  "AI prediction, and not certain -- always describe it as an estimate " +
+  "or a range, never as a fact about the future. If a horizon's hasData " +
+  "is false, say plainly that there is not enough history for that " +
+  "horizon rather than guessing a number. Do not invent transactions, " +
+  "income, or spending events, and do not give budgeting, saving, or " +
+  "investment advice. Keep the explanation concise, clear, and " +
+  "non-judgmental.";
+
+// Risk must be explained FROM the supplied evidence, never presented as a
+// certainty or a calibrated probability, and never as investment, credit,
+// lending, tax, or legal advice.
+const RISK_SYSTEM_PROMPT =
+  "You are SIA, BALENISA's read-only financial explanation assistant. " +
+  "Explain the user's financial risk using only the supplied structured " +
+  "context of rule-detected risk signals and their evidence. Treat the " +
+  "context as authoritative. Describe only the specific signals and " +
+  "evidence present (for example, an overspent or nearly-exhausted " +
+  "budget, persistent spending growth, unusual expenses, forecasted " +
+  "pressure, or a low financial-health score) -- never invent a risk " +
+  "that has no corresponding signal, and never state a risk as a " +
+  "certainty or a numeric probability/percentage chance. If riskLevel is " +
+  "\"none\" or there are no signals, say plainly that no risk signals " +
+  "were found. Do not give investment, credit, lending, tax, or legal " +
+  "advice, and do not instruct the user to take a specific financial " +
+  "action. Keep the explanation concise, clear, and non-judgmental.";
+
 const SYSTEM_PROMPTS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_SYSTEM_PROMPT,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_SYSTEM_PROMPT,
   [BUDGET_STATUS_EXPLANATION]: BUDGET_STATUS_SYSTEM_PROMPT,
   [CATEGORY_SPENDING_EXPLANATION]: CATEGORY_SPENDING_SYSTEM_PROMPT,
+  [ANOMALY_EXPLANATION]: ANOMALY_SYSTEM_PROMPT,
+  [SPENDING_FORECAST_EXPLANATION]: FORECAST_SYSTEM_PROMPT,
+  [FINANCIAL_RISK_EXPLANATION]: RISK_SYSTEM_PROMPT,
 };
 
 // Deliberately the same generic body for every failure/unavailable path
@@ -171,7 +289,7 @@ const ask = async (req, res) => {
     return res.status(503).json(UNAVAILABLE_RESPONSE);
   }
 
-  const { question } = req.body || {};
+  const { question, sessionId, clientMessageId } = req.body || {};
 
   if (typeof question !== "string" || question.trim() === "") {
     return res.status(400).json({
@@ -189,6 +307,14 @@ const ask = async (req, res) => {
     });
   }
 
+  // Additive, best-effort only. A client that never sends sessionId (every
+  // pre-existing caller) sees byte-for-byte the same behavior as before --
+  // activeSession stays null, and the response below carries no sessionId
+  // field at all, exactly as previously.
+  const requestedSessionId = typeof sessionId === "string" ? sessionId : undefined;
+  const requestedClientMessageId = typeof clientMessageId === "string" ? clientMessageId : undefined;
+  const activeSession = await safeGetOrCreateSession(req.userId, requestedSessionId);
+
   // Whatever classifyIntent returns is used as-is -- no hard-coded intent,
   // no guessed fallback. classifyIntent's own contract guarantees exactly
   // HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION,
@@ -205,12 +331,24 @@ const ask = async (req, res) => {
     // req.userId comes only from verifyToken (Middlewares/Auth.js), which
     // ran before this controller. This is the sole identity ever passed
     // into buildContext, for either intent -- req.body/req.query/route
-    // params are never read for a userId anywhere in this controller.
+    // params are never read for a userId anywhere in this controller. The
+    // canonical Report is fetched fresh here on every single turn --
+    // conversation history (below) is never used as a substitute source of
+    // current financial facts.
     const contextResult = await buildContext(req.userId, intent);
 
     if (!contextResult || contextResult.fields === null || contextResult.reason === "no_data") {
-      return res.status(200).json(formatNoDataResponse(intent));
+      const noDataResponse = formatNoDataResponse(intent);
+      if (activeSession) noDataResponse.sessionId = String(activeSession._id);
+      return res.status(200).json(noDataResponse);
     }
+
+    // Bounded recent-turn history, for conversational continuity ONLY --
+    // buildContext() above already fetched the current, authoritative
+    // report fresh for this turn regardless of what (if anything) loads
+    // here. See sia/llmService.js's buildHistoryMessages() for exactly how
+    // this is kept structurally unable to override the system prompt.
+    const recentTurns = activeSession ? await safeLoadRecentTurns(activeSession._id, req.userId) : [];
 
     const providerStartedAt = Date.now();
     let llmResult;
@@ -219,6 +357,7 @@ const ask = async (req, res) => {
         systemPrompt: SYSTEM_PROMPTS_BY_INTENT[intent],
         context: contextResult,
         question: trimmedQuestion,
+        history: recentTurns,
       });
     } catch (providerErr) {
       // Exactly one failure record per provider attempt -- never logged
@@ -244,13 +383,56 @@ const ask = async (req, res) => {
       return res.status(503).json(UNAVAILABLE_RESPONSE);
     }
 
+    // Grounded-response validation (Batch 2 architecture closure): a real
+    // deterministic gate, not just a system-prompt instruction. Only the
+    // three new report-grounded intents are checked (see
+    // sia/responseValidator.js) -- the four original intents' behavior is
+    // completely unaffected. A failed check is treated exactly like a
+    // failed/unusable provider result: the generic 503 below, never a
+    // partially-shown or rewritten answer. contextResult.fields is the
+    // exact structured context this answer was grounded in, so a
+    // monetary-figure check has a real source of truth to compare against.
+    const validation = validateGroundedAnswer({
+      intent,
+      answer: llmResult.answer,
+      contextFields: contextResult.fields,
+    });
+    if (!validation.valid) {
+      logSiaEvent({
+        event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
+        provider: config.provider,
+        errorCode: `GROUNDING_${validation.reasonCode}`,
+        latencyMs: Date.now() - providerStartedAt,
+      });
+      return res.status(503).json(UNAVAILABLE_RESPONSE);
+    }
+
     logSiaEvent({
       event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED,
       provider: config.provider,
       latencyMs: Date.now() - providerStartedAt,
     });
 
-    return res.status(200).json(formatExplanationResponse(intent, llmResult.answer));
+    // Persisted only now that a real, usable answer exists -- a provider
+    // failure or an unusable result above never reaches this line, so a
+    // failed request can never leave a half-written (question with no
+    // answer) turn behind. Best-effort: a persistence failure here does not
+    // alter or retract the response already computed.
+    if (activeSession) {
+      await safeAppendTurn({
+        sessionId: activeSession._id,
+        userId: req.userId,
+        question: trimmedQuestion,
+        intent,
+        answer: llmResult.answer,
+        providerMetadata: { provider: config.provider },
+        clientMessageId: requestedClientMessageId,
+      });
+    }
+
+    const explanationResponse = formatExplanationResponse(intent, llmResult.answer);
+    if (activeSession) explanationResponse.sessionId = String(activeSession._id);
+    return res.status(200).json(explanationResponse);
   } catch (err) {
     return res.status(503).json(UNAVAILABLE_RESPONSE);
   }

@@ -28,7 +28,67 @@ const SUPPORTED_INTENTS = new Set([
   "SPENDING_CHANGE_EXPLANATION",
   "BUDGET_STATUS_EXPLANATION",
   "CATEGORY_SPENDING_EXPLANATION",
+  // Batch 2: additive only -- every existing intent above is unchanged.
+  "ANOMALY_EXPLANATION",
+  "SPENDING_FORECAST_EXPLANATION",
+  "FINANCIAL_RISK_EXPLANATION",
 ]);
+
+// -- Batch 2 shared helpers -----------------------------------------------
+
+const isFiniteNumberCtx = (value) => typeof value === "number" && Number.isFinite(value);
+const isPlainObjectCtx = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Bounded copy of one public anomaly record -- only the exact fields
+// expenseAnomalyAnalyzer.js's own frozen output contract guarantees
+// (already free of userId/raw expense objects/internal sort keys). A newly
+// constructed object every time, so no reference to the stored Report is
+// ever retained.
+function copyAnomalyRecord(record) {
+  if (!isPlainObjectCtx(record)) return null;
+  return {
+    expenseId: typeof record.expenseId === "string" ? record.expenseId : null,
+    category: typeof record.category === "string" ? record.category : null,
+    amount: isFiniteNumberCtx(record.amount) ? record.amount : null,
+    expenseDate: typeof record.expenseDate === "string" ? record.expenseDate : null,
+    severity: typeof record.severity === "string" ? record.severity : null,
+    reasonCode: typeof record.reasonCode === "string" ? record.reasonCode : null,
+  };
+}
+
+// Bounded copy of one forecast horizon's public fields -- estimate/range
+// only, always paired with `isEstimate: true` so the LLM (and, downstream,
+// the user-facing prompt) can never mistake a statistical projection for an
+// authoritative recorded fact.
+function copyForecastHorizon(horizon) {
+  if (!isPlainObjectCtx(horizon)) return null;
+  return {
+    hasData: horizon.hasData === true,
+    reasonCode: typeof horizon.reasonCode === "string" ? horizon.reasonCode : null,
+    isEstimate: true,
+    estimate: isFiniteNumberCtx(horizon.estimate) ? horizon.estimate : null,
+    range: isPlainObjectCtx(horizon.range)
+      ? {
+          lower: isFiniteNumberCtx(horizon.range.lower) ? horizon.range.lower : null,
+          upper: isFiniteNumberCtx(horizon.range.upper) ? horizon.range.upper : null,
+        }
+      : null,
+    historyMonthsUsed: isFiniteNumberCtx(horizon.historyMonthsUsed) ? horizon.historyMonthsUsed : null,
+    horizonMonths: isFiniteNumberCtx(horizon.horizonMonths) ? horizon.horizonMonths : null,
+  };
+}
+
+// Bounded copy of one risk signal's public fields -- reasonCode/severity
+// plus its own already-bounded evidence object (riskAnalyzer.js's own
+// contract never carries a raw record or user identifier inside evidence).
+function copyRiskSignal(signal) {
+  if (!isPlainObjectCtx(signal)) return null;
+  return {
+    reasonCode: typeof signal.reasonCode === "string" ? signal.reasonCode : null,
+    severity: typeof signal.severity === "string" ? signal.severity : null,
+    evidence: isPlainObjectCtx(signal.evidence) ? JSON.parse(JSON.stringify(signal.evidence)) : {},
+  };
+}
 
 // Deliberately `!== undefined && !== null`, not a truthiness check -- a
 // valid `0` (e.g. totalSpent, comparePastMonth, healthScore) or a valid
@@ -451,10 +511,104 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // Unreachable: SUPPORTED_INTENTS above only ever admits the four
+  // intent === "ANOMALY_EXPLANATION" -- Batch 2. Sourced exclusively from
+  // report.anomalies (expenseAnomalyAnalyzer.js's own frozen output,
+  // already free of raw expense records/userId/internal sort keys). A
+  // valid hasData:false no-data/zero-anomaly result is a legitimate,
+  // present answer -- NOT treated as "no context" here, per the explicit
+  // requirement that a report's own no-data/zero-anomaly state must be
+  // distinguished from SIA's "insufficient report data" no-data case.
+  if (intent === "ANOMALY_EXPLANATION") {
+    const anomalies = report.anomalies;
+    if (!isPresent(anomalies) || typeof anomalies.hasData !== "boolean") {
+      return noDataResult(intent);
+    }
+
+    const anomalyList = Array.isArray(anomalies.anomalies) ? anomalies.anomalies : [];
+
+    return {
+      intent,
+      fields: {
+        anomalies: {
+          hasData: anomalies.hasData,
+          reasonCode: typeof anomalies.reasonCode === "string" ? anomalies.reasonCode : null,
+          flaggedCount: isFiniteNumberCtx(anomalies.flaggedCount) ? anomalies.flaggedCount : 0,
+          // Already bounded to at most 10 by expenseAnomalyRules.js's
+          // maxAnomalies -- copied again here defensively (never trusts a
+          // stored document's array length without re-validating).
+          records: anomalyList.slice(0, 10).map(copyAnomalyRecord).filter(Boolean),
+        },
+      },
+      sourceReportGeneratedAt,
+    };
+  }
+
+  // intent === "SPENDING_FORECAST_EXPLANATION" -- Batch 2. Sourced
+  // exclusively from report.forecast (forecastAnalyzer.js's own output).
+  // All three horizons are included (bounded, small, already public) since
+  // the classifier does not itself extract which specific horizon a
+  // question named -- every value is explicitly marked `isEstimate: true`
+  // so it can never be presented as a recorded fact.
+  if (intent === "SPENDING_FORECAST_EXPLANATION") {
+    const forecast = report.forecast;
+    if (!isPresent(forecast) || typeof forecast.hasData !== "boolean") {
+      return noDataResult(intent);
+    }
+
+    return {
+      intent,
+      fields: {
+        forecast: {
+          hasData: forecast.hasData,
+          method: typeof forecast.method === "string" ? forecast.method : null,
+          historyMonthsAvailable: isFiniteNumberCtx(forecast.historyMonthsAvailable)
+            ? forecast.historyMonthsAvailable
+            : 0,
+          nextMonthForecast: copyForecastHorizon(forecast.nextMonthForecast),
+          nextQuarterForecast: copyForecastHorizon(forecast.nextQuarterForecast),
+          nextYearForecast: copyForecastHorizon(forecast.nextYearForecast),
+        },
+      },
+      sourceReportGeneratedAt,
+    };
+  }
+
+  // intent === "FINANCIAL_RISK_EXPLANATION" -- Batch 2. Sourced from
+  // report.risk (riskAnalyzer.js's own bounded, allowlisted output) plus
+  // only the two directly-referenced summary fields riskAnalyzer.js's own
+  // evidence already reflects (totalSpent, budgetStatus) -- never the
+  // complete report, never raw budget/spending internals.
+  if (intent === "FINANCIAL_RISK_EXPLANATION") {
+    const risk = report.risk;
+    if (!isPresent(risk) || typeof risk.hasData !== "boolean") {
+      return noDataResult(intent);
+    }
+
+    const signalList = Array.isArray(risk.signals) ? risk.signals : [];
+
+    return {
+      intent,
+      fields: {
+        risk: {
+          hasData: risk.hasData,
+          reasonCode: typeof risk.reasonCode === "string" ? risk.reasonCode : null,
+          riskLevel: typeof risk.riskLevel === "string" ? risk.riskLevel : "none",
+          signalCount: isFiniteNumberCtx(risk.signalCount) ? risk.signalCount : 0,
+          signals: signalList.slice(0, 10).map(copyRiskSignal).filter(Boolean),
+        },
+        summary: {
+          totalSpent: isFiniteNumberCtx(summary.totalSpent) ? summary.totalSpent : null,
+          budgetStatus: typeof summary.budgetStatus === "string" ? summary.budgetStatus : null,
+        },
+      },
+      sourceReportGeneratedAt,
+    };
+  }
+
+  // Unreachable: SUPPORTED_INTENTS above only ever admits the seven
   // intents handled explicitly above. Kept as an explicit, honest
   // fallback rather than an assumption, matching this module's existing
-  // "never assume" convention -- if a fifth intent is ever added to
+  // "never assume" convention -- if an eighth intent is ever added to
   // SUPPORTED_INTENTS without a matching branch here, this returns the
   // same safe no-data shape instead of silently returning undefined.
   return noDataResult(intent);

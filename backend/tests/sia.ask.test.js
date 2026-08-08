@@ -361,6 +361,12 @@ describe("POST /sia/ask", () => {
       systemPrompt: expect.stringContaining("You are SIA"),
       context: fakeContext,
       question: HEALTH_QUESTION,
+      // Batch 2: additive -- always [] here since these tests never
+      // connect to a real session store (mongoose.connection.readyState
+      // !== 1 in this Jest environment). See
+      // tests/sia.ask.activeSession.test.js for the connected-state proof
+      // that real history is loaded and passed through.
+      history: [],
     });
   });
 
@@ -552,6 +558,7 @@ describe("POST /sia/ask", () => {
       systemPrompt: expect.stringContaining("You are SIA"),
       context: fakeContext,
       question: SPENDING_QUESTION,
+      history: [],
     });
     // The spending prompt must never be the exact health prompt string, and
     // must reflect the "contributed to" causal-language constraint.
@@ -619,7 +626,16 @@ describe("POST /sia/ask", () => {
     const res = await request(app)
       .post("/sia/ask")
       .set("Authorization", `Bearer ${token}`)
-      .send({ question: "Predict my spending next month." });
+      // "Predict my spending next month." was the original example phrase
+      // here, but as of Batch 2 it is legitimately classified as
+      // SPENDING_FORECAST_EXPLANATION (see the dedicated test below) --
+      // this was never a protected "existing four intents classify exactly
+      // as before" case (the phrase carried no SPENDING_CHANGE_EXPLANATION
+      // or BUDGET_STATUS_EXPLANATION trigger word either), so it is not a
+      // regression. A phrase with no supported-intent trigger word at all
+      // is used here instead to keep this test's actual intent (proving
+      // the 422/unsupported path) accurate.
+      .send({ question: "Tell me a joke about spending." });
 
     expect(res.status).toBe(422);
     expect(res.body).toEqual({
@@ -628,6 +644,30 @@ describe("POST /sia/ask", () => {
     });
     expect(buildContextMock).not.toHaveBeenCalled();
     expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  // Batch 2: documents the intentional reclassification noted above --
+  // "Predict my spending next month." now resolves to the new
+  // SPENDING_FORECAST_EXPLANATION intent and reaches buildContext.
+  it("Batch 2: classifies a forecast-style spending question as SPENDING_FORECAST_EXPLANATION, not 422", async () => {
+    const { app, buildContextMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => ({
+        intent: "SPENDING_FORECAST_EXPLANATION",
+        fields: null,
+        reason: "no_data",
+      }),
+    });
+    const token = signToken("user-16b");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Predict my spending next month." });
+
+    expect(res.status).toBe(200);
+    expect(res.body.intent).toBe("SPENDING_FORECAST_EXPLANATION");
+    expect(buildContextMock).toHaveBeenCalledWith("user-16b", "SPENDING_FORECAST_EXPLANATION");
   });
 
   it("returns a generic 503 for spending when askLlm resolves with a blank answer", async () => {
@@ -887,6 +927,7 @@ describe("POST /sia/ask", () => {
       systemPrompt: expect.stringContaining("You are SIA"),
       context: fakeContext,
       question: BUDGET_QUESTION,
+      history: [],
     });
     // The budget prompt must never be the health or spending prompt, and
     // must reflect this milestone's "do not present a projection as
