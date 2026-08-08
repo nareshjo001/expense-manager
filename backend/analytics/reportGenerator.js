@@ -7,6 +7,7 @@ const categoryAnalyzer = require("./analyzers/categoryAnalyzer");
 const trendAnalyzer = require("./analyzers/trendAnalyzer");
 const habitAnalyzer = require("./analyzers/habitAnalyzer");
 const healthAnalyzer = require("./analyzers/healthAnalyzer");
+const habitRules = require("./analyzers/scores/habitRules");
 
 const { generateBudgetInsights } = require('../Services/BudgetServices/budgetInsight.service');
 
@@ -39,15 +40,15 @@ const generateReport = async (userId) => {
     previousMonthExpenses: analyticsContext.previousMonthExpenses,
   });
 
-  const monthlyHabitReport = habitAnalyzer.analyze(analyticsContext.currentMonthExpenses);
-  const yearlyHabitReport = habitAnalyzer.analyze(analyticsContext.currentYearExpenses);
+  const monthlyHabitReport = habitAnalyzer.analyze(analyticsContext.currentMonthExpenses, habitRules.habits);
+  const yearlyHabitReport = habitAnalyzer.analyze(analyticsContext.currentYearExpenses, habitRules.habits);
 
   const healthReport = healthAnalyzer.analyze({
     budget: budgetReport,
     category: monthlyCategoryReport,
     spending: spendingReport,
     trend: trendReport,
-    monthlyHabits: monthlyHabitReport,
+    habits: monthlyHabitReport,
   });
 
   const metadata = {

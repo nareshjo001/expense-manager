@@ -19,11 +19,37 @@ const calculateHabitScore = (habits = {}) => {
     return emptyResult(REASONS.NO_EXPENSE_DATA);
   }
 
-  const impulseRaw =
-    habits.impulseSpending?.amountSharePercentage ??
-    habits.impulseSpending?.transactionSharePercentage;
-  const impulseValue = Number.isFinite(Number(impulseRaw)) ? Number(impulseRaw) : 0;
-  const impulseTier = findTier(rules.habits.impulseTiers, impulseValue);
+  // Resolve amountSharePercentage first, falling through to
+  // transactionSharePercentage only when amountSharePercentage itself is
+  // not a usable value -- checked per-field with an explicit finite test,
+  // not a single nullish-coalesce over both fields. `??` only skips
+  // null/undefined, so a NaN or Infinity amountSharePercentage would
+  // otherwise "win" the coalesce and silently discard a perfectly valid
+  // transactionSharePercentage fallback.
+  const isFiniteShare = (value) =>
+    typeof value === "number" && Number.isFinite(value);
+
+  const amountRaw = habits.impulseSpending?.amountSharePercentage;
+  const transactionRaw = habits.impulseSpending?.transactionSharePercentage;
+
+  // Distinguish "no evaluable impulse share" from a genuine evaluated
+  // 0% — an absent/non-finite value must not fall into the same
+  // LowImpulse tier a real, confirmed zero would earn.
+  let impulseValue;
+  if (isFiniteShare(amountRaw)) {
+    impulseValue = Number(amountRaw);
+  } else if (isFiniteShare(transactionRaw)) {
+    impulseValue = Number(transactionRaw);
+  } else {
+    impulseValue = null;
+  }
+
+  let impulseTier;
+  if (impulseValue === null) {
+    impulseTier = { score: 0, label: "InsufficientData" };
+  } else {
+    impulseTier = findTier(rules.habits.impulseTiers, impulseValue);
+  }
 
   const microRaw = habits.microSpending?.contributionPercentage;
   const microValue = Number.isFinite(Number(microRaw)) ? Number(microRaw) : 0;
