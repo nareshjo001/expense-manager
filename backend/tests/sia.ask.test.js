@@ -1561,3 +1561,177 @@ describe("POST /sia/ask", () => {
     expect(askLlmMock.mock.calls[2][0].systemPrompt).not.toBe(askLlmMock.mock.calls[3][0].systemPrompt);
   });
 });
+
+// M3-1: question max-length validation and the dedicated SIA rate limiter.
+// Still uses loadApp() (real Routes/sia.routes.js + Middlewares/Auth.js +
+// utils/rateLimiter.js's real siaLimiter, mocked sia/* modules), so every
+// app instance here is created fresh via jest.resetModules() -- each test
+// gets its own, empty siaLimiter store. No real MongoDB, Redis, or OpenAI
+// call is possible: buildContext/askLlm remain mocked, and the 429/401
+// tests below never get far enough to reach them anyway.
+describe("POST /sia/ask -- M3-1 input validation and rate limiting", () => {
+  it("returns 400 when question is null", async () => {
+    const { app } = loadApp({ configOverrides: { enabled: true } });
+    const token = signToken("m3-1-null");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: null });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ success: false, message: "question is required" });
+  });
+
+  it("returns 400 when question is an empty string", async () => {
+    const { app } = loadApp({ configOverrides: { enabled: true } });
+    const token = signToken("m3-1-empty-string");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ success: false, message: "question is required" });
+  });
+
+  it("returns 400 and rejects a question longer than 500 characters, calling neither the classifier, buildContext, nor askLlm", async () => {
+    const { app, classifyIntentMock, buildContextMock, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+    });
+    const token = signToken("m3-1-oversized");
+    const oversizedQuestion = "a".repeat(501);
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: oversizedQuestion });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ success: false, message: "question must be 500 characters or fewer" });
+    expect(classifyIntentMock).not.toHaveBeenCalled();
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+    // The rejected question is never echoed back.
+    expect(JSON.stringify(res.body)).not.toContain(oversizedQuestion);
+  });
+
+  it("accepts a question of exactly 500 characters and passes the classifier the trimmed value, not the padded raw value", async () => {
+    const exactly500 = "b".repeat(500);
+    const { app, classifyIntentMock } = loadApp({
+      configOverrides: { enabled: true },
+      classifyIntentImpl: () => null,
+    });
+    const token = signToken("m3-1-exact-500");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: `  ${exactly500}  ` });
+
+    // Reaches classification (proving the length check passed) and is then
+    // reported as unrecognized -- 422, not 400.
+    expect(res.status).toBe(422);
+    expect(classifyIntentMock).toHaveBeenCalledWith(exactly500);
+  });
+
+  it("trims surrounding whitespace before the 500-char check, so padded-but-500-after-trim questions are accepted", async () => {
+    const { app } = loadApp({ configOverrides: { enabled: true }, classifyIntentImpl: () => null });
+    const token = signToken("m3-1-trim-before-check");
+    const paddedButValid = `   ${"c".repeat(500)}   `;
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: paddedButValid });
+
+    expect(res.status).not.toBe(400);
+  });
+
+  it("an unauthenticated request returns the existing 401 and never reaches the SIA limiter, classifier, buildContext, or askLlm", async () => {
+    const { app, classifyIntentMock, buildContextMock, askLlmMock } = loadApp({
+      configOverrides: { enabled: true },
+    });
+
+    const res = await request(app).post("/sia/ask").send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(401);
+    expect(classifyIntentMock).not.toHaveBeenCalled();
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it(
+    "allows the first 20 authenticated requests from one user and returns 429 with sanitized headers/body on the 21st",
+    async () => {
+      const { app } = loadApp({ configOverrides: { enabled: false } });
+      const token = signToken("m3-1-quota-single-user");
+      const sensitiveQuestion = "SENSITIVE_QUESTION_MARKER";
+
+      const responses = [];
+      for (let i = 0; i < 21; i += 1) {
+        // Sequential by design: express-rate-limit's in-memory store counts
+        // per request, so requests must be awaited one at a time to get a
+        // deterministic 20-then-429 boundary.
+        // eslint-disable-next-line no-await-in-loop
+        const res = await request(app)
+          .post("/sia/ask")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ question: sensitiveQuestion });
+        responses.push(res);
+      }
+
+      const firstTwenty = responses.slice(0, 20);
+      const twentyFirst = responses[20];
+
+      expect(firstTwenty.every((res) => res.status !== 429)).toBe(true);
+      expect(twentyFirst.status).toBe(429);
+      expect(twentyFirst.body).toEqual({
+        success: false,
+        message: "Too many requests. Please try again later.",
+      });
+      // standardHeaders: true / legacyHeaders: false -- the same convention
+      // as the existing apiLimiter/authLimiter in utils/rateLimiter.js.
+      expect(twentyFirst.headers).toHaveProperty("ratelimit-limit");
+      expect(twentyFirst.headers).not.toHaveProperty("x-ratelimit-limit");
+      // Never leaks the question or the authenticated userId.
+      expect(JSON.stringify(twentyFirst.body)).not.toContain(sensitiveQuestion);
+      expect(JSON.stringify(twentyFirst.body)).not.toContain("m3-1-quota-single-user");
+    },
+    20000
+  );
+
+  it(
+    "gives two different authenticated users independent 20-request quotas",
+    async () => {
+      const { app } = loadApp({ configOverrides: { enabled: false } });
+      const tokenA = signToken("m3-1-user-a");
+      const tokenB = signToken("m3-1-user-b");
+
+      for (let i = 0; i < 20; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await request(app)
+          .post("/sia/ask")
+          .set("Authorization", `Bearer ${tokenA}`)
+          .send({ question: "q" });
+        expect(res.status).not.toBe(429);
+      }
+
+      // User A has now exhausted their quota; user B's independent quota is
+      // untouched.
+      const userBRes = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${tokenB}`)
+        .send({ question: "q" });
+      expect(userBRes.status).not.toBe(429);
+
+      const userANextRes = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${tokenA}`)
+        .send({ question: "q" });
+      expect(userANextRes.status).toBe(429);
+    },
+    20000
+  );
+});

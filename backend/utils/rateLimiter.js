@@ -32,4 +32,30 @@ const authLimiter = rateLimit({
     legacyHeaders: false
 });
 
-module.exports = { apiLimiter, authLimiter };
+
+// SIA limiter (M3-1) -- a dedicated, stricter limiter for POST /sia/ask,
+// separate from apiLimiter's shared 150/15min budget so heavier LLM-backed
+// usage on this one endpoint cannot starve every other authenticated
+// route's quota. Must be applied AFTER verifyToken (see
+// Routes/sia.routes.js) so req.userId is always already set -- the
+// ipKeyGenerator fallback below is defensive only and is not expected to be
+// reached in practice, mirroring apiLimiter's own keying convention. Never
+// keys on the question, financial context, API key, or raw JWT.
+const siaLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+
+    keyGenerator: (req) => {
+        return req.userId || ipKeyGenerator(req.ip);
+    },
+
+    message: {
+        success: false,
+        message: "Too many requests. Please try again later."
+    },
+
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+module.exports = { apiLimiter, authLimiter, siaLimiter };

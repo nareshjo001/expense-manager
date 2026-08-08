@@ -17,6 +17,11 @@
 // backend/sia/contextBuilder.js's M2-4A implementation. Same as M2-3:
 // only a new prompt and map entry, no controller-flow change, no new
 // route, no new endpoint.
+// M3-1 scope: hardens the pre-existing question validation with a maximum
+// length (500 chars, measured after trimming); adds a dedicated,
+// req.userId-keyed rate limiter (Routes/sia.routes.js's siaLimiter) in
+// front of this controller. No change to the classifier/context/provider
+// contracts, and unsupported-question 422 behavior is unchanged.
 //
 // Strictly read-only -- no database writes, no direct MongoDB, Redis,
 // Expense, Income, Budget, analytics, or ML-service imports.
@@ -39,6 +44,12 @@ const {
   formatNoDataResponse,
   formatExplanationResponse,
 } = require("../../sia/responseFormatter");
+
+// M3-1: the maximum accepted question length, measured after trimming.
+// Exactly this many characters remains valid; anything longer is rejected
+// with 400 before intent classification, context building, or the provider
+// are ever reached.
+const MAX_QUESTION_LENGTH = 500;
 
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
 const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
@@ -161,6 +172,13 @@ const ask = async (req, res) => {
   }
 
   const trimmedQuestion = question.trim();
+
+  if (trimmedQuestion.length > MAX_QUESTION_LENGTH) {
+    return res.status(400).json({
+      success: false,
+      message: `question must be ${MAX_QUESTION_LENGTH} characters or fewer`,
+    });
+  }
 
   // Whatever classifyIntent returns is used as-is -- no hard-coded intent,
   // no guessed fallback. classifyIntent's own contract guarantees exactly
