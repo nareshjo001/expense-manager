@@ -403,7 +403,7 @@ describe("POST /sia/ask", () => {
       success: true,
       answer: "I do not have enough financial report data yet to explain your financial health score.",
       intent: "HEALTH_EXPLANATION",
-      basedOn: [],
+      basedOn: ["none"],
     });
     expect(askLlmMock).not.toHaveBeenCalled();
   });
@@ -607,7 +607,7 @@ describe("POST /sia/ask", () => {
       success: true,
       answer: "I do not have enough financial report data yet to explain how your spending changed.",
       intent: "SPENDING_CHANGE_EXPLANATION",
-      basedOn: [],
+      basedOn: ["none"],
     });
     expect(askLlmMock).not.toHaveBeenCalled();
   });
@@ -949,7 +949,7 @@ describe("POST /sia/ask", () => {
       success: true,
       answer: "I do not have enough financial report data yet to explain your budget status.",
       intent: "BUDGET_STATUS_EXPLANATION",
-      basedOn: [],
+      basedOn: ["none"],
     });
     expect(askLlmMock).not.toHaveBeenCalled();
   });
@@ -1328,7 +1328,7 @@ describe("POST /sia/ask", () => {
       success: true,
       answer: CATEGORY_NO_DATA_ANSWER,
       intent: "CATEGORY_SPENDING_EXPLANATION",
-      basedOn: [],
+      basedOn: ["none"],
     });
     expect(askLlmMock).not.toHaveBeenCalled();
   });
@@ -2046,9 +2046,59 @@ describe("POST /sia/ask -- M3-3 safe structured logging", () => {
       success: true,
       answer: "I do not have enough financial report data yet to explain your financial health score.",
       intent: "HEALTH_EXPLANATION",
-      basedOn: [],
+      basedOn: ["none"],
     });
     expect(askLlmMock).not.toHaveBeenCalled();
     expect(loggedRecords()).toHaveLength(0);
+  });
+});
+
+// M3-4: grounding metadata provenance. backend/sia/responseFormatter.js's
+// formatExplanationResponse(intent, answer) only ever reads two arguments --
+// the server-classified intent (from classifyIntent, computed before
+// buildContext/askLlm are even called) and the LLM's plain answer string --
+// and looks basedOn up from its own fixed, server-owned
+// GROUNDING_PATHS_BY_INTENT map. It never reads llmResult.intent or
+// llmResult.basedOn. No existing test proves this against an adversarial or
+// malformed provider result, so this is the one material coverage gap for
+// M3-4: nothing currently demonstrates that a provider response cannot
+// inject or override the response's grounding metadata.
+describe("POST /sia/ask -- M3-4 grounding metadata provenance", () => {
+  it("ignores an intent/basedOn injected by a (mocked) provider result -- intent and basedOn always come from the server, never the LLM", async () => {
+    const { app, classifyIntentMock } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeHealthContext(),
+      // A malicious or malformed provider result cannot legitimately return
+      // `intent`/`basedOn` (askLlm's real success shape is only
+      // {answer, model, latencyMs}) -- this simulates one anyway to prove
+      // the controller/formatter never reads those fields even if present.
+      askLlmImpl: async () => ({
+        answer: "Your score reflects Low risk.",
+        model: "mock-model",
+        latencyMs: 5,
+        intent: "SPENDING_CHANGE_EXPLANATION",
+        basedOn: ["provider_injected_fake_path"],
+      }),
+    });
+    const token = signToken("m3-4-no-provider-override");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(200);
+    // intent came from the deterministic server-side classifier (called
+    // with the trimmed question, before buildContext/askLlm run), not the
+    // provider result.
+    expect(classifyIntentMock).toHaveBeenCalledWith(HEALTH_QUESTION);
+    expect(res.body).toEqual({
+      success: true,
+      answer: "Your score reflects Low risk.",
+      intent: "HEALTH_EXPLANATION",
+      basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+    });
+    expect(res.body.intent).not.toBe("SPENDING_CHANGE_EXPLANATION");
+    expect(res.body.basedOn).not.toContain("provider_injected_fake_path");
   });
 });

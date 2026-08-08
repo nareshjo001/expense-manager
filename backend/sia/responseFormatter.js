@@ -132,12 +132,20 @@ const NO_DATA_ANSWERS_BY_INTENT = {
     "I don't have enough monthly category spending data to explain your category spending yet.",
 };
 
+// M3-4: per the blueprint's exact M3-4 contract addition ("Extends basedOn
+// to explicitly list "none" when contextBuilder returned no data, rather
+// than omitting the field"), the no-data basedOn value is the single-element
+// array ["none"] -- basedOn's established type (an array of grounding-path
+// strings, see GROUNDING_PATHS_BY_INTENT above) is preserved; "none" is a
+// literal sentinel string, not a real Report field path.
+const NO_DATA_BASED_ON = Object.freeze(["none"]);
+
 function formatNoDataResponse(intent) {
   return {
     success: true,
     answer: NO_DATA_ANSWERS_BY_INTENT[intent],
     intent,
-    basedOn: [],
+    basedOn: NO_DATA_BASED_ON,
   };
 }
 
