@@ -104,7 +104,7 @@ service would succeed if it reached the service on its own network path. In norm
 operation, the backend's `verifyToken` middleware is the only real access control a
 user's request passes through before prediction happens.
 
-Three plain health endpoints (`HEAD /`, `GET /`, `GET /health/live`, `GET /health/ready`)
+Four plain health endpoints (`HEAD /`, `GET /`, `GET /health/live`, `GET /health/ready`)
 require no authentication and report process/dependency liveness.
 
 ## Database collections
@@ -170,15 +170,35 @@ run otherwise, so it cannot touch production data.
 - A hard process kill during retraining loses the background thread silently; it is only
   recovered at the next process restart, via the startup reconciliation sweeps.
 
-## Planned ML capabilities
+## Relationship to SIA
 
-- Service-to-service authentication for the backend→ML calls.
-- Per-user or per-account model personalization.
-- Online/incremental learning, rather than full refits only.
-- Forecasting, anomaly detection, and broader personalized insights beyond category
-  prediction — none of this exists in the current model or pipeline.
+**SIA does not run in this service.** There is no SIA code, endpoint, model, prompt, or
+LLM dependency anywhere in `ml-service/` — this service's only model is the TF-IDF +
+Random Forest category classifier described above.
 
-**SIA (Smart Insights Assistant) is explicitly outside the current implementation.**
-There is no SIA code, endpoint, or dependency anywhere in this service, the backend, or
-the frontend. It remains planned/future scope only and should not be treated as an
-existing capability of this service.
+SIA is implemented entirely in the Express backend (see the
+[backend README](../backend/README.md#sia-v1)), where it explains the deterministic
+**Report** produced by the backend's own analytics engine. It never calls this service,
+and this service never calls it. The two are independent: disabling SIA changes nothing
+here, and this service being down does not affect SIA.
+
+Prediction confidence produced here is a classifier probability for a category
+suggestion. It is unrelated to SIA's answers and is not used to ground them.
+
+## Implemented versus planned
+
+| Capability | Status |
+|---|---|
+| Category prediction (TF-IDF + Random Forest) with confidence | Implemented |
+| Rule-based description generation | Implemented (template/keyword matching, not ML) |
+| Feedback-driven full retraining with 9-gate validation | Implemented |
+| Atomic, versioned model bundle persistence and activation | Implemented |
+| Startup reconciliation for interrupted runs | Implemented |
+| Token-gated operational/status endpoints (fail closed) | Implemented |
+| Forecasting | Planned — no forecasting model, endpoint, or pipeline exists |
+| Financial-risk prediction | Planned — not present in any model or route |
+| Anomaly detection | Planned — not present in any model or route |
+| Per-user or per-account model personalization | Planned |
+| Online/incremental learning rather than full refits | Planned |
+| Service-to-service authentication for backend→ML calls | Planned |
+| Any LLM, SIA, or generative capability in this service | Not implemented, and out of scope by design |
