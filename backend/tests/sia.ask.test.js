@@ -1735,3 +1735,72 @@ describe("POST /sia/ask -- M3-1 input validation and rate limiting", () => {
     20000
   );
 });
+
+// M3-2: timeout/provider-failure graceful degradation. ask.js's single
+// generic try/catch (established in M2-1) already treats every rejected
+// buildContext/askLlm call identically -- these tests prove that guarantee
+// specifically for the real, distinct M1-3 OpenAI failure codes (timeout,
+// network, HTTP, malformed/incomplete response, empty output), not just a
+// generic LlmProviderError, and confirm no retry happens at the controller
+// layer either. No production code changed for this milestone: the
+// controller's catch block never branches on err.code, so no partial or
+// code-specific response is possible.
+describe("POST /sia/ask -- M3-2 timeout and graceful degradation", () => {
+  it.each([
+    ["PROVIDER_TIMEOUT", "SIA's request to the LLM provider timed out."],
+    ["PROVIDER_NETWORK_ERROR", "SIA could not reach the LLM provider."],
+    ["PROVIDER_HTTP_ERROR", "The LLM provider returned an error response."],
+    ["PROVIDER_MALFORMED_RESPONSE", "The LLM provider returned a malformed response."],
+    ["PROVIDER_RESPONSE_INCOMPLETE", "The LLM provider did not return a completed response."],
+    ["PROVIDER_EMPTY_OUTPUT", "The LLM provider returned no usable answer text."],
+  ])(
+    "degrades to the exact same generic 503 contract for %s, calling askLlm exactly once (no retry)",
+    async (code, internalMessage) => {
+      const { app, askLlmMock, LlmProviderError } = loadApp({
+        configOverrides: { enabled: true },
+        buildContextImpl: async () => fakeHealthContext(),
+        askLlmImpl: async () => {
+          throw new LlmProviderError(internalMessage, { code, provider: "openai" });
+        },
+      });
+      const token = signToken(`m3-2-${code.toLowerCase()}`);
+
+      const res = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ question: HEALTH_QUESTION });
+
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+      expect(askLlmMock).toHaveBeenCalledTimes(1);
+      // The internal, code-specific provider message is never leaked to the client.
+      expect(JSON.stringify(res.body)).not.toContain(internalMessage);
+      expect(JSON.stringify(res.body)).not.toContain(code);
+    }
+  );
+
+  it("returns exactly one HTTP response and no partial answer when askLlm times out", async () => {
+    const { app, LlmProviderError } = loadApp({
+      configOverrides: { enabled: true },
+      buildContextImpl: async () => fakeHealthContext(),
+      askLlmImpl: async () => {
+        throw new LlmProviderError("SIA's request to the LLM provider timed out.", {
+          code: "PROVIDER_TIMEOUT",
+          provider: "openai",
+        });
+      },
+    });
+    const token = signToken("m3-2-single-response");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: HEALTH_QUESTION });
+
+    expect(res.status).toBe(503);
+    expect(Object.keys(res.body).sort()).toEqual(["message", "success"]);
+    expect(res.body.answer).toBeUndefined();
+    expect(res.body.intent).toBeUndefined();
+    expect(res.body.basedOn).toBeUndefined();
+  });
+});

@@ -270,6 +270,8 @@ describe("backend/sia/llmService -- OpenAI provider adapter", () => {
         code: "PROVIDER_TIMEOUT",
         provider: "openai",
       });
+      // M3-2: a timeout is never retried -- exactly one outbound attempt.
+      expect(postMock).toHaveBeenCalledTimes(1);
     });
 
     it("normalizes a request-sent-but-no-response network failure to PROVIDER_NETWORK_ERROR", async () => {
@@ -283,6 +285,8 @@ describe("backend/sia/llmService -- OpenAI provider adapter", () => {
         code: "PROVIDER_NETWORK_ERROR",
         provider: "openai",
       });
+      // M3-2: a network failure is never retried -- exactly one outbound attempt.
+      expect(postMock).toHaveBeenCalledTimes(1);
     });
 
     it("normalizes an OpenAI 4xx/5xx HTTP response to PROVIDER_HTTP_ERROR", async () => {
@@ -298,6 +302,8 @@ describe("backend/sia/llmService -- OpenAI provider adapter", () => {
         code: "PROVIDER_HTTP_ERROR",
         provider: "openai",
       });
+      // M3-2: an HTTP error response is never retried -- exactly one outbound attempt.
+      expect(postMock).toHaveBeenCalledTimes(1);
     });
   });
 
