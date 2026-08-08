@@ -9,7 +9,7 @@
 // configuration once, at load time.
 "use strict";
 
-const ENV_KEYS = ["SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_TIMEOUT_MS"];
+const ENV_KEYS = ["SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_TIMEOUT_MS", "SIA_LLM_MODEL"];
 
 let originalEnv;
 
@@ -45,10 +45,11 @@ function loadConfig() {
 }
 
 describe("backend/sia/config", () => {
-  it("returns all three safe defaults when the SIA variables are absent", () => {
+  it("returns all four safe defaults when the SIA variables are absent", () => {
     delete process.env.SIA_ENABLED;
     delete process.env.SIA_LLM_PROVIDER;
     delete process.env.SIA_LLM_TIMEOUT_MS;
+    delete process.env.SIA_LLM_MODEL;
 
     const config = loadConfig();
 
@@ -56,6 +57,7 @@ describe("backend/sia/config", () => {
       enabled: false,
       provider: null,
       timeoutMs: 8000,
+      model: null,
     });
   });
 
@@ -94,6 +96,30 @@ describe("backend/sia/config", () => {
     process.env.SIA_LLM_PROVIDER = "   ";
 
     expect(loadConfig().provider).toBeNull();
+  });
+
+  it("returns null model when SIA_LLM_MODEL is missing", () => {
+    delete process.env.SIA_LLM_MODEL;
+
+    expect(loadConfig().model).toBeNull();
+  });
+
+  it("blank model becomes null", () => {
+    process.env.SIA_LLM_MODEL = "   ";
+
+    expect(loadConfig().model).toBeNull();
+  });
+
+  it("trims the configured model", () => {
+    process.env.SIA_LLM_MODEL = "  gpt-4.1-mini  ";
+
+    expect(loadConfig().model).toBe("gpt-4.1-mini");
+  });
+
+  it("returns the configured model unchanged when already trimmed", () => {
+    process.env.SIA_LLM_MODEL = "gpt-4.1-mini";
+
+    expect(loadConfig().model).toBe("gpt-4.1-mini");
   });
 
   it.each([

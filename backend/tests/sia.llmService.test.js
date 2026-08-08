@@ -89,17 +89,25 @@ describe("backend/sia/llmService", () => {
   });
 
   it("rejects with LlmProviderError when a provider is configured but unimplemented", async () => {
-    const { askLlm, LlmProviderError } = loadLlmService({ provider: "openai" });
+    const { askLlm, LlmProviderError } = loadLlmService({ provider: "azure-openai" });
 
     await expect(
       askLlm({ systemPrompt: "sp", context: {}, question: "q" })
     ).rejects.toBeInstanceOf(LlmProviderError);
   });
 
-  it('a configured provider uses code "PROVIDER_NOT_IMPLEMENTED"', async () => {
-    const { askLlm } = loadLlmService({ provider: "openai" });
+  it('a configured, unimplemented provider uses code "PROVIDER_NOT_IMPLEMENTED"', async () => {
+    const { askLlm } = loadLlmService({ provider: "azure-openai" });
 
     await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.toMatchObject({
+      code: "PROVIDER_NOT_IMPLEMENTED",
+    });
+  });
+
+  it('the normalized "openai" provider no longer uses code "PROVIDER_NOT_IMPLEMENTED" (real M1-3 adapter exists)', async () => {
+    const { askLlm } = loadLlmService({ provider: "openai" });
+
+    await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.not.toMatchObject({
       code: "PROVIDER_NOT_IMPLEMENTED",
     });
   });
@@ -198,8 +206,8 @@ describe("backend/sia/llmService", () => {
     expect(serializedError).not.toContain("424242");
   });
 
-  it("does not implicitly recognize any specific provider name as supported", async () => {
-    const candidateProviders = ["openai", "anthropic", "gemini", "azure-openai", "some-future-provider"];
+  it("does not implicitly recognize any specific provider name as supported (openai is the sole implemented adapter)", async () => {
+    const candidateProviders = ["anthropic", "gemini", "azure-openai", "some-future-provider", "OpenAI"];
 
     for (const providerName of candidateProviders) {
       const { askLlm } = loadLlmService({ provider: providerName });

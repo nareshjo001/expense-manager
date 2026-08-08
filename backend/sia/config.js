@@ -30,6 +30,19 @@ function normalizeProvider(rawValue) {
   return trimmed === "" ? null : trimmed;
 }
 
+// Trims the configured model name; blank (or absent) input becomes null --
+// the same closed/unconfigured representation normalizeProvider uses. There
+// is deliberately no hardcoded default model: an unconfigured model must
+// fail the same explicit way a missing provider does, not silently select a
+// specific OpenAI model version.
+function normalizeModel(rawValue) {
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+  const trimmed = rawValue.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 // Accepts the configured timeout only when it parses to a finite, strictly
 // positive number. Anything else (absent, blank, non-numeric, zero,
 // negative, Infinity/NaN) falls back to the safe default.
@@ -48,6 +61,7 @@ const config = {
   enabled: normalizeEnabled(process.env.SIA_ENABLED),
   provider: normalizeProvider(process.env.SIA_LLM_PROVIDER),
   timeoutMs: normalizeTimeoutMs(process.env.SIA_LLM_TIMEOUT_MS),
+  model: normalizeModel(process.env.SIA_LLM_MODEL),
 };
 
 module.exports = config;
