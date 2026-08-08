@@ -1,0 +1,246 @@
+/* SiaPanel.css -- styles both the "Ask SIA" launcher (.sia-entry-point)
+   and the question/answer panel (.sia-panel), plus their shared theme
+   wrapper (.sia-root, rendered by SiaEntryPoint.js).
+
+   .sia-root is a SIBLING of LandingPage.js's themed .app-container div, not
+   a descendant of it, so LandingPage.css's --bg-color/--text-color custom
+   properties never cascade here. This stylesheet is fully self-contained:
+   it redeclares its own light-theme/dark-theme token set below, matching
+   the same class-naming convention and palette family already used by
+   LandingPage.css/components/contexts/ThemeContext.js, without importing
+   or depending on that file. No global element selectors, external
+   assets, or new dependencies are used anywhere in this file. */
+
+.sia-root.light-theme {
+  --sia-bg: #ffffff;
+  --sia-surface: #fdf2f8;
+  --sia-text: #111827;
+  --sia-muted-text: #6b7280;
+  --sia-accent-start: #f9a8d4;
+  --sia-accent-end: #f472b6;
+  --sia-border: #f3d4e4;
+  --sia-error-bg: #fee2e2;
+  --sia-error-text: #991b1b;
+}
+
+.sia-root.dark-theme {
+  --sia-bg: #1f2937;
+  --sia-surface: #111827;
+  --sia-text: #f9fafb;
+  --sia-muted-text: #9ca3af;
+  --sia-accent-start: #3b82f6;
+  --sia-accent-end: #60a5fa;
+  --sia-border: #374151;
+  --sia-error-bg: #451a1a;
+  --sia-error-text: #fca5a5;
+}
+
+/* ===== Launcher button =====
+   Positioned above the existing bottom-right ScrollToTopButton
+   (.scroll-top-btn, bottom: 30px, z-index: 9999999) so the two never
+   overlap. z-index 10000 sits above every LandingPage.css overlay/modal
+   layer (999-9999) but well below ScrollToTopButton's 9999999, so an
+   already-visible scroll-to-top button always stays reachable. */
+.sia-entry-point {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  z-index: 10000;
+}
+
+.sia-entry-point:focus-visible {
+  outline: 3px solid var(--sia-accent-end);
+  outline-offset: 2px;
+}
+
+/* ===== Panel ===== */
+.sia-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sia-bg);
+  color: var(--sia-text);
+  border: 1px solid var(--sia-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  overflow-y: auto;
+  z-index: 10000;
+}
+
+.sia-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+}
+
+.sia-panel-heading {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.sia-panel-close {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #ffffff;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sia-panel-close:focus-visible,
+.sia-panel-submit:focus-visible,
+.sia-panel-retry:focus-visible,
+.sia-panel-input:focus-visible {
+  outline: 3px solid var(--sia-accent-end);
+  outline-offset: 2px;
+}
+
+.sia-panel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.sia-panel-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--sia-text);
+}
+
+.sia-panel-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 10px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.sia-panel-submit {
+  align-self: flex-end;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sia-panel-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sia-panel-status {
+  margin: 0 16px 16px;
+  font-size: 0.95rem;
+  color: var(--sia-muted-text);
+}
+
+.sia-panel-answer {
+  margin: 0 16px 16px;
+  padding: 12px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border-radius: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sia-panel-error-block {
+  margin: 0 16px 16px;
+}
+
+.sia-panel-error {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  color: var(--sia-error-text);
+  background: var(--sia-error-bg);
+  border-radius: 10px;
+}
+
+.sia-panel-retry {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+/* ===== Mobile: bottom-sheet / full-width treatment ===== */
+@media screen and (max-width: 600px) {
+  .sia-entry-point {
+    bottom: 130px;
+    right: 15px;
+    padding: 10px 16px;
+    font-size: 0.95rem;
+  }
+
+  .sia-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .sia-panel-submit {
+    align-self: stretch;
+  }
+}
+
+/* No animation is used by default; this only guards against adding any
+   later without respecting a reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  .sia-entry-point,
+  .sia-panel {
+    transition: none;
+    animation: none;
+  }
+}

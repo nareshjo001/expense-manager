@@ -1,11 +1,18 @@
 import React from "react";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import SiaEntryPoint from "./SiaEntryPoint";
 
-// The flag is read once at module load time (see SiaEntryPoint.js), so each
-// test that needs a specific flag value sets process.env before requiring
-// the module fresh via jest.resetModules() + a dynamic require. This file
-// never touches any API client, mutation hook, or network -- SiaEntryPoint
-// itself calls none of those (see M4-1's askSia / M4-2's useSiaAskMutation).
+// M4-4: SiaEntryPoint now uses hooks (useState/useContext), so the flag is
+// read fresh on every render (see SiaEntryPoint.js) instead of being cached
+// as a module-level constant loaded via jest.resetModules(). This lets every
+// test in this file use one single, static top-level import of React and of
+// SiaEntryPoint -- resetting Jest's module registry would also reload React
+// itself, risking a second React instance and "Invalid hook call" errors.
+// Tests only ever mutate process.env directly and re-render.
+//
+// SiaPanel is mocked here so this file stays a pure ownership/wiring test
+// (open/close state, onOpen callback, flag gating) -- SiaPanel's own
+// question/answer/error/retry contract is covered by SiaPanel.test.js.
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
 const originalValue = process.env[ENV_KEY];
 
@@ -17,31 +24,45 @@ function restoreEnv() {
   }
 }
 
+function setFlag(value) {
+  if (value === undefined) {
+    delete process.env[ENV_KEY];
+  } else {
+    process.env[ENV_KEY] = value;
+  }
+}
+
+const mockPanelMountSpy = jest.fn();
+
+jest.mock("./SiaPanel", () => {
+  const ReactForMock = require("react");
+  return function MockSiaPanel({ onClose }) {
+    ReactForMock.useEffect(() => {
+      mockPanelMountSpy();
+    }, []);
+    return (
+      <div data-testid="mock-sia-panel">
+        <button type="button" onClick={onClose}>
+          Mock Close
+        </button>
+      </div>
+    );
+  };
+});
+
 afterEach(() => {
   cleanup();
   restoreEnv();
-  jest.resetModules();
+  mockPanelMountSpy.mockClear();
 });
 
 afterAll(() => {
   restoreEnv();
 });
 
-// Loads a fresh SiaEntryPoint after setting (or deleting) the flag, so the
-// module-level SIA_ENABLED constant is re-evaluated against the given value.
-function loadSiaEntryPoint(flagValue) {
-  jest.resetModules();
-  if (flagValue === undefined) {
-    delete process.env[ENV_KEY];
-  } else {
-    process.env[ENV_KEY] = flagValue;
-  }
-  return require("./SiaEntryPoint").default;
-}
-
 describe("frontend/src/components/sia/SiaEntryPoint", () => {
   it("renders nothing when the flag is unset", () => {
-    const SiaEntryPoint = loadSiaEntryPoint(undefined);
+    setFlag(undefined);
     const { container } = render(<SiaEntryPoint />);
 
     expect(container).toBeEmptyDOMElement();
@@ -49,7 +70,7 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   });
 
   it('renders nothing when the flag is "false"', () => {
-    const SiaEntryPoint = loadSiaEntryPoint("false");
+    setFlag("false");
     const { container } = render(<SiaEntryPoint />);
 
     expect(container).toBeEmptyDOMElement();
@@ -59,7 +80,7 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   it.each(["TRUE", "1", "yes", "True", " true", "true "])(
     'renders nothing for the non-contract value "%s"',
     (value) => {
-      const SiaEntryPoint = loadSiaEntryPoint(value);
+      setFlag(value);
       const { container } = render(<SiaEntryPoint />);
 
       expect(container).toBeEmptyDOMElement();
@@ -68,7 +89,7 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   );
 
   it('renders exactly one button named "Ask SIA" for the exact value "true"', () => {
-    const SiaEntryPoint = loadSiaEntryPoint("true");
+    setFlag("true");
     render(<SiaEntryPoint />);
 
     const buttons = screen.getAllByRole("button", { name: "Ask SIA" });
@@ -77,7 +98,7 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   });
 
   it("invokes onOpen exactly once when the enabled button is clicked", () => {
-    const SiaEntryPoint = loadSiaEntryPoint("true");
+    setFlag("true");
     const onOpen = jest.fn();
     render(<SiaEntryPoint onOpen={onOpen} />);
 
@@ -87,9 +108,65 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   });
 
   it("does not throw when onOpen is omitted and the button is clicked", () => {
-    const SiaEntryPoint = loadSiaEntryPoint("true");
+    setFlag("true");
     render(<SiaEntryPoint />);
 
     expect(() => fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }))).not.toThrow();
+  });
+
+  it("clicking Ask SIA opens the panel (launcher button disappears, panel appears)", () => {
+    setFlag("true");
+    render(<SiaEntryPoint />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+
+    expect(screen.getByTestId("mock-sia-panel")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("still invokes the optional onOpen callback exactly once when opening the panel", () => {
+    setFlag("true");
+    const onOpen = jest.fn();
+    render(<SiaEntryPoint onOpen={onOpen} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("mock-sia-panel")).toBeInTheDocument();
+  });
+
+  it("closing the panel returns to the launcher", () => {
+    setFlag("true");
+    render(<SiaEntryPoint />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+    expect(screen.getByTestId("mock-sia-panel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock Close" }));
+
+    expect(screen.queryByTestId("mock-sia-panel")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask SIA" })).toBeInTheDocument();
+  });
+
+  it("reopening creates a fresh panel instance (a real mount, not a retained one)", () => {
+    setFlag("true");
+    render(<SiaEntryPoint />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+    expect(mockPanelMountSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+
+    expect(mockPanelMountSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("a disabled feature flag renders neither the launcher nor the panel", () => {
+    setFlag("false");
+    const { container } = render(<SiaEntryPoint />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mock-sia-panel")).not.toBeInTheDocument();
   });
 });
