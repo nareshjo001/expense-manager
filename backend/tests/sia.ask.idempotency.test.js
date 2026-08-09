@@ -281,6 +281,63 @@ describe("POST /sia/ask -- concurrent duplicates", () => {
       expect(conflicted.body.code).toBe("SIA_REQUEST_IN_PROGRESS");
     }
   });
+
+  // Batch 3G narrow regression: the same race as above, but staged in the
+  // ANSWER_READY window instead of the PROCESSING window -- gating
+  // appendTurn (session/message persistence, which runs AFTER
+  // markAnswerReady() has already committed the validated answer and
+  // renewed the lease) rather than gating askLlm. Before the
+  // idempotencyService.js fix, a duplicate arriving in exactly this window
+  // could take over the live ANSWER_READY lease and call
+  // createSession/appendTurn a SECOND time for the same first turn. With
+  // the fix, the duplicate must see IN_PROGRESS and never independently
+  // create a session or append a turn.
+  it("a duplicate arriving while the owner is still finalizing an ANSWER_READY answer never starts a second finalizer", async () => {
+    let releasePersistence;
+    const gate = new Promise((resolve) => {
+      releasePersistence = resolve;
+    });
+
+    const { app, askLlmMock, appendTurnMock, createSessionMock } = loadApp({
+      appendTurnImpl: async () => {
+        await gate;
+        return { deduplicated: false };
+      },
+    });
+    const token = signToken("user-answer-ready-race-1");
+    const body = { question: QUESTION, clientMessageId: "key-answer-ready-race-1" };
+
+    const inFlight = Promise.all([post(app, token, body), post(app, token, body)]);
+    // Let the owner get all the way through askLlm + validation +
+    // markAnswerReady (a fast, synchronous-ish path in this test's mocks)
+    // and reach the gated appendTurn call before the follower is dispatched.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    releasePersistence();
+    const [a, b] = await inFlight;
+
+    // The decisive proof: the provider and session persistence were each
+    // entered exactly once, even though two requests targeting the same
+    // first turn were in flight simultaneously through the ANSWER_READY
+    // window.
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+    expect(appendTurnMock).toHaveBeenCalledTimes(1);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+
+    const statuses = [a.status, b.status].sort();
+    expect(statuses[0]).toBe(200);
+    expect([200, 409]).toContain(statuses[1]);
+
+    const succeeded = [a, b].filter((r) => r.status === 200);
+    // Every successful response shares the SAME session id -- proof that no
+    // second session was created for this one logical first turn.
+    const sessionIds = new Set(succeeded.map((r) => r.body.sessionId));
+    expect(sessionIds.size).toBe(1);
+
+    const conflicted = [a, b].find((r) => r.status === 409);
+    if (conflicted) {
+      expect(conflicted.body.code).toBe("SIA_REQUEST_IN_PROGRESS");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------
@@ -373,7 +430,7 @@ describe("POST /sia/ask -- idempotency key conflicts", () => {
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- completed replay", () => {
   it("skips the classifier, context builder, LLM, validator and appendTurn entirely", async () => {
-    const { app, askLlmMock, buildContextMock, classifyIntentMock, appendTurnMock } = loadApp();
+    const { app, askLlmMock, buildContextMock, classifyIntentMock, appendTurnMock, createSessionMock } = loadApp();
     const token = signToken("user-replay-1");
     const body = { question: QUESTION, sessionId: VALID_SESSION_ID, clientMessageId: "key-replay-1" };
 
@@ -389,6 +446,13 @@ describe("POST /sia/ask -- completed replay", () => {
     expect(buildContextMock.mock.calls.length).toBe(contextCallsAfterFirst);
     expect(askLlmMock).toHaveBeenCalledTimes(1);
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
+    // Batch 3G remediation (closing an explicit coverage gap): REPLAY_COMPLETED
+    // returns the stored response before finalizeAnswer() -- and therefore
+    // before any title derivation -- ever runs. This request targeted an
+    // ALREADY-EXISTING session (VALID_SESSION_ID), so no session creation
+    // of any kind should ever occur on either the original request or the
+    // replay.
+    expect(createSessionMock).not.toHaveBeenCalled();
   });
 });
 
@@ -423,6 +487,99 @@ describe("POST /sia/ask -- recovery from a stored answer", () => {
     expect(askLlmMock).not.toHaveBeenCalled();
     // Persistence was finished off from the stored answer.
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Batch 3G remediation: closes the audit's explicitly identified coverage
+  // gap. The prior test above proves RESUME_ANSWER_READY recovers the
+  // stored answer without a second LLM call, but never inspected
+  // createSessionMock's call arguments -- so nothing here previously proved
+  // that a brand-new-session resume derives its title from the SAME
+  // originally-validated question (rather than, say, an empty string, the
+  // stale/retried request's raw body, or no argument at all). sessionService
+  // itself is mocked in this file (title derivation is proven directly
+  // against the real deriveSessionTitle()/createSession() in
+  // sia.sessionTitle.test.js and sia.sessionService.test.js) -- what this
+  // test proves is that ask.js's controller-level RESUME_ANSWER_READY path
+  // feeds that helper the correct input exactly once, never supplies a
+  // title itself, and a same-key retry after recovery can never diverge.
+  it("RESUME_ANSWER_READY for a brand-new session creates exactly one session with the original validated question, and a same-key retry cannot diverge", async () => {
+    const requestFake = createSiaRequestFake();
+    const { fingerprintQuestion } = jest.requireActual("../sia/idempotencyService");
+    await requestFake.create({
+      user: "user-resume-title-1",
+      clientMessageId: "key-resume-title-1",
+      questionFingerprint: fingerprintQuestion(QUESTION),
+      status: "answer_ready",
+      ownerToken: "stale-owner",
+      processingExpiresAt: new Date(Date.now() - 60000),
+      session: null,
+      answer: "Previously validated answer.",
+      intent: "HEALTH_EXPLANATION",
+    });
+
+    const { app, askLlmMock, appendTurnMock, createSessionMock } = loadApp({ siaRequestFake: requestFake });
+    const token = signToken("user-resume-title-1");
+    const body = { question: QUESTION, clientMessageId: "key-resume-title-1" };
+
+    const res = await post(app, token, body);
+
+    expect(res.status).toBe(200);
+    expect(askLlmMock).not.toHaveBeenCalled();
+
+    // Exactly one new session, created with exactly the original validated
+    // question and NOTHING else (no controller-supplied title, no request
+    // metadata) -- this is the sole input sessionService.createSession()'s
+    // real deriveSessionTitle() helper ever receives on this path.
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(createSessionMock).toHaveBeenCalledWith("user-resume-title-1", QUESTION);
+    expect(appendTurnMock).toHaveBeenCalledTimes(1);
+
+    // A second arrival under the SAME clientMessageId (now status
+    // "completed") must be a pure REPLAY_COMPLETED: no additional session,
+    // no additional append, byte-identical response -- so the title/session
+    // this request resolved to can never diverge on a retry.
+    const retry = await post(app, token, body);
+    expect(retry.status).toBe(200);
+    expect(retry.body).toEqual(res.body);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(appendTurnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("RESUME_ANSWER_READY for an EXISTING session never creates a new session (no rename)", async () => {
+    const requestFake = createSiaRequestFake();
+    const { fingerprintQuestion } = jest.requireActual("../sia/idempotencyService");
+    await requestFake.create({
+      user: "user-resume-existing-1",
+      clientMessageId: "key-resume-existing-1",
+      questionFingerprint: fingerprintQuestion(QUESTION),
+      status: "answer_ready",
+      ownerToken: "stale-owner",
+      processingExpiresAt: new Date(Date.now() - 60000),
+      session: VALID_SESSION_ID,
+      answer: "Previously validated answer for an existing session.",
+      intent: "HEALTH_EXPLANATION",
+    });
+
+    const { app, askLlmMock, appendTurnMock, createSessionMock, findOwnedSessionMock } = loadApp({
+      siaRequestFake: requestFake,
+    });
+    const token = signToken("user-resume-existing-1");
+
+    const res = await post(app, token, {
+      question: QUESTION,
+      sessionId: VALID_SESSION_ID,
+      clientMessageId: "key-resume-existing-1",
+    });
+
+    expect(res.status).toBe(200);
+    expect(askLlmMock).not.toHaveBeenCalled();
+    expect(findOwnedSessionMock).toHaveBeenCalled();
+    // The decisive proof: resuming an ANSWER_READY record that already
+    // pointed at an existing session never creates a second one -- the
+    // existing session is reused (and therefore never re-titled).
+    expect(createSessionMock).not.toHaveBeenCalled();
+    expect(appendTurnMock).toHaveBeenCalledTimes(1);
+    expect(res.body.sessionId).toBe(VALID_SESSION_ID);
   });
 });
 

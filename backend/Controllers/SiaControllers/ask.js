@@ -99,10 +99,15 @@ async function safeFindOwnedSession(userId, sessionId) {
   }
 }
 
-async function safeCreateSession(userId) {
+// Batch 3G: `firstQuestion` is optional and only ever supplied for a
+// brand-new conversation's very first successfully answered turn (see
+// finalizeAnswer() below) -- an existing session is never passed a
+// question here, and this function itself never derives or interprets the
+// question; sessionService.createSession() owns that (sia/sessionTitle.js).
+async function safeCreateSession(userId, firstQuestion) {
   if (!isSessionStoreAvailable()) return null;
   try {
-    return await sessionService.createSession(userId);
+    return await sessionService.createSession(userId, firstQuestion);
   } catch (_err) {
     return null;
   }
@@ -376,9 +381,26 @@ function parseSessionId(raw) {
 // `answer_ready` recovery path -- neither of which calls the provider from
 // here.
 async function finalizeAnswer({ req, reservation, activeSession, intent, answer, clientMessageId, grounding }) {
+  // Batch 3G: captured BEFORE `session` is mutated below, so this is true
+  // only when this call is genuinely starting a brand-new conversation --
+  // never for an existing session, and never a second time for the same
+  // conversation. This is what gates automatic-title derivation to
+  // exactly the first successfully answered turn, with no extra query:
+  // the title is derived and written in the SAME SiaSession.create() call
+  // safeCreateSession()/sessionService.createSession() already makes.
+  //
+  // The question passed on this path is this request's own validated,
+  // trimmed question -- for a resumed ANSWER_READY completion
+  // (idempotencyService's RESUME_ANSWER_READY outcome), that is safe
+  // because reserveRequest()/evaluateExisting() already rejected any
+  // request whose question fingerprint does not match the original
+  // attempt's (a mismatch is a 409 CONFLICT, never reaching here) -- so
+  // this is provably "the same stored/fingerprinted question", without
+  // needing to store the raw question text a second time anywhere.
+  const isNewSession = !activeSession;
   let session = activeSession;
   if (!session) {
-    session = await safeCreateSession(req.userId);
+    session = await safeCreateSession(req.userId, isNewSession ? req.body.question.trim() : undefined);
   }
 
   if (session) {

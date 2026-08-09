@@ -547,6 +547,81 @@ describe("SIA conversation -- history", () => {
     expect(screen.getByText(/4 messages/)).toBeInTheDocument();
   });
 
+  // Batch 3G remediation: closes the audit's frontend title-synchronization
+  // coverage gap. Every other `title`-related test in this file (23c above,
+  // and the ones near "24-26"/grounding/etc.) seeds a mocked getSiaSessions
+  // response with a title already present -- none of them proves that a
+  // BRAND-NEW session's backend-derived title actually becomes visible
+  // through this app's real invalidate/refetch cycle after a live ask. This
+  // test proves exactly that sequence end-to-end, using the SAME
+  // queryKeys.sia.sessions.list() query and the SAME
+  // invalidateQueries()/refetch-on-remount behavior useSiaConversation.js
+  // already has (see its two `queryClient.invalidateQueries(...)` calls) --
+  // no new query key or frontend-side title generation is introduced. The
+  // frontend never derives or optimistically displays a title itself: the
+  // ONLY source of the title text asserted below is the (updated)
+  // getSiaSessions mock response, exactly like a real backend refetch.
+  it("23d. a new session's backend-derived title becomes visible via the existing invalidate/refetch cycle, without a page refresh", async () => {
+    // 1. Initial session list has no new session yet.
+    getSiaSessions.mockResolvedValue({ success: true, sessions: [] });
+    askSia.mockResolvedValue(answer("Your score is healthy.", "new-sess-title-1"));
+
+    renderEntryPoint();
+    await openPanel();
+
+    await act(async () => {
+      openHistory();
+    });
+    expect(await screen.findByText("No past conversations yet.")).toBeInTheDocument();
+    expect(getSiaSessions).toHaveBeenCalledTimes(1);
+
+    // Back to conversation mode -- the composer only renders here.
+    await act(async () => {
+      openHistory();
+    });
+    expect(screen.getByRole("heading", { name: "Ask SIA" })).toBeInTheDocument();
+
+    // 2. User starts/submits a brand-new conversation. The successful
+    // /sia/ask response contains a sessionId but -- exactly like the real
+    // backend contract -- no title field at all.
+    await ask("Why is my financial health score low?");
+    await screen.findByText("Your score is healthy.");
+    expect(askSia.mock.calls[0][0]).not.toHaveProperty("title");
+    expect(askSia.mock.calls[0][0]).not.toHaveProperty("sessionTitle");
+
+    // 3. The backend now reports this session with its server-derived
+    // title (and, alongside it, an older session with no title at all, to
+    // simultaneously re-confirm the neutral fallback still applies).
+    getSiaSessions.mockResolvedValue({
+      success: true,
+      sessions: [
+        {
+          sessionId: "new-sess-title-1",
+          title: "Why is my financial health score low?",
+          messageCount: 2,
+          lastMessageAt: "2026-08-09T10:00:00.000Z",
+        },
+        { sessionId: "s-untitled", title: null, messageCount: 1, lastMessageAt: "2026-08-01T10:00:00.000Z" },
+      ],
+    });
+
+    // 4. Opening history again -- WITHOUT any remount or page refresh --
+    // refetches the existing sessions query and shows the backend-stored
+    // title as the sole source of that text.
+    await act(async () => {
+      openHistory();
+    });
+
+    expect(await screen.findByText("Why is my financial health score low?")).toBeInTheDocument();
+    expect(getSiaSessions.mock.calls.length).toBeGreaterThan(1);
+    // Null/missing title on the other (pre-existing) session still falls
+    // back to the same neutral label -- this refetch never invented a
+    // title for either session.
+    expect(screen.getByText("SIA conversation")).toBeInTheDocument();
+    // The panel header is completely unaffected by any of this.
+    expect(screen.getByRole("heading", { name: "Ask SIA" })).toBeInTheDocument();
+  });
+
   it("24-26. selecting a session loads its messages in order and makes it active for the next ask", async () => {
     getSiaSessions.mockResolvedValue({
       success: true,

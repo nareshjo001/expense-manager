@@ -153,7 +153,12 @@ describe("POST /sia/ask -- active session path: new conversation", () => {
     // All existing response fields remain present alongside the additive one.
     expect(res.body).toMatchObject({ success: true, intent: "HEALTH_EXPLANATION" });
 
-    expect(createSessionMock).toHaveBeenCalledWith("user-active-1");
+    // Batch 3G: a brand-new conversation's first successfully answered
+    // question is now also passed through so the session can be created
+    // with a deterministic, local title in the same insert -- see
+    // sia.sessionTitle.test.js and sia.sessionService.test.js's
+    // "createSession title persistence" suite for the derivation itself.
+    expect(createSessionMock).toHaveBeenCalledWith("user-active-1", "Why is my financial health score low?");
     expect(buildContextMock).toHaveBeenCalledWith("user-active-1", "HEALTH_EXPLANATION");
 
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
@@ -340,7 +345,7 @@ describe("POST /sia/ask -- active session path: request-body identity cannot be 
       .set("Authorization", `Bearer ${token}`)
       .send({ question: "Why is my financial health score low?", userId: "attacker-controlled-id" });
 
-    expect(createSessionMock).toHaveBeenCalledWith("user-active-9");
+    expect(createSessionMock).toHaveBeenCalledWith("user-active-9", "Why is my financial health score low?");
     expect(buildContextMock).toHaveBeenCalledWith("user-active-9", "HEALTH_EXPLANATION");
   });
 });

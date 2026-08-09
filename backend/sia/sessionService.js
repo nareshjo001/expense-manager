@@ -15,6 +15,7 @@ const mongoose = require("mongoose");
 
 const SiaSession = require("../models/SiaSession");
 const SiaMessage = require("../models/SiaMessage");
+const { deriveSessionTitle } = require("./sessionTitle");
 
 const DEFAULT_SESSION_LIST_LIMIT = 20;
 const MAX_SESSION_LIST_LIMIT = 50;
@@ -52,8 +53,21 @@ async function findOwnedSession(userId, sessionId) {
 
 // Creates a brand-new session owned by `userId`. Never creates a session
 // belonging to any other user.
-async function createSession(userId) {
-  return SiaSession.create({ user: userId });
+//
+// Batch 3G: `firstQuestion` is optional and trusted server-side only --
+// callers pass it exactly once, for the first successfully answered
+// question of a brand-new conversation (see
+// Controllers/SiaControllers/ask.js's finalizeAnswer()). This is a
+// single-write design: the title is derived locally (deriveSessionTitle()
+// -- no provider/LLM call, no logging of the question or title) and
+// included in this SAME SiaSession.create() call. There is deliberately no
+// second query anywhere that updates a session's title after creation --
+// an existing session is never renamed on a later turn, and a caller that
+// omits `firstQuestion` gets the exact same behavior as before this
+// batch: `title` stays unset, which the schema already defaults to null.
+async function createSession(userId, firstQuestion) {
+  const title = deriveSessionTitle(firstQuestion);
+  return SiaSession.create({ user: userId, title });
 }
 
 // Returns an existing, owned session if `sessionId` is supplied and valid,

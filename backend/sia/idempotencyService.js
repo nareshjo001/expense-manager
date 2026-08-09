@@ -194,9 +194,28 @@ async function evaluateExisting(existing, questionFingerprint, requestedSessionI
   }
 
   if (existing.status === REQUEST_STATUS.ANSWER_READY) {
-    // A validated answer already exists. Take ownership so exactly one
-    // caller finishes the outstanding persistence -- and note that no
-    // provider call happens on this path at all.
+    // Batch 3G narrow regression fix: markAnswerReady() below renews
+    // processingExpiresAt to a fresh lease at the exact moment it commits
+    // the validated answer -- the original owner is then actively
+    // finishing finalization (session creation + persistence +
+    // markCompleted). Before this check existed, a duplicate arriving in
+    // that live window could take over immediately (the compare-and-set
+    // below still matches, since the live owner hasn't changed its own
+    // ownerToken yet), letting TWO finalizers run concurrently for the same
+    // first turn. Mirrors the PROCESSING branch's own lease check above
+    // exactly -- a live lease is never taken over, an expired or never-set
+    // one (0) remains recoverable via the existing atomic takeover.
+    const readyExpiresAt = existing.processingExpiresAt ? new Date(existing.processingExpiresAt).getTime() : 0;
+    if (Number.isFinite(readyExpiresAt) && readyExpiresAt > Date.now()) {
+      // An owner is actively finishing finalization right now. This caller
+      // is a follower and must NOT start a second finalizer.
+      return { outcome: OUTCOME.IN_PROGRESS, record: existing };
+    }
+
+    // A validated answer already exists and no owner is actively
+    // finalizing it. Take ownership so exactly one caller finishes the
+    // outstanding persistence -- and note that no provider call happens on
+    // this path at all.
     const taken = await takeOverRequest(existing, REQUEST_STATUS.ANSWER_READY);
     if (taken) {
       return { outcome: OUTCOME.RESUME_ANSWER_READY, record: taken.record, ownerToken: taken.ownerToken };

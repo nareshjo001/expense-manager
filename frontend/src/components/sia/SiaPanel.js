@@ -29,7 +29,15 @@ import "./SiaPanel.css";
 //
 // Both flags default to a FAIL-CLOSED posture at the point of use below:
 // submission is enabled only on an explicit `isAvailable === true`.
-const SiaPanel = ({ onClose, conversation, isAvailable, isCheckingAvailability, onRetryAvailability }) => {
+const SiaPanel = ({
+  onClose,
+  conversation,
+  isAvailable,
+  isCheckingAvailability,
+  onRetryAvailability,
+  focusRequestVersion,
+  lastHandledFocusRequestVersionRef,
+}) => {
   const {
     messages,
     input,
@@ -54,6 +62,16 @@ const SiaPanel = ({ onClose, conversation, isAvailable, isCheckingAvailability, 
   const composerRef = useRef(null);
   const transcriptEndRef = useRef(null);
   const closeButtonRef = useRef(null);
+  const retryButtonRef = useRef(null);
+  // Batch 3G remediation: fallback acknowledgement store for callers that
+  // render SiaPanel directly without the owner-supplied ref (e.g. older
+  // tests) -- SiaPanel itself still unmounts/remounts in that case, so this
+  // local ref does NOT survive close/reopen on its own, matching the
+  // pre-remediation behavior for exactly those callers. Whenever
+  // SiaEntryPoint renders this component (the only production caller), the
+  // real prop below is used instead, and THAT ref survives unmounts.
+  const localLastHandledFocusRequestVersionRef = useRef(0);
+  const lastHandledRef = lastHandledFocusRequestVersionRef || localLastHandledFocusRequestVersionRef;
   const queryClient = useQueryClient();
   const [historyLoadError, setHistoryLoadError] = useState(null);
 
@@ -167,6 +185,54 @@ const SiaPanel = ({ onClose, conversation, isAvailable, isCheckingAvailability, 
   const composerDisabled = isBusy || blockedByAvailability;
   const submitDisabled = !canSubmit || blockedByAvailability;
 
+  // Batch 3G: the explicit contextual-launch focus signal (see
+  // SiaEntryPoint.js's openWithSuggestion, which increments this prop on
+  // every valid contextual click). The mode-keyed effect above does NOT
+  // reliably refire here -- a contextual click on an already-open panel
+  // that is already in conversation mode never changes `mode` at all, and
+  // neither does a second click on a different contextual button while the
+  // first click's prefilled text is still showing. `focusRequestVersion` is
+  // a value that changes on every single valid contextual launch
+  // specifically so this effect can key on it directly, independent of
+  // whatever else did or didn't change.
+  //
+  // `focusRequestVersion` starts at 0/undefined and is otherwise untouched
+  // by hydration, message updates, or availability refetches -- so this
+  // never fires on ordinary mount, session restoration, or unrelated
+  // re-renders, only on a genuine contextual launch.
+  //
+  // Batch 3G remediation: a version is only ever processed once. Without
+  // this guard, closing the panel (which unmounts SiaPanel) and then
+  // reopening it ordinarily (via the plain "Ask SIA" button, not a new
+  // contextual click) would re-run this effect on the fresh mount with the
+  // SAME already-consumed `focusRequestVersion` value still in
+  // SiaEntryPoint's state, incorrectly replaying the contextual focus
+  // behavior for a plain open. `lastHandledRef` (see above) survives that
+  // unmount/remount when SiaEntryPoint supplies it, so a version already
+  // acknowledged is never processed twice. Marking the version handled
+  // BEFORE focusing (rather than after) means a synchronous re-render
+  // triggered by the focus call itself can never re-enter this branch.
+  useEffect(() => {
+    if (!focusRequestVersion) return;
+    if (focusRequestVersion <= lastHandledRef.current) return;
+    lastHandledRef.current = focusRequestVersion;
+
+    if (composerDisabled) {
+      // The composer itself cannot take focus while disabled -- prefer the
+      // Retry control when one is actually being offered, otherwise fall
+      // back to the panel's own close control rather than a disabled
+      // element.
+      if (isCheckingAvailability !== true && retryButtonRef.current) {
+        retryButtonRef.current.focus();
+      } else if (closeButtonRef.current) {
+        closeButtonRef.current.focus();
+      }
+    } else if (composerRef.current) {
+      composerRef.current.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequestVersion]);
+
   // Exactly one of these ever renders, and only when a status is actually
   // being tracked. Deliberately generic: no provider, model, env-var name,
   // or reason code is available to this component in the first place (the
@@ -247,6 +313,7 @@ const SiaPanel = ({ onClose, conversation, isAvailable, isCheckingAvailability, 
                   type="button"
                   className="sia-secondary-btn"
                   onClick={handleRetryAvailability}
+                  ref={retryButtonRef}
                 >
                   Retry
                 </button>

@@ -69,7 +69,10 @@ describe("sia/sessionService -- getOrCreateSession", () => {
     const session = await sessionService.getOrCreateSession("user-1", undefined);
 
     expect(sessionDocs.findOne).not.toHaveBeenCalled();
-    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1" });
+    // Batch 3G: getOrCreateSession() never receives a question from any
+    // caller, so title stays null -- byte-identical to this call's
+    // pre-3G behavior other than the now-explicit `title` key.
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: null });
     expect(session._id).toBe(VALID_ID);
   });
 
@@ -91,7 +94,7 @@ describe("sia/sessionService -- getOrCreateSession", () => {
 
     const session = await sessionService.getOrCreateSession("user-1", OTHER_VALID_ID);
 
-    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1" });
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: null });
     expect(session._id).toBe(OTHER_VALID_ID);
   });
 
@@ -102,8 +105,66 @@ describe("sia/sessionService -- getOrCreateSession", () => {
     const session = await sessionService.getOrCreateSession("user-1", "not-a-valid-object-id");
 
     expect(sessionDocs.findOne).not.toHaveBeenCalled();
-    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1" });
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: null });
     expect(session._id).toBe(VALID_ID);
+  });
+});
+
+// Batch 3G: createSession()'s single-write title persistence. All of
+// getOrCreateSession's tests above already prove the no-question path is
+// unaffected (title: null, same as the schema's own default) -- these
+// prove the new optional `firstQuestion` parameter.
+describe("sia/sessionService -- createSession title persistence (Batch 3G)", () => {
+  it("derives and includes a title in the SAME create() call when a first question is supplied", async () => {
+    const { sessionService, sessionDocs } = loadSessionService();
+    sessionDocs.create.mockResolvedValue({ _id: VALID_ID, user: "user-1", title: "How is my budget?" });
+
+    const session = await sessionService.createSession("user-1", "  How is   my budget?\n");
+
+    expect(sessionDocs.create).toHaveBeenCalledTimes(1);
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: "How is my budget?" });
+    // No second, later query of any kind -- updateOne must never be
+    // reached by createSession() at all.
+    expect(sessionDocs.updateOne).not.toHaveBeenCalled();
+    expect(session._id).toBe(VALID_ID);
+  });
+
+  it("stores title: null (not omitted) when no first question is supplied", async () => {
+    const { sessionService, sessionDocs } = loadSessionService();
+    sessionDocs.create.mockResolvedValue({ _id: VALID_ID, user: "user-1", title: null });
+
+    await sessionService.createSession("user-1");
+
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: null });
+    expect(sessionDocs.updateOne).not.toHaveBeenCalled();
+  });
+
+  it("stores title: null when the supplied first question is whitespace/control-only", async () => {
+    const { sessionService, sessionDocs } = loadSessionService();
+    sessionDocs.create.mockResolvedValue({ _id: VALID_ID, user: "user-1", title: null });
+
+    await sessionService.createSession("user-1", "   \n\t  ");
+
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: null });
+  });
+
+  it("preserves Unicode/emoji questions verbatim in the derived title", async () => {
+    const { sessionService, sessionDocs } = loadSessionService();
+    const tamil = "தமிழில் என் செலவுகளை விளக்கவும்";
+    sessionDocs.create.mockResolvedValue({ _id: VALID_ID, user: "user-1", title: tamil });
+
+    await sessionService.createSession("user-1", tamil);
+
+    expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: tamil });
+  });
+
+  it("never calls sessionDocs.findOne -- title derivation has no database read of its own", async () => {
+    const { sessionService, sessionDocs } = loadSessionService();
+    sessionDocs.create.mockResolvedValue({ _id: VALID_ID, user: "user-1", title: "Why did my spending change?" });
+
+    await sessionService.createSession("user-1", "Why did my spending change?");
+
+    expect(sessionDocs.findOne).not.toHaveBeenCalled();
   });
 });
 

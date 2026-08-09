@@ -209,7 +209,7 @@ describe("sia/idempotencyService -- reserveRequest outcomes", () => {
     expect(result.outcome).toBe(service.OUTCOME.IN_PROGRESS);
   });
 
-  it("RESUME_ANSWER_READY takes ownership of a stored, validated answer", async () => {
+  it("RESUME_ANSWER_READY takes ownership of a stored, validated answer whose lease has already expired (or was never set -- legacy/defensive)", async () => {
     const { service, requestDocs } = loadService();
     const ready = {
       _id: "req-1",
@@ -219,6 +219,8 @@ describe("sia/idempotencyService -- reserveRequest outcomes", () => {
       answer: "Already validated.",
       intent: "HEALTH_EXPLANATION",
       session: null,
+      // No processingExpiresAt -- treated as already-expired (0), so a
+      // takeover is legitimate: nothing is actively finalizing this record.
     };
     requestDocs.findOne.mockResolvedValue(ready);
     requestDocs.findOneAndUpdate.mockResolvedValue({ ...ready, ownerToken: "new-owner" });
@@ -227,6 +229,68 @@ describe("sia/idempotencyService -- reserveRequest outcomes", () => {
 
     expect(result.outcome).toBe(service.OUTCOME.RESUME_ANSWER_READY);
     expect(result.record.answer).toBe("Already validated.");
+  });
+
+  it("RESUME_ANSWER_READY also takes ownership when the ANSWER_READY lease has genuinely EXPIRED", async () => {
+    const { service, requestDocs } = loadService();
+    const ready = {
+      _id: "req-1",
+      status: REQUEST_STATUS.ANSWER_READY,
+      questionFingerprint: service.fingerprintQuestion(BASE.question),
+      ownerToken: "prior-owner",
+      answer: "Already validated.",
+      intent: "HEALTH_EXPLANATION",
+      session: null,
+      processingExpiresAt: new Date(Date.now() - 60000), // expired
+    };
+    requestDocs.findOne.mockResolvedValue(ready);
+    requestDocs.findOneAndUpdate.mockResolvedValue({ ...ready, ownerToken: "new-owner" });
+
+    const result = await service.reserveRequest(BASE);
+
+    expect(result.outcome).toBe(service.OUTCOME.RESUME_ANSWER_READY);
+    expect(requestDocs.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  // Batch 3G narrow regression: the audit found that evaluateExisting()'s
+  // ANSWER_READY branch, unlike its PROCESSING sibling immediately below in
+  // this same function, never checked processingExpiresAt at all before
+  // attempting a takeover -- so a duplicate request arriving in the window
+  // between markAnswerReady() (which DOES renew the lease -- see
+  // idempotencyService.js) and the original owner finishing finalizeAnswer()
+  // could immediately steal ownership via the compare-and-set (which still
+  // matches, because the original owner hasn't changed its own ownerToken
+  // yet -- it's still working). That would let TWO finalizers run
+  // concurrently for the same first turn: the original (still executing
+  // with its now-stale, silently-superseded ownerToken) and the taker, each
+  // independently creating/appending a session for what the user experiences
+  // as one submission. This test proves the corrected behavior: a live
+  // (unexpired) ANSWER_READY lease is never taken over -- the caller is told
+  // IN_PROGRESS, the exact same outcome a live PROCESSING lease already
+  // produces, and no compare-and-set write is attempted at all.
+  it("a LIVE (unexpired) ANSWER_READY lease is never taken over -- returns IN_PROGRESS, matching the live-PROCESSING behavior", async () => {
+    const { service, requestDocs } = loadService();
+    const ready = {
+      _id: "req-1",
+      status: REQUEST_STATUS.ANSWER_READY,
+      questionFingerprint: service.fingerprintQuestion(BASE.question),
+      ownerToken: "live-owner",
+      answer: "Already validated.",
+      intent: "HEALTH_EXPLANATION",
+      session: null,
+      // Renewed by markAnswerReady() moments ago -- the original owner is
+      // actively finishing session creation/persistence right now.
+      processingExpiresAt: new Date(Date.now() + 60000),
+    };
+    requestDocs.findOne.mockResolvedValue(ready);
+
+    const result = await service.reserveRequest(BASE);
+
+    expect(result.outcome).toBe(service.OUTCOME.IN_PROGRESS);
+    // The decisive assertion: no takeover write is even attempted while the
+    // lease is live -- a second finalizer must never be given the chance to
+    // start, not merely be expected to lose a race it should never enter.
+    expect(requestDocs.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("a concurrent E11000 on create makes this caller a follower, not a second owner", async () => {
