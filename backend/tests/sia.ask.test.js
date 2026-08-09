@@ -18,8 +18,17 @@ const request = require("supertest");
 const TEST_JWT_SECRET = "sia-ask-test-secret";
 const originalJwtSecret = process.env.JWT_SECRET;
 
+// Batch 3E: the controller's readiness gate requires a non-blank provider
+// credential in addition to the enabled flag, provider, and model. This is
+// an obviously-fake placeholder, set for the duration of this suite only
+// and restored afterwards -- readiness checks PRESENCE, never format, so no
+// realistic-looking key is needed (or wanted) anywhere in the test suite.
+const FAKE_CREDENTIAL = "test-credential-value-not-a-real-key";
+const originalOpenAiKey = process.env.OPENAI_API_KEY;
+
 beforeAll(() => {
   process.env.JWT_SECRET = TEST_JWT_SECRET;
+  process.env.OPENAI_API_KEY = FAKE_CREDENTIAL;
 });
 
 afterAll(() => {
@@ -27,6 +36,11 @@ afterAll(() => {
     delete process.env.JWT_SECRET;
   } else {
     process.env.JWT_SECRET = originalJwtSecret;
+  }
+  if (originalOpenAiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+  } else {
+    process.env.OPENAI_API_KEY = originalOpenAiKey;
   }
 });
 
@@ -70,9 +84,22 @@ function signToken(userId) {
 function loadApp({ configOverrides = {}, classifyIntentImpl, buildContextImpl, askLlmImpl } = {}) {
   jest.resetModules();
 
+  // Batch 3E: `provider` and `model` are part of the baseline mock because
+  // the controller's readiness gate (sia/readiness.js, shared with
+  // GET /sia/status) now requires an implemented provider and a configured
+  // model as well as the enabled flag. The baseline still starts DISABLED,
+  // exactly as before, so the "SIA disabled" tests are unaffected -- every
+  // other test already opts in with `configOverrides: { enabled: true }`
+  // and now gets a fully READY deployment, which is what those tests always
+  // intended (they mock askLlm, so the provider value itself was never
+  // exercised). The suite-level OPENAI_API_KEY supplies the remaining
+  // credential requirement. No assertion was relaxed for any of this: the
+  // `provider: null` values elsewhere in this file belong to thrown
+  // LlmProviderError objects, not to config, and are untouched.
   jest.doMock("../sia/config", () => ({
     enabled: false,
-    provider: null,
+    provider: "openai",
+    model: "sia-test-model",
     timeoutMs: 8000,
     ...configOverrides,
   }));

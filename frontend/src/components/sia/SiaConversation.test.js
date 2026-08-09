@@ -3,7 +3,7 @@ import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-libra
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SiaEntryPoint from "./SiaEntryPoint";
 import { askSia } from "../../api/siaApi";
-import { getSiaSessions, getSiaSessionMessages, deleteSiaSession } from "../../api/siaSessionsApi";
+import { getSiaSessions, getSiaSessionMessages, deleteSiaSession, getSiaStatus } from "../../api/siaSessionsApi";
 import { SIA_SUGGESTIONS } from "./siaSuggestions";
 
 // Only the API layer is mocked -- the reducer, hooks, TanStack wiring and
@@ -14,6 +14,13 @@ jest.mock("../../api/siaSessionsApi", () => ({
   getSiaSessions: jest.fn(),
   getSiaSessionMessages: jest.fn(),
   deleteSiaSession: jest.fn(),
+  // Batch 3E: SiaEntryPoint now checks runtime availability before the
+  // composer is usable. Every test in this file is about the CONVERSATION
+  // behaviour of a healthy deployment, so the status call is stubbed as
+  // available below -- the unavailable/degraded paths have their own
+  // dedicated suite (SiaAvailability.test.js). No assertion here was
+  // relaxed to accommodate the new query.
+  getSiaStatus: jest.fn(),
 }));
 
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
@@ -50,6 +57,7 @@ afterAll(() => {
 
 beforeEach(() => {
   process.env[ENV_KEY] = "true";
+  getSiaStatus.mockResolvedValue({ success: true, available: true });
   getSiaSessions.mockResolvedValue({ success: true, sessions: [] });
   getSiaSessionMessages.mockResolvedValue({ success: true, sessionId: "s1", messages: [] });
   deleteSiaSession.mockResolvedValue({ success: true, message: "Session deleted." });
@@ -74,7 +82,16 @@ function renderEntryPoint() {
   return { ...utils, queryClient };
 }
 
-const openPanel = () => fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+// Batch 3E: opening the panel now also waits for the runtime availability
+// check to settle. Every test in this file describes a HEALTHY deployment
+// (getSiaStatus is stubbed available in beforeEach), so waiting here simply
+// skips the brief, correct "Checking SIA availability..." state rather than
+// weakening anything -- the checking/unavailable states have their own
+// dedicated suite in SiaAvailability.test.js.
+const openPanel = async () => {
+  fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+  await waitFor(() => expect(composer()).not.toBeDisabled());
+};
 const composer = () => screen.getByLabelText(/your question/i);
 const askButton = () => screen.getByRole("button", { name: "Ask" });
 
@@ -106,7 +123,7 @@ describe("SIA conversation -- asking", () => {
   it("1. a first question renders one user message and one answer", async () => {
     askSia.mockResolvedValue(answer("Your score is healthy.", "sess-1"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
 
@@ -119,7 +136,7 @@ describe("SIA conversation -- asking", () => {
       .mockResolvedValueOnce(answer("First answer.", "sess-abc"))
       .mockResolvedValueOnce(answer("Second answer.", "sess-abc"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     await screen.findByText("First answer.");
@@ -135,7 +152,7 @@ describe("SIA conversation -- asking", () => {
       .mockResolvedValueOnce(answer("First answer.", "sess-abc"))
       .mockResolvedValueOnce(answer("Second answer.", "sess-abc"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     await screen.findByText("First answer.");
@@ -153,7 +170,7 @@ describe("SIA conversation -- asking", () => {
       .mockResolvedValueOnce(answer("A1", "s"))
       .mockResolvedValueOnce(answer("A2", "s"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     await screen.findByText("A1");
@@ -172,7 +189,7 @@ describe("SIA conversation -- asking", () => {
       .mockRejectedValueOnce(httpError(503, { success: false, message: "SIA is temporarily unavailable." }))
       .mockResolvedValueOnce(answer("Recovered answer.", "sess-1"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     const retryButton = await screen.findByRole("button", { name: "Retry" });
@@ -195,7 +212,7 @@ describe("SIA conversation -- asking", () => {
   it("8. a failed first request creates no fake successful turn", async () => {
     askSia.mockRejectedValue(httpError(503, { success: false, message: "SIA is temporarily unavailable." }));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
 
@@ -211,7 +228,7 @@ describe("SIA conversation -- asking", () => {
       resolveAsk = () => resolve(answer("Done.", "s"));
     }));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     fireEvent.change(composer(), { target: { value: "Why is my financial health score low?" } });
     await act(async () => {
@@ -235,7 +252,7 @@ describe("SIA conversation -- asking", () => {
       basedOn: ["none"],
     });
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
 
@@ -250,7 +267,7 @@ describe("SIA conversation -- asking", () => {
   it("11. closing and reopening the panel retains the conversation", async () => {
     askSia.mockResolvedValue(answer("Persisted answer.", "sess-1"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     await screen.findByText("Persisted answer.");
@@ -258,7 +275,7 @@ describe("SIA conversation -- asking", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close SIA" }));
     expect(screen.queryByText("Persisted answer.")).toBeNull();
 
-    openPanel();
+    await openPanel();
     expect(screen.getByText("Persisted answer.")).toBeInTheDocument();
     expect(screen.getByText("Why is my financial health score low?")).toBeInTheDocument();
   });
@@ -267,13 +284,13 @@ describe("SIA conversation -- asking", () => {
     const getItem = jest.spyOn(Storage.prototype, "getItem");
     askSia.mockResolvedValue(answer("First mount answer.", "sess-1"));
     const first = renderEntryPoint();
-    openPanel();
+    await openPanel();
     await ask("Why is my financial health score low?");
     await screen.findByText("First mount answer.");
 
     first.unmount();
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     expect(screen.queryByText("First mount answer.")).toBeNull();
     const siaStorageReads = getItem.mock.calls.filter(([key]) => String(key).toLowerCase().includes("sia"));
@@ -284,7 +301,7 @@ describe("SIA conversation -- asking", () => {
   it("13. basedOn and raw internal paths are never rendered", async () => {
     askSia.mockResolvedValue(answer("A grounded answer.", "sess-1"));
     const { container } = renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     await screen.findByText("A grounded answer.");
@@ -299,7 +316,7 @@ describe("SIA conversation -- asking", () => {
     const hostile = "<b>bold</b> spending <img src=x onerror=alert(1)>";
     askSia.mockResolvedValue(answer(hostile, "sess-1"));
     const { container } = renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
 
@@ -319,7 +336,7 @@ describe("SIA conversation -- asking", () => {
       )
       .mockResolvedValueOnce(answer("Finally answered.", "sess-1"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     expect(await screen.findByRole("alert")).toHaveTextContent(/still being processed/i);
@@ -341,7 +358,7 @@ describe("SIA conversation -- asking", () => {
       })
     );
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     await ask("Why is my financial health score low?");
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not be retried safely/i);
@@ -360,9 +377,9 @@ describe("SIA conversation -- asking", () => {
 // Suggestions
 // ---------------------------------------------------------------------
 describe("SIA conversation -- suggestions", () => {
-  it("17-18. an empty conversation shows one suggestion per supported intent", () => {
+  it("17-18. an empty conversation shows one suggestion per supported intent", async () => {
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     expect(SIA_SUGGESTIONS).toHaveLength(7);
     const intents = new Set(SIA_SUGGESTIONS.map((s) => s.intent));
@@ -373,9 +390,9 @@ describe("SIA conversation -- suggestions", () => {
     }
   });
 
-  it("19-20. selecting a suggestion populates and focuses the composer without submitting", () => {
+  it("19-20. selecting a suggestion populates and focuses the composer without submitting", async () => {
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     const target = SIA_SUGGESTIONS[0];
     fireEvent.click(screen.getByRole("button", { name: target.text }));
@@ -388,7 +405,7 @@ describe("SIA conversation -- suggestions", () => {
   it("21. suggestions disappear once a conversation begins and return for New chat", async () => {
     askSia.mockResolvedValue(answer("An answer.", "sess-1"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     const first = SIA_SUGGESTIONS[0];
     expect(screen.getByRole("button", { name: first.text })).toBeInTheDocument();
@@ -411,7 +428,7 @@ describe("SIA conversation -- history", () => {
 
   it("22. the history query stays disabled until history is opened", async () => {
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     expect(getSiaSessions).not.toHaveBeenCalled();
 
@@ -423,7 +440,7 @@ describe("SIA conversation -- history", () => {
 
   it("23a. renders the empty state", async () => {
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await act(async () => {
       openHistory();
     });
@@ -434,7 +451,7 @@ describe("SIA conversation -- history", () => {
   it("23b. renders the error state with a retry control", async () => {
     getSiaSessions.mockRejectedValue(httpError(503, { success: false, message: "unavailable" }));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await act(async () => {
       openHistory();
     });
@@ -452,7 +469,7 @@ describe("SIA conversation -- history", () => {
       ],
     });
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await act(async () => {
       openHistory();
     });
@@ -479,7 +496,7 @@ describe("SIA conversation -- history", () => {
     askSia.mockResolvedValue(answer("Continued answer.", "s1"));
 
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await act(async () => {
       openHistory();
     });
@@ -512,7 +529,7 @@ describe("SIA conversation -- history", () => {
     getSiaSessionMessages.mockRejectedValue(httpError(404, { success: false, message: "Session not found." }));
 
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await ask("Why is my financial health score low?");
     await screen.findByText("Live answer.");
 
@@ -548,7 +565,7 @@ describe("SIA conversation -- history", () => {
     });
 
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await act(async () => {
       openHistory();
     });
@@ -564,7 +581,7 @@ describe("SIA conversation -- history", () => {
   it("29. New chat clears local active state without deleting the server session", async () => {
     askSia.mockResolvedValue(answer("An answer.", "sess-9"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await ask("Why is my financial health score low?");
     await screen.findByText("An answer.");
 
@@ -590,7 +607,7 @@ describe("SIA conversation -- deleting a session", () => {
   async function openHistoryWith(sessions) {
     getSiaSessions.mockResolvedValue({ success: true, sessions });
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await act(async () => {
       openHistory();
     });
@@ -632,7 +649,7 @@ describe("SIA conversation -- deleting a session", () => {
     askSia.mockResolvedValue(answer("Active answer.", "s1"));
     getSiaSessions.mockResolvedValue({ success: true, sessions: [SESSION] });
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await ask("Why is my financial health score low?");
     await screen.findByText("Active answer.");
 
@@ -655,7 +672,7 @@ describe("SIA conversation -- deleting a session", () => {
     askSia.mockResolvedValue(answer("Keep me.", "active-session"));
     getSiaSessions.mockResolvedValue({ success: true, sessions: [SESSION] });
     renderEntryPoint();
-    openPanel();
+    await openPanel();
     await ask("Why is my financial health score low?");
     await screen.findByText("Keep me.");
 
@@ -697,7 +714,7 @@ describe("SIA conversation -- accessibility", () => {
     renderEntryPoint();
 
     expect(screen.getByRole("button", { name: "Ask SIA" })).toBeInTheDocument();
-    openPanel();
+    await openPanel();
 
     expect(screen.getByRole("button", { name: "Close SIA" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Conversation history" })).toBeInTheDocument();
@@ -712,7 +729,7 @@ describe("SIA conversation -- accessibility", () => {
   it("38. Enter submits and Shift+Enter does not", async () => {
     askSia.mockResolvedValue(answer("Keyboard answer.", "s"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     fireEvent.change(composer(), { target: { value: "Why is my financial health score low?" } });
     fireEvent.keyDown(composer(), { key: "Enter", shiftKey: true });
@@ -724,9 +741,9 @@ describe("SIA conversation -- accessibility", () => {
     expect(askSia).toHaveBeenCalledTimes(1);
   });
 
-  it("39. focus returns to the launcher after closing", () => {
+  it("39. focus returns to the launcher after closing", async () => {
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "Close SIA" }));
 
@@ -739,7 +756,7 @@ describe("SIA conversation -- accessibility", () => {
       resolveAsk = () => resolve(answer("Announced.", "s"));
     }));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     fireEvent.change(composer(), { target: { value: "Why is my financial health score low?" } });
     await act(async () => {
@@ -757,7 +774,7 @@ describe("SIA conversation -- accessibility", () => {
   it("the transcript is an accessible log region and roles are labelled for screen readers", async () => {
     askSia.mockResolvedValue(answer("Labelled answer.", "s"));
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     expect(screen.getByRole("log", { name: "Conversation" })).toBeInTheDocument();
 
@@ -770,7 +787,7 @@ describe("SIA conversation -- accessibility", () => {
 
   it("blocks submission of blank and overlength input", async () => {
     renderEntryPoint();
-    openPanel();
+    await openPanel();
 
     expect(askButton()).toBeDisabled();
 

@@ -58,6 +58,7 @@ const { logSiaEvent, SIA_LOG_EVENTS } = require("../../sia/safeLogger");
 const sessionService = require("../../sia/sessionService");
 const { validateGroundedAnswer } = require("../../sia/responseValidator");
 const idempotencyService = require("../../sia/idempotencyService");
+const { isSiaReady } = require("../../sia/readiness");
 const { isValidObjectId } = require("mongoose");
 
 // Batch 2: bounded conversation session support, additive only.
@@ -408,7 +409,22 @@ async function finalizeAnswer({ req, reservation, activeSession, intent, answer,
 }
 
 const ask = async (req, res) => {
-  if (!config.enabled) {
+  // Batch 3E: the readiness gate. Previously this checked only
+  // `config.enabled`, which meant a request against a deployment with SIA
+  // enabled but NO provider/model/API key was admitted, classified, given
+  // a freshly-built analytics context, and only then failed at the
+  // provider boundary -- paying for a full Report V3 read to produce a
+  // guaranteed 503. isSiaReady() (sia/readiness.js) is the SAME function
+  // GET /sia/status answers with, so the two endpoints can never disagree
+  // about availability.
+  //
+  // The rejection is deliberately the pre-existing, byte-identical generic
+  // 503 -- no new status code, no reason code, no configuration detail --
+  // and it happens BEFORE any request validation side effect, intent
+  // classification, context build, provider call, session creation, or
+  // idempotency reservation, so an unready deployment does no work and
+  // leaves no trace at all.
+  if (!isSiaReady()) {
     return res.status(503).json(UNAVAILABLE_RESPONSE);
   }
 

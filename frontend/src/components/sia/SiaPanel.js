@@ -20,7 +20,15 @@ import "./SiaPanel.css";
 // Answers are rendered as plain text (never dangerouslySetInnerHTML);
 // newlines are handled by CSS `white-space: pre-wrap`, so HTML-looking
 // content from a provider can only ever appear as literal characters.
-const SiaPanel = ({ onClose, conversation }) => {
+// Batch 3E availability props (all optional, so any existing caller/test
+// that renders SiaPanel without them keeps working):
+//   isAvailable            -- backend confirmed SIA can answer a new question
+//   isCheckingAvailability -- the status request is still in flight
+//   onRetryAvailability    -- refetches status after a failure/unavailability
+//
+// Both flags default to a FAIL-CLOSED posture at the point of use below:
+// submission is enabled only on an explicit `isAvailable === true`.
+const SiaPanel = ({ onClose, conversation, isAvailable, isCheckingAvailability, onRetryAvailability }) => {
   const {
     messages,
     input,
@@ -87,13 +95,31 @@ const SiaPanel = ({ onClose, conversation }) => {
     }
   }, [messages.length, pending]);
 
+  // Batch 3E: the single fail-closed gate every submission route consults.
+  // Explicit `=== true` rather than truthiness, and an undefined prop (an
+  // older caller, or a test rendering the panel bare) therefore reads as
+  // NOT submittable only when a status was actually requested -- see
+  // canAttemptSubmission below for how that is kept backward compatible.
+  const isAvailabilityKnown = isAvailable !== undefined || isCheckingAvailability !== undefined;
+  const blockedByAvailability = isAvailabilityKnown && (isCheckingAvailability === true || isAvailable !== true);
+
+  // Guards EVERY path that can start a new question -- the form's submit
+  // event, the Enter key, and the suggestion buttons all funnel through
+  // here, so a disabled attribute alone is never the only defence. This
+  // also stops a stale UI state (e.g. a suggestion click dispatched in the
+  // same tick availability flipped) from reaching submitQuestion().
+  const attemptSubmit = () => {
+    if (blockedByAvailability) return;
+    submitQuestion();
+  };
+
   const handleClose = () => {
     if (typeof onClose === "function") onClose();
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    submitQuestion();
+    attemptSubmit();
   };
 
   const handleKeyDown = (event) => {
@@ -101,15 +127,22 @@ const SiaPanel = ({ onClose, conversation }) => {
     // composer.
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      submitQuestion();
+      attemptSubmit();
     }
   };
 
   const handleSuggestion = (text) => {
     // Populates the composer and focuses it -- never submits on the user's
-    // behalf, so the question can still be edited.
+    // behalf, so the question can still be edited. Blocked entirely while
+    // unavailable so it cannot populate a composer the user then cannot
+    // send from.
+    if (blockedByAvailability) return;
     setInput(text);
     if (composerRef.current) composerRef.current.focus();
+  };
+
+  const handleRetryAvailability = () => {
+    if (typeof onRetryAvailability === "function") onRetryAvailability();
   };
 
   const handleSelectSession = (sessionId) => {
@@ -126,6 +159,24 @@ const SiaPanel = ({ onClose, conversation }) => {
   const trimmedLength = input.trim().length;
   const isOverLimit = trimmedLength > MAX_QUESTION_LENGTH;
   const showSuggestions = messages.length === 0 && !pending && !failed && mode === PANEL_MODE.CONVERSATION;
+
+  // Batch 3E: the composer is disabled while a request is in flight (the
+  // pre-existing isBusy rule) OR while availability is unknown/false. The
+  // Ask button additionally keeps its existing canSubmit rules.
+  const composerDisabled = isBusy || blockedByAvailability;
+  const submitDisabled = !canSubmit || blockedByAvailability;
+
+  // Exactly one of these ever renders, and only when a status is actually
+  // being tracked. Deliberately generic: no provider, model, env-var name,
+  // or reason code is available to this component in the first place (the
+  // server never sends one), so there is nothing here that could leak.
+  const availabilityNotice = !isAvailabilityKnown
+    ? null
+    : isCheckingAvailability === true
+    ? "Checking SIA availability…"
+    : isAvailable !== true
+    ? "SIA is temporarily unavailable. You can still view previous conversations."
+    : null;
 
   return (
     <div className="sia-panel" role="dialog" aria-modal="false" aria-labelledby="sia-panel-heading">
@@ -183,6 +234,25 @@ const SiaPanel = ({ onClose, conversation }) => {
         </>
       ) : (
         <>
+          {/* Batch 3E availability notice. aria-live="polite" so a screen
+              reader announces the transition from checking -> available/
+              unavailable without interrupting, and the Retry control is
+              offered only once checking has actually finished. */}
+          {availabilityNotice && (
+            <div className="sia-availability-notice" role="status" aria-live="polite">
+              <p className="sia-availability-text">{availabilityNotice}</p>
+              {isCheckingAvailability !== true && (
+                <button
+                  type="button"
+                  className="sia-secondary-btn"
+                  onClick={handleRetryAvailability}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="sia-transcript" role="log" aria-label="Conversation">
             {messages.map((message) => (
               <div
@@ -240,6 +310,7 @@ const SiaPanel = ({ onClose, conversation }) => {
                       type="button"
                       className="sia-suggestion"
                       onClick={() => handleSuggestion(suggestion.text)}
+                      disabled={blockedByAvailability}
                     >
                       {suggestion.text}
                     </button>
@@ -259,7 +330,7 @@ const SiaPanel = ({ onClose, conversation }) => {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isBusy}
+              disabled={composerDisabled}
               rows={2}
               ref={composerRef}
             />
@@ -272,7 +343,7 @@ const SiaPanel = ({ onClose, conversation }) => {
                   {trimmedLength} / {MAX_QUESTION_LENGTH}
                 </span>
               )}
-              <button type="submit" className="sia-panel-submit" disabled={!canSubmit}>
+              <button type="submit" className="sia-panel-submit" disabled={submitDisabled}>
                 Ask
               </button>
             </div>

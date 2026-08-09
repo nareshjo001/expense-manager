@@ -419,6 +419,33 @@
   overflow-wrap: anywhere;
 }
 
+/* ===== Batch 3E: runtime availability notice =====
+   Shown above the transcript while SIA availability is being checked, or
+   when the backend reports SIA cannot currently accept a new question.
+   Reuses the existing theme tokens only -- no new colour is introduced and
+   no external asset is referenced. Deliberately styled as a neutral,
+   muted notice rather than an error block: an unavailable SIA is an
+   operator/deployment condition, not something the user did wrong, and
+   history browsing remains fully usable while it is displayed. */
+.sia-availability-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--sia-surface);
+  border-bottom: 1px solid var(--sia-border);
+}
+
+.sia-availability-text {
+  margin: 0;
+  flex: 1 1 200px;
+  font-size: 0.88rem;
+  color: var(--sia-muted-text);
+  overflow-wrap: anywhere;
+}
+
 .sia-panel-form {
   display: flex;
   flex-direction: column;

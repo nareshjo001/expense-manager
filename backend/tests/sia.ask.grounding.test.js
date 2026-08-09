@@ -15,8 +15,15 @@ const request = require("supertest");
 const TEST_JWT_SECRET = "sia-ask-grounding-test-secret";
 const originalJwtSecret = process.env.JWT_SECRET;
 
+// Batch 3E: the controller's readiness gate additionally requires a
+// non-blank provider credential. Obviously-fake placeholder, scoped to this
+// suite and restored afterwards -- readiness checks PRESENCE, never format.
+const FAKE_CREDENTIAL = "test-credential-value-not-a-real-key";
+const originalOpenAiKey = process.env.OPENAI_API_KEY;
+
 beforeAll(() => {
   process.env.JWT_SECRET = TEST_JWT_SECRET;
+  process.env.OPENAI_API_KEY = FAKE_CREDENTIAL;
 });
 
 afterAll(() => {
@@ -24,6 +31,11 @@ afterAll(() => {
     delete process.env.JWT_SECRET;
   } else {
     process.env.JWT_SECRET = originalJwtSecret;
+  }
+  if (originalOpenAiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+  } else {
+    process.env.OPENAI_API_KEY = originalOpenAiKey;
   }
 });
 
@@ -43,7 +55,7 @@ function signToken(userId) {
 function loadApp({ buildContextImpl, askLlmImpl } = {}) {
   jest.resetModules();
 
-  jest.doMock("../sia/config", () => ({ enabled: true, provider: "openai", timeoutMs: 8000 }));
+  jest.doMock("../sia/config", () => ({ enabled: true, provider: "openai", model: "sia-test-model", timeoutMs: 8000 }));
 
   const { classifyIntent: realClassifyIntent } = jest.requireActual("../sia/intentClassifier");
   jest.doMock("../sia/intentClassifier", () => ({ classifyIntent: jest.fn(realClassifyIntent) }));
@@ -361,7 +373,7 @@ describe("POST /sia/ask -- Batch 3D: grounding rejection + idempotency interacti
   function loadAppWithIdempotency({ buildContextImpl, askLlmImpl }) {
     jest.resetModules();
 
-    jest.doMock("../sia/config", () => ({ enabled: true, provider: "openai", timeoutMs: 8000 }));
+    jest.doMock("../sia/config", () => ({ enabled: true, provider: "openai", model: "sia-test-model", timeoutMs: 8000 }));
 
     const { classifyIntent: realClassifyIntent } = jest.requireActual("../sia/intentClassifier");
     jest.doMock("../sia/intentClassifier", () => ({ classifyIntent: jest.fn(realClassifyIntent) }));

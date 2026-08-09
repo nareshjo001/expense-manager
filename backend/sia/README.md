@@ -1,6 +1,99 @@
 # SIA (backend module)
 
+> **Documentation status note (Batch 3E).** Everything below the
+> "Runtime readiness and status" section is the **original M1-1 text and is
+> now substantially out of date** — SIA has since gained a context builder,
+> an intent classifier, a real OpenAI provider adapter, bounded conversation
+> sessions, request-level idempotency, grounded-response validation, and
+> frontend integration. Rewriting all of it is a documentation task in its
+> own right and is deliberately **out of scope for Batch 3E**, which added
+> only the focused readiness/status section immediately below. Treat the
+> older sections as historical until they are revised separately.
+
+## Runtime readiness and status (Batch 3E)
+
+### `GET /sia/status`
+
+Authenticated (`verifyToken`, the same boundary as every other SIA route).
+Rate limited by the shared `apiLimiter` that `app.js` mounts on `/sia` —
+deliberately **not** by the strict `siaLimiter` reserved for `POST /sia/ask`,
+so checking availability can never consume a user's question budget.
+
+Response — the complete contract, always exactly these two fields:
+
+```json
+{ "success": true, "available": true }
+```
+```json
+{ "success": true, "available": false }
+```
+
+`available: false` is intentionally **indistinguishable** between all of its
+causes. The endpoint never returns the provider name, model name, credential
+presence or value, missing environment-variable names, an internal reason
+code, configuration details, or a stack trace.
+
+An unauthenticated request receives the repository's standard `401` and
+learns nothing about availability.
+
+### Readiness conditions
+
+`sia/readiness.js`'s `isSiaReady()` is the single authoritative evaluator,
+used by **both** `GET /sia/status` and `POST /sia/ask`, so the two endpoints
+can never disagree. SIA is ready only when **all** of the following hold:
+
+1. SIA is enabled — `SIA_ENABLED` is exactly the string `"true"`.
+2. A provider is configured (`SIA_LLM_PROVIDER`) **and** this codebase
+   implements an adapter for it. Currently `openai` is the only implemented
+   provider; any other value is treated as not ready.
+3. A non-blank model is configured — `SIA_LLM_MODEL` (there is deliberately
+   no default model).
+4. A non-blank API credential exists for the configured provider — for the
+   OpenAI adapter, `OPENAI_API_KEY`.
+
+Each condition mirrors a real failure branch that already exists in
+`sia/llmService.js`; readiness adds no new requirement, it only evaluates the
+same conditions **earlier**, before a request is admitted.
+
+The credential is read for **presence only**. It is never returned, logged,
+serialized, length-reported, or included in an error, and it is deliberately
+**not** validated against a prefix, length, or format — provider key formats
+change, and a format guess would reject valid keys.
+
+Only variable **names** are documented here. No value belongs in this file,
+and Batch 3E neither adds nor modifies any `.env` file.
+
+### What readiness does *not* prove
+
+This is a **local configuration check only**. It performs **no network
+request, provider call, or external health probe of any kind**. A `true`
+result means "correctly configured", never "verified reachable" — it does not
+prove that OpenAI is up, that the credential is accepted, that the model
+exists or is entitled to the account, or that quota remains. A request that
+passes the gate can still fail afterwards with the existing generic `503`,
+which remains the correct behaviour for a genuine provider or network
+failure.
+
+### Frontend behaviour (fail closed)
+
+`REACT_APP_SIA_ENABLED` still decides only whether the SIA feature is
+**exposed** in a build. Backend status decides whether **new questions can
+currently be submitted**; both must hold, and neither implies the other.
+
+The frontend fails closed: new submissions are enabled **only** on an
+unambiguous `{ success: true, available: true }`. A loading state, a request
+failure, a non-2xx, a malformed body, or a truthy-but-not-`true` value all
+block submission. The launcher is never hidden and conversation history
+stays browsable, resumable, and deletable while SIA is unavailable, and a
+user-driven Retry refetches status. Status is fetched once per mounted app
+session (cached, no background polling).
+
+---
+
 ## Current status
+
+> Historical (M1-1) — see the documentation status note at the top of this
+> file.
 
 Structural foundation only (M1-1). This module exists in the repository but
 is not wired into the application in any way: nothing requires it, no route

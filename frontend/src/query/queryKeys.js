@@ -36,6 +36,13 @@ export const queryKeys = {
 
   sia: {
     all: ["sia"],
+    // Batch 3E: runtime availability (GET /sia/status). A stable, argument-
+    // free key so every consumer shares one cache entry -- opening and
+    // closing the panel repeatedly within a mounted app session reuses the
+    // cached result instead of re-requesting. Deliberately a sibling of
+    // `sessions` (not nested inside it), since availability is independent
+    // of conversation history.
+    status: () => [...queryKeys.sia.all, "status"],
     sessions: {
       all: () => [...queryKeys.sia.all, "sessions"],
       list: () => [...queryKeys.sia.sessions.all(), "list"],

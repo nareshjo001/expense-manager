@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { ThemeContext } from "../contexts/ThemeContext";
 import SiaPanel from "./SiaPanel";
 import { useSiaConversation } from "./useSiaConversation";
+import { useSiaStatusQuery, isSiaAvailableResponse } from "../../hooks/queries/useSiaStatusQuery";
 
 // M4-3: CRA only embeds env vars prefixed REACT_APP_ at build time. Checked
 // fresh on every render rather than cached as a module-level constant, so
@@ -51,6 +52,19 @@ const SiaEntryPoint = ({ onOpen }) => {
   // because the user closed the panel.
   const conversation = useSiaConversation();
 
+  // Batch 3E: runtime availability. Owned HERE, not in SiaPanel, for the
+  // same reason the conversation is -- SiaPanel unmounts on close, so a
+  // panel-owned query would re-request on every reopen. Living here means
+  // one request per mounted app session (then served from cache until
+  // stale), and it is gated on the build-time flag below so a
+  // SIA-disabled build issues no request at all.
+  const statusQuery = useSiaStatusQuery(isSiaEnabled());
+  const isCheckingAvailability = statusQuery.isLoading || statusQuery.isFetching;
+  // Fail closed: anything other than an unambiguous success/available pair
+  // (network error, non-2xx, malformed body, still loading) means new
+  // questions are blocked. History stays readable regardless.
+  const isSiaAvailable = statusQuery.isSuccess && isSiaAvailableResponse(statusQuery.data);
+
   // Focus can only move to the launcher AFTER it has been re-rendered, so
   // this runs as an effect rather than inline in the close handler (where
   // the ref is still null because the button does not exist yet).
@@ -82,7 +96,16 @@ const SiaEntryPoint = ({ onOpen }) => {
   return (
     <div className={`sia-root ${theme}`}>
       {isOpen ? (
-        <SiaPanel onClose={handleClose} conversation={conversation} />
+        <SiaPanel
+          onClose={handleClose}
+          conversation={conversation}
+          // The launcher itself is never hidden by backend unavailability
+          // -- users must always be able to open SIA and read previous
+          // conversations. Only NEW submissions are gated.
+          isAvailable={isSiaAvailable}
+          isCheckingAvailability={isCheckingAvailability}
+          onRetryAvailability={statusQuery.refetch}
+        />
       ) : (
         <button
           type="button"
