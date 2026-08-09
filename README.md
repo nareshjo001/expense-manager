@@ -172,9 +172,10 @@ The backend SIA suites cover configuration, intent classification, context build
 | SIA V1 — read-only explanations over the Report | Implemented (feature-flagged, off by default) |
 | SIA conversation history, streaming, voice, tools, or agent behavior | Not implemented — no such code exists |
 | Retrieval-augmented generation (RAG) over documents | Not implemented |
-| Expense forecasting | Planned |
-| Financial-risk prediction | Planned |
-| Server-side anomaly-detection model | Planned |
+| Statistical next-calendar-month forecasting and budget-risk estimation (Prediction Layer V1) | Implemented |
+| Statistical expense-anomaly analytics | Implemented |
+| Statistical financial-risk interpretation over the Report | Implemented |
+| Fraud detection, notifications and scheduled alerts | Planned |
 | Personalized (per-user) ML models | Planned |
 
 ## Known limitations
@@ -190,4 +191,15 @@ The backend SIA suites cover configuration, intent classification, context build
 
 ## Project direction
 
-BALENISA is intended to grow as a reliable personal finance system, not as a collection of disconnected AI features. Planned work extends the deterministic analytics engine with forecasting, risk and anomaly models first — and only then exposes those structured results through SIA, on the same grounded, read-only terms as SIA V1.
+BALENISA is intended to grow as a reliable personal finance system, not as a collection of disconnected AI features. The deterministic analytics engine now carries forecasting, risk and anomaly analysis, each exposed through SIA on the same grounded, read-only terms as SIA V1. Planned work continues with anomaly-detection depth, fraud signals and notifications.
+
+### Prediction Layer V1
+
+Statistical **next-calendar-month** spending forecasting and budget-risk estimation over the user's own history.
+
+- **Statistical, not machine-learned.** A Theil-Sen robust trend is fitted to completed monthly totals, with the uncertainty range derived from that trend's own residuals. There is no trained model, no training dataset and no measured accuracy figure — so none is ever displayed or claimed.
+- **Honest availability.** Each horizon is produced only when enough completed months exist; otherwise an explicit reason code is returned instead of a guessed number. The current, in-progress month is never counted as history.
+- **Explicit target month.** `nextCalendarMonthForecast` predicts the *next* calendar month and publishes that month as `targetMonth`. The older `nextMonthForecast` field is retained unchanged for compatibility, but despite its name it projects the *current* in-progress month — the frontend and SIA both read only the next-calendar field.
+- **Category breakdown.** Categories are discovered dynamically from the user's own data. Each is projected from its own history, with a smoothed share-of-total fallback for sparse categories, and the rounded category amounts reconcile exactly to the overall predicted total.
+- **Budget risk.** The prediction is compared only against a budget the user actually created for the target month; the budget model is per-calendar-month with no recurring concept, so when no such budget exists the status is `no_budget` rather than a substituted comparison. Tier boundaries are reused from the existing budget analyzer, not restated.
+- Forecasts are estimates, not guarantees, and are labelled that way everywhere they appear.

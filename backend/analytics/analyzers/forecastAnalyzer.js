@@ -29,19 +29,15 @@
 "use strict";
 
 const { forecast: RULES } = require("./scores/forecastRules");
+// Prediction Layer V1: the trend math moved to ./robustTrend.js unchanged
+// (same formulas, same constants) so the per-category breakdown can use the
+// literal same function. This module still re-exports fitRobustTrend below,
+// so every existing importer and test is unaffected.
+const { fitRobustTrend } = require("./robustTrend");
+const categoryForecastAllocator = require("./categoryForecastAllocator");
+const forecastBudgetRisk = require("./forecastBudgetRisk");
 
 const round2 = (value) => Number(Number(value).toFixed(2));
-
-const median = (numbers) => {
-  const sorted = [...numbers].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
-
-const medianAbsoluteDeviation = (numbers, numbersMedian) => {
-  const deviations = numbers.map((n) => Math.abs(n - numbersMedian));
-  return median(deviations);
-};
 
 const parseAnchorDate = (value) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -119,65 +115,10 @@ function sanitizeMonthlySeries(monthlySeries) {
     : points;
 }
 
-/**
- * Theil-Sen robust linear trend: fits `total ≈ intercept + slope * ordinal`
- * over `points` (`{ ordinal, total }`, sorted ascending by `ordinal` --
- * `ordinal` is the real calendar-month ordinal from
- * `monthKeyToOrdinal()`/`dateToOrdinal()` above, NEVER an array index).
- * This is the fix for a real calendar-gap defect: using array index as the
- * x-coordinate silently treats any two points as exactly one month apart
- * regardless of how many months actually separate them (e.g. January and
- * March, with February entirely missing, were previously fit as if
- * adjacent, computing a slope of (1400-1000)/1 = ₹400/month instead of the
- * true (1400-1000)/2 = ₹200/month). Using the real ordinal difference
- * (`points[j].ordinal - points[i].ordinal`, which is 2 for January->March)
- * makes the slope reflect the true elapsed calendar time between any two
- * points, gap or no gap.
- *
- * `slope` is the median of the slopes between every pair of points -- a
- * single outlier month can only ever be an endpoint of O(n) of the O(n^2)
- * pairs considered, so it cannot dominate the median the way it would
- * dominate a least-squares fit. `intercept` is the median of each point's
- * residual against `slope * ordinal`, the standard robust Theil-Sen
- * intercept estimator. `residualMad` is the median absolute deviation of
- * the fitted line's residuals, used as this forecast's uncertainty measure
- * in place of the raw totals' own spread.
- *
- * Degenerate cases (0 or 1 point) return a flat, zero-slope line rather
- * than throwing -- callers gate horizon computation on
- * `RULES.minHistoryMonthsFor*` (always >= 3) before this matters in
- * practice, but the function itself stays safe for any input length. Every
- * pair has a distinct ordinal by construction (sanitizeMonthlySeries()
- * above already merges same-ordinal entries before this function ever
- * runs), so no pairwise division by zero is possible here.
- */
-function fitRobustTrend(points) {
-  const n = points.length;
-
-  if (n === 0) {
-    return { slope: 0, intercept: 0, residualMad: 0 };
-  }
-  if (n === 1) {
-    return { slope: 0, intercept: points[0].total, residualMad: 0 };
-  }
-
-  const slopes = [];
-  for (let i = 0; i < n; i += 1) {
-    for (let j = i + 1; j < n; j += 1) {
-      slopes.push((points[j].total - points[i].total) / (points[j].ordinal - points[i].ordinal));
-    }
-  }
-  const slope = median(slopes);
-
-  const residualsAgainstSlope = points.map((point) => point.total - slope * point.ordinal);
-  const intercept = median(residualsAgainstSlope);
-
-  const residuals = points.map((point) => point.total - (intercept + slope * point.ordinal));
-  const residualMedian = median(residuals);
-  const residualMad = medianAbsoluteDeviation(residuals, residualMedian);
-
-  return { slope, intercept, residualMad };
-}
+// `fitRobustTrend` now lives in ./robustTrend.js (imported above and
+// re-exported at the bottom of this module). See that file for the full
+// Theil-Sen rationale, the calendar-gap correctness note, and the
+// degenerate-input behavior -- the implementation itself is unchanged.
 
 // Sum of the trend line's point estimates over `horizonMonths` consecutive
 // future calendar months, starting at `anchorOrdinal` (the current,
@@ -239,6 +180,64 @@ function buildHorizon({ horizonMonths, minHistoryMonths, reasonCode, historyMont
   };
 }
 
+// Prediction Layer V1 (corrected): the forecast's TARGET month is the NEXT
+// calendar month relative to the caller-supplied anchor (the current,
+// in-progress month) -- never the anchor month itself.
+//
+// Why this is a real distinction, not a rename: the LEGACY
+// `nextMonthForecast` horizon has always projected at the ANCHOR ordinal,
+// i.e. the current, in-progress month, computed from completed-month
+// history. That committed v3 behavior is preserved byte-for-byte below.
+// Prediction Layer V1 promises a genuinely NEXT-calendar-month figure, so
+// it is computed separately at anchorOrdinal + 1 and published under its
+// own field. The two are observably different whenever the trend is not
+// flat.
+//
+// Uses Date arithmetic (month + 1) rather than string maths so December ->
+// January year rollover is handled by the platform: new Date(2026, 11+1, 1)
+// is January 2027.
+function nextCalendarMonthOf(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+}
+
+// Stable "YYYY-MM" label for a given month-start Date. Never calls
+// `new Date()` to discover "now".
+function formatMonthKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+// Prediction Layer V1: a purely DESCRIPTIVE summary of the history behind
+// the estimates. It never gates or alters any forecast value -- the
+// per-horizon minHistoryMonthsFor* rules remain the only gates -- and never
+// states an accuracy figure, because none is measured anywhere in this
+// feature.
+function buildDataQuality({ completedMonths, activeDays, points }) {
+  const { statuses, warnings: WARN, sufficientCompletedMonths } = RULES.dataQuality;
+  const warnings = [];
+
+  if (completedMonths > 0 && completedMonths < sufficientCompletedMonths) {
+    warnings.push(WARN.limitedHistory);
+  }
+
+  // A calendar gap means the observed months are not contiguous, which the
+  // straight-line trend does not model. Surfaced as an explicit warning
+  // rather than silently affecting the estimate.
+  if (Array.isArray(points) && points.length >= 2) {
+    const span = points[points.length - 1].ordinal - points[0].ordinal + 1;
+    if (span > points.length) warnings.push(WARN.historyGaps);
+  }
+
+  return {
+    status: completedMonths >= sufficientCompletedMonths ? statuses.sufficient : statuses.limited,
+    completedMonths,
+    activeDays,
+    method: RULES.methodVersion,
+    warnings,
+  };
+}
+
 /**
  * @param {object} input
  * @param {Array<{monthKey: string, totalAmount: number}>} input.monthlySeries -
@@ -256,8 +255,26 @@ function buildHorizon({ horizonMonths, minHistoryMonths, reasonCode, historyMont
  *   used only for validity checking here (the aggregation boundary already
  *   applied it when building `monthlySeries`). This function never calls
  *   `new Date()` to discover "now".
+ * @param {Array<{category: string, monthlySeries: Array}>} [input.categorySeries] -
+ *   Prediction Layer V1: aggregate-only per-category history from
+ *   analytics/forecastInputAggregator.js. Optional -- omitting it simply
+ *   yields no category breakdown, never an error, so every pre-existing
+ *   caller keeps working unchanged.
+ * @param {number} [input.activeDays] - Prediction Layer V1: descriptive
+ *   count of distinct days with recorded activity in the history window.
+ * @param {{budget?: number}|null} [input.targetMonthBudget] - Prediction
+ *   Layer V1: the budget the user has explicitly created for the FORECAST
+ *   TARGET month (never the current month's budget). Null/absent yields a
+ *   `no_budget` risk status rather than a substituted comparison.
  */
-const analyze = ({ monthlySeries = [], currentPartialMonthTotal = 0, currentMonthStart } = {}) => {
+const analyze = ({
+  monthlySeries = [],
+  currentPartialMonthTotal = 0,
+  currentMonthStart,
+  categorySeries = [],
+  activeDays = 0,
+  targetMonthBudget = null,
+} = {}) => {
   const monthStart = parseAnchorDate(currentMonthStart);
 
   const partialTotal = Number(currentPartialMonthTotal);
@@ -302,12 +319,32 @@ const analyze = ({ monthlySeries = [], currentPartialMonthTotal = 0, currentMont
     }),
   });
 
+  const safeActiveDays = Number.isFinite(Number(activeDays)) ? Math.max(0, Math.trunc(Number(activeDays))) : 0;
+
   if (!monthStart) {
     return {
       hasData: false,
       method: RULES.methodVersion,
       historyMonthsAvailable: 0,
       currentPartialMonth,
+      targetMonth: null,
+      dataQuality: buildDataQuality({ completedMonths: 0, activeDays: safeActiveDays, points: [] }),
+      nextCalendarMonthForecast: {
+        ...buildHorizon({
+          horizonMonths: 1,
+          minHistoryMonths: RULES.minHistoryMonthsForNextMonth,
+          reasonCode: RULES.reasonCodes.insufficientHistoryNextMonth,
+          historyMonthsUsed: 0,
+          anchorOrdinal: 0,
+          intercept: 0,
+          slope: 0,
+          residualMad: 0,
+        }),
+        targetMonth: null,
+        categories: [],
+        categoriesReasonCode: RULES.reasonCodes.noCategoryBreakdown,
+      },
+      budgetRisk: forecastBudgetRisk.evaluate({ predictedTotal: null, targetMonthBudget }),
       ...emptyHorizons(),
     };
   }
@@ -326,12 +363,73 @@ const analyze = ({ monthlySeries = [], currentPartialMonthTotal = 0, currentMont
 
   const { slope, intercept, residualMad } = fitRobustTrend(points);
 
+  // LEGACY horizons -- byte-for-byte the committed v3 behavior, projected
+  // at the ANCHOR ordinal (the current, in-progress month). Deliberately
+  // left completely untouched, including `nextMonthForecast`'s historically
+  // misleading name: existing consumers and the committed contract depend
+  // on these exact values.
   const horizons = emptyHorizons(anchorOrdinal, intercept, slope, residualMad, historyMonthsUsed);
+
+  // Prediction Layer V1 (corrected): the TRUE next-calendar-month forecast,
+  // evaluated at anchorOrdinal + 1 -- one full calendar month beyond the
+  // legacy horizon. Same fitted trend, same MAD-derived spread, same
+  // history gate, same non-negative flooring and the same reason code, so
+  // nothing about the proven engine changes; only the ordinal it is
+  // evaluated at differs. The current partial month is still never fitted
+  // (it was excluded at the aggregation boundary), so targeting a farther
+  // month cannot leak current-month spending into the estimate.
+  const nextCalendarMonthStart = nextCalendarMonthOf(monthStart);
+  const nextCalendarOrdinal = anchorOrdinal + 1;
+
+  const nextCalendarMonthForecast = buildHorizon({
+    horizonMonths: 1,
+    minHistoryMonths: RULES.minHistoryMonthsForNextMonth,
+    reasonCode: RULES.reasonCodes.insufficientHistoryNextMonth,
+    historyMonthsUsed,
+    anchorOrdinal: nextCalendarOrdinal,
+    intercept,
+    slope,
+    residualMad,
+  });
+
+  // The per-category breakdown reconciles to the TRUE next-calendar-month
+  // estimate (never the legacy current-month projection) and is projected
+  // at the same true target ordinal.
+  const categoryBreakdown = nextCalendarMonthForecast.hasData
+    ? categoryForecastAllocator.allocate({
+        categorySeries,
+        predictedTotal: nextCalendarMonthForecast.estimate,
+        anchorOrdinal: nextCalendarOrdinal,
+      })
+    : { hasData: false, reasonCode: RULES.reasonCodes.noCategoryBreakdown, categories: [] };
 
   return {
     hasData: horizons.nextMonthForecast.hasData,
     method: RULES.methodVersion,
     historyMonthsAvailable: historyMonthsUsed,
+    // The NEXT calendar month -- what nextCalendarMonthForecast targets.
+    // Never the anchor/current month.
+    targetMonth: formatMonthKey(nextCalendarMonthStart),
+    dataQuality: buildDataQuality({
+      completedMonths: historyMonthsUsed,
+      activeDays: safeActiveDays,
+      points,
+    }),
+    nextCalendarMonthForecast: {
+      ...nextCalendarMonthForecast,
+      targetMonth: formatMonthKey(nextCalendarMonthStart),
+      categories: categoryBreakdown.categories,
+      categoriesReasonCode: categoryBreakdown.hasData ? null : categoryBreakdown.reasonCode,
+    },
+    // Forecast-vs-budget interpretation for the TRUE target month only.
+    // Reuses budgetAnalyzer.js's own exported thresholds (see
+    // analyzers/forecastBudgetRisk.js) rather than restating them, and
+    // reports `no_budget` when the user has not created a budget for that
+    // specific month -- no other month's budget is ever substituted.
+    budgetRisk: forecastBudgetRisk.evaluate({
+      predictedTotal: nextCalendarMonthForecast.hasData ? nextCalendarMonthForecast.estimate : null,
+      targetMonthBudget,
+    }),
     // Explicit, separate representation of the current partial month --
     // never merged into history/estimates, per the requirement that any
     // partial-month use be explicit and justified. Included here purely as

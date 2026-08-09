@@ -310,4 +310,7 @@ Every SIA test mocks the provider — no test issues a real LLM or network reque
 | Transactional expense + feedback writes | Planned |
 | Request validation on update/delete/recurring mutations | Planned |
 | Edit-time ML feedback capture | Planned |
-| Forecasting, risk, and anomaly analytics | Planned |
+| Statistical forecasting and budget-risk analytics (Prediction Layer V1) | Implemented |
+| Statistical expense-anomaly analytics | Implemented |
+| Statistical financial-risk analytics | Implemented |
+| Fraud detection, notifications and scheduled alerts | Planned |

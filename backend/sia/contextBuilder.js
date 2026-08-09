@@ -78,6 +78,63 @@ function copyForecastHorizon(horizon) {
   };
 }
 
+// Prediction Layer V1: the bounded per-category forecast breakdown.
+//
+// Only the category NAME, its predicted amount and its share are copied --
+// these are already-aggregated monthly projections, never a transaction,
+// never a merchant/expense name, never an id or date. Capped at
+// MAX_FORECAST_CATEGORIES so an account with many categories cannot grow
+// the prompt without bound; the analyzer's own output is already sorted
+// largest-first, so the cap keeps exactly the categories a "which category
+// will be highest" question is about.
+const MAX_FORECAST_CATEGORIES = 5;
+
+function copyForecastCategories(categories) {
+  if (!Array.isArray(categories)) return [];
+  return categories
+    .filter(isPlainObjectCtx)
+    .slice(0, MAX_FORECAST_CATEGORIES)
+    .map((entry) => ({
+      category: typeof entry.category === "string" ? entry.category : null,
+      predictedAmount: isFiniteNumberCtx(entry.predictedAmount) ? entry.predictedAmount : null,
+      sharePercentage: isFiniteNumberCtx(entry.sharePercentage) ? entry.sharePercentage : null,
+      isEstimate: true,
+    }))
+    .filter((entry) => entry.category !== null);
+}
+
+// Prediction Layer V1: forecast-vs-budget risk for the target month, copied
+// field-by-field from forecastBudgetRisk.js's own bounded output. Carries no
+// budget document, no month history and no user identifier.
+function copyForecastBudgetRisk(budgetRisk) {
+  if (!isPlainObjectCtx(budgetRisk)) return null;
+  return {
+    status: typeof budgetRisk.status === "string" ? budgetRisk.status : null,
+    budgetAmount: isFiniteNumberCtx(budgetRisk.budgetAmount) ? budgetRisk.budgetAmount : null,
+    predictedUtilizationPercentage: isFiniteNumberCtx(budgetRisk.predictedUtilizationPercentage)
+      ? budgetRisk.predictedUtilizationPercentage
+      : null,
+    predictedRemaining: isFiniteNumberCtx(budgetRisk.predictedRemaining) ? budgetRisk.predictedRemaining : null,
+    isEstimate: true,
+  };
+}
+
+// Prediction Layer V1: the descriptive data-quality summary, so SIA can
+// explain WHY a forecast is limited or unavailable instead of inventing a
+// prediction. `warnings` are fixed, developer-authored reason codes from
+// forecastRules.js -- never free text derived from user data.
+function copyForecastDataQuality(dataQuality) {
+  if (!isPlainObjectCtx(dataQuality)) return null;
+  return {
+    status: typeof dataQuality.status === "string" ? dataQuality.status : null,
+    completedMonths: isFiniteNumberCtx(dataQuality.completedMonths) ? dataQuality.completedMonths : null,
+    activeDays: isFiniteNumberCtx(dataQuality.activeDays) ? dataQuality.activeDays : null,
+    warnings: Array.isArray(dataQuality.warnings)
+      ? dataQuality.warnings.filter((warning) => typeof warning === "string").slice(0, 5)
+      : [],
+  };
+}
+
 // Bounded copy of one risk signal's public fields -- reasonCode/severity
 // plus its own already-bounded evidence object (riskAnalyzer.js's own
 // contract never carries a raw record or user identifier inside evidence).
@@ -555,6 +612,15 @@ async function buildContext(userId, intent) {
       return noDataResult(intent);
     }
 
+    // Prediction Layer V1 (corrected): the answer is grounded on the TRUE
+    // next-calendar-month forecast. The legacy `nextMonthForecast` field is
+    // deliberately NOT sent -- despite its name it projects the CURRENT,
+    // in-progress month, so grounding a "how much might I spend next month"
+    // answer on it would silently answer a different question. If the true
+    // field is absent (e.g. an older cached report), the context reports it
+    // as unavailable rather than substituting the legacy value.
+    const nextCalendarMonth = copyForecastHorizon(forecast.nextCalendarMonthForecast);
+
     return {
       intent,
       fields: {
@@ -564,9 +630,27 @@ async function buildContext(userId, intent) {
           historyMonthsAvailable: isFiniteNumberCtx(forecast.historyMonthsAvailable)
             ? forecast.historyMonthsAvailable
             : 0,
-          nextMonthForecast: copyForecastHorizon(forecast.nextMonthForecast),
+          // The target period, the data-quality summary (so an unavailable/
+          // limited forecast can be explained with the real reason rather
+          // than guessed at), the per-category breakdown and the
+          // target-month budget-risk status. Every one of these is a
+          // bounded, already-aggregated figure -- no transaction, no raw
+          // history series, no identifier reaches the provider.
+          targetMonth: typeof forecast.targetMonth === "string" ? forecast.targetMonth : null,
+          dataQuality: copyForecastDataQuality(forecast.dataQuality),
+          nextCalendarMonthForecast: nextCalendarMonth
+            ? {
+                ...nextCalendarMonth,
+                targetMonth:
+                  typeof forecast.nextCalendarMonthForecast?.targetMonth === "string"
+                    ? forecast.nextCalendarMonthForecast.targetMonth
+                    : null,
+                categories: copyForecastCategories(forecast.nextCalendarMonthForecast?.categories),
+              }
+            : null,
           nextQuarterForecast: copyForecastHorizon(forecast.nextQuarterForecast),
           nextYearForecast: copyForecastHorizon(forecast.nextYearForecast),
+          budgetRisk: copyForecastBudgetRisk(forecast.budgetRisk),
         },
       },
       sourceReportGeneratedAt,

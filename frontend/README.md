@@ -44,6 +44,7 @@ other two services.
 | Income handling | Add/edit/delete income entries |
 | Charts | Line, bar, and pie charts for spending trends and category breakdowns |
 | Insights / monthly insights | Rule-based summary cards computed from expense/chart data — not a separate AI feature |
+| Spending Forecast (Prediction Layer V1) | Reads the `forecast` section of the existing analytics report — predicted next-month spend, range, category breakdown and target-month budget risk. No extra fetch, no separate query key. Every figure is labelled an estimate; no accuracy figure is shown because none is measured. |
 | SIA panel | Feature-flagged question/answer surface for explanations of the user's own report |
 | Theme | Light/dark theme via `ThemeContext` |
 

@@ -1,0 +1,301 @@
+/* Prediction Layer V1 -- Spending Forecast section.
+   Follows the exact same theming convention as SpendingInsights.css /
+   BudgetIntelligence.css in this folder: theme variables are declared per
+   file under .light-theme/.dark-theme, and the inner report card keeps a
+   light surface in BOTH themes, so every piece of text ON that card sets an
+   explicit dark colour rather than inheriting the app text colour (which is
+   near-white in dark theme and would be illegible here). */
+
+/* ========== Light Theme ========== */
+.light-theme {
+  --forecast-card-border: #E5E7EB;
+  --forecast-accent: #9d174d;
+  --forecast-bar-fill: linear-gradient(90deg, #FBCFE8, #F472B6, #EC4899);
+}
+
+/* ========== Dark Theme ========== */
+.dark-theme {
+  --forecast-card-border: #4B5563;
+  --forecast-accent: #1D4ED8;
+  --forecast-bar-fill: linear-gradient(90deg, #93C5FD, #60A5FA, #3B82F6);
+}
+
+.forecast-container {
+  width: 100%;
+}
+
+.forecast-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.forecast-h-text {
+  font-size: 18px !important;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* MAIN CARD -- fixed light surface in both themes (same choice the sibling
+   BudgetIntelligence card makes), hence the explicit dark text colours on
+   every descendant below. */
+.forecast-card {
+  width: 100%;
+  padding: 24px;
+  border-radius: 20px;
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(180deg, #f1f5f9, #e5e7eb) border-box;
+  border: 1px solid transparent;
+  border-left: 5px solid var(--forecast-accent);
+  box-shadow: var(--card-box-shadow);
+  overflow: hidden;
+}
+
+.forecast-target-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin: 0 0 4px 0;
+}
+
+.forecast-headline-amount {
+  font-size: 30px !important;
+  font-weight: 700;
+  color: var(--forecast-accent);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.forecast-range-text {
+  font-size: 14px;
+  color: #4b5563;
+  margin: 6px 0 0 0;
+  overflow-wrap: anywhere;
+}
+
+.forecast-estimate-note {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 14px 0 0 0;
+  line-height: 1.5;
+}
+
+/* QUALITY + RISK BADGES -- never colour-only: each badge always carries a
+   text label (and, for risk, a leading symbol), so the status is fully
+   readable without perceiving colour at all. */
+.forecast-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.forecast-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  overflow-wrap: anywhere;
+}
+
+.forecast-badge.safe {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.forecast-badge.watch {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.forecast-badge.high {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.forecast-badge.neutral {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+/* BUDGET RISK DETAIL */
+.forecast-budget-block {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--forecast-card-border);
+}
+
+.forecast-budget-line {
+  font-size: 14px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.forecast-budget-line + .forecast-budget-line {
+  margin-top: 6px;
+}
+
+/* CATEGORY BREAKDOWN */
+.forecast-section-title {
+  font-size: 15px !important;
+  font-weight: 650;
+  color: #111827;
+  margin: 22px 0 10px 0;
+}
+
+.forecast-category-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.forecast-category-row {
+  min-width: 0;
+}
+
+.forecast-category-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.forecast-category-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.forecast-category-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.forecast-bar-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2f7;
+  overflow: hidden;
+}
+
+.forecast-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--forecast-bar-fill);
+}
+
+/* LONGER HORIZONS */
+.forecast-horizon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.forecast-horizon-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--forecast-card-border);
+  min-width: 0;
+}
+
+.forecast-horizon-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0 0 4px 0;
+}
+
+.forecast-horizon-amount {
+  font-size: 20px !important;
+  font-weight: 700;
+  color: var(--forecast-accent);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.forecast-horizon-range {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 4px 0 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* EMPTY / UNAVAILABLE STATES */
+.forecast-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  padding: 18px 12px;
+}
+
+.forecast-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.forecast-empty-text {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  .forecast-card {
+    padding: 18px;
+  }
+
+  .forecast-h-text {
+    font-size: 16px !important;
+  }
+
+  .forecast-headline-amount {
+    font-size: 26px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .forecast-card {
+    padding: 14px;
+  }
+
+  .forecast-headline-amount {
+    font-size: 23px !important;
+  }
+
+  .forecast-category-value {
+    white-space: normal;
+  }
+}

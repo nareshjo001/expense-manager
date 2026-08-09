@@ -39,7 +39,17 @@
 // that could make an old document merely *appear* migrated.
 "use strict";
 
-const CURRENT_REPORT_VERSION = 3;
+// Bumped from 3 to 4 for Prediction Layer V1: version 4 is the first
+// contract whose `forecast` section always carries the per-category
+// next-month breakdown (`nextMonthForecast.categories`), the descriptive
+// `dataQuality` summary, the `targetMonth` label and the
+// forecast-vs-target-month `budgetRisk` block. A version-3 cached or
+// persisted report is now treated as stale by the exact same
+// isCurrentReport() gate below -- no second version field, no global cache
+// flush, no migration: models/Report.js stores every section as Mixed, so
+// the added keys need no schema change, and a stale v3 document is simply
+// regenerated on next read.
+const CURRENT_REPORT_VERSION = 4;
 
 // True only when `report` carries a numeric metadata.version at least as
 // new as the current contract. Anything else (missing report, missing/

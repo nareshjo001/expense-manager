@@ -368,6 +368,13 @@ describe("models/Report.js: forecast and risk section schema round-trip (Batch 2
     expect(rehydrated.forecast).toEqual({});
     expect(rehydrated.risk).toEqual({});
     expect(isCurrentReport(rehydrated)).toBe(false);
-    expect(CURRENT_REPORT_VERSION).toBe(3);
+    // Prediction Layer V1 bumped the contract from 3 to 4 (the forecast
+    // section now always carries the per-category breakdown, dataQuality,
+    // targetMonth and budgetRisk). A version-3 document is therefore stale
+    // by the same gate -- asserted explicitly below so this is a deliberate
+    // contract change, not an accidental drift.
+    expect(CURRENT_REPORT_VERSION).toBe(4);
+    expect(isCurrentReport({ metadata: { version: 3 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 4 } })).toBe(true);
   });
 });

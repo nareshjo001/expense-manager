@@ -182,4 +182,10 @@ module.exports = {
   calculateBudgetStreak,
   calculateBudgetProjection,
   analyze,
+  // Exported (Prediction Layer V1) purely so the forecast-vs-budget risk
+  // mapper (analyzers/forecastBudgetRisk.js) can derive its tiers from
+  // THESE thresholds instead of restating the same numbers a second time.
+  // Read-only for that consumer; nothing in this module's own behavior
+  // changed by exposing it.
+  STATUS_THRESHOLDS,
 };

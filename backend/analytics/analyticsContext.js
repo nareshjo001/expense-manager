@@ -2,6 +2,8 @@ const dataProvider = require("./dataProvider");
 const {
     buildCompletedMonthSeries,
     computeCurrentPartialMonthTotal,
+    buildCompletedMonthCategorySeries,
+    countActiveDays,
 } = require("./forecastInputAggregator");
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -108,6 +110,41 @@ const createAnalyticsContext = async (userId) => {
     const forecastMonthlySeries = buildCompletedMonthSeries(recentExpensePool, currentMonthStart);
     const forecastCurrentPartialMonthTotal = computeCurrentPartialMonthTotal(safeCurrentMonth);
 
+    // Prediction Layer V1: the per-category equivalent of the series above,
+    // plus a single descriptive active-day count. Both cross the SAME
+    // aggregate-only boundary -- forecastAnalyzer.js and
+    // categoryForecastAllocator.js still never receive a raw expense
+    // record. No new database query: both are derived from the
+    // already-fetched recentExpensePool.
+    const forecastCategorySeries = buildCompletedMonthCategorySeries(recentExpensePool, currentMonthStart);
+    const forecastActiveDays = countActiveDays(recentExpensePool, currentMonthStart);
+
+    // Prediction Layer V1 (corrected): the budget the user has explicitly
+    // created for the forecast's TARGET month -- the NEXT calendar month
+    // after `currentMonthStart`, which is what
+    // forecastAnalyzer.nextCalendarMonthForecast actually predicts. The
+    // CURRENT month's budget is deliberately never used here: comparing a
+    // next-month projection against this month's limit would be a
+    // substitution the user never authorised.
+    //
+    // Built with Date arithmetic so December -> January year rollover is
+    // handled by the platform, then matched EXACTLY against the
+    // already-fetched budget history using this file's existing
+    // `"MMM YYYY"` key convention -- no new query. config/Schemas.js's
+    // budget model is per-calendar-month with no recurring/reusable
+    // concept, so when the user has not created that specific month's
+    // budget the forecast reports `no_budget` rather than borrowing
+    // another month's figure.
+    const forecastTargetMonthStart = new Date(
+        currentMonthStart.getFullYear(),
+        currentMonthStart.getMonth() + 1,
+        1
+    );
+    const forecastTargetMonthKey =
+        `${monthNames[forecastTargetMonthStart.getMonth()]} ${forecastTargetMonthStart.getFullYear()}`;
+    const forecastTargetMonthBudget =
+        safeBudgetHistory.find((entry) => entry?.month === forecastTargetMonthKey) ?? null;
+
     const trendData = {
         today: filterBetween(recentExpensePool, startOfToday, startOfTomorrow),
         yesterday: filterBetween(recentExpensePool, startOfYesterday, startOfToday),
@@ -143,6 +180,11 @@ const createAnalyticsContext = async (userId) => {
         // recentExpensePool/currentMonthExpenses directly.
         forecastMonthlySeries,
         forecastCurrentPartialMonthTotal,
+        // Prediction Layer V1 -- all aggregate-only, all derived from data
+        // already fetched above.
+        forecastCategorySeries,
+        forecastActiveDays,
+        forecastTargetMonthBudget,
     };
 
 };

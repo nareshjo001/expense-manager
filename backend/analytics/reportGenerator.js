@@ -72,10 +72,17 @@ const generateReport = async (userId) => {
   // boundary already computed. No new database query either way. Never a
   // trained model, never a fabricated accuracy figure (see
   // analytics/analyzers/scores/forecastRules.js).
+  // Prediction Layer V1 adds the per-category breakdown, the descriptive
+  // data-quality summary and the forecast-vs-target-month budget risk --
+  // all fed from the SAME aggregate-only boundary, still with no new
+  // database query and still no raw expense record reaching the analyzer.
   const forecastReport = forecastAnalyzer.analyze({
     monthlySeries: analyticsContext.forecastMonthlySeries,
     currentPartialMonthTotal: analyticsContext.forecastCurrentPartialMonthTotal,
     currentMonthStart: analyticsContext.currentMonthStart,
+    categorySeries: analyticsContext.forecastCategorySeries,
+    activeDays: analyticsContext.forecastActiveDays,
+    targetMonthBudget: analyticsContext.forecastTargetMonthBudget,
   });
 
   // Risk Intelligence V1: pure, deterministic analyzer consuming only

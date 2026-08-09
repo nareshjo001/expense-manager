@@ -125,7 +125,156 @@ function computeCurrentPartialMonthTotal(currentMonthExpenses) {
   return round2(total);
 }
 
+/**
+ * Prediction Layer V1: the per-CATEGORY equivalent of
+ * buildCompletedMonthSeries() above, and the only place transaction-level
+ * `expenseCategory` is read for forecasting purposes. Emits aggregate-only
+ * `{ category, monthlySeries: [{ monthKey, totalAmount }] }` entries --
+ * never a raw record, never an amount attributable to a single expense.
+ *
+ * Categories are discovered ENTIRELY from the data: there is no fixed list,
+ * no fixed count, and no hard-coded category name anywhere in this
+ * function. A record whose category is missing/blank/non-string is skipped
+ * rather than being bucketed under a guessed default, so the breakdown
+ * never invents a category the user does not actually have.
+ *
+ * Same window, same exclusions and same skip-don't-throw policy as
+ * buildCompletedMonthSeries(): complete calendar months strictly before
+ * `monthStart` only, bounded to `RULES.maxHistoryMonths`, malformed records
+ * silently dropped, input never mutated, output order deterministic
+ * (categories sorted by name ascending; each series oldest-first).
+ *
+ * TIMELINE ALIGNMENT (Prediction Layer V1 correction). Every category is
+ * aligned against ONE canonical completed-month timeline -- exactly the
+ * months buildCompletedMonthSeries() emitted, i.e. the months in which the
+ * user had ANY eligible spending. A month that is on that timeline but in
+ * which this category recorded nothing is emitted as an explicit
+ * `totalAmount: 0` point, not omitted.
+ *
+ * This is the fix for a real misallocation defect: previously a category
+ * seen in only 3 scattered months of a 12-month active timeline produced a
+ * 3-point series, so its own trend fit (and the sparse smoothed-share
+ * fallback) treated those 3 observations as the category's ENTIRE history
+ * and predicted as if it spent that much every month -- over-predicting an
+ * intermittent category roughly 4x in the observed case and, because the
+ * breakdown reconciles to a fixed total, under-predicting the regular
+ * categories by the same amount. Zero-filling against the canonical
+ * timeline makes "this category was absent that month" a real observation
+ * of zero, which is what it actually is.
+ *
+ * Deliberately bounded: zeros are inserted ONLY for months already on the
+ * canonical timeline. The current partial month is never added (it is not
+ * on that timeline), months outside the usable history window are never
+ * added, and a month in which the user genuinely recorded nothing at all
+ * stays absent for every category -- this function never invents activity
+ * the user did not have.
+ *
+ * @param {Array} expensePool - raw expense records (e.g. recentExpensePool).
+ * @param {Date} monthStart - first instant of the current, in-progress month.
+ * @returns {Array<{category: string, monthlySeries: Array<{monthKey: string, totalAmount: number}>}>}
+ */
+function buildCompletedMonthCategorySeries(expensePool, monthStart) {
+  if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) {
+    return [];
+  }
+
+  const earliestAllowed = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() - RULES.maxHistoryMonths,
+    1
+  );
+
+  // category -> (monthKey -> total)
+  const byCategory = new Map();
+  const source = Array.isArray(expensePool) ? expensePool : [];
+
+  for (const record of source) {
+    if (!record || typeof record !== "object") continue;
+
+    const category = typeof record.expenseCategory === "string" ? record.expenseCategory.trim() : "";
+    if (category === "") continue;
+
+    const date = parseDate(record.expenseDate);
+    if (!date) continue;
+    if (date < earliestAllowed || date >= monthStart) continue;
+
+    const amount = toFiniteAmount(record.expenseAmount);
+    if (amount === null) continue;
+
+    const key = monthKeyOf(date);
+    if (!byCategory.has(category)) byCategory.set(category, new Map());
+    const months = byCategory.get(category);
+    months.set(key, (months.get(key) ?? 0) + amount);
+  }
+
+  // The canonical completed-month timeline: exactly the months
+  // buildCompletedMonthSeries() emits for this same pool and anchor -- the
+  // months the user had ANY eligible spending in. Derived by calling that
+  // function rather than re-deriving the rule here, so the two can never
+  // disagree about which months are eligible.
+  const canonicalMonthKeys = buildCompletedMonthSeries(expensePool, monthStart).map(
+    (point) => point.monthKey
+  );
+
+  return [...byCategory.entries()]
+    .map(([category, months]) => ({
+      category,
+      // Aligned against every canonical month: a month on the timeline in
+      // which this category recorded nothing becomes an explicit 0, so an
+      // intermittent category is evaluated over its true timeline rather
+      // than only the months it happened to appear in.
+      monthlySeries: canonicalMonthKeys.map((key) => ({
+        monthKey: key,
+        totalAmount: months.has(key) ? round2(months.get(key)) : 0,
+      })),
+    }))
+    .filter((entry) => entry.monthlySeries.length > 0)
+    .sort((a, b) => (a.category < b.category ? -1 : a.category > b.category ? 1 : 0));
+}
+
+/**
+ * Prediction Layer V1: count of DISTINCT calendar days carrying at least
+ * one valid expense inside the same completed-month window. A single
+ * descriptive scalar for the forecast's data-quality summary -- never a
+ * date list, never a per-day breakdown, so nothing transaction-shaped
+ * crosses this boundary.
+ *
+ * "Active days" deliberately counts days with recorded activity, not the
+ * calendar span: a user who logged expenses on 12 days spread across 6
+ * months has 12 active days, not ~180.
+ */
+function countActiveDays(expensePool, monthStart) {
+  if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) {
+    return 0;
+  }
+
+  const earliestAllowed = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() - RULES.maxHistoryMonths,
+    1
+  );
+
+  const days = new Set();
+  const source = Array.isArray(expensePool) ? expensePool : [];
+
+  for (const record of source) {
+    if (!record || typeof record !== "object") continue;
+
+    const date = parseDate(record.expenseDate);
+    if (!date) continue;
+    if (date < earliestAllowed || date >= monthStart) continue;
+
+    if (toFiniteAmount(record.expenseAmount) === null) continue;
+
+    days.add(`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`);
+  }
+
+  return days.size;
+}
+
 module.exports = {
   buildCompletedMonthSeries,
   computeCurrentPartialMonthTotal,
+  buildCompletedMonthCategorySeries,
+  countActiveDays,
 };

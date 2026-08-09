@@ -4,6 +4,15 @@ A standalone FastAPI microservice that predicts an expense category from free-te
 input, generates a filler description when one is missing, and periodically retrains its
 one shared classification model from user corrections collected by the backend.
 
+> **Scope note (Prediction Layer V1).** Spending forecasting and budget-risk
+> estimation are **not** part of this service. They are implemented as pure,
+> deterministic statistical analyzers inside the backend analytics engine
+> (`backend/analytics/analyzers/forecastAnalyzer.js`) — a Theil-Sen robust
+> trend over the user's own completed monthly totals, with no trained model,
+> no training dataset, no measured accuracy figure and no call to this
+> service. This service remains responsible only for expense-category
+> prediction, retraining and description generation.
+
 See the [root README](../README.md) for the overall system and the
 [frontend](../frontend/README.md) / [backend](../backend/README.md) READMEs for the
 other two services.

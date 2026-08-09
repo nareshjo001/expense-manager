@@ -116,6 +116,12 @@ describe("backend/sia/contextBuilder -- Batch 2: ANOMALY_EXPLANATION", () => {
 });
 
 describe("backend/sia/contextBuilder -- Batch 2: SPENDING_FORECAST_EXPLANATION", () => {
+  // Prediction Layer V1 correction: SIA grounds forecast answers on the
+  // TRUE next-calendar-month horizon. The legacy `nextMonthForecast` field
+  // projects the CURRENT, in-progress month despite its name, so it is no
+  // longer forwarded to the provider at all. The fixture below carries a
+  // deliberately DIFFERENT legacy estimate so the assertions cannot pass by
+  // coincidence.
   it("returns a bounded forecast context with every horizon explicitly marked as an estimate", async () => {
     const report = baseReport({
       forecast: {
@@ -123,6 +129,7 @@ describe("backend/sia/contextBuilder -- Batch 2: SPENDING_FORECAST_EXPLANATION",
         method: "TRAILING_MEDIAN_MAD_V1",
         historyMonthsAvailable: 6,
         nextMonthForecast: { hasData: true, estimate: 1000, range: { lower: 800, upper: 1200 }, historyMonthsUsed: 6, horizonMonths: 1 },
+        nextCalendarMonthForecast: { hasData: true, estimate: 1250, range: { lower: 1000, upper: 1500 }, historyMonthsUsed: 6, horizonMonths: 1 },
         nextQuarterForecast: { hasData: true, estimate: 3000, range: { lower: 2400, upper: 3600 }, historyMonthsUsed: 6, horizonMonths: 3 },
         nextYearForecast: { hasData: false, reasonCode: "INSUFFICIENT_HISTORY_FOR_NEXT_YEAR", historyMonthsUsed: 6, horizonMonths: 12 },
       },
@@ -131,8 +138,10 @@ describe("backend/sia/contextBuilder -- Batch 2: SPENDING_FORECAST_EXPLANATION",
 
     const result = await buildContext("user-1", "SPENDING_FORECAST_EXPLANATION");
 
-    expect(result.fields.forecast.nextMonthForecast.isEstimate).toBe(true);
-    expect(result.fields.forecast.nextMonthForecast.estimate).toBe(1000);
+    expect(result.fields.forecast.nextCalendarMonthForecast.isEstimate).toBe(true);
+    expect(result.fields.forecast.nextCalendarMonthForecast.estimate).toBe(1250);
+    // The legacy horizon is not exposed at all.
+    expect(result.fields.forecast).not.toHaveProperty("nextMonthForecast");
     expect(result.fields.forecast.nextYearForecast.hasData).toBe(false);
     expect(result.fields.forecast.nextYearForecast.reasonCode).toBe("INSUFFICIENT_HISTORY_FOR_NEXT_YEAR");
   });

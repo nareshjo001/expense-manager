@@ -154,14 +154,26 @@ describe("reportGenerator: forecastAnalyzer/riskAnalyzer wiring (A)", () => {
 
     expect(forecastAnalyzer.analyze).toHaveBeenCalledTimes(1);
     const [callArgs] = forecastAnalyzer.analyze.mock.calls[0];
+    // Prediction Layer V1 added three further inputs -- categorySeries,
+    // activeDays and targetMonthBudget. This assertion stays EXACT (an
+    // exhaustive key list, not a subset check) precisely so any future
+    // argument added here has to be declared deliberately, which is what
+    // makes it a real aggregate-only boundary guard rather than a formality.
     expect(Object.keys(callArgs).sort()).toEqual(
-      ["monthlySeries", "currentPartialMonthTotal", "currentMonthStart"].sort()
+      [
+        "monthlySeries",
+        "currentPartialMonthTotal",
+        "currentMonthStart",
+        "categorySeries",
+        "activeDays",
+        "targetMonthBudget",
+      ].sort()
     );
     expect(callArgs.monthlySeries).toBe(forecastMonthlySeries);
     expect(callArgs.currentPartialMonthTotal).toBe(250);
     expect(callArgs.currentMonthStart).toBe(CURRENT_MONTH_START);
     // The raw pool is never one of the arguments forecastAnalyzer.analyze()
-    // was called with.
+    // was called with -- including via any of the newly-added inputs.
     expect(JSON.stringify(callArgs)).not.toContain("should-never-reach-forecast");
   });
 
