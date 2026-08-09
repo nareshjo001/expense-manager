@@ -1,120 +1,283 @@
-import React, { useState } from "react";
-import { useSiaAskMutation } from "../../hooks/mutations/useSiaAskMutation";
+import React, { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import SiaSessionList from "./SiaSessionList";
+import { SIA_SUGGESTIONS } from "./siaSuggestions";
+import { useSiaSessionMessagesQuery } from "../../hooks/queries/useSiaSessionMessagesQuery";
+import { queryKeys } from "../../query/queryKeys";
+import {
+  PANEL_MODE,
+  SIA_ERROR_CODE,
+  MAX_QUESTION_LENGTH,
+  normalizeServerMessages,
+} from "./useSiaConversation";
 import "./SiaPanel.css";
 
-const GENERIC_ERROR_MESSAGE = "SIA is temporarily unavailable. Please try again.";
+// Presentation only. Every piece of conversation state lives in
+// SiaEntryPoint's useSiaConversation() hook, so unmounting this component
+// on close never loses the transcript, the active session, or an in-flight
+// request.
+//
+// Answers are rendered as plain text (never dangerouslySetInnerHTML);
+// newlines are handled by CSS `white-space: pre-wrap`, so HTML-looking
+// content from a provider can only ever appear as literal characters.
+const SiaPanel = ({ onClose, conversation }) => {
+  const {
+    messages,
+    input,
+    pending,
+    failed,
+    mode,
+    activeSessionId,
+    selectedHistorySessionId,
+    canSubmit,
+    isBusy,
+    setInput,
+    submitQuestion,
+    retry,
+    dismissFailed,
+    newChat,
+    setMode,
+    selectHistorySession,
+    hydrate,
+    clearActiveSession,
+  } = conversation;
 
-// Extracts only a plain, safe string message from a rejected Axios error's
-// response body -- never the raw error object, Axios config, stack trace,
-// or response body as a whole. Anything that isn't a non-blank string
-// falls back to a generic, safe message. Matches the backend's own
-// {success:false, message: string} error contract (see
-// backend/Controllers/SiaControllers/ask.js's 400/422/503 responses).
-function getErrorMessage(error) {
-  const message = error && error.response && error.response.data && error.response.data.message;
-  return typeof message === "string" && message.trim() !== "" ? message : GENERIC_ERROR_MESSAGE;
-}
+  const composerRef = useRef(null);
+  const transcriptEndRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const queryClient = useQueryClient();
+  const [historyLoadError, setHistoryLoadError] = useState(null);
 
-// M4-4: the actual question/answer surface. Always mounted fresh by
-// SiaEntryPoint (never retained across opens/closes), so there is no
-// message history here -- only the latest question and its outcome.
-// Uses useSiaAskMutation (M4-2) directly; never imports askSia (M4-1)
-// itself, and never adds onSuccess/onError callbacks to the mutation.
-const SiaPanel = ({ onClose }) => {
-  const mutation = useSiaAskMutation();
-  const [question, setQuestion] = useState("");
-  const [lastSubmittedQuestion, setLastSubmittedQuestion] = useState(null);
+  // Only fetches once a session is actually selected.
+  const messagesQuery = useSiaSessionMessagesQuery(selectedHistorySessionId);
 
-  const canSubmit = question.trim() !== "" && !mutation.isPending;
+  // A failed load (typically a 404 for a session deleted elsewhere) returns
+  // the user to the history list with an understandable message and
+  // refreshes that list -- the existing local transcript is never touched,
+  // because hydration only ever happens on success.
+  useEffect(() => {
+    if (!selectedHistorySessionId || !messagesQuery.isError) return;
+    setHistoryLoadError("That conversation could not be opened. It may have been deleted.");
+    selectHistorySession(null);
+    queryClient.invalidateQueries({ queryKey: queryKeys.sia.sessions.list() });
+  }, [selectedHistorySessionId, messagesQuery.isError, selectHistorySession, queryClient]);
 
-  // Trimming is used only to decide whether a submission is allowed -- the
-  // original, untrimmed question string is always what's sent to the
-  // mutation, unchanged.
-  const submitQuestion = (value) => {
-    setLastSubmittedQuestion(value);
-    mutation.mutate(value);
+  // Hydrate exactly once per successful load, and only for the session
+  // still selected -- the reducer itself re-checks, so a slow response for
+  // an abandoned selection can never overwrite a newer conversation.
+  useEffect(() => {
+    if (!selectedHistorySessionId || !messagesQuery.isSuccess) return;
+    const loadedSessionId = messagesQuery.data?.sessionId || selectedHistorySessionId;
+    if (String(loadedSessionId) !== String(selectedHistorySessionId)) return;
+    hydrate(selectedHistorySessionId, normalizeServerMessages(messagesQuery.data?.messages));
+  }, [selectedHistorySessionId, messagesQuery.isSuccess, messagesQuery.data, hydrate]);
+
+  // Move focus into the composer when the panel opens.
+  useEffect(() => {
+    if (mode === PANEL_MODE.CONVERSATION && composerRef.current) {
+      composerRef.current.focus();
+    }
+  }, [mode]);
+
+  // Follow the newest message on submit/answer. Guarded because jsdom (and
+  // some older browsers) do not implement scrollIntoView.
+  useEffect(() => {
+    if (transcriptEndRef.current?.scrollIntoView) {
+      transcriptEndRef.current.scrollIntoView({ block: "end" });
+    }
+  }, [messages.length, pending]);
+
+  const handleClose = () => {
+    if (typeof onClose === "function") onClose();
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (question.trim() === "" || mutation.isPending) {
-      return;
-    }
-    submitQuestion(question);
+    submitQuestion();
   };
 
-  const handleRetry = () => {
-    if (lastSubmittedQuestion === null || mutation.isPending) {
-      return;
+  const handleKeyDown = (event) => {
+    // Enter sends; Shift+Enter inserts a newline in this multiline
+    // composer.
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitQuestion();
     }
-    submitQuestion(lastSubmittedQuestion);
   };
 
-  const handleClose = () => {
-    if (typeof onClose === "function") {
-      onClose();
-    }
+  const handleSuggestion = (text) => {
+    // Populates the composer and focuses it -- never submits on the user's
+    // behalf, so the question can still be edited.
+    setInput(text);
+    if (composerRef.current) composerRef.current.focus();
   };
+
+  const handleSelectSession = (sessionId) => {
+    setHistoryLoadError(null);
+    selectHistorySession(sessionId);
+  };
+
+  const handleBackToConversation = () => {
+    setHistoryLoadError(null);
+    setMode(PANEL_MODE.CONVERSATION);
+    selectHistorySession(null);
+  };
+
+  const trimmedLength = input.trim().length;
+  const isOverLimit = trimmedLength > MAX_QUESTION_LENGTH;
+  const showSuggestions = messages.length === 0 && !pending && !failed && mode === PANEL_MODE.CONVERSATION;
 
   return (
-    <div
-      className="sia-panel"
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="sia-panel-heading"
-    >
+    <div className="sia-panel" role="dialog" aria-modal="false" aria-labelledby="sia-panel-heading">
       <div className="sia-panel-header">
         <h2 id="sia-panel-heading" className="sia-panel-heading">
           Ask SIA
         </h2>
-        <button
-          type="button"
-          className="sia-panel-close"
-          aria-label="Close SIA"
-          onClick={handleClose}
-        >
-          &times;
-        </button>
+        <div className="sia-header-actions">
+          <button
+            type="button"
+            className="sia-header-btn"
+            onClick={newChat}
+            disabled={isBusy}
+            aria-label="Start a new conversation"
+          >
+            New chat
+          </button>
+          <button
+            type="button"
+            className="sia-header-btn"
+            onClick={() =>
+              setMode(mode === PANEL_MODE.HISTORY ? PANEL_MODE.CONVERSATION : PANEL_MODE.HISTORY)
+            }
+            disabled={isBusy}
+            aria-label="Conversation history"
+          >
+            History
+          </button>
+          <button
+            type="button"
+            className="sia-panel-close"
+            aria-label="Close SIA"
+            onClick={handleClose}
+            ref={closeButtonRef}
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
-      <form className="sia-panel-form" onSubmit={handleSubmit}>
-        <label htmlFor="sia-question-input" className="sia-panel-label">
-          Your question
-        </label>
-        <textarea
-          id="sia-question-input"
-          className="sia-panel-input"
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          disabled={mutation.isPending}
-          rows={3}
-        />
-        <button type="submit" className="sia-panel-submit" disabled={!canSubmit}>
-          Ask
-        </button>
-      </form>
-
-      {mutation.isPending && (
-        <p className="sia-panel-status" role="status">
-          SIA is thinking&hellip;
-        </p>
-      )}
-
-      {!mutation.isPending && mutation.isSuccess && mutation.data && (
-        <p className="sia-panel-answer">{mutation.data.answer}</p>
-      )}
-
-      {!mutation.isPending && mutation.isError && (
-        <div className="sia-panel-error-block">
-          <p className="sia-panel-error" role="alert">
-            {getErrorMessage(mutation.error)}
-          </p>
-          {lastSubmittedQuestion !== null && (
-            <button type="button" className="sia-panel-retry" onClick={handleRetry}>
-              Retry
-            </button>
+      {mode === PANEL_MODE.HISTORY ? (
+        <>
+          {historyLoadError && (
+            <p className="sia-error sia-history-error" role="alert">
+              {historyLoadError}
+            </p>
           )}
-        </div>
+          <SiaSessionList
+            isOpen
+            activeSessionId={activeSessionId}
+            onSelect={handleSelectSession}
+            onBack={handleBackToConversation}
+            onActiveSessionDeleted={clearActiveSession}
+          />
+        </>
+      ) : (
+        <>
+          <div className="sia-transcript" role="log" aria-label="Conversation">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={
+                  message.role === "user" ? "sia-message sia-message-user" : "sia-message sia-message-assistant"
+                }
+              >
+                <span className="sia-visually-hidden">
+                  {message.role === "user" ? "You said:" : "SIA said:"}
+                </span>
+                <p className="sia-message-text">{message.content}</p>
+
+                {failed && failed.messageId === message.id && (
+                  <div className="sia-error-block">
+                    <p className="sia-error" role="alert">
+                      {failed.code === SIA_ERROR_CODE.IN_PROGRESS
+                        ? "This question is still being processed. You can try again in a moment."
+                        : failed.code === SIA_ERROR_CODE.CONFLICT
+                        ? "This question could not be retried safely. Please dismiss it and ask again."
+                        : failed.message}
+                    </p>
+                    {/* A conflict can never be resolved by resending the
+                        same key, so Retry is deliberately not offered for
+                        it -- only a deliberate fresh submission can. */}
+                    {failed.code !== SIA_ERROR_CODE.CONFLICT && (
+                      <button type="button" className="sia-secondary-btn" onClick={retry}>
+                        Retry
+                      </button>
+                    )}
+                    <button type="button" className="sia-secondary-btn" onClick={dismissFailed}>
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {pending && (
+              <p className="sia-pending" role="status">
+                SIA is thinking&hellip;
+              </p>
+            )}
+
+            <div ref={transcriptEndRef} />
+          </div>
+
+          {showSuggestions && (
+            <div className="sia-suggestions">
+              <p className="sia-suggestions-label">Try asking:</p>
+              <ul className="sia-suggestion-list">
+                {SIA_SUGGESTIONS.map((suggestion) => (
+                  <li key={suggestion.id}>
+                    <button
+                      type="button"
+                      className="sia-suggestion"
+                      onClick={() => handleSuggestion(suggestion.text)}
+                    >
+                      {suggestion.text}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <form className="sia-composer" onSubmit={handleSubmit}>
+            <label htmlFor="sia-question-input" className="sia-panel-label">
+              Your question
+            </label>
+            <textarea
+              id="sia-question-input"
+              className="sia-panel-input"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isBusy}
+              rows={2}
+              ref={composerRef}
+            />
+            <div className="sia-composer-footer">
+              {/* Only surfaces near the limit rather than counting from
+                  zero, so it is information when it matters and noise
+                  never. */}
+              {trimmedLength > MAX_QUESTION_LENGTH - 100 && (
+                <span className={isOverLimit ? "sia-counter sia-counter-over" : "sia-counter"} role="status">
+                  {trimmedLength} / {MAX_QUESTION_LENGTH}
+                </span>
+              )}
+              <button type="submit" className="sia-panel-submit" disabled={!canSubmit}>
+                Ask
+              </button>
+            </div>
+          </form>
+        </>
       )}
     </div>
   );

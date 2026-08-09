@@ -1,6 +1,21 @@
 import React from "react";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render as rtlRender, screen, cleanup, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SiaEntryPoint from "./SiaEntryPoint";
+
+// Batch 3C: SiaEntryPoint now owns the conversation state (see
+// useSiaConversation), which uses TanStack Query, so a provider is
+// required. The API layer is mocked so nothing here can reach the network.
+jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
+
+// Wraps every render in this file with a fresh QueryClient, keeping each
+// test's cache isolated.
+const render = (ui) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: 0 } },
+  });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+};
 
 // M4-4: SiaEntryPoint now uses hooks (useState/useContext), so the flag is
 // read fresh on every render (see SiaEntryPoint.js) instead of being cached
@@ -148,6 +163,11 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
     expect(screen.getByRole("button", { name: "Ask SIA" })).toBeInTheDocument();
   });
 
+  // Batch 3C: the PANEL is still genuinely remounted (it is pure
+  // presentation), but the conversation state it renders now lives in
+  // SiaEntryPoint, so remounting no longer discards the transcript. That
+  // retention is proven end-to-end in SiaConversation.test.js; this file
+  // continues to prove the mount/unmount wiring itself.
   it("reopening creates a fresh panel instance (a real mount, not a retained one)", () => {
     setFlag("true");
     render(<SiaEntryPoint />);

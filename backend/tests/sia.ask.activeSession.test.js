@@ -47,10 +47,22 @@ const healthContext = () => ({
   sourceReportGeneratedAt: "2026-08-08T00:00:00.000Z",
 });
 
+// Batch 3B.1: session resolution and session creation are now two
+// separate service calls made at two different points in the request
+// (lookup before the provider call so history can load; creation only
+// AFTER a validated answer exists, so a failed turn leaves no empty
+// conversation). These fixtures were updated to mock that exact pair --
+// every assertion below is preserved, only the seam it observes moved.
+// Session ids are now real ObjectId strings because the controller
+// validates their shape and rejects malformed ones with 400.
+const EXISTING_SESSION_ID = "64f1a2b3c4d5e6f7a8b9c0d1";
+const OTHER_SESSION_ID = "64f1a2b3c4d5e6f7a8b9c0d2";
+
 function loadActiveApp({
   buildContextImpl,
   askLlmImpl,
-  getOrCreateSessionImpl,
+  findOwnedSessionImpl,
+  createSessionImpl,
   appendTurnImpl,
   loadRecentTurnsImpl,
 } = {}) {
@@ -70,13 +82,18 @@ function loadActiveApp({
   );
   jest.doMock("../sia/llmService", () => ({ askLlm: askLlmMock, LlmProviderError: RealLlmProviderError }));
 
-  const getOrCreateSessionMock = jest.fn(
-    getOrCreateSessionImpl || (async (userId) => ({ _id: `sess-for-${userId}`, user: userId }))
+  const findOwnedSessionMock = jest.fn(
+    findOwnedSessionImpl || (async (userId, sessionId) => ({ _id: sessionId, user: userId }))
+  );
+  const createSessionMock = jest.fn(
+    createSessionImpl || (async (userId) => ({ _id: `sess-for-${userId}`, user: userId }))
   );
   const appendTurnMock = jest.fn(appendTurnImpl || (async () => ({ deduplicated: false })));
   const loadRecentTurnsMock = jest.fn(loadRecentTurnsImpl || (async () => []));
   jest.doMock("../sia/sessionService", () => ({
-    getOrCreateSession: getOrCreateSessionMock,
+    findOwnedSession: findOwnedSessionMock,
+    createSession: createSessionMock,
+    getOrCreateSession: jest.fn(),
     appendTurn: appendTurnMock,
     loadRecentTurns: loadRecentTurnsMock,
     listSessions: jest.fn(async () => []),
@@ -98,12 +115,20 @@ function loadActiveApp({
   }));
 
   const app = require("../app");
-  return { app, buildContextMock, askLlmMock, getOrCreateSessionMock, appendTurnMock, loadRecentTurnsMock };
+  return {
+    app,
+    buildContextMock,
+    askLlmMock,
+    findOwnedSessionMock,
+    createSessionMock,
+    appendTurnMock,
+    loadRecentTurnsMock,
+  };
 }
 
 describe("POST /sia/ask -- active session path: new conversation", () => {
   it("creates a session (no client sessionId), fetches the report by authenticated identity, persists exactly one completed turn, and returns sessionId additively", async () => {
-    const { app, buildContextMock, getOrCreateSessionMock, appendTurnMock } = loadActiveApp();
+    const { app, buildContextMock, createSessionMock, appendTurnMock } = loadActiveApp();
     const token = signToken("user-active-1");
 
     const res = await request(app)
@@ -116,7 +141,7 @@ describe("POST /sia/ask -- active session path: new conversation", () => {
     // All existing response fields remain present alongside the additive one.
     expect(res.body).toMatchObject({ success: true, intent: "HEALTH_EXPLANATION" });
 
-    expect(getOrCreateSessionMock).toHaveBeenCalledWith("user-active-1", undefined);
+    expect(createSessionMock).toHaveBeenCalledWith("user-active-1");
     expect(buildContextMock).toHaveBeenCalledWith("user-active-1", "HEALTH_EXPLANATION");
 
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
@@ -137,8 +162,8 @@ describe("POST /sia/ask -- active session path: existing conversation", () => {
       { role: "user", content: "Earlier question", intent: "HEALTH_EXPLANATION" },
       { role: "assistant", content: "Earlier answer", intent: "HEALTH_EXPLANATION" },
     ];
-    const { app, askLlmMock, getOrCreateSessionMock, loadRecentTurnsMock } = loadActiveApp({
-      getOrCreateSessionImpl: async (userId, sessionId) => ({ _id: sessionId, user: userId }),
+    const { app, askLlmMock, findOwnedSessionMock, loadRecentTurnsMock } = loadActiveApp({
+      findOwnedSessionImpl: async (userId, sessionId) => ({ _id: sessionId, user: userId }),
       loadRecentTurnsImpl: async () => priorTurns,
     });
     const token = signToken("user-active-2");
@@ -146,12 +171,12 @@ describe("POST /sia/ask -- active session path: existing conversation", () => {
     const res = await request(app)
       .post("/sia/ask")
       .set("Authorization", `Bearer ${token}`)
-      .send({ question: "Why is my financial health score low?", sessionId: "existing-session-id" });
+      .send({ question: "Why is my financial health score low?", sessionId: EXISTING_SESSION_ID });
 
     expect(res.status).toBe(200);
-    expect(res.body.sessionId).toBe("existing-session-id");
-    expect(getOrCreateSessionMock).toHaveBeenCalledWith("user-active-2", "existing-session-id");
-    expect(loadRecentTurnsMock).toHaveBeenCalledWith("existing-session-id", "user-active-2");
+    expect(res.body.sessionId).toBe(EXISTING_SESSION_ID);
+    expect(findOwnedSessionMock).toHaveBeenCalledWith("user-active-2", EXISTING_SESSION_ID);
+    expect(loadRecentTurnsMock).toHaveBeenCalledWith(EXISTING_SESSION_ID, "user-active-2");
 
     // The critical proof: history reached askLlm's actual call arguments,
     // not just sessionService's own return value.
@@ -169,7 +194,7 @@ describe("POST /sia/ask -- active session path: existing conversation", () => {
     await request(app)
       .post("/sia/ask")
       .set("Authorization", `Bearer ${token}`)
-      .send({ question: "Why is my financial health score low?", sessionId: "session-x" });
+      .send({ question: "Why is my financial health score low?", sessionId: OTHER_SESSION_ID });
 
     expect(buildContextMock).toHaveBeenCalledTimes(1);
     expect(buildContextMock).toHaveBeenCalledWith("user-active-3", "HEALTH_EXPLANATION");
@@ -177,8 +202,8 @@ describe("POST /sia/ask -- active session path: existing conversation", () => {
 });
 
 describe("POST /sia/ask -- active session path: failure paths", () => {
-  it("a provider failure persists no completed turn", async () => {
-    const { app, appendTurnMock } = loadActiveApp({
+  it("a provider failure persists no completed turn, and creates no empty session", async () => {
+    const { app, appendTurnMock, createSessionMock } = loadActiveApp({
       askLlmImpl: async () => {
         const { LlmProviderError } = jest.requireActual("../sia/llmService");
         throw new LlmProviderError("boom", { code: "PROVIDER_TIMEOUT", provider: "openai" });
@@ -193,9 +218,12 @@ describe("POST /sia/ask -- active session path: failure paths", () => {
 
     expect(res.status).toBe(503);
     expect(appendTurnMock).not.toHaveBeenCalled();
+    // Batch 3B.1: session creation is deferred until a validated answer
+    // exists, so a failed first turn leaves no empty conversation behind.
+    expect(createSessionMock).not.toHaveBeenCalled();
   });
 
-  it("a no-data response (fallback path) persists no completed turn, but still returns the additive sessionId", async () => {
+  it("a no-data response on an EXISTING session persists no completed turn, but still returns the additive sessionId", async () => {
     const { app, appendTurnMock } = loadActiveApp({
       buildContextImpl: async () => ({ intent: "HEALTH_EXPLANATION", fields: null, reason: "no_data" }),
     });
@@ -204,10 +232,30 @@ describe("POST /sia/ask -- active session path: failure paths", () => {
     const res = await request(app)
       .post("/sia/ask")
       .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Why is my financial health score low?", sessionId: EXISTING_SESSION_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.sessionId).toBe(EXISTING_SESSION_ID);
+    expect(appendTurnMock).not.toHaveBeenCalled();
+  });
+
+  it("a no-data response on a NEW conversation creates no empty session", async () => {
+    const { app, appendTurnMock, createSessionMock } = loadActiveApp({
+      buildContextImpl: async () => ({ intent: "HEALTH_EXPLANATION", fields: null, reason: "no_data" }),
+    });
+    const token = signToken("user-active-5b");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
       .send({ question: "Why is my financial health score low?" });
 
     expect(res.status).toBe(200);
-    expect(res.body.sessionId).toBeDefined();
+    expect(res.body.success).toBe(true);
+    // No turn exists to store, so an empty conversation would be pure
+    // noise in the user's history.
+    expect(createSessionMock).not.toHaveBeenCalled();
+    expect(res.body.sessionId).toBeUndefined();
     expect(appendTurnMock).not.toHaveBeenCalled();
   });
 
@@ -231,9 +279,9 @@ describe("POST /sia/ask -- active session path: failure paths", () => {
     expect(appendTurnMock).not.toHaveBeenCalled();
   });
 
-  it("a session-store failure (e.g. getOrCreateSession throws) degrades to the pre-existing no-session behavior, not a failed request", async () => {
+  it("a session-store failure (e.g. createSession throws) degrades to the pre-existing no-session behavior, not a failed request", async () => {
     const { app, appendTurnMock } = loadActiveApp({
-      getOrCreateSessionImpl: async () => {
+      createSessionImpl: async () => {
         throw new Error("db unavailable");
       },
     });
@@ -271,8 +319,8 @@ describe("POST /sia/ask -- active session path: failure paths", () => {
 });
 
 describe("POST /sia/ask -- active session path: request-body identity cannot be overridden", () => {
-  it("a request-body userId is never used as the identity passed to getOrCreateSession/buildContext", async () => {
-    const { app, getOrCreateSessionMock, buildContextMock } = loadActiveApp();
+  it("a request-body userId is never used as the identity passed to createSession/buildContext", async () => {
+    const { app, createSessionMock, buildContextMock } = loadActiveApp();
     const token = signToken("user-active-9");
 
     await request(app)
@@ -280,7 +328,7 @@ describe("POST /sia/ask -- active session path: request-body identity cannot be 
       .set("Authorization", `Bearer ${token}`)
       .send({ question: "Why is my financial health score low?", userId: "attacker-controlled-id" });
 
-    expect(getOrCreateSessionMock).toHaveBeenCalledWith("user-active-9", undefined);
+    expect(createSessionMock).toHaveBeenCalledWith("user-active-9");
     expect(buildContextMock).toHaveBeenCalledWith("user-active-9", "HEALTH_EXPLANATION");
   });
 });

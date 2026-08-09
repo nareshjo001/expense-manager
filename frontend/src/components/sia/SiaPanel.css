@@ -79,7 +79,9 @@
   border: 1px solid var(--sia-border);
   border-radius: 16px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
-  overflow-y: auto;
+  /* The panel itself never scrolls -- the transcript and history bodies
+     own their own scrolling, so the header and composer stay pinned. */
+  overflow: hidden;
   z-index: 10000;
 }
 
@@ -87,8 +89,44 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px 16px;
   background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  flex: 0 0 auto;
+}
+
+.sia-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sia-header-btn {
+  min-height: 44px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sia-header-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sia-header-btn:focus-visible,
+.sia-secondary-btn:focus-visible,
+.sia-danger-btn:focus-visible,
+.sia-suggestion:focus-visible,
+.sia-history-open:focus-visible,
+.sia-icon-btn:focus-visible {
+  outline: 3px solid var(--sia-accent-end);
+  outline-offset: 2px;
 }
 
 .sia-panel-heading {
@@ -119,6 +157,266 @@
 .sia-panel-input:focus-visible {
   outline: 3px solid var(--sia-accent-end);
   outline-offset: 2px;
+}
+
+/* ===== Transcript ===== */
+.sia-transcript {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sia-message {
+  max-width: 88%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.sia-message-user {
+  align-self: flex-end;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border-bottom-right-radius: 4px;
+}
+
+.sia-message-assistant {
+  align-self: flex-start;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-bottom-left-radius: 4px;
+}
+
+/* Newlines come from the answer text itself via pre-wrap -- never from
+   injected markup. Long unbroken strings wrap instead of overflowing. */
+.sia-message-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sia-pending {
+  align-self: flex-start;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--sia-muted-text);
+}
+
+.sia-muted {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--sia-muted-text);
+}
+
+.sia-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== Suggestions ===== */
+.sia-suggestions {
+  flex: 0 0 auto;
+  padding: 0 16px 8px;
+}
+
+.sia-suggestions-label {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--sia-muted-text);
+}
+
+.sia-suggestion-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sia-suggestion {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+/* ===== Shared buttons ===== */
+.sia-secondary-btn {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sia-danger-btn {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--sia-error-text);
+  background: var(--sia-error-bg);
+  border: 1px solid var(--sia-error-text);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sia-icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.2rem;
+  color: var(--sia-muted-text);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* ===== History ===== */
+.sia-history {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sia-history-bar {
+  flex: 0 0 auto;
+  padding: 12px 16px 0;
+}
+
+.sia-history-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px 16px;
+}
+
+.sia-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sia-history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sia-history-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--sia-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sia-history-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sia-history-meta {
+  font-size: 0.8rem;
+  color: var(--sia-muted-text);
+}
+
+.sia-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sia-confirm-text {
+  font-size: 0.85rem;
+  color: var(--sia-text);
+}
+
+/* ===== Composer ===== */
+.sia-composer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--sia-border);
+}
+
+.sia-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.sia-counter {
+  font-size: 0.8rem;
+  color: var(--sia-muted-text);
+}
+
+.sia-counter-over {
+  color: var(--sia-error-text);
+  font-weight: 600;
+}
+
+.sia-error-block {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sia-error {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  color: var(--sia-error-text);
+  background: var(--sia-error-bg);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
 }
 
 .sia-panel-form {
@@ -232,6 +530,21 @@
 
   .sia-panel-submit {
     align-self: stretch;
+  }
+
+  /* Header controls stay reachable without pushing the close button off
+     the edge on a 375px viewport. */
+  .sia-header-btn {
+    padding: 8px;
+    font-size: 0.8rem;
+  }
+
+  .sia-message {
+    max-width: 92%;
+  }
+
+  .sia-composer-footer {
+    justify-content: space-between;
   }
 }
 

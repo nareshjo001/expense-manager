@@ -36,25 +36,50 @@ function boundLimit(requested, fallback, max) {
   return Math.min(Math.floor(n), max);
 }
 
+// Resolves `sessionId` to a session owned by `userId`, or null. Returns
+// null (never throws, never discloses) both for a malformed id and for a
+// valid id owned by somebody else -- the caller decides what that means.
+//
+// Batch 3B.1: split out of getOrCreateSession() below because
+// Controllers/SiaControllers/ask.js must now be able to LOOK UP an
+// existing session without implicitly creating one. Deferring creation is
+// what stops a failed first turn from leaving an empty, user-visible
+// conversation behind.
+async function findOwnedSession(userId, sessionId) {
+  if (!isValidObjectId(sessionId)) return null;
+  return SiaSession.findOne({ _id: sessionId, user: userId });
+}
+
+// Creates a brand-new session owned by `userId`. Never creates a session
+// belonging to any other user.
+async function createSession(userId) {
+  return SiaSession.create({ user: userId });
+}
+
 // Returns an existing, owned session if `sessionId` is supplied and valid,
 // or creates a brand-new one for `userId` otherwise. Never creates a
 // session belonging to any user other than `userId`, and never trusts a
 // sessionId that does not resolve to a document owned by `userId` (falls
 // back to creating a fresh session in that case rather than throwing --
 // the same "never disclose whether another identifier exists" posture the
-// dedicated session endpoints use, applied here to the ask-flow too).
+// dedicated session endpoints use).
+//
+// Batch 3B.1: now a thin composition of the two functions above, with its
+// original behaviour preserved exactly. The ask controller no longer uses
+// it (it needs the lookup and the creation at two DIFFERENT points in the
+// request, either side of the provider call), but it remains the correct
+// primitive for any caller that genuinely wants "resolve or create" in one
+// step.
 async function getOrCreateSession(userId, sessionId) {
   if (sessionId !== undefined && sessionId !== null) {
-    if (isValidObjectId(sessionId)) {
-      const existing = await SiaSession.findOne({ _id: sessionId, user: userId });
-      if (existing) return existing;
-    }
+    const existing = await findOwnedSession(userId, sessionId);
+    if (existing) return existing;
     // Invalid id shape, or a valid id that does not belong to this user:
     // silently falls through to creating a new session rather than
     // throwing or revealing which case occurred.
   }
 
-  return SiaSession.create({ user: userId });
+  return createSession(userId);
 }
 
 // Persists exactly one completed turn (one user message + one assistant
@@ -245,6 +270,8 @@ async function loadRecentTurns(sessionId, userId, limit = MAX_RECENT_TURNS_FOR_L
 }
 
 module.exports = {
+  findOwnedSession,
+  createSession,
   getOrCreateSession,
   appendTurn,
   listSessions,

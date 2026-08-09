@@ -34,6 +34,19 @@ export const queryKeys = {
     ],
   },
 
+  sia: {
+    all: ["sia"],
+    sessions: {
+      all: () => [...queryKeys.sia.all, "sessions"],
+      list: () => [...queryKeys.sia.sessions.all(), "list"],
+      messages: (sessionId) => [
+        ...queryKeys.sia.sessions.all(),
+        "messages",
+        sessionId,
+      ],
+    },
+  },
+
   charts: {
     all: ["charts"],
     bar: (filters) => [

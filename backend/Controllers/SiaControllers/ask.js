@@ -57,6 +57,8 @@ const {
 const { logSiaEvent, SIA_LOG_EVENTS } = require("../../sia/safeLogger");
 const sessionService = require("../../sia/sessionService");
 const { validateGroundedAnswer } = require("../../sia/responseValidator");
+const idempotencyService = require("../../sia/idempotencyService");
+const { isValidObjectId } = require("mongoose");
 
 // Batch 2: bounded conversation session support, additive only.
 //
@@ -80,10 +82,25 @@ const { validateGroundedAnswer } = require("../../sia/responseValidator");
 // half-written turn (a question persisted with no matching answer, or vice
 // versa) -- appendTurn() is only ever called once a real, usable answer
 // already exists, and both of its writes happen together.
-async function safeGetOrCreateSession(userId, sessionId) {
+// Batch 3B.1: session RESOLUTION and session CREATION are now separate,
+// deliberately performed at two different points in the request. An
+// explicitly supplied session is resolved up front (its history is needed
+// before the provider call); a brand-new conversation's session is not
+// created until a validated answer already exists, so a failed first turn
+// never leaves an empty, user-visible conversation behind.
+async function safeFindOwnedSession(userId, sessionId) {
   if (!isSessionStoreAvailable()) return null;
   try {
-    return await sessionService.getOrCreateSession(userId, sessionId);
+    return await sessionService.findOwnedSession(userId, sessionId);
+  } catch (_err) {
+    return null;
+  }
+}
+
+async function safeCreateSession(userId) {
+  if (!isSessionStoreAvailable()) return null;
+  try {
+    return await sessionService.createSession(userId);
   } catch (_err) {
     return null;
   }
@@ -284,6 +301,112 @@ const UNAVAILABLE_RESPONSE = {
   message: "SIA is temporarily unavailable.",
 };
 
+// Batch 3B.1: the exact, stable conflict contract. Both carry a machine-
+// readable `code` so a client can distinguish "you reused a key for a
+// different request" (never retryable as-is) from "your original request
+// is still running" (retryable shortly) -- neither is a generic 503.
+const IDEMPOTENCY_CONFLICT_RESPONSE = {
+  success: false,
+  code: "SIA_IDEMPOTENCY_CONFLICT",
+  message: "This clientMessageId was already used for a different request.",
+};
+
+const REQUEST_IN_PROGRESS_RESPONSE = {
+  success: false,
+  code: "SIA_REQUEST_IN_PROGRESS",
+  message: "This request is still being processed. Please retry shortly.",
+};
+
+const SESSION_NOT_FOUND_RESPONSE = {
+  success: false,
+  message: "Session not found.",
+};
+
+// Mirrors models/SiaRequest.js's and models/SiaMessage.js's own ceiling.
+const MAX_CLIENT_MESSAGE_ID_LENGTH = 100;
+
+// Validates the optional idempotency key. Returns {ok, value} or
+// {ok:false, message}. Omission stays fully supported (backward
+// compatibility for every pre-existing client) -- it simply carries no
+// idempotency guarantee.
+function parseClientMessageId(raw) {
+  if (raw === undefined || raw === null) return { ok: true, value: undefined };
+  if (typeof raw !== "string") {
+    return { ok: false, message: "clientMessageId must be a string" };
+  }
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return { ok: false, message: "clientMessageId must not be empty" };
+  }
+  if (trimmed.length > MAX_CLIENT_MESSAGE_ID_LENGTH) {
+    return {
+      ok: false,
+      message: `clientMessageId must be ${MAX_CLIENT_MESSAGE_ID_LENGTH} characters or fewer`,
+    };
+  }
+  return { ok: true, value: trimmed };
+}
+
+// Validates the optional session id. Batch 3B.1 correction: a malformed id
+// is now an explicit 400 rather than being silently swallowed into "create
+// a brand-new session instead", which previously hid client bugs and made
+// a typo indistinguishable from starting a new conversation.
+function parseSessionId(raw) {
+  if (raw === undefined || raw === null) return { ok: true, value: undefined };
+  if (typeof raw !== "string") {
+    return { ok: false, message: "sessionId must be a string" };
+  }
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return { ok: false, message: "sessionId must not be empty" };
+  }
+  if (!isValidObjectId(trimmed)) {
+    return { ok: false, message: "sessionId is not a valid identifier" };
+  }
+  return { ok: true, value: trimmed };
+}
+
+// Completes a request that already has a validated answer in hand: creates
+// the session if this is a brand-new conversation (deferred to exactly
+// this point so a failed turn never leaves an empty one), appends the
+// single user/assistant pair, records the exact returned payload for
+// replay, and returns it. Shared by the normal success path and by the
+// `answer_ready` recovery path -- neither of which calls the provider from
+// here.
+async function finalizeAnswer({ req, reservation, activeSession, intent, answer, clientMessageId }) {
+  let session = activeSession;
+  if (!session) {
+    session = await safeCreateSession(req.userId);
+  }
+
+  if (session) {
+    await safeAppendTurn({
+      sessionId: session._id,
+      userId: req.userId,
+      question: req.body.question.trim(),
+      intent,
+      answer,
+      providerMetadata: { provider: config.provider },
+      clientMessageId,
+    });
+  }
+
+  const payload = formatExplanationResponse(intent, answer);
+  if (session) payload.sessionId = String(session._id);
+
+  if (reservation) {
+    await idempotencyService.markCompleted({
+      requestId: reservation.record._id,
+      ownerToken: reservation.ownerToken,
+      responseStatus: 200,
+      responsePayload: payload,
+      sessionId: session ? session._id : null,
+    });
+  }
+
+  return { status: 200, payload };
+}
+
 const ask = async (req, res) => {
   if (!config.enabled) {
     return res.status(503).json(UNAVAILABLE_RESPONSE);
@@ -307,13 +430,110 @@ const ask = async (req, res) => {
     });
   }
 
-  // Additive, best-effort only. A client that never sends sessionId (every
-  // pre-existing caller) sees byte-for-byte the same behavior as before --
-  // activeSession stays null, and the response below carries no sessionId
-  // field at all, exactly as previously.
-  const requestedSessionId = typeof sessionId === "string" ? sessionId : undefined;
-  const requestedClientMessageId = typeof clientMessageId === "string" ? clientMessageId : undefined;
-  const activeSession = await safeGetOrCreateSession(req.userId, requestedSessionId);
+  const parsedClientMessageId = parseClientMessageId(clientMessageId);
+  if (!parsedClientMessageId.ok) {
+    return res.status(400).json({ success: false, message: parsedClientMessageId.message });
+  }
+  const requestedClientMessageId = parsedClientMessageId.value;
+
+  const parsedSessionId = parseSessionId(sessionId);
+  if (!parsedSessionId.ok) {
+    return res.status(400).json({ success: false, message: parsedSessionId.message });
+  }
+  const requestedSessionId = parsedSessionId.value;
+
+  // A keyed request whose coordination store is unreachable CANNOT be made
+  // idempotent. Failing closed here -- before the provider is ever called
+  // -- is the only honest option: silently executing it unprotected would
+  // hand the client a guarantee that does not exist, and is exactly how a
+  // retry storm produces duplicate LLM charges.
+  if (requestedClientMessageId && !isSessionStoreAvailable()) {
+    return res.status(503).json(UNAVAILABLE_RESPONSE);
+  }
+
+  // THE reservation. Deliberately before session creation, before intent
+  // classification, before context building, and before askLlm -- this
+  // ordering is the entire fix. Batch 3B.0 found the previous
+  // implementation only consulted clientMessageId inside appendTurn, long
+  // AFTER the provider had already been called.
+  let reservation = null;
+  if (requestedClientMessageId) {
+    try {
+      reservation = await idempotencyService.reserveRequest({
+        userId: req.userId,
+        clientMessageId: requestedClientMessageId,
+        question: trimmedQuestion,
+        requestedSessionId,
+      });
+    } catch (_err) {
+      return res.status(503).json(UNAVAILABLE_RESPONSE);
+    }
+
+    if (reservation.outcome === idempotencyService.OUTCOME.CONFLICT) {
+      return res.status(409).json(IDEMPOTENCY_CONFLICT_RESPONSE);
+    }
+
+    if (reservation.outcome === idempotencyService.OUTCOME.REPLAY_COMPLETED) {
+      // Verbatim replay of the already-returned payload. No classifier, no
+      // context build, no provider call, no validation, no appendTurn.
+      return res
+        .status(reservation.record.responseStatus || 200)
+        .json(reservation.record.responsePayload);
+    }
+
+    if (reservation.outcome === idempotencyService.OUTCOME.IN_PROGRESS) {
+      const completed = await idempotencyService.awaitCompletedResponse({
+        userId: req.userId,
+        clientMessageId: requestedClientMessageId,
+      });
+      if (completed) {
+        return res.status(completed.responseStatus || 200).json(completed.responsePayload);
+      }
+      // Still running at the safe limit. A follower must NEVER fall
+      // through into calling the provider itself.
+      return res.status(409).json(REQUEST_IN_PROGRESS_RESPONSE);
+    }
+
+    if (reservation.outcome === idempotencyService.OUTCOME.RESUME_ANSWER_READY) {
+      // A validated answer already exists from a prior attempt whose
+      // persistence did not finish. Complete it -- without a second
+      // provider call.
+      try {
+        const resumeSession = reservation.record.session
+          ? await safeFindOwnedSession(req.userId, String(reservation.record.session))
+          : null;
+        const finished = await finalizeAnswer({
+          req,
+          reservation,
+          activeSession: resumeSession,
+          intent: reservation.record.intent,
+          answer: reservation.record.answer,
+          clientMessageId: requestedClientMessageId,
+        });
+        return res.status(finished.status).json(finished.payload);
+      } catch (_err) {
+        return res.status(503).json(UNAVAILABLE_RESPONSE);
+      }
+    }
+  }
+
+  // Resolve an explicitly-supplied session BEFORE the provider call, since
+  // its bounded history feeds the LLM. A valid-but-unknown/foreign id is
+  // now an explicit, non-disclosing 404 -- never a silently substituted
+  // brand-new session (Batch 3B.1 correction).
+  let activeSession = null;
+  if (requestedSessionId) {
+    activeSession = await safeFindOwnedSession(req.userId, requestedSessionId);
+    if (!activeSession) {
+      if (reservation) {
+        await idempotencyService.releaseRequest({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+        });
+      }
+      return res.status(404).json(SESSION_NOT_FOUND_RESPONSE);
+    }
+  }
 
   // Whatever classifyIntent returns is used as-is -- no hard-coded intent,
   // no guessed fallback. classifyIntent's own contract guarantees exactly
@@ -321,6 +541,12 @@ const ask = async (req, res) => {
   // BUDGET_STATUS_EXPLANATION, CATEGORY_SPENDING_EXPLANATION, or null.
   const intent = classifyIntent(trimmedQuestion);
   if (intent === null) {
+    if (reservation) {
+      await idempotencyService.releaseRequest({
+        requestId: reservation.record._id,
+        ownerToken: reservation.ownerToken,
+      });
+    }
     return res.status(422).json({
       success: false,
       message: "Question not recognized for the intents SIA currently supports.",
@@ -338,8 +564,26 @@ const ask = async (req, res) => {
     const contextResult = await buildContext(req.userId, intent);
 
     if (!contextResult || contextResult.fields === null || contextResult.reason === "no_data") {
+      // No provider call happens on this path, and -- Batch 3B.1 -- no
+      // session is created for a brand-new conversation either: there is
+      // no turn to store, so an empty conversation would be pure noise in
+      // the user's history. An EXISTING session still reports its id, as
+      // before.
       const noDataResponse = formatNoDataResponse(intent);
       if (activeSession) noDataResponse.sessionId = String(activeSession._id);
+
+      // Recorded as completed so a retry with the same key replays this
+      // exact 200 rather than re-running context building.
+      if (reservation) {
+        await idempotencyService.markCompleted({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+          responseStatus: 200,
+          responsePayload: noDataResponse,
+          sessionId: activeSession ? activeSession._id : null,
+        });
+      }
+
       return res.status(200).json(noDataResponse);
     }
 
@@ -404,7 +648,7 @@ const ask = async (req, res) => {
         errorCode: `GROUNDING_${validation.reasonCode}`,
         latencyMs: Date.now() - providerStartedAt,
       });
-      return res.status(503).json(UNAVAILABLE_RESPONSE);
+      throw new Error("GROUNDING_REJECTED");
     }
 
     logSiaEvent({
@@ -413,27 +657,51 @@ const ask = async (req, res) => {
       latencyMs: Date.now() - providerStartedAt,
     });
 
+    // The durable checkpoint: the validated answer is committed BEFORE any
+    // session write is attempted, so if persistence then fails, a retry
+    // with the same key resumes from this stored answer instead of paying
+    // for a second provider call.
+    if (reservation) {
+      await idempotencyService.markAnswerReady({
+        requestId: reservation.record._id,
+        ownerToken: reservation.ownerToken,
+        answer: llmResult.answer,
+        intent,
+        sessionId: activeSession ? activeSession._id : null,
+      });
+    }
+
     // Persisted only now that a real, usable answer exists -- a provider
     // failure or an unusable result above never reaches this line, so a
     // failed request can never leave a half-written (question with no
     // answer) turn behind. Best-effort: a persistence failure here does not
     // alter or retract the response already computed.
-    if (activeSession) {
-      await safeAppendTurn({
-        sessionId: activeSession._id,
-        userId: req.userId,
-        question: trimmedQuestion,
-        intent,
-        answer: llmResult.answer,
-        providerMetadata: { provider: config.provider },
-        clientMessageId: requestedClientMessageId,
-      });
-    }
-
-    const explanationResponse = formatExplanationResponse(intent, llmResult.answer);
-    if (activeSession) explanationResponse.sessionId = String(activeSession._id);
-    return res.status(200).json(explanationResponse);
+    const finished = await finalizeAnswer({
+      req,
+      reservation,
+      activeSession,
+      intent,
+      answer: llmResult.answer,
+      clientMessageId: requestedClientMessageId,
+    });
+    return res.status(finished.status).json(finished.payload);
   } catch (err) {
+    // Release the reservation so a provider or grounding failure never
+    // permanently poisons the key -- the client may retry the identical
+    // request and will be treated as a fresh, properly-owned attempt. Note
+    // this only runs for failures BEFORE markAnswerReady committed; once
+    // an answer is stored, a retry resumes from it instead.
+    if (reservation) {
+      try {
+        await idempotencyService.releaseRequest({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+        });
+      } catch (_releaseErr) {
+        // Best-effort. The lease's own expiry is the backstop that keeps
+        // the key retryable even if this release fails.
+      }
+    }
     return res.status(503).json(UNAVAILABLE_RESPONSE);
   }
 };

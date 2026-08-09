@@ -31,16 +31,24 @@ describe("frontend/src/hooks/mutations/useSiaAskMutation", () => {
     useSiaAskMutation();
 
     expect(useMutation).toHaveBeenCalledTimes(1);
-    expect(useMutation).toHaveBeenCalledWith({ mutationFn: askSia });
+    expect(useMutation).toHaveBeenCalledWith({ mutationFn: askSia, retry: 0 });
   });
 
-  it("configures only mutationFn -- no mutation key, callbacks, retries, or other options", () => {
+  it("configures only mutationFn and an explicit retry:0 -- no mutation key or callbacks", () => {
     useMutation.mockReturnValue({});
 
     useSiaAskMutation();
 
     const optionsArg = useMutation.mock.calls[0][0];
-    expect(Object.keys(optionsArg)).toEqual(["mutationFn"]);
+    expect(Object.keys(optionsArg).sort()).toEqual(["mutationFn", "retry"]);
+  });
+
+  it("disables automatic retries so the same clientMessageId is never resent behind the UI's back", () => {
+    useMutation.mockReturnValue({});
+
+    useSiaAskMutation();
+
+    expect(useMutation.mock.calls[0][0].retry).toBe(0);
   });
 
   it("returns the exact object returned by useMutation, unchanged", () => {
@@ -59,7 +67,28 @@ describe("frontend/src/hooks/mutations/useSiaAskMutation", () => {
     expect(result).toBe(fakeMutationObject);
   });
 
-  it("invoking the configured mutationFn passes the question string unchanged to askSia", async () => {
+  it("invoking the configured mutationFn passes the request payload unchanged to askSia", async () => {
+    let capturedOptions;
+    useMutation.mockImplementation((options) => {
+      capturedOptions = options;
+      return {};
+    });
+    askSia.mockResolvedValue(GROUNDED_RESPONSE);
+
+    const payload = {
+      question: "Why did my spending change?",
+      sessionId: "64f1a2b3c4d5e6f7a8b9c0d1",
+      clientMessageId: "key-1",
+    };
+
+    useSiaAskMutation();
+    await capturedOptions.mutationFn(payload);
+
+    expect(askSia).toHaveBeenCalledTimes(1);
+    expect(askSia).toHaveBeenCalledWith(payload);
+  });
+
+  it("the hook itself never generates a clientMessageId -- that belongs to the conversation state", async () => {
     let capturedOptions;
     useMutation.mockImplementation((options) => {
       capturedOptions = options;
@@ -68,10 +97,9 @@ describe("frontend/src/hooks/mutations/useSiaAskMutation", () => {
     askSia.mockResolvedValue(GROUNDED_RESPONSE);
 
     useSiaAskMutation();
-    await capturedOptions.mutationFn("Why did my spending change?");
+    await capturedOptions.mutationFn({ question: "Q" });
 
-    expect(askSia).toHaveBeenCalledTimes(1);
-    expect(askSia).toHaveBeenCalledWith("Why did my spending change?");
+    expect(askSia).toHaveBeenCalledWith({ question: "Q" });
   });
 
   it("resolves with the exact API response returned by askSia, unchanged", async () => {

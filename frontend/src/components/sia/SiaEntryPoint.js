@@ -1,6 +1,7 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { ThemeContext } from "../contexts/ThemeContext";
 import SiaPanel from "./SiaPanel";
+import { useSiaConversation } from "./useSiaConversation";
 
 // M4-3: CRA only embeds env vars prefixed REACT_APP_ at build time. Checked
 // fresh on every render rather than cached as a module-level constant, so
@@ -18,13 +19,20 @@ function isSiaEnabled() {
   return process.env.REACT_APP_SIA_ENABLED === "true";
 }
 
-// M4-3 scaffold, M4-4 integration: owns whether the panel is open. Rendered
-// only inside LandingPage.js's existing authenticated tree, so this
-// component never inspects auth state, JWTs, or localStorage itself --
-// authenticated placement is guaranteed by where it is mounted. Closed
-// state renders the "Ask SIA" launcher button; open state renders SiaPanel
-// INSTEAD of the button (never both), so every open is a fresh SiaPanel
-// mount with no leftover question/answer state from a previous session.
+// M4-3 scaffold, M4-4 integration, Batch 3C conversation ownership.
+//
+// Rendered only inside LandingPage.js's existing authenticated tree, so
+// this component never inspects auth state, JWTs, or localStorage itself --
+// authenticated placement is guaranteed by where it is mounted.
+//
+// Batch 3C: this component now OWNS the conversation state (via
+// useSiaConversation) rather than leaving it inside SiaPanel. SiaPanel is
+// still unmounted while closed -- it is pure presentation -- but the
+// transcript, active session id, composer text and any in-flight request
+// survive close/reopen because they live here instead. Nothing is written
+// to localStorage/sessionStorage, so a page refresh deliberately starts a
+// fresh local conversation, with server-side history as the explicit
+// recovery path.
 //
 // Reads the app's existing ThemeContext (light-theme/dark-theme, see
 // components/contexts/ThemeContext.js) defensively -- SiaEntryPoint/SiaPanel
@@ -36,6 +44,22 @@ const SiaEntryPoint = ({ onOpen }) => {
   const [isOpen, setIsOpen] = useState(false);
   const themeContext = useContext(ThemeContext) || {};
   const theme = themeContext.theme || "light-theme";
+  const launcherRef = useRef(null);
+  const shouldRefocusLauncher = useRef(false);
+
+  // Mounted unconditionally so an in-flight request is never lost merely
+  // because the user closed the panel.
+  const conversation = useSiaConversation();
+
+  // Focus can only move to the launcher AFTER it has been re-rendered, so
+  // this runs as an effect rather than inline in the close handler (where
+  // the ref is still null because the button does not exist yet).
+  useEffect(() => {
+    if (!isOpen && shouldRefocusLauncher.current && launcherRef.current) {
+      launcherRef.current.focus();
+      shouldRefocusLauncher.current = false;
+    }
+  }, [isOpen]);
 
   if (!isSiaEnabled()) {
     return null;
@@ -49,15 +73,23 @@ const SiaEntryPoint = ({ onOpen }) => {
   };
 
   const handleClose = () => {
+    // Return focus to the control that opened the panel, once it exists
+    // again (see the effect above).
+    shouldRefocusLauncher.current = true;
     setIsOpen(false);
   };
 
   return (
     <div className={`sia-root ${theme}`}>
       {isOpen ? (
-        <SiaPanel onClose={handleClose} />
+        <SiaPanel onClose={handleClose} conversation={conversation} />
       ) : (
-        <button type="button" className="sia-entry-point" onClick={handleOpen}>
+        <button
+          type="button"
+          className="sia-entry-point"
+          onClick={handleOpen}
+          ref={launcherRef}
+        >
           Ask SIA
         </button>
       )}

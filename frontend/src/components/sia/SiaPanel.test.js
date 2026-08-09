@@ -1,27 +1,82 @@
 import React from "react";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { useSiaAskMutation } from "../../hooks/mutations/useSiaAskMutation";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SiaPanel from "./SiaPanel";
+import { PANEL_MODE, SIA_ERROR_CODE } from "./useSiaConversation";
+import { useSiaSessionMessagesQuery } from "../../hooks/queries/useSiaSessionMessagesQuery";
+import { useSiaSessionsQuery } from "../../hooks/queries/useSiaSessionsQuery";
 
-// useSiaAskMutation (M4-2) is fully mocked here -- never the network, never
-// a real askSia/axios call. This file only proves SiaPanel's own rendering
-// and interaction contract against controlled mutation-object shapes.
-jest.mock("../../hooks/mutations/useSiaAskMutation", () => ({
-  useSiaAskMutation: jest.fn(),
+// Batch 3C: SiaPanel is now pure presentation -- the conversation state it
+// renders is owned by SiaEntryPoint (see useSiaConversation). This file
+// therefore injects a controlled conversation object and proves the
+// PANEL's own rendering/interaction contract in isolation, exactly as it
+// previously did against a controlled mutation object. End-to-end
+// behaviour (real reducer + real hooks + real query wiring) is proven
+// separately in SiaConversation.test.js.
+// The API modules are mocked (matching this repository's existing
+// convention in siaApi.test.js) so the real axios instance -- which ships
+// as ESM and is not transformed by CRA's Jest config -- is never imported
+// through the component tree.
+jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
+jest.mock("../../api/siaSessionsApi", () => ({
+  getSiaSessions: jest.fn(),
+  getSiaSessionMessages: jest.fn(),
+  deleteSiaSession: jest.fn(),
 }));
 
-function makeMutationState(overrides = {}) {
-  return {
-    mutate: jest.fn(),
-    mutateAsync: jest.fn(),
-    data: undefined,
-    error: null,
-    isPending: false,
-    isSuccess: false,
+jest.mock("../../hooks/queries/useSiaSessionMessagesQuery", () => ({
+  useSiaSessionMessagesQuery: jest.fn(),
+}));
+
+jest.mock("../../hooks/queries/useSiaSessionsQuery", () => ({
+  useSiaSessionsQuery: jest.fn(),
+}));
+
+// This project's CRA Jest config enables `resetMocks`, which clears any
+// implementation supplied in a jest.mock factory before each test -- so
+// the query-hook return shapes are (re)installed here instead.
+beforeEach(() => {
+  useSiaSessionMessagesQuery.mockReturnValue({ isSuccess: false, isError: false, data: undefined });
+  useSiaSessionsQuery.mockReturnValue({
+    data: { success: true, sessions: [] },
+    isLoading: false,
     isError: false,
-    reset: jest.fn(),
+    isFetching: false,
+    refetch: jest.fn(),
+  });
+});
+
+function makeConversation(overrides = {}) {
+  return {
+    activeSessionId: null,
+    messages: [],
+    input: "",
+    pending: null,
+    failed: null,
+    mode: PANEL_MODE.CONVERSATION,
+    selectedHistorySessionId: null,
+    isBusy: false,
+    canSubmit: false,
+    setInput: jest.fn(),
+    submitQuestion: jest.fn(),
+    retry: jest.fn(),
+    dismissFailed: jest.fn(),
+    newChat: jest.fn(),
+    setMode: jest.fn(),
+    selectHistorySession: jest.fn(),
+    hydrate: jest.fn(),
+    clearActiveSession: jest.fn(),
     ...overrides,
   };
+}
+
+function renderPanel(conversation, onClose = jest.fn()) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <SiaPanel onClose={onClose} conversation={conversation} />
+    </QueryClientProvider>
+  );
 }
 
 afterEach(() => {
@@ -29,98 +84,71 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-function getQuestionInput() {
-  return screen.getByLabelText(/your question/i);
-}
+const userTurn = { id: "m1", role: "user", content: "Why did my spending change?" };
 
 describe("frontend/src/components/sia/SiaPanel", () => {
   it("renders the accessible heading, question field, Ask button, and Close SIA control", () => {
-    useSiaAskMutation.mockReturnValue(makeMutationState());
-    render(<SiaPanel onClose={jest.fn()} />);
+    renderPanel(makeConversation());
 
     expect(screen.getByRole("heading", { name: "Ask SIA" })).toBeInTheDocument();
-    expect(getQuestionInput()).toBeInTheDocument();
+    expect(screen.getByLabelText(/your question/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close SIA" })).toBeInTheDocument();
   });
 
-  it("does not submit an empty question", () => {
-    const mutate = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState({ mutate }));
-    render(<SiaPanel onClose={jest.fn()} />);
+  it("does not submit when the conversation reports the input is not submittable", () => {
+    const conversation = makeConversation({ input: "   ", canSubmit: false });
+    renderPanel(conversation);
 
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
+    expect(conversation.submitQuestion).not.toHaveBeenCalled();
   });
 
-  it("does not submit a whitespace-only question", () => {
-    const mutate = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState({ mutate }));
-    render(<SiaPanel onClose={jest.fn()} />);
+  it("submits through the conversation when the input is valid", () => {
+    const conversation = makeConversation({ input: "Why did my spending change?", canSubmit: true });
+    renderPanel(conversation);
 
-    fireEvent.change(getQuestionInput(), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
 
-    expect(mutate).not.toHaveBeenCalled();
+    expect(conversation.submitQuestion).toHaveBeenCalledTimes(1);
   });
 
-  it("passes a non-empty question unchanged to mutation.mutate", () => {
-    const mutate = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState({ mutate }));
-    render(<SiaPanel onClose={jest.fn()} />);
-
-    fireEvent.change(getQuestionInput(), { target: { value: "Why did my spending change?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
-
-    expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate).toHaveBeenCalledWith("Why did my spending change?");
-  });
-
-  it("shows an accessible pending state and prevents duplicate submission while pending", () => {
-    const mutate = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState({ mutate, isPending: true }));
-    render(<SiaPanel onClose={jest.fn()} />);
+  it("shows an accessible pending state and disables Ask while a request is active", () => {
+    const conversation = makeConversation({
+      messages: [userTurn],
+      pending: { clientMessageId: "k", question: "Q", sessionId: null, messageId: "m1" },
+      isBusy: true,
+      canSubmit: false,
+    });
+    renderPanel(conversation);
 
     expect(screen.getByRole("status")).toHaveTextContent(/SIA is thinking/i);
-    const askButton = screen.getByRole("button", { name: "Ask" });
-    expect(askButton).toBeDisabled();
-
-    fireEvent.click(askButton);
-
-    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
   });
 
   it("renders a successful answer exactly", () => {
-    useSiaAskMutation.mockReturnValue(
-      makeMutationState({
-        isSuccess: true,
-        data: {
-          success: true,
-          answer: "Your spending increased mainly in food.",
-          intent: "spending_change",
-          basedOn: ["spending.monthComparison"],
-        },
-      })
-    );
-    render(<SiaPanel onClose={jest.fn()} />);
+    const conversation = makeConversation({
+      messages: [userTurn, { id: "m2", role: "assistant", content: "Your spending increased mainly in food." }],
+    });
+    renderPanel(conversation);
 
     expect(screen.getByText("Your spending increased mainly in food.")).toBeInTheDocument();
   });
 
-  it("renders a no-data answer (basedOn: [\"none\"]) as a normal success", () => {
-    useSiaAskMutation.mockReturnValue(
-      makeMutationState({
-        isSuccess: true,
-        data: {
-          success: true,
-          answer: "I do not have enough financial report data yet to explain your financial health score.",
-          intent: "HEALTH_EXPLANATION",
-          basedOn: ["none"],
+  it('renders a no-data answer (basedOn: ["none"]) as a normal success', () => {
+    const conversation = makeConversation({
+      messages: [
+        userTurn,
+        {
+          id: "m2",
+          role: "assistant",
+          content: "I do not have enough financial report data yet to explain your financial health score.",
         },
-      })
-    );
-    render(<SiaPanel onClose={jest.fn()} />);
+      ],
+    });
+    renderPanel(conversation);
 
     expect(
       screen.getByText(
@@ -130,66 +158,64 @@ describe("frontend/src/components/sia/SiaPanel", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("renders a backend-provided error message in an accessible alert", () => {
-    useSiaAskMutation.mockReturnValue(
-      makeMutationState({
-        isError: true,
-        error: {
-          response: {
-            status: 503,
-            data: { success: false, message: "SIA is temporarily unavailable." },
-          },
-        },
-      })
-    );
-    render(<SiaPanel onClose={jest.fn()} />);
+  it("renders a backend-provided error message in an accessible alert attached to its own turn", () => {
+    const conversation = makeConversation({
+      messages: [userTurn],
+      failed: {
+        messageId: "m1",
+        clientMessageId: "k",
+        question: "Q",
+        sessionId: null,
+        code: null,
+        message: "SIA is temporarily unavailable.",
+      },
+    });
+    renderPanel(conversation);
 
     expect(screen.getByRole("alert")).toHaveTextContent("SIA is temporarily unavailable.");
   });
 
-  it("falls back to a generic message for an unknown/malformed error", () => {
-    useSiaAskMutation.mockReturnValue(
-      makeMutationState({
-        isError: true,
-        error: new Error("connect ECONNREFUSED 127.0.0.1:8080"),
-      })
-    );
-    render(<SiaPanel onClose={jest.fn()} />);
-
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("SIA is temporarily unavailable. Please try again.");
-    expect(alert).not.toHaveTextContent("ECONNREFUSED");
-  });
-
-  it("Retry sends the exact last submitted question again, unchanged", () => {
-    const mutate = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState({ mutate }));
-    const { rerender } = render(<SiaPanel onClose={jest.fn()} />);
-
-    fireEvent.change(getQuestionInput(), { target: { value: "Why did my spending change?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
-    expect(mutate).toHaveBeenNthCalledWith(1, "Why did my spending change?");
-
-    // Simulate the mutation now reflecting an error after that submission.
-    useSiaAskMutation.mockReturnValue(
-      makeMutationState({
-        mutate,
-        isError: true,
-        error: { response: { data: { message: "SIA is temporarily unavailable." } } },
-      })
-    );
-    rerender(<SiaPanel onClose={jest.fn()} />);
+  it("Retry delegates to the conversation, which reuses the original key", () => {
+    const conversation = makeConversation({
+      messages: [userTurn],
+      failed: {
+        messageId: "m1",
+        clientMessageId: "k",
+        question: "Q",
+        sessionId: null,
+        code: null,
+        message: "SIA is temporarily unavailable.",
+      },
+    });
+    renderPanel(conversation);
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(mutate).toHaveBeenCalledTimes(2);
-    expect(mutate).toHaveBeenNthCalledWith(2, "Why did my spending change?");
+    expect(conversation.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no Retry for an idempotency conflict, since the same key can never succeed", () => {
+    const conversation = makeConversation({
+      messages: [userTurn],
+      failed: {
+        messageId: "m1",
+        clientMessageId: "k",
+        question: "Q",
+        sessionId: null,
+        code: SIA_ERROR_CODE.CONFLICT,
+        message: "This clientMessageId was already used for a different request.",
+      },
+    });
+    renderPanel(conversation);
+
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/could not be retried safely/i);
   });
 
   it("invokes onClose exactly once when the close button is clicked", () => {
     const onClose = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState());
-    render(<SiaPanel onClose={onClose} />);
+    renderPanel(makeConversation(), onClose);
 
     fireEvent.click(screen.getByRole("button", { name: "Close SIA" }));
 
@@ -197,36 +223,41 @@ describe("frontend/src/components/sia/SiaPanel", () => {
   });
 
   it("does not throw when onClose is omitted and the close button is clicked", () => {
-    useSiaAskMutation.mockReturnValue(makeMutationState());
-    render(<SiaPanel />);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SiaPanel conversation={makeConversation()} />
+      </QueryClientProvider>
+    );
 
     expect(() => fireEvent.click(screen.getByRole("button", { name: "Close SIA" }))).not.toThrow();
   });
 
   it("renders HTML-like answer content as literal text, never as markup", () => {
     const htmlLikeAnswer = "<b>bold</b> spending increase <img src=x onerror=alert(1)>";
-    useSiaAskMutation.mockReturnValue(
-      makeMutationState({
-        isSuccess: true,
-        data: { success: true, answer: htmlLikeAnswer, intent: "spending_change", basedOn: [] },
-      })
-    );
-    const { container } = render(<SiaPanel onClose={jest.fn()} />);
+    const conversation = makeConversation({
+      messages: [userTurn, { id: "m2", role: "assistant", content: htmlLikeAnswer }],
+    });
+    const { container } = renderPanel(conversation);
 
     expect(screen.getByText(htmlLikeAnswer)).toBeInTheDocument();
     expect(container.querySelector("b")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("never performs a real request -- useSiaAskMutation is fully mocked", () => {
-    const mutate = jest.fn();
-    useSiaAskMutation.mockReturnValue(makeMutationState({ mutate }));
-    render(<SiaPanel onClose={jest.fn()} />);
+  it("switches to the history view through the conversation's mode setter", () => {
+    const conversation = makeConversation();
+    renderPanel(conversation);
 
-    fireEvent.change(getQuestionInput(), { target: { value: "Why did my spending change?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conversation history" }));
 
-    expect(jest.isMockFunction(useSiaAskMutation)).toBe(true);
-    expect(jest.isMockFunction(mutate)).toBe(true);
+    expect(conversation.setMode).toHaveBeenCalledWith(PANEL_MODE.HISTORY);
+  });
+
+  it("renders the history view instead of the transcript when in history mode", () => {
+    renderPanel(makeConversation({ mode: PANEL_MODE.HISTORY }));
+
+    expect(screen.getByRole("region", { name: "Conversation history" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/your question/i)).toBeNull();
   });
 });
