@@ -1,13 +1,14 @@
-// Grounded-response validation -- Batch 2 architecture closure.
+// Grounded-response validation -- Batch 2 architecture closure, extended to
+// all seven supported intents in Batch 3D.
 //
 // System prompts alone do not enforce anything; a provider can still
 // return unsupported figures, leaked identifiers, fraud language, false
 // certainty, or out-of-scope advice despite being instructed not to. This
 // module is the deterministic gate Controllers/SiaControllers/ask.js runs
-// every ANOMALY_EXPLANATION / SPENDING_FORECAST_EXPLANATION /
-// FINANCIAL_RISK_EXPLANATION answer through before it can reach the user --
-// a failed check is treated exactly like a failed/unusable provider
-// result (the existing generic 503 branch), never partially shown.
+// every answer through, for every SIA-supported intent, before it can
+// reach the user -- a failed check is treated exactly like a
+// failed/unusable provider result (the existing generic 503 branch), never
+// partially shown.
 //
 // Deliberately NOT a "reject every digit" filter: harmless formatting or
 // count language ("3 categories", "signal count: 2") is never flagged.
@@ -15,19 +16,41 @@
 // currency symbol) are checked against the numbers actually present in
 // the structured context that grounded this answer -- everything else is
 // left alone.
+//
+// This module validates defined, deterministic invariants only (leaked
+// identifiers, raw internal field names, echoed JSON structure, and
+// currency figures unsupported by the real context, plus a small number of
+// intent-specific language checks below). It does not, and cannot,
+// mathematically prove every natural-language claim in an answer.
 "use strict";
 
+const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
+const SPENDING_CHANGE_EXPLANATION = "SPENDING_CHANGE_EXPLANATION";
+const BUDGET_STATUS_EXPLANATION = "BUDGET_STATUS_EXPLANATION";
+const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
 const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
 const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 
-// Only these three intents are grounded-response-validated. The four
-// original intents (HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION,
-// BUDGET_STATUS_EXPLANATION, CATEGORY_SPENDING_EXPLANATION) are
-// deliberately untouched by this module -- validateGroundedAnswer()
-// always returns `{ valid: true }` for them, so their pre-existing
-// behavior (proven by tests/sia.ask.test.js's 80 tests) is unaffected.
+// Batch 3D: all seven SIA-supported intents now receive the shared generic
+// checks below -- leaked-Mongo-identifier detection, raw internal-field-
+// token detection, echoed-JSON-structure detection, and the
+// unsupported-currency-figure cross-check against the real narrowed
+// context. Batch 2's three intent-specific checks (fraud-language for
+// anomaly; certainty/probability language for risk and forecast; advice
+// language for risk) remain scoped to exactly the same intents they always
+// were -- Batch 3D deliberately does NOT add a causal-language rule for
+// SPENDING_CHANGE_EXPLANATION/CATEGORY_SPENDING_EXPLANATION, or an advice-
+// language rule for BUDGET_STATUS_EXPLANATION, or any rule for
+// HEALTH_EXPLANATION beyond the shared generic checks. That is a
+// deliberate, separately-evidenced decision (see the Batch 3D report), not
+// an oversight: broad keyword matching risks rejecting valid explanations,
+// and extending it needs its own evidence and design.
 const VALIDATED_INTENTS = new Set([
+  HEALTH_EXPLANATION,
+  SPENDING_CHANGE_EXPLANATION,
+  BUDGET_STATUS_EXPLANATION,
+  CATEGORY_SPENDING_EXPLANATION,
   ANOMALY_EXPLANATION,
   SPENDING_FORECAST_EXPLANATION,
   FINANCIAL_RISK_EXPLANATION,
@@ -79,7 +102,15 @@ const round2 = (value) => Math.round(value * 100) / 100;
 // Recursively collects every finite numeric leaf value out of the
 // structured context that grounded this answer, rounded to 2 decimals so
 // a currency claim can be compared against it without floating-point
-// false negatives.
+// false negatives. Deliberately numbers only -- a string leaf is never
+// coerced here, no matter how numeric-looking, because this function has
+// no notion of WHICH field it is looking at (a category literally named
+// "500", a period label, a description) and treating every clean numeric
+// string anywhere in the context as a supported currency figure would be
+// exactly the kind of broad, field-blind rule this module's existing
+// "reject every digit" caution (see the module header) warns against. See
+// collectKnownStringAmounts() below for the one, narrowly-scoped
+// exception this module actually needs.
 function collectNumericValues(node, out) {
   if (typeof node === "number" && Number.isFinite(node)) {
     out.add(round2(node));
@@ -88,6 +119,56 @@ function collectNumericValues(node, out) {
   } else if (node && typeof node === "object") {
     for (const key of Object.keys(node)) collectNumericValues(node[key], out);
   }
+  return out;
+}
+
+// Batch 3D follow-up (verified against backend/analytics/analyzers/
+// budgetAnalyzer.js): its `analyze()` output's `budget` and `spent`
+// fields are passed through UNCHANGED from the stored Budget document --
+// `budget: currentMonth.budget, spent: currentMonth.spent` -- with no
+// toSafeNumber()/round2() coercion applied, unlike every other derived
+// budget or category value (exceededBy, remainingBudget, budgetLeft,
+// projectedSpent, projectedOverspend, utilization,
+// projectedOverspendPercent, and every categoryAnalyzer.js field are all
+// confirmed real `number`s). So `budget`/`spent` are the only two fields
+// anywhere in the seven intents' real context shapes not type-guaranteed
+// to be a JS `number` at this layer.
+//
+// contextBuilder.js and budgetAnalyzer.js are out of this batch's scope
+// (see the Batch 3D report), so this is handled here instead -- but
+// narrowly, by EXACT field path, not by a general "any numeric string
+// anywhere" rule. BUDGET_STATUS_EXPLANATION's context shape (see
+// contextBuilder.js) is always `{ budget: { budget, spent, ... } }`, so
+// only `contextFields.budget.budget` and `contextFields.budget.spent`
+// are ever read here. Every other field on that same object (category,
+// status, projectionStatus, or any other string) is left completely
+// alone -- a numeric-looking string in any of THOSE fields must never
+// authorize a currency claim, only these two exact, verified,
+// unnormalized monetary fields may.
+const NUMERIC_STRING_PATTERN = /^-?\d+(\.\d+)?$/;
+
+function coerceKnownStringAmount(value, out) {
+  if (typeof value === "string" && NUMERIC_STRING_PATTERN.test(value.trim())) {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) out.add(round2(parsed));
+  }
+}
+
+// Adds `contextFields.budget.budget` / `contextFields.budget.spent` to
+// `out` when either is a string (a genuine JS number in that same
+// position is already covered by collectNumericValues() above -- this
+// function only ever ADDS the string case, it never duplicates or
+// overrides the number case). Safe against a missing/malformed
+// `contextFields.budget` (any non-BUDGET_STATUS_EXPLANATION context, or a
+// context whose `budget` sub-object is absent) -- both are left as a
+// no-op rather than throwing.
+function collectKnownStringAmounts(contextFields, out) {
+  const budget = contextFields && contextFields.budget;
+  if (!budget || typeof budget !== "object") return out;
+
+  coerceKnownStringAmount(budget.budget, out);
+  coerceKnownStringAmount(budget.spent, out);
+
   return out;
 }
 
@@ -149,6 +230,10 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
   }
 
   const contextNumbers = collectNumericValues(contextFields, new Set());
+  // Narrow, exact-field-path addition -- see collectKnownStringAmounts()
+  // above. A no-op for every intent/context other than
+  // BUDGET_STATUS_EXPLANATION's `{ budget: { budget, spent } }` shape.
+  collectKnownStringAmounts(contextFields, contextNumbers);
   const claimedAmounts = extractCurrencyAmounts(answer);
   for (const amount of claimedAmounts) {
     if (!contextNumbers.has(amount)) {
