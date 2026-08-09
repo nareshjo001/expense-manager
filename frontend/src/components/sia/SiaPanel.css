@@ -203,6 +203,93 @@
   word-break: break-word;
 }
 
+/* ===== Batch 3F: answer-grounding transparency disclosure =====
+   Rendered under an assistant message only, and only when
+   SiaGroundingDisclosure's own isValidGrounding() gate passes -- collapsed
+   by default, reusing the existing theme tokens exclusively. */
+.sia-grounding {
+  margin-top: 6px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.sia-grounding-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Matches every other interactive control in this file (44px), rather
+     than the 32px this control originally used -- the disclosure toggle is
+     a real touch target and must not be the one exception. Wrapping and
+     light/dark styling are unaffected: the row still shrinks to content
+     width, and .sia-grounding-toggle-text keeps overflow-wrap: anywhere. */
+  min-height: 44px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--sia-muted-text);
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.sia-grounding-toggle:focus-visible {
+  outline: 3px solid var(--sia-accent-end);
+  outline-offset: 2px;
+}
+
+.sia-grounding-toggle-text {
+  overflow-wrap: anywhere;
+}
+
+.sia-grounding-caret {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.sia-grounding-panel {
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 10px;
+}
+
+.sia-grounding-explainer {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--sia-muted-text);
+  overflow-wrap: anywhere;
+}
+
+.sia-grounding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sia-grounding-item {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--sia-text);
+}
+
+.sia-grounding-label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sia-grounding-period {
+  font-size: 0.78rem;
+  color: var(--sia-muted-text);
+}
+
 .sia-pending {
   align-self: flex-start;
   margin: 0;

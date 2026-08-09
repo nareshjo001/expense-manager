@@ -59,6 +59,7 @@ const sessionService = require("../../sia/sessionService");
 const { validateGroundedAnswer } = require("../../sia/responseValidator");
 const idempotencyService = require("../../sia/idempotencyService");
 const { isSiaReady } = require("../../sia/readiness");
+const { buildGroundingSnapshot } = require("../../sia/groundingService");
 const { isValidObjectId } = require("mongoose");
 
 // Batch 2: bounded conversation session support, additive only.
@@ -374,7 +375,7 @@ function parseSessionId(raw) {
 // replay, and returns it. Shared by the normal success path and by the
 // `answer_ready` recovery path -- neither of which calls the provider from
 // here.
-async function finalizeAnswer({ req, reservation, activeSession, intent, answer, clientMessageId }) {
+async function finalizeAnswer({ req, reservation, activeSession, intent, answer, clientMessageId, grounding }) {
   let session = activeSession;
   if (!session) {
     session = await safeCreateSession(req.userId);
@@ -389,10 +390,11 @@ async function finalizeAnswer({ req, reservation, activeSession, intent, answer,
       answer,
       providerMetadata: { provider: config.provider },
       clientMessageId,
+      grounding,
     });
   }
 
-  const payload = formatExplanationResponse(intent, answer);
+  const payload = formatExplanationResponse(intent, answer, grounding);
   if (session) payload.sessionId = String(session._id);
 
   if (reservation) {
@@ -525,6 +527,10 @@ const ask = async (req, res) => {
           intent: reservation.record.intent,
           answer: reservation.record.answer,
           clientMessageId: requestedClientMessageId,
+          // Batch 3F: the SAME snapshot committed at markAnswerReady() time
+          // for the original attempt -- never recomputed from the user's
+          // current (possibly since-changed) analytics.
+          grounding: reservation.record.grounding || undefined,
         });
         return res.status(finished.status).json(finished.payload);
       } catch (_err) {
@@ -602,6 +608,13 @@ const ask = async (req, res) => {
 
       return res.status(200).json(noDataResponse);
     }
+
+    // Batch 3F: computed from the EXACT contextResult that will be sent to
+    // the provider below -- not from the intent, not from what the
+    // classifier merely selected, and not by parsing the provider's answer
+    // or the constructed prompt. This is why it happens here, immediately
+    // after buildContext() succeeds, rather than after askLlm() returns.
+    const grounding = buildGroundingSnapshot(contextResult);
 
     // Bounded recent-turn history, for conversational continuity ONLY --
     // buildContext() above already fetched the current, authoritative
@@ -684,6 +697,7 @@ const ask = async (req, res) => {
         answer: llmResult.answer,
         intent,
         sessionId: activeSession ? activeSession._id : null,
+        grounding,
       });
     }
 
@@ -699,6 +713,7 @@ const ask = async (req, res) => {
       intent,
       answer: llmResult.answer,
       clientMessageId: requestedClientMessageId,
+      grounding,
     });
     return res.status(finished.status).json(finished.payload);
   } catch (err) {

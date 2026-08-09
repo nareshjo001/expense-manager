@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import SiaSessionList from "./SiaSessionList";
+import SiaGroundingDisclosure from "./SiaGroundingDisclosure";
 import { SIA_SUGGESTIONS } from "./siaSuggestions";
 import { useSiaSessionMessagesQuery } from "../../hooks/queries/useSiaSessionMessagesQuery";
 import { queryKeys } from "../../query/queryKeys";
@@ -265,6 +266,13 @@ const SiaPanel = ({ onClose, conversation, isAvailable, isCheckingAvailability, 
                   {message.role === "user" ? "You said:" : "SIA said:"}
                 </span>
                 <p className="sia-message-text">{message.content}</p>
+
+                {/* Batch 3F: only ever considered for an assistant turn --
+                    a user message's `grounding` is never set in the first
+                    place, but the role check here is an explicit second
+                    guard, matching this file's existing defence-in-depth
+                    style (see blockedByAvailability above). */}
+                {message.role === "assistant" && <SiaGroundingDisclosure grounding={message.grounding} />}
 
                 {failed && failed.messageId === message.id && (
                   <div className="sia-error-block">

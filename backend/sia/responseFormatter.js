@@ -179,13 +179,25 @@ function formatNoDataResponse(intent) {
 
 // The successful response once a real (or, in this milestone, mocked) LLM
 // answer exists, for either supported intent.
-function formatExplanationResponse(intent, answer) {
-  return {
+//
+// Batch 3F: `grounding` is the new, additive, user-facing provenance
+// snapshot (backend/sia/groundingService.js's buildGroundingSnapshot()) --
+// completely separate from `basedOn` above, which is unchanged. `grounding`
+// is optional here: a caller that does not pass one (or passes undefined)
+// gets a response with no `grounding` key at all, so every pre-3F caller of
+// this function (there are none left after this batch, but the contract
+// itself stays honest) is unaffected.
+function formatExplanationResponse(intent, answer, grounding) {
+  const response = {
     success: true,
     answer,
     intent,
     basedOn: GROUNDING_PATHS_BY_INTENT[intent],
   };
+  if (grounding !== undefined) {
+    response.grounding = grounding;
+  }
+  return response;
 }
 
 module.exports = {

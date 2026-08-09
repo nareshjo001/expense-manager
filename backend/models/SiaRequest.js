@@ -25,6 +25,41 @@
 
 const mongoose = require("mongoose");
 
+// Batch 3F acceptance remediation (requirement 3): `grounding` below used
+// to be `mongoose.Schema.Types.Mixed`, which enforces no shape at all --
+// any property, including an accidental `_id`, `__v`, a raw internal
+// identifier, or a client-influenced value, could in principle survive a
+// write. This mirrors models/SiaMessage.js's own
+// siaGroundingSourceSchema/siaGroundingSchema shape exactly (server-owned
+// `key`/`label`/optional `period` only, both levels `_id: false` so no
+// subdocument identity field is auto-generated). It is duplicated here
+// rather than extracted into a shared module: the two models' grounding
+// fields are independently small, and this batch's file-count budget does
+// not add a new production file for a four-line schema. If a third
+// grounding-bearing model is ever added, extracting a shared module then
+// would be the right call.
+// `period` declares NO default, for exactly the reason documented on
+// models/SiaMessage.js's siaGroundingSourceSchema: `default: null` turned
+// an absent period into a present-but-null one on the way back out, so an
+// answer-ready RESUME reconstructed a snapshot that was not byte-identical
+// to the one the original attempt returned. Unset stays undefined, and
+// Mongoose omits it from serialization.
+const siaRequestGroundingSourceSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, maxlength: 64 },
+    label: { type: String, required: true, maxlength: 120 },
+    period: { type: String, maxlength: 32 },
+  },
+  { _id: false }
+);
+
+const siaRequestGroundingSchema = new mongoose.Schema(
+  {
+    sources: { type: [siaRequestGroundingSourceSchema], default: undefined },
+  },
+  { _id: false }
+);
+
 // The request lifecycle. `processing` is an exclusive, LEASED reservation:
 // exactly one caller owns it at a time, and only the owner may call the
 // provider. `answer_ready` means a validated answer exists but session
@@ -129,6 +164,23 @@ const siaRequestSchema = new mongoose.Schema(
     intent: {
       type: String,
       default: null,
+    },
+
+    // Batch 3F: the same immutable grounding snapshot
+    // (backend/sia/groundingService.js) computed for this answer, stored at
+    // the same `answer_ready` checkpoint as `answer`/`intent` above so a
+    // RESUME_ANSWER_READY recovery (a persistence failure after a validated
+    // answer already exists) can finish without a second provider call AND
+    // without losing which analytics sources actually grounded that
+    // specific answer. Structured and schema-bound (see
+    // siaRequestGroundingSchema above), matching models/SiaMessage.js's own
+    // grounding shape exactly -- this is already-small, already-sanitized,
+    // non-secret data (server-owned keys/labels/optional periods only,
+    // with unknown properties stripped by Mongoose's schema-level casting),
+    // never the structured financial context itself.
+    grounding: {
+      type: siaRequestGroundingSchema,
+      default: undefined,
     },
 
     // The exact HTTP status and body already returned to a client. Replay

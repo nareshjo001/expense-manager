@@ -226,7 +226,12 @@ async function evaluateExisting(existing, questionFingerprint, requestedSessionI
 // Commits the validated answer before session creation/persistence is
 // attempted. This is the checkpoint that makes a persistence failure
 // recoverable WITHOUT a second provider call.
-async function markAnswerReady({ requestId, ownerToken, answer, intent, sessionId }) {
+//
+// Batch 3F: `grounding` (optional) is committed at this exact same
+// checkpoint as `answer`/`intent` -- see models/SiaRequest.js -- so a
+// RESUME_ANSWER_READY recovery can rebuild the identical response the
+// original attempt would have returned, grounding included.
+async function markAnswerReady({ requestId, ownerToken, answer, intent, sessionId, grounding }) {
   return SiaRequest.findOneAndUpdate(
     { _id: requestId, ownerToken },
     {
@@ -235,6 +240,7 @@ async function markAnswerReady({ requestId, ownerToken, answer, intent, sessionI
         answer,
         intent,
         session: sessionId || null,
+        grounding: grounding !== undefined ? grounding : null,
         processingExpiresAt: leaseExpiryFromNow(),
       },
     },

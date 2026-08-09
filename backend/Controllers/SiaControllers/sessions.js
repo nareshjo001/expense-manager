@@ -58,6 +58,13 @@ const listMessages = async (req, res) => {
         content: m.content,
         intent: m.intent,
         createdAt: m.createdAt,
+        // Batch 3F: the exact grounding snapshot stored with this message
+        // (see models/SiaMessage.js) -- present only on assistant messages
+        // that had one at creation time. `m.grounding` is simply undefined
+        // for every user message and every pre-3F/no-data assistant
+        // message, and JSON.stringify omits an undefined property, so this
+        // adds nothing to any response that never had it.
+        grounding: m.grounding,
       })),
     });
   } catch (_err) {

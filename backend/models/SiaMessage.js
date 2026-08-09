@@ -21,6 +21,46 @@ const mongoose = require("mongoose");
 const MAX_USER_CONTENT_LENGTH = 500;
 const MAX_ASSISTANT_CONTENT_LENGTH = 4000;
 
+// Batch 3F: the answer-grounding transparency snapshot -- which BALENISA
+// analytics sections actually grounded THIS assistant answer, deterministically
+// produced by backend/sia/groundingService.js at generation time (never by
+// the LLM, never from the client). Assistant messages only; a user-role
+// message never sets this field. Small and bounded by construction: at
+// most one entry per backend/sia/groundingService.js allowlist key (8 today),
+// each carrying only a short server-owned key/label and an optional
+// short period string -- never a raw path, metric value, prompt, or
+// identifier. `default: undefined` (not `[]`/`{}`) so a pre-3F message, or
+// a no-data/legacy turn that never computed a grounding snapshot, stores no
+// `grounding` field at all rather than a hollow empty object -- existing
+// documents and existing readers that don't know this field remain fully
+// compatible.
+// `period` deliberately declares NO default. An earlier version used
+// `default: null`, which meant a snapshot generated without a period (the
+// only kind backend/sia/groundingService.js currently produces) came back
+// out of persistence as `period: null` -- present-but-empty rather than
+// absent. That broke the batch's core guarantee that the IDENTICAL snapshot
+// survives fresh response, persistence, resume, replay and history: the
+// fresh route returned `{key, label}` while history and answer-ready resume
+// returned `{key, label, period: null}`. With no default, an unset path
+// stays `undefined` and Mongoose omits it from toObject()/toJSON()
+// entirely, so all four paths now serialize byte-identically. An
+// explicitly supplied, valid period is still stored and returned unchanged.
+const siaGroundingSourceSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, maxlength: 64 },
+    label: { type: String, required: true, maxlength: 120 },
+    period: { type: String, maxlength: 32 },
+  },
+  { _id: false }
+);
+
+const siaGroundingSchema = new mongoose.Schema(
+  {
+    sources: { type: [siaGroundingSourceSchema], default: undefined },
+  },
+  { _id: false }
+);
+
 const siaMessageSchema = new mongoose.Schema(
   {
     session: {
@@ -79,6 +119,9 @@ const siaMessageSchema = new mongoose.Schema(
       latencyMs: { type: Number, default: null },
       errorCode: { type: String, default: null },
     },
+
+    // Batch 3F. See siaGroundingSchema above.
+    grounding: { type: siaGroundingSchema, default: undefined },
   },
   {
     timestamps: true,

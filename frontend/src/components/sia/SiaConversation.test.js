@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, notifyManager } from "@tanstack/react-query";
 import SiaEntryPoint from "./SiaEntryPoint";
 import { askSia } from "../../api/siaApi";
 import { getSiaSessions, getSiaSessionMessages, deleteSiaSession, getSiaStatus } from "../../api/siaSessionsApi";
@@ -55,6 +55,59 @@ afterAll(() => {
   });
 });
 
+// Batch 3F acceptance remediation -- requirement 5.
+//
+// Root cause of the intermittent "not configured to support act(...)"
+// warnings: TanStack Query's notifyManager defers every query-state
+// notification through a `setTimeout(fn, 0)` scheduler
+// (query-core/src/notifyManager.ts's `defaultScheduler`), not a
+// synchronous call. A notification scheduled during one test's
+// synchronous/awaited body can therefore fire AFTER that test's body (and
+// even after RTL's cleanup() has unmounted) has already returned control
+// to Jest, landing inside whichever later test's console-capture window
+// happens to be active at that moment -- which is exactly why the warning
+// was intermittent and order-dependent rather than tied to any one test.
+//
+// notifyManager.setNotifyFunction() is TanStack Query's own documented
+// hook for this (see its source comment: "This can be used to for example
+// wrap notifications with React.act while running tests"). Wrapping every
+// notification in `act()` here means ANY update that fires -- synchronously
+// or via the deferred setTimeout, during this test's body or spilling into
+// a later one -- is always reported to React inside an act() boundary, so
+// React never has cause to warn, regardless of timing. This is a global,
+// file-level fix (not per-test) because the deferred notification that
+// warns is frequently attributable to the PREVIOUS test, not the currently
+// running one -- a per-test wrap cannot reach a callback that fires after
+// that test's own act() block has already closed.
+beforeAll(() => {
+  notifyManager.setNotifyFunction((callback) => {
+    act(() => {
+      callback();
+    });
+  });
+  notifyManager.setBatchNotifyFunction((callback) => {
+    act(() => {
+      callback();
+    });
+  });
+});
+afterAll(() => {
+  // Restored to TanStack Query's own default (a synchronous passthrough --
+  // see query-core/src/notifyManager.ts's createNotifyManager()) so no
+  // other suite's console-warning behaviour is affected by module load
+  // order or by this file running before/after another Jest file in the
+  // same worker.
+  notifyManager.setNotifyFunction((callback) => callback());
+  notifyManager.setBatchNotifyFunction((callback) => callback());
+});
+
+// Every QueryClient created by renderEntryPoint() below is tracked here so
+// afterEach can clear it -- cleanup() (RTL) unmounts the DOM tree, but it
+// does not clear a QueryClient's own internal query cache/observers/timers,
+// which is a second, independent source of a state update landing after a
+// test has already finished.
+const activeQueryClients = [];
+
 beforeEach(() => {
   process.env[ENV_KEY] = "true";
   getSiaStatus.mockResolvedValue({ success: true, available: true });
@@ -63,8 +116,22 @@ beforeEach(() => {
   deleteSiaSession.mockResolvedValue({ success: true, message: "Session deleted." });
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Cancel any in-flight queries and clear each QueryClient's cache/
+  // observers before the next test starts, wrapped in act() so any
+  // resulting synchronous notification is itself act()-reported. This
+  // closes the second, independent source of a late state update: a
+  // QueryClient created by an earlier test but never explicitly told to
+  // stop, even after its DOM tree is already unmounted.
+  for (const queryClient of activeQueryClients) {
+    // eslint-disable-next-line no-await-in-loop
+    await act(async () => {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+    });
+  }
+  activeQueryClients.length = 0;
   jest.clearAllMocks();
   if (originalFlag === undefined) delete process.env[ENV_KEY];
   else process.env[ENV_KEY] = originalFlag;
@@ -74,6 +141,7 @@ function renderEntryPoint() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: 0 } },
   });
+  activeQueryClients.push(queryClient);
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <SiaEntryPoint />
@@ -799,5 +867,205 @@ describe("SIA conversation -- accessibility", () => {
     expect(screen.getByText("501 / 500")).toBeInTheDocument();
 
     expect(askSia).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------
+// Batch 3F: answer-grounding transparency
+// ---------------------------------------------------------------------
+describe("SIA conversation -- answer-grounding transparency (Batch 3F)", () => {
+  // Batch 3F acceptance remediation: this fixture's `period` is a mocked
+  // API response value used only to prove the component renders a period
+  // WHEN one is present -- it does not assert or imply anything about
+  // backend/sia/groundingService.js's own current behavior, which never
+  // populates `period` today (see backend/tests/sia.grounding.test.js).
+  const groundingFixture = (overrides = {}) => ({
+    sources: [{ key: "financialHealth", label: "Financial health analysis", period: "2026-08-09" }],
+    ...overrides,
+  });
+
+  it("a valid grounding snapshot renders a collapsed disclosure under the assistant answer", async () => {
+    askSia.mockResolvedValue({ ...answer("Your score is healthy.", "sess-g1"), grounding: groundingFixture() });
+    renderEntryPoint();
+    await openPanel();
+
+    await ask("Why is my financial health score low?");
+    await screen.findByText("Your score is healthy.");
+
+    const toggle = screen.getByRole("button", { name: /BALENISA data supported this answer \(1 source\)/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Financial health analysis")).not.toBeInTheDocument();
+  });
+
+  it("expanding the disclosure shows the label and period", async () => {
+    askSia.mockResolvedValue({ ...answer("Your score is healthy.", "sess-g2"), grounding: groundingFixture() });
+    renderEntryPoint();
+    await openPanel();
+
+    await ask("Why is my financial health score low?");
+    await screen.findByText("Your score is healthy.");
+
+    fireEvent.click(screen.getByRole("button", { name: /BALENISA data supported this answer/i }));
+    expect(screen.getByText("Financial health analysis")).toBeInTheDocument();
+    expect(screen.getByText("2026-08-09")).toBeInTheDocument();
+  });
+
+  it("the disclosure never renders under a user message", async () => {
+    askSia.mockResolvedValue({ ...answer("Your score is healthy.", "sess-g3"), grounding: groundingFixture() });
+    renderEntryPoint();
+    await openPanel();
+
+    await ask("Why is my financial health score low?");
+    await screen.findByText("Your score is healthy.");
+
+    // Exactly one disclosure toggle exists -- for the assistant turn only,
+    // never a second one attached to the user's own question bubble.
+    expect(screen.getAllByRole("button", { name: /BALENISA data supported this answer/i })).toHaveLength(1);
+  });
+
+  it("multiple assistant messages in the same conversation have independent disclosure state", async () => {
+    askSia
+      .mockResolvedValueOnce({ ...answer("First answer.", "sess-g4"), grounding: groundingFixture() })
+      .mockResolvedValueOnce({
+        ...answer("Second answer.", "sess-g4"),
+        grounding: groundingFixture({ sources: [{ key: "trends", label: "Spending trends" }] }),
+      });
+    renderEntryPoint();
+    await openPanel();
+
+    await ask("Why is my financial health score low?");
+    await screen.findByText("First answer.");
+    await ask("Why did my spending change this month?");
+    await screen.findByText("Second answer.");
+
+    const toggles = screen.getAllByRole("button", { name: /BALENISA data supported this answer/i });
+    expect(toggles).toHaveLength(2);
+
+    fireEvent.click(toggles[0]);
+    expect(toggles[0]).toHaveAttribute("aria-expanded", "true");
+    expect(toggles[1]).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Financial health analysis")).toBeInTheDocument();
+    expect(screen.queryByText("Spending trends")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["empty sources", { sources: [] }],
+    ["malformed (not an object)", "not-an-object"],
+    ["a legacy message with no grounding key at all", undefined],
+  ])("fails closed and renders no disclosure for %s grounding, without crashing", async (_label, grounding) => {
+    const payload = answer("An answer with no grounding.", "sess-g5");
+    if (grounding !== undefined) payload.grounding = grounding;
+    askSia.mockResolvedValue(payload);
+    renderEntryPoint();
+    await openPanel();
+
+    await ask("Why is my financial health score low?");
+    expect(await screen.findByText("An answer with no grounding.")).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: /BALENISA data supported this answer/i })).not.toBeInTheDocument();
+  });
+
+  it("a resumed/hydrated session's stored assistant message renders its own persisted grounding", async () => {
+    getSiaSessions.mockResolvedValue({
+      success: true,
+      sessions: [{ sessionId: "s-grounded", title: "Older chat", messageCount: 2, lastMessageAt: "2026-08-01T10:00:00.000Z" }],
+    });
+    getSiaSessionMessages.mockResolvedValue({
+      success: true,
+      sessionId: "s-grounded",
+      messages: [
+        { role: "user", content: "Earlier question", intent: "HEALTH_EXPLANATION", createdAt: "2026-08-01T09:00:00.000Z" },
+        {
+          role: "assistant",
+          content: "Earlier answer",
+          intent: "HEALTH_EXPLANATION",
+          createdAt: "2026-08-01T09:00:01.000Z",
+          grounding: groundingFixture(),
+        },
+      ],
+    });
+
+    renderEntryPoint();
+    await openPanel();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Conversation history" }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Older chat"));
+    });
+
+    expect(await screen.findByText("Earlier answer")).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: /BALENISA data supported this answer \(1 source\)/i });
+    fireEvent.click(toggle);
+    expect(screen.getByText("Financial health analysis")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------
+// Batch 3F acceptance remediation -- requirement 5 regression
+// ---------------------------------------------------------------------
+// Proves the notifyManager act()-wrapping fix above actually holds, without
+// suppressing or filtering console output (the spy below always calls
+// through to the real console.error, so a genuine warning is still printed
+// to the test run exactly as it would be without this spy in place -- only
+// its call arguments are additionally captured for assertion). Runs a
+// realistic multi-turn, multi-query flow (ask, open history, select a
+// session, delete a session) -- the combination Batch 3F's original
+// acceptance review found the warning under -- inside one test, then
+// asserts afterward that console.error was never called with any
+// React/TanStack Query "not wrapped in act(...)" text.
+describe("SIA conversation -- no React/TanStack Query act() warnings (Batch 3F acceptance remediation, requirement 5)", () => {
+  it("a realistic multi-turn, multi-query session produces zero act(...) warnings", async () => {
+    const realConsoleError = console.error;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation((...args) => {
+      realConsoleError(...args);
+    });
+
+    getSiaSessions.mockResolvedValue({
+      success: true,
+      sessions: [{ sessionId: "s-old", title: "Older chat", messageCount: 2, lastMessageAt: "2026-08-01T10:00:00.000Z" }],
+    });
+    getSiaSessionMessages.mockResolvedValue({
+      success: true,
+      sessionId: "s-old",
+      messages: [
+        { role: "user", content: "Earlier question", intent: "HEALTH_EXPLANATION", createdAt: "2026-08-01T09:00:00.000Z" },
+        { role: "assistant", content: "Earlier answer", intent: "HEALTH_EXPLANATION", createdAt: "2026-08-01T09:00:01.000Z" },
+      ],
+    });
+    deleteSiaSession.mockResolvedValue({ success: true, message: "Session deleted." });
+    askSia.mockResolvedValue(answer("Your score is healthy.", "sess-regression"));
+
+    renderEntryPoint();
+    await openPanel();
+    await ask("Why is my financial health score low?");
+    await screen.findByText("Your score is healthy.");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Conversation history" }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Older chat"));
+    });
+    await screen.findByText("Earlier answer");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Conversation history" }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Delete Older chat" }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Confirm delete" }));
+    });
+
+    const actWarningPattern = /not (wrapped in act|configured to support act)/i;
+    const offendingCalls = consoleErrorSpy.mock.calls.filter((call) =>
+      call.some((arg) => typeof arg === "string" && actWarningPattern.test(arg))
+    );
+    expect(offendingCalls).toEqual([]);
+
+    consoleErrorSpy.mockRestore();
   });
 });

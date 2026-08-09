@@ -416,6 +416,14 @@ describe("POST /sia/ask", () => {
       answer: "Your score reflects Low risk.",
       intent: "HEALTH_EXPLANATION",
       basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+      // Batch 3F: fakeHealthContext()'s fields carry both financialHealth
+      // and summary.
+      grounding: {
+        sources: [
+          { key: "financialHealth", label: "Financial health analysis" },
+          { key: "summary", label: "Financial summary" },
+        ],
+      },
     });
   });
 
@@ -530,7 +538,8 @@ describe("POST /sia/ask", () => {
 
     const serialized = JSON.stringify(res.body);
     expect(serialized).not.toContain(authenticatedUserId);
-    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "intent", "success"]);
+    // Batch 3F: `grounding` joins the allowlisted response keys.
+    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "grounding", "intent", "success"]);
   });
 
   it("does not mutate the request body", async () => {
@@ -617,6 +626,14 @@ describe("POST /sia/ask", () => {
       answer: "Your spending increased, largely associated with higher totals this month.",
       intent: "SPENDING_CHANGE_EXPLANATION",
       basedOn: ["trends", "trends.monthlyTrend", "summary.comparePastMonth", "summary.totalSpent"],
+      // Batch 3F: fakeSpendingContext()'s fields carry both trends and
+      // summary -- canonical allowlist order places summary first.
+      grounding: {
+        sources: [
+          { key: "summary", label: "Financial summary" },
+          { key: "trends", label: "Spending trends" },
+        ],
+      },
     });
   });
 
@@ -850,7 +867,8 @@ describe("POST /sia/ask", () => {
       "summary.comparePastMonth",
       "summary.totalSpent",
     ]);
-    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "intent", "success"]);
+    // Batch 3F: `grounding` joins the allowlisted response keys.
+    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "grounding", "intent", "success"]);
   });
 
   it("does not mutate the request body or the buildContext-returned context object for a spending question", async () => {
@@ -898,12 +916,24 @@ describe("POST /sia/ask", () => {
       answer: "Health answer.",
       intent: "HEALTH_EXPLANATION",
       basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+      grounding: {
+        sources: [
+          { key: "financialHealth", label: "Financial health analysis" },
+          { key: "summary", label: "Financial summary" },
+        ],
+      },
     });
     expect(spendingRes.body).toEqual({
       success: true,
       answer: "Spending answer.",
       intent: "SPENDING_CHANGE_EXPLANATION",
       basedOn: ["trends", "trends.monthlyTrend", "summary.comparePastMonth", "summary.totalSpent"],
+      grounding: {
+        sources: [
+          { key: "summary", label: "Financial summary" },
+          { key: "trends", label: "Spending trends" },
+        ],
+      },
     });
 
     expect(buildContextMock).toHaveBeenNthCalledWith(1, "user-24", "HEALTH_EXPLANATION");
@@ -989,6 +1019,7 @@ describe("POST /sia/ask", () => {
       answer: "You've used 64% of your budget, with ₹1800 remaining and a Warning status.",
       intent: "BUDGET_STATUS_EXPLANATION",
       basedOn: ["budgets"],
+      grounding: { sources: [{ key: "budget", label: "Budget status" }] },
     });
     // "budgets" (plural) is the canonical report.budgets source path;
     // "budget" (singular) is only this context's own internal field name
@@ -1215,7 +1246,8 @@ describe("POST /sia/ask", () => {
     // used -- never the singular "budget", which is only this context's
     // own internal field name.
     expect(res.body.basedOn).not.toContain("budget");
-    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "intent", "success"]);
+    // Batch 3F: `grounding` joins the allowlisted response keys.
+    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "grounding", "intent", "success"]);
   });
 
   it("does not mutate the request body or the buildContext-returned context object for a budget question", async () => {
@@ -1271,18 +1303,31 @@ describe("POST /sia/ask", () => {
       answer: "Health answer.",
       intent: "HEALTH_EXPLANATION",
       basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+      grounding: {
+        sources: [
+          { key: "financialHealth", label: "Financial health analysis" },
+          { key: "summary", label: "Financial summary" },
+        ],
+      },
     });
     expect(spendingRes.body).toEqual({
       success: true,
       answer: "Spending answer.",
       intent: "SPENDING_CHANGE_EXPLANATION",
       basedOn: ["trends", "trends.monthlyTrend", "summary.comparePastMonth", "summary.totalSpent"],
+      grounding: {
+        sources: [
+          { key: "summary", label: "Financial summary" },
+          { key: "trends", label: "Spending trends" },
+        ],
+      },
     });
     expect(budgetRes.body).toEqual({
       success: true,
       answer: "Budget answer.",
       intent: "BUDGET_STATUS_EXPLANATION",
       basedOn: ["budgets"],
+      grounding: { sources: [{ key: "budget", label: "Budget status" }] },
     });
 
     expect(buildContextMock).toHaveBeenNthCalledWith(1, "user-37", "HEALTH_EXPLANATION");
@@ -1367,6 +1412,7 @@ describe("POST /sia/ask", () => {
       answer: "Groceries accounted for the largest share.",
       intent: "CATEGORY_SPENDING_EXPLANATION",
       basedOn: ["categories.monthly"],
+      grounding: { sources: [{ key: "categories", label: "Category spending breakdown" }] },
     });
     // Specifically the monthly path -- not the bare parent, which would
     // wrongly imply the excluded yearly branch is grounded too.
@@ -1553,7 +1599,8 @@ describe("POST /sia/ask", () => {
       .send({ question: CATEGORY_QUESTION });
 
     const serialized = JSON.stringify(res.body);
-    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "intent", "success"]);
+    // Batch 3F: `grounding` joins the allowlisted response keys.
+    expect(Object.keys(res.body).sort()).toEqual(["answer", "basedOn", "grounding", "intent", "success"]);
     expect(res.body).not.toHaveProperty("fields");
     expect(res.body).not.toHaveProperty("context");
     expect(res.body).not.toHaveProperty("sourceReportGeneratedAt");
@@ -1639,6 +1686,7 @@ describe("POST /sia/ask", () => {
       answer: "Category answer.",
       intent: "CATEGORY_SPENDING_EXPLANATION",
       basedOn: ["categories.monthly"],
+      grounding: { sources: [{ key: "categories", label: "Category spending breakdown" }] },
     });
 
     expect(buildContextMock).toHaveBeenNthCalledWith(4, "user-cat-12", "CATEGORY_SPENDING_EXPLANATION");
@@ -2165,6 +2213,12 @@ describe("POST /sia/ask -- M3-4 grounding metadata provenance", () => {
       answer: "Your score reflects Low risk.",
       intent: "HEALTH_EXPLANATION",
       basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+      grounding: {
+        sources: [
+          { key: "financialHealth", label: "Financial health analysis" },
+          { key: "summary", label: "Financial summary" },
+        ],
+      },
     });
     expect(res.body.intent).not.toBe("SPENDING_CHANGE_EXPLANATION");
     expect(res.body.basedOn).not.toContain("provider_injected_fake_path");

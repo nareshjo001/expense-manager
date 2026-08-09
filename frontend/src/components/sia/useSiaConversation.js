@@ -88,6 +88,11 @@ export function siaConversationReducer(state, action) {
         id: nextMessageId(),
         role: "assistant",
         content: action.answer,
+        // Batch 3F: the server-computed grounding snapshot, passed through
+        // exactly as received (SiaGroundingDisclosure.js is the single
+        // validation gate at render time -- a missing/malformed value here
+        // simply renders nothing, never a crash).
+        grounding: action.grounding,
       };
       return {
         ...state,
@@ -186,7 +191,7 @@ export function normalizeServerMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-    .map((m) => ({ id: nextMessageId(), role: m.role, content: m.content }));
+    .map((m) => ({ id: nextMessageId(), role: m.role, content: m.content, grounding: m.grounding }));
 }
 
 export const MAX_QUESTION_LENGTH = 500;
@@ -209,7 +214,12 @@ export function useSiaConversation() {
         },
         {
           onSuccess: (data) => {
-            dispatch({ type: "SUCCESS", answer: data?.answer ?? "", sessionId: data?.sessionId });
+            dispatch({
+              type: "SUCCESS",
+              answer: data?.answer ?? "",
+              sessionId: data?.sessionId,
+              grounding: data?.grounding,
+            });
             // The session list's ordering and timestamps just changed.
             queryClient.invalidateQueries({ queryKey: queryKeys.sia.sessions.list() });
           },
@@ -250,7 +260,12 @@ export function useSiaConversation() {
       { question, sessionId, clientMessageId },
       {
         onSuccess: (data) => {
-          dispatch({ type: "SUCCESS", answer: data?.answer ?? "", sessionId: data?.sessionId });
+          dispatch({
+            type: "SUCCESS",
+            answer: data?.answer ?? "",
+            sessionId: data?.sessionId,
+            grounding: data?.grounding,
+          });
           queryClient.invalidateQueries({ queryKey: queryKeys.sia.sessions.list() });
         },
         onError: (error) => {

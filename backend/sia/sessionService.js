@@ -104,7 +104,24 @@ async function getOrCreateSession(userId, sessionId) {
 // pair" result the sequential path already returns -- so a concurrent
 // retry never duplicates messages and never needs to re-invoke the LLM
 // provider to answer the retry.
-async function appendTurn({ sessionId, userId, question, intent, answer, providerMetadata, clientMessageId }) {
+// Batch 3F: `grounding` (optional) is the immutable provenance snapshot for
+// THIS answer (backend/sia/groundingService.js). It is stored on the
+// assistant document only -- a user turn never carries it -- and, like
+// every other field here, it is written exactly once, at creation time,
+// and never recomputed later: the user's underlying financial data can
+// change after this turn is stored, so replaying old grounding from
+// CURRENT analytics would misrepresent what actually grounded this specific
+// historical answer.
+async function appendTurn({
+  sessionId,
+  userId,
+  question,
+  intent,
+  answer,
+  providerMetadata,
+  clientMessageId,
+  grounding,
+}) {
   // The unique index on models/SiaMessage.js is scoped to (session,
   // clientMessageId) -- a single raw clientMessageId cannot be stored on
   // both the user and assistant document of the same turn without
@@ -166,6 +183,13 @@ async function appendTurn({ sessionId, userId, question, intent, answer, provide
       intent,
       clientMessageId: assistantClientMessageId,
       metadata: providerMetadata || {},
+      // The `grounding` key is only ever present on the create() call at
+      // all when a real, non-empty snapshot exists -- conditionally
+      // spread in, not set to `undefined`, so a no-op grounding
+      // computation leaves the write attributes byte-for-byte identical to
+      // before this field existed (see tests/sia.historySafety.test.js's
+      // exact-allowlist proof, which this mirrors).
+      ...(grounding && Array.isArray(grounding.sources) && grounding.sources.length > 0 ? { grounding } : {}),
     });
   } catch (err) {
     // MongoDB duplicate-key error (E11000) -- a concurrent request won the
