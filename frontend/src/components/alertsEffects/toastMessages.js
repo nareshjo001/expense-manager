@@ -157,12 +157,18 @@ const expenseAddErrorToast = (data = {}) => {
     );
 };
 
-const deleteSuccessToast = () => {
+// Phase C -- Expense Mutation Reliability: `isPending` is true when the
+// delete itself committed but derived budget/report sync is still catching
+// up (derivedData.recoveryPending on the response). Wording stays calm and
+// factual -- never implies the delete failed or needs to be redone.
+const deleteSuccessToast = (isPending = false) => {
     toast.dismiss();
     toast.success(
         <div>
         <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
-                Deleted Successfully!
+                {isPending
+                    ? "Expense deleted. Budget and insights are still refreshing."
+                    : "Deleted Successfully!"}
         </div>
         </div>,
         {

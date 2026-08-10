@@ -9,7 +9,7 @@ import { useCreateBudgetMutation } from '../../../hooks/mutations/useCreateBudge
 
 // Sets or displays the current month's budget, reading from the shared budgets query.
 const SetBudget = () => {
-  const { monthlyBudgets, budgetStatus } = useBudgetSummary();
+  const { monthlyBudgets, budgetStatus, isCurrentMonthStale } = useBudgetSummary();
   const createBudgetMutation = useCreateBudgetMutation();
 
   const [budget, setBudget] = useState({ month: "", budgetAmount: "" });
@@ -105,7 +105,7 @@ const SetBudget = () => {
 
       {isCurrentMonthSet() && (
         <div className="budget-notify set-budget">
-          <BudgetBar monthlyBudgets={monthlyBudgets} />
+          <BudgetBar monthlyBudgets={monthlyBudgets} isStale={isCurrentMonthStale} />
         </div>
       )}
     </div>

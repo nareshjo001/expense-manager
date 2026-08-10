@@ -2,9 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import './BudgetBar.css';
 import icons from '../../imports/iconsImport';
+import { FetchingLoader } from '../../alertsEffects/FetchingLoader';
 
 // Progress bar showing the current month's budget usage, with an animated fill and over-budget alert state.
-const BudgetBar = ({ monthlyBudgets }) => {
+//
+// Phase C.2 -- `isStale` (from useBudgetSummary's `isCurrentMonthStale`)
+// indicates the `.spent` figure shown below may still reflect a mutation
+// whose budget recalculation is pending recovery (see
+// Controllers/BudgetControllers/getbudgets.js's `recoveryPending`/
+// `staleMonths`). Rather than hiding or blocking on this, the existing
+// value is still shown (best-available data) alongside a calm, explicit
+// "still refreshing" note -- consistent with the wording already used
+// elsewhere for pending derived-data recovery (see
+// alertsEffects/toastMessages.js's deleteSuccessToast).
+const BudgetBar = ({ monthlyBudgets, isStale = false }) => {
   const currentMonth = format(new Date(), 'MMM yyyy');
 
   const budget = monthlyBudgets.find(b => b.month === currentMonth);
@@ -55,6 +66,13 @@ const BudgetBar = ({ monthlyBudgets }) => {
           </div>
         </div>
       </div>
+
+      {isStale && (
+        <div className="budget-refreshing-note" role="status">
+          <FetchingLoader />
+          <span>Budget is refreshing</span>
+        </div>
+      )}
     </div>
   );
 };

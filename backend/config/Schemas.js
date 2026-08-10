@@ -119,6 +119,15 @@ const budgetSchema = new Schema({
         type: Number,
         min: 0,
         required: true
+    },
+    // Phase C.2 -- atomic write-fencing generation stamp, mirrors
+    // models/Report.js's own syncRevision field. See
+    // Services/BudgetServices/budget.service.js's recalculateBudget for
+    // how the actual write is conditioned on this field so an older,
+    // slower recomputation can never overwrite a newer one.
+    syncRevision: {
+        type: Number,
+        default: 0
     }
 });
 

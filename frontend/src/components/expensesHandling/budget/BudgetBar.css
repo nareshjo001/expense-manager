@@ -119,6 +119,18 @@
   height: 20px;
 }
 
+.budget-refreshing-note {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
 @media screen and (max-width: 600px) {
   /* Budget Bar */
   .budget-bar-wrapper {

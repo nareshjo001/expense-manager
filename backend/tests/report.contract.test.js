@@ -43,6 +43,20 @@ const REPORT_SERVICE_PATH = "../Services/reportService";
 const REPORT_CACHE_PATH = "../cache/reportCache";
 const FINANCIAL_REPORT_MODEL_PATH = "../models/Report";
 const REPORT_GENERATOR_PATH = "../analytics/reportGenerator";
+// Phase C -- Expense Mutation Reliability: Controllers/report.controller.js
+// now calls syncRecoveryService.repairIfPending(userId) before serving the
+// report. Mocked in every loader below so these tests never touch the real
+// models/PendingSync.js (which would otherwise try a real Mongoose query
+// against the never-connected default connection in this suite).
+const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
+// Phase C.4 -- Services/reportService.js's getReport() now also reads
+// models/PendingSync.js DIRECTLY (not only through syncRecoveryService),
+// to compare a cached/stored report's own revision against the durable
+// minimum revision this user's report must meet. Mocked in section E's
+// loader below for the identical reason SYNC_RECOVERY_SERVICE_PATH already
+// is -- never let this suite's calls reach a real, never-connected Mongo
+// query.
+const PENDING_SYNC_PATH = "../models/PendingSync";
 const APP_PATH = "../app";
 
 const TEST_JWT_SECRET = "report-contract-test-secret";
@@ -80,7 +94,7 @@ function signToken(userId, overrides = {}) {
 // every test that only needs to prove route/middleware/controller behavior
 // around a stubbed service call -- not reportService's own internal
 // branching (that's section E's job, via loadAppWithMockedServiceDependencies).
-function loadAppWithMockedService({ getReportImpl } = {}) {
+function loadAppWithMockedService({ getReportImpl, repairIfPendingImpl } = {}) {
   jest.resetModules();
 
   const getReportMock = jest.fn(getReportImpl || (async () => ({})));
@@ -89,8 +103,15 @@ function loadAppWithMockedService({ getReportImpl } = {}) {
     refreshReport: jest.fn(),
   }));
 
+  const repairIfPendingMock = jest.fn(
+    repairIfPendingImpl || (async () => ({ attempted: false, stillPending: false }))
+  );
+  jest.doMock(SYNC_RECOVERY_SERVICE_PATH, () => ({
+    repairIfPending: repairIfPendingMock,
+  }));
+
   const app = require(APP_PATH);
-  return { app, getReportMock };
+  return { app, getReportMock, repairIfPendingMock };
 }
 
 // Loads a fresh Express app with reportService's own three dependencies
@@ -99,10 +120,12 @@ function loadAppWithMockedService({ getReportImpl } = {}) {
 // branching logic against these stubs.
 function loadAppWithMockedServiceDependencies({
   cacheGetImpl,
+  cacheGetWithRevisionImpl,
   cacheSetImpl,
   findOneImpl,
   findOneAndUpdateImpl,
   generateReportImpl,
+  pendingSyncFindOneImpl,
 } = {}) {
   jest.resetModules();
 
@@ -120,13 +143,50 @@ function loadAppWithMockedServiceDependencies({
   // cache/store/generate branching logic.
   jest.dontMock(REPORT_SERVICE_PATH);
 
-  const cacheGetMock = jest.fn(cacheGetImpl || (async () => null));
+  // Same rationale as loadAppWithMockedService above -- never let this
+  // suite's report.controller.js call reach the real PendingSync model.
+  const repairIfPendingMock = jest.fn(async () => ({ attempted: false, stillPending: false }));
+  jest.doMock(SYNC_RECOVERY_SERVICE_PATH, () => ({
+    repairIfPending: repairIfPendingMock,
+  }));
+
+  // Phase C.4 -- getReport() now calls reportCache.getWithRevision()
+  // instead of get(). Default wraps whatever cacheGetImpl resolves (the
+  // existing tests' own fixture shape) into the `{ revision, payload }`
+  // envelope with `revision: null` -- combined with the default
+  // pendingSyncFindOneImpl below (no PendingSync doc -> no revision floor
+  // established), this reproduces the OLD getReport() behavior byte-for-
+  // byte for every test that doesn't care about revision freshness, while
+  // still exercising the real comparison logic for tests that do (see
+  // Section E's own new revision-freshness tests further down).
+  const resolvedCacheGetImpl = cacheGetImpl || (async () => null);
+  const cacheGetMock = jest.fn(resolvedCacheGetImpl);
+  // Phase C.4 requirement #2's own tests need to control the cached
+  // envelope's REVISION explicitly (not just its payload), to prove a
+  // revision-10 cache entry is correctly rejected when the durable minimum
+  // is 11 -- cacheGetWithRevisionImpl, when given, is used verbatim instead
+  // of being derived from cacheGetImpl.
+  const cacheGetWithRevisionMock = jest.fn(
+    cacheGetWithRevisionImpl ||
+      (async (...args) => {
+        const payload = await resolvedCacheGetImpl(...args);
+        return payload ? { revision: null, payload } : null;
+      })
+  );
   const cacheSetMock = jest.fn(cacheSetImpl || (async () => {}));
   const cacheInvalidateMock = jest.fn(async () => {});
   jest.doMock(REPORT_CACHE_PATH, () => ({
     get: cacheGetMock,
+    getWithRevision: cacheGetWithRevisionMock,
     set: cacheSetMock,
     invalidate: cacheInvalidateMock,
+  }));
+
+  const pendingSyncFindOneMock = jest.fn(
+    pendingSyncFindOneImpl || (() => ({ lean: jest.fn().mockResolvedValue(null) }))
+  );
+  jest.doMock(PENDING_SYNC_PATH, () => ({
+    findOne: pendingSyncFindOneMock,
   }));
 
   const findOneMock = jest.fn(
@@ -149,11 +209,14 @@ function loadAppWithMockedServiceDependencies({
   return {
     app,
     cacheGetMock,
+    cacheGetWithRevisionMock,
     cacheSetMock,
     cacheInvalidateMock,
     findOneMock,
     findOneAndUpdateMock,
     generateReportMock,
+    repairIfPendingMock,
+    pendingSyncFindOneMock,
   };
 }
 
@@ -347,7 +410,7 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
     // below (describe block H).
     const cachedReport = { __probe: "CACHE_HIT_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
 
-    const { app, cacheGetMock, findOneMock, generateReportMock } =
+    const { app, cacheGetWithRevisionMock, findOneMock, generateReportMock } =
       loadAppWithMockedServiceDependencies({
         cacheGetImpl: async () => cachedReport,
       });
@@ -358,7 +421,10 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(cachedReport);
-    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    // Phase C.4 -- getReport() now reads through getWithRevision(), not
+    // get(), so it can compare the cached entry's own revision against the
+    // durable minimum (see reportService.js's getReport() doc comment).
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
     expect(findOneMock).not.toHaveBeenCalled();
     expect(generateReportMock).not.toHaveBeenCalled();
   });
@@ -370,7 +436,7 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
     const storedReport = { __probe: "STORED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
     const leanMock = jest.fn().mockResolvedValue(storedReport);
 
-    const { app, cacheGetMock, findOneMock, cacheSetMock, generateReportMock } =
+    const { app, cacheGetWithRevisionMock, findOneMock, cacheSetMock, generateReportMock } =
       loadAppWithMockedServiceDependencies({
         cacheGetImpl: async () => null,
         findOneImpl: () => ({ lean: leanMock }),
@@ -382,11 +448,14 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(storedReport);
-    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
     expect(findOneMock).toHaveBeenCalledWith({ user: userId });
     expect(leanMock).toHaveBeenCalledTimes(1);
     expect(generateReportMock).not.toHaveBeenCalled();
-    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport);
+    // Phase C.4 -- getReport() now passes the stored document's own
+    // syncRevision (here `undefined ?? null` -> null, since storedReport
+    // carries none) through as cache.set()'s third argument.
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport, null);
   });
 
   it("cache and stored-report miss: generates, persists with the real upsert chain/options, caches, and returns the persisted result", async () => {
@@ -399,7 +468,7 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
 
     const {
       app,
-      cacheGetMock,
+      cacheGetWithRevisionMock,
       findOneMock,
       findOneAndUpdateMock,
       generateReportMock,
@@ -418,26 +487,199 @@ describe("GET /report -- real reportService cache/store/generate branches (E)", 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(persistedReport);
 
-    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
     expect(findOneMock).toHaveBeenCalledWith({ user: userId });
     expect(generateReportMock).toHaveBeenCalledWith(userId);
 
     // Exact reproduction of Services/reportService.js's real
     // findOneAndUpdate call shape: user-scoped filter, the generated report
-    // spread alongside `user`, and the current production upsert options.
+    // spread alongside `user`, and the current production options. Phase
+    // C.2 -- this first conditional write is NEVER allowed to upsert (see
+    // persistAndCache's own doc comment: upsert + a filter that can fail to
+    // match an EXISTING uniquely-indexed document is a real MongoDB
+    // pitfall that throws a duplicate-key error instead of cleanly
+    // reporting "no match"). This mock resolves a document on the first
+    // call, so the separate "genuinely first-ever report" upsert:true
+    // fallback path is never reached here.
+    // Phase C.3 -- the update is now a `$set`, never a full-document
+    // replacement (see persistAndCache's own doc comment on why: a
+    // replacement-style update would silently wipe a `syncRevision` an
+    // earlier fenced call had already stamped).
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { user: userId },
-      { user: userId, ...generatedReport },
+      { $set: { user: userId, ...generatedReport } },
       {
         new: true,
-        upsert: true,
+        upsert: false,
         runValidators: true,
-        setDefaultsOnInsert: true,
       }
     );
     expect(findOneAndUpdateLeanMock).toHaveBeenCalledTimes(1);
 
-    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport);
+    // Phase C.3 -- reportCache.set() now also receives the revision that
+    // fenced this write (null here -- this call is unfenced).
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport, null);
+  });
+
+  // Phase C.4 requirement #2 -- proves a stale Redis cache entry can never
+  // be served once a durable minimum revision is known, even though the
+  // entry is otherwise contract-current (metadata.version stamped) and
+  // would have sailed through the OLD isCurrentReport()-only check.
+  it("stale cache proof: Mongo report at revision 11, Redis cached at revision 10, PendingSync floor at 11 -- the revision-10 cached payload is never returned; the fresher stored document is served and re-cached at revision 11", async () => {
+    const userId = "report-contract-stale-cache-user";
+    const staleCachedPayload = { __probe: "STALE_CACHED_REV_10", metadata: { version: CURRENT_REPORT_VERSION } };
+    const freshStoredReport = {
+      __probe: "FRESH_STORED_REV_11",
+      metadata: { version: CURRENT_REPORT_VERSION },
+      syncRevision: 11,
+    };
+    const leanMock = jest.fn().mockResolvedValue(freshStoredReport);
+
+    const {
+      app,
+      cacheGetWithRevisionMock,
+      findOneMock,
+      generateReportMock,
+      cacheSetMock,
+    } = loadAppWithMockedServiceDependencies({
+      // The cache holds a validly-CAS-written entry -- it just lost the
+      // race to reach Redis before a newer write landed in Mongo (or the
+      // Redis write silently failed -- reportCache.js's own set() self-
+      // catches every Redis error). Either way, revision 10 < the durable
+      // floor of 11 below.
+      cacheGetWithRevisionImpl: async () => ({ revision: 10, payload: staleCachedPayload }),
+      findOneImpl: () => ({ lean: leanMock }),
+      // PendingSync.revision === 11 with reportPending: false is exactly
+      // what synchronizeAfterMutation's confirmReport:true path leaves
+      // behind once a mutation at revision 11 has been fully confirmed --
+      // see reportService.js's getReport() doc comment for why this is a
+      // safe durable minimum to compare against.
+      pendingSyncFindOneImpl: () => ({
+        lean: jest.fn().mockResolvedValue({ user: userId, revision: 11, reportPending: false }),
+      }),
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    // The stale revision-10 cached payload must NEVER be returned.
+    expect(res.body).not.toEqual(staleCachedPayload);
+    // The fresher, revision-11 stored document is served instead.
+    expect(res.body).toEqual(freshStoredReport);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
+    expect(findOneMock).toHaveBeenCalledWith({ user: userId });
+    // No live regeneration was needed -- the stored Mongo document already
+    // met the revision floor once the stale cache entry was correctly
+    // rejected.
+    expect(generateReportMock).not.toHaveBeenCalled();
+    // The cache is re-populated with the fresh revision-11 document,
+    // overwriting the stale revision-10 entry (Redis's own CAS script
+    // allows this: 11 is not older than 10).
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, freshStoredReport, 11);
+  });
+
+  // Phase C.4 requirement #2, second scenario -- proves the specific crash
+  // window the requirement calls out: a process crash immediately AFTER a
+  // Mongo report CAS succeeds but BEFORE reportCache.set()'s own Redis EVAL
+  // call ever runs. No cache entry exists at all afterward (nothing ever
+  // reached Redis), and PendingSync's own durable revision floor (left
+  // behind by whichever confirm() call fenced the underlying mutation)
+  // still correctly gates the stored Mongo document -- proving the pending
+  // work durably survives the crash and the NEXT read repairs rather than
+  // serving anything stale.
+  it("crash-before-Redis-EVAL proof: Mongo CAS succeeded at revision 11 but Redis was never written -- next getReport() call finds no cache entry, and PendingSync's durable floor still correctly gates freshness", async () => {
+    const userId = "report-contract-crash-before-eval-user";
+    const freshStoredReport = {
+      __probe: "SURVIVED_CRASH_REV_11",
+      metadata: { version: CURRENT_REPORT_VERSION },
+      syncRevision: 11,
+    };
+    const leanMock = jest.fn().mockResolvedValue(freshStoredReport);
+
+    const {
+      app,
+      cacheGetWithRevisionMock,
+      findOneMock,
+      generateReportMock,
+      cacheSetMock,
+    } = loadAppWithMockedServiceDependencies({
+      // Simulates the crash: reportCache.set()'s own EVAL call for the
+      // ORIGINAL write never ran, so Redis has nothing at all for this key
+      // -- a real cache MISS, not a stale HIT.
+      cacheGetWithRevisionImpl: async () => null,
+      findOneImpl: () => ({ lean: leanMock }),
+      pendingSyncFindOneImpl: () => ({
+        lean: jest.fn().mockResolvedValue({ user: userId, revision: 11, reportPending: false }),
+      }),
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(freshStoredReport);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
+    expect(findOneMock).toHaveBeenCalledWith({ user: userId });
+    // The stored document alone (revision 11) already meets the durable
+    // floor (also 11) -- no live regeneration is needed to repair.
+    expect(generateReportMock).not.toHaveBeenCalled();
+    // This read repairs the gap the crash left behind: Redis is populated
+    // for the first time with the correct revision-11 entry.
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, freshStoredReport, 11);
+  });
+
+  // Companion to the crash scenario above -- proves the case where the
+  // crash happened before the Mongo CAS itself completed (or before any
+  // mutation confirm() ran at all for this user's most recent work): the
+  // stored document is ALSO behind the durable floor, so getReport() must
+  // fall through to a genuine live regeneration rather than serving the
+  // stale stored document, even though nothing is cached.
+  it("crash-before-Mongo-CAS proof: PendingSync still reports pending recovery -- neither the (absent) cache nor the stale stored document is served; getReport() regenerates live", async () => {
+    const userId = "report-contract-crash-before-cas-user";
+    const staleStoredReport = {
+      __probe: "STALE_STORED_REV_10",
+      metadata: { version: CURRENT_REPORT_VERSION },
+      syncRevision: 10,
+    };
+    const generatedReport = { __probe: "LIVE_REGENERATED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
+    const persistedReport = { __probe: "LIVE_REGENERATED_PERSISTED", metadata: { version: CURRENT_REPORT_VERSION } };
+
+    const findOneLeanMock = jest.fn().mockResolvedValue(staleStoredReport);
+    const findOneAndUpdateLeanMock = jest.fn().mockResolvedValue(persistedReport);
+
+    const {
+      app,
+      cacheGetWithRevisionMock,
+      findOneMock,
+      generateReportMock,
+    } = loadAppWithMockedServiceDependencies({
+      cacheGetWithRevisionImpl: async () => null,
+      findOneImpl: () => ({ lean: findOneLeanMock }),
+      findOneAndUpdateImpl: () => ({ lean: findOneAndUpdateLeanMock }),
+      generateReportImpl: async () => generatedReport,
+      // reportPending: true is the durable marker a reserve()/pending
+      // Tier-1 work record leaves behind for exactly this crash window --
+      // a mutation's write may have landed (or may not have -- this is the
+      // ambiguous-write case requirement #1 covers) but derived-data
+      // synchronization for it is not yet known-complete.
+      pendingSyncFindOneImpl: () => ({
+        lean: jest.fn().mockResolvedValue({ user: userId, revision: 11, reportPending: true }),
+      }),
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toEqual(staleStoredReport);
+    expect(res.body).toEqual(persistedReport);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
+    expect(findOneMock).toHaveBeenCalledWith({ user: userId });
+    expect(generateReportMock).toHaveBeenCalledWith(userId);
   });
 });
 
@@ -454,7 +696,7 @@ describe("GET /report -- legacy report-contract-version compatibility (H)", () =
     const storedReport = { __probe: "CURRENT_STORED_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
     const leanMock = jest.fn().mockResolvedValue(storedReport);
 
-    const { app, cacheGetMock, findOneMock, generateReportMock, cacheSetMock } =
+    const { app, cacheGetWithRevisionMock, findOneMock, generateReportMock, cacheSetMock } =
       loadAppWithMockedServiceDependencies({
         cacheGetImpl: async () => LEGACY_CACHED_REPORT,
         findOneImpl: () => ({ lean: leanMock }),
@@ -468,11 +710,12 @@ describe("GET /report -- legacy report-contract-version compatibility (H)", () =
     // The legacy cached probe is never returned to the client.
     expect(res.body).not.toEqual(LEGACY_CACHED_REPORT);
     expect(res.body).toEqual(storedReport);
-    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
     expect(findOneMock).toHaveBeenCalledWith({ user: userId });
     // The current stored report found underneath the stale cache entry is
-    // re-cached, overwriting (not flushing) just this user's key.
-    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport);
+    // re-cached, overwriting (not flushing) just this user's key. Third
+    // arg is the stored document's own syncRevision (undefined -> null).
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport, null);
     expect(generateReportMock).not.toHaveBeenCalled();
   });
 
@@ -513,19 +756,19 @@ describe("GET /report -- legacy report-contract-version compatibility (H)", () =
     expect(generateReportMock).toHaveBeenCalledWith(userId);
 
     // The legacy document is replaced in place via the existing user-scoped
-    // upsert convention -- same filter/options as every other write path,
-    // no bespoke migration query.
+    // conditional-write convention -- same filter/options as every other
+    // write path, no bespoke migration query. Phase C.2 -- never upsert on
+    // this first call (see the comment in the previous test).
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { user: userId },
-      { user: userId, ...generatedReport },
+      { $set: { user: userId, ...generatedReport } },
       {
         new: true,
-        upsert: true,
+        upsert: false,
         runValidators: true,
-        setDefaultsOnInsert: true,
       }
     );
-    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport);
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport, null);
   });
 
   it("accepts a current report whose anomaly section is hasData:false as present, not legacy", async () => {
@@ -601,7 +844,7 @@ describe("GET /report -- legacy report-contract-version compatibility (H)", () =
     expect(res.body).toEqual(storedReport);
     expect(findOneMock).toHaveBeenCalledWith({ user: userId });
     expect(generateReportMock).not.toHaveBeenCalled();
-    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport);
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, storedReport, null);
   });
 
   it("never calls a global Redis flush -- only the per-user cache.set/get/invalidate seam is used, even along the legacy-regeneration path", async () => {
@@ -612,7 +855,7 @@ describe("GET /report -- legacy report-contract-version compatibility (H)", () =
     const findOneLeanMock = jest.fn().mockResolvedValue(LEGACY_STORED_REPORT);
     const findOneAndUpdateLeanMock = jest.fn().mockResolvedValue(persistedReport);
 
-    const { app, cacheGetMock, cacheSetMock, cacheInvalidateMock } = loadAppWithMockedServiceDependencies({
+    const { app, cacheGetWithRevisionMock, cacheSetMock, cacheInvalidateMock } = loadAppWithMockedServiceDependencies({
       cacheGetImpl: async () => null,
       findOneImpl: () => ({ lean: findOneLeanMock }),
       generateReportImpl: async () => generatedReport,
@@ -621,14 +864,15 @@ describe("GET /report -- legacy report-contract-version compatibility (H)", () =
 
     await request(app).get("/report").set("Authorization", `Bearer ${signToken(userId)}`);
 
-    // reportCache.js's real module surface is exactly get/set/invalidate,
-    // each always scoped to one `report:${userId}` key -- there is no
-    // flush/flushAll/flushDb method to call in the first place, and this
-    // request only ever invoked the per-user get/set here.
-    expect(cacheGetMock).toHaveBeenCalledTimes(1);
-    expect(cacheGetMock).toHaveBeenCalledWith(userId);
+    // reportCache.js's real module surface is exactly get/getWithRevision/
+    // set/invalidate, each always scoped to one `report:${userId}` key --
+    // there is no flush/flushAll/flushDb method to call in the first
+    // place, and this request only ever invoked the per-user
+    // getWithRevision/set here.
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledTimes(1);
+    expect(cacheGetWithRevisionMock).toHaveBeenCalledWith(userId);
     expect(cacheSetMock).toHaveBeenCalledTimes(1);
-    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport);
+    expect(cacheSetMock).toHaveBeenCalledWith(userId, persistedReport, null);
     expect(cacheInvalidateMock).not.toHaveBeenCalled();
 
     const reportCacheSource = require("fs").readFileSync(
@@ -806,6 +1050,150 @@ describe("GET /report -- controller error contract (F)", () => {
       message: "Failed to fetch financial report.",
     });
     expect(getReportMock).toHaveBeenCalledTimes(1);
+
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("GET /report -- Phase C read-time repair wiring", () => {
+  it("calls syncRecoveryService.repairIfPending for the authenticated user BEFORE serving the report", async () => {
+    const assembledReport = buildAssembledReport();
+    const callOrder = [];
+    const { app } = loadAppWithMockedService({
+      getReportImpl: async () => {
+        callOrder.push("getReport");
+        return assembledReport;
+      },
+      repairIfPendingImpl: async (userId) => {
+        callOrder.push("repairIfPending");
+        return { attempted: true, stillPending: false };
+      },
+    });
+
+    const userId = "report-contract-repair-user";
+    const res = await request(app).get("/report").set("Authorization", `Bearer ${signToken(userId)}`);
+
+    expect(res.status).toBe(200);
+    expect(callOrder).toEqual(["repairIfPending", "getReport"]);
+  });
+
+  it("Phase C.1 -- when repair leaves the report component pending, forces a direct refreshReport() instead of trusting getReport()'s cache/store path", async () => {
+    const freshReport = { __probe: "FORCED_FRESH_REPORT", metadata: { version: CURRENT_REPORT_VERSION } };
+    const getReportMock = jest.fn(async () => ({ __probe: "SHOULD_NOT_BE_SERVED_STALE" }));
+    const refreshReportMock = jest.fn(async () => freshReport);
+    jest.doMock(REPORT_SERVICE_PATH, () => ({
+      getReport: getReportMock,
+      refreshReport: refreshReportMock,
+    }));
+    jest.doMock(SYNC_RECOVERY_SERVICE_PATH, () => ({
+      repairIfPending: jest.fn(async () => ({ attempted: true, stillPending: true, reportRepairFailed: true })),
+    }));
+    const app = require(APP_PATH);
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-forced-refresh-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(freshReport);
+    // getReport()'s own cache/store path is never used on this path -- it
+    // could otherwise return (and re-cache) the very report repair just
+    // failed to fix, presenting it as if synchronization had succeeded.
+    expect(getReportMock).not.toHaveBeenCalled();
+    expect(refreshReportMock).toHaveBeenCalledWith("report-contract-forced-refresh-user");
+  });
+
+  it("Phase C.1 -- when the forced refresh ALSO fails, returns a controlled 503 rather than falling through to a stale getReport() path", async () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const getReportMock = jest.fn(async () => ({ __probe: "SHOULD_NOT_BE_SERVED_STALE" }));
+    const refreshReportMock = jest.fn(async () => {
+      throw new Error("simulated forced-refresh failure");
+    });
+    jest.doMock(REPORT_SERVICE_PATH, () => ({
+      getReport: getReportMock,
+      refreshReport: refreshReportMock,
+    }));
+    jest.doMock(SYNC_RECOVERY_SERVICE_PATH, () => ({
+      repairIfPending: jest.fn(async () => ({ attempted: true, stillPending: true, reportRepairFailed: true })),
+    }));
+    const app = require(APP_PATH);
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-forced-refresh-fails-user")}`);
+
+    expect(res.status).toBe(503);
+    expect(res.body.success).toBe(false);
+    expect(res.body.recoveryPending).toBe(true);
+    expect(getReportMock).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("Phase C.1 -- when the forced refresh is fence-skipped (superseded by newer concurrent work), returns a controlled 503, not a false success", async () => {
+    const getReportMock = jest.fn(async () => ({ __probe: "SHOULD_NOT_BE_SERVED_STALE" }));
+    const refreshReportMock = jest.fn(async () => ({ skipped: true, reason: "superseded" }));
+    jest.doMock(REPORT_SERVICE_PATH, () => ({
+      getReport: getReportMock,
+      refreshReport: refreshReportMock,
+    }));
+    jest.doMock(SYNC_RECOVERY_SERVICE_PATH, () => ({
+      repairIfPending: jest.fn(async () => ({ attempted: true, stillPending: true, reportRepairFailed: true })),
+    }));
+    const app = require(APP_PATH);
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-forced-refresh-superseded-user")}`);
+
+    expect(res.status).toBe(503);
+    expect(res.body.recoveryPending).toBe(true);
+    expect(getReportMock).not.toHaveBeenCalled();
+  });
+
+  it("Phase C.1 -- when repair fully succeeded (nothing still pending), the normal getReport() cache/store path is used exactly as before", async () => {
+    const assembledReport = buildAssembledReport();
+    const { app, getReportMock } = loadAppWithMockedService({
+      getReportImpl: async () => assembledReport,
+      repairIfPendingImpl: async () => ({ attempted: true, stillPending: false, reportRepairFailed: false }),
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-repair-succeeded-user")}`);
+
+    expect(res.status).toBe(200);
+    expect(getReportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still serves the report normally even when repairIfPending itself rejects", async () => {
+    // repairIfPending's own contract (Services/syncRecoveryService.js) is to
+    // never throw, but this proves the controller does not depend on that
+    // -- Controllers/report.controller.js's own try/catch would otherwise
+    // turn an unexpected rejection here into a false 500 on an otherwise
+    // healthy report read. This test intentionally violates that contract
+    // to prove report.controller.js has no OTHER hidden dependency on it
+    // succeeding.
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const assembledReport = buildAssembledReport();
+    const { app } = loadAppWithMockedService({
+      getReportImpl: async () => assembledReport,
+      repairIfPendingImpl: async () => {
+        throw new Error("simulated repair failure");
+      },
+    });
+
+    const res = await request(app)
+      .get("/report")
+      .set("Authorization", `Bearer ${signToken("report-contract-repair-throws-user")}`);
+
+    // Documents current behavior: report.controller.js's own try/catch
+    // wraps repairIfPending and getReport together, so a hypothetical
+    // rejection here (never expected from the real implementation) is
+    // still handled safely -- as a controlled 500, not a crash -- rather
+    // than ever being silently swallowed and served over-optimistically.
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ success: false, message: "Failed to fetch financial report." });
 
     consoleErrorSpy.mockRestore();
   });

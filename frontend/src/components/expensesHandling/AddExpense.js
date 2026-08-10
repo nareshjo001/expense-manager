@@ -31,6 +31,26 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     // Tracks a programmatically-set expenseName (edit load / bill scan) so ML prediction doesn't run or overwrite the loaded category until the user actually types.
     const programmaticNameRef = useRef(null);
 
+    // Phase C -- Expense Mutation Reliability: stable add-expense idempotency
+    // key for this logical "add attempt". Generated lazily on first submit
+    // (not on every render) and deliberately NOT regenerated on a retried
+    // submit of the same attempt -- backend/Controllers/ExpenseControllers/
+    // addexpense.js relies on this id staying the same across a retry so a
+    // lost-response resubmit is recognized as a replay instead of creating a
+    // duplicate expense. Cleared only on committed success or when a new
+    // form session genuinely begins (entering edit mode, or unmounting when
+    // navigating away from /add).
+    const addAttemptIdRef = useRef(null);
+    const getAddAttemptId = () => {
+        if (!addAttemptIdRef.current) {
+            addAttemptIdRef.current =
+                (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                    ? crypto.randomUUID()
+                    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+        return addAttemptIdRef.current;
+    };
+
     const navigate = useNavigate();
 
     const addExpenseMutation = useAddExpenseMutation();
@@ -161,6 +181,16 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         }
     }, [isEdit]);
 
+    // Phase C -- Expense Mutation Reliability: entering edit mode is a
+    // genuinely new form session for the add flow, so any in-flight add
+    // attempt id is cleared -- a later add (after leaving edit mode) must
+    // not reuse a stale identifier from an abandoned add attempt.
+    useEffect(() => {
+        if (isEdit.enableEdit) {
+            addAttemptIdRef.current = null;
+        }
+    }, [isEdit.enableEdit]);
+
     // Handles form submission
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -181,6 +211,13 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
         const mutationCallbacks = {
             onSuccess: (data) => {
+                // Phase C -- Expense Mutation Reliability: a 2xx here always
+                // means the expense itself (add or edit) committed, whether
+                // or not derived budget/report sync finished yet (see
+                // derivedData.recoveryPending) -- so this always follows the
+                // normal success path below. A pending sync gets calm,
+                // non-alarming wording instead of the default success
+                // message; the user is never told to resubmit.
                 setName('');
                 setCategory('');
                 setAmount('');
@@ -190,9 +227,16 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 setMlPredictedCategory('');
                 setMlConfidence(null);
                 setIsEdit({ enableEdit: false, expense_id: '' });
+                // Committed success: this add attempt is done, whether it was
+                // a fresh create or a replay -- next submit is a new attempt.
+                addAttemptIdRef.current = null;
 
                 navigate('/');
-                expenseAddSuccessToast(data);
+
+                const toastData = data?.derivedData?.recoveryPending
+                    ? { ...data, message: 'Expense saved. Budget and insights are still refreshing.' }
+                    : data;
+                expenseAddSuccessToast(toastData);
             },
             onError: (error) => {
                 // 401/429/409 are already surfaced by the shared axios interceptor — avoid toasting a second time.
@@ -212,7 +256,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         };
 
         if (!isEdit.enableEdit) {
-            addExpenseMutation.mutate({ ...payload, id: Date.now().toString() }, mutationCallbacks);
+            addExpenseMutation.mutate({ ...payload, id: getAddAttemptId() }, mutationCallbacks);
         } else {
             updateExpenseMutation.mutate({ editID: isEdit.expense_id, payload }, mutationCallbacks);
         }

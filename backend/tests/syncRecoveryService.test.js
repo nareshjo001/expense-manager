@@ -1,0 +1,853 @@
+// Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
+// Phase C.1 -- Mutation Recovery Correctness Gate.
+//
+// Isolated unit coverage for Services/syncRecoveryService.js: the durable
+// pending-synchronization marker + read-time repair, PLUS (as of C.1) the
+// pre-write reservation tier (reserve/confirm) that closes the crash gap,
+// and the fenceRevision plumbing that stops a stale recompute from
+// clobbering fresher derived data. Runs under the default
+// backend/jest.config.js (npm test) -- never touches MongoDB, Redis, or the
+// network. Three seams are mocked:
+//   - ../models/PendingSync (the marker document itself)
+//   - ../Services/BudgetServices/budget.service (only recalculateBudget is
+//     mocked; getMonthAnchor/getMonthKey are left as their real,
+//     pure/DB-free implementations via jest.requireActual so month
+//     de-duplication logic is exercised for real)
+//   - ../Services/reportService (only refreshReport is mocked)
+//
+// Every test calls jest.resetModules() and re-requires
+// Services/syncRecoveryService.js fresh.
+"use strict";
+
+const PENDING_SYNC_MODEL_PATH = "../models/PendingSync";
+const BUDGET_SERVICE_PATH = "../Services/BudgetServices/budget.service";
+const REPORT_SERVICE_PATH = "../Services/reportService";
+const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
+
+afterEach(() => {
+  jest.resetModules();
+  jest.restoreAllMocks();
+});
+
+function loadService({
+  findOneImpl,
+  findOneAndUpdateImpl,
+  updateOneImpl,
+  recalculateBudgetImpl,
+  refreshReportImpl,
+} = {}) {
+  jest.resetModules();
+
+  const findOneMock = jest.fn(
+    findOneImpl || (() => ({ lean: jest.fn().mockResolvedValue(null) }))
+  );
+  // Phase C.4 -- repairIfPending()'s Tier-1/Tier-2 passes now call
+  // allocateRepairRevision() (an atomic $inc via THIS SAME findOneAndUpdate
+  // seam) before fencing any recompute, whenever there is actual repair
+  // work to do. A bare `async () => null` default would make that $inc call
+  // resolve `record.revision` against `null` and throw -- every test in
+  // this file that reaches a repair pass without its own
+  // findOneAndUpdateImpl now needs a non-null default with SOME numeric
+  // revision on it. `{ revision: 1 }` is an arbitrary, harmless default;
+  // tests that care about the exact fenced value supply their own impl.
+  const findOneAndUpdateMock = jest.fn(findOneAndUpdateImpl || (async () => ({ revision: 1 })));
+  const updateOneMock = jest.fn(updateOneImpl || (async () => ({})));
+
+  jest.doMock(PENDING_SYNC_MODEL_PATH, () => ({
+    findOne: findOneMock,
+    findOneAndUpdate: findOneAndUpdateMock,
+    updateOne: updateOneMock,
+  }));
+
+  const recalculateBudgetMock = jest.fn(recalculateBudgetImpl || (async () => {}));
+  jest.doMock(BUDGET_SERVICE_PATH, () => {
+    const actual = jest.requireActual(BUDGET_SERVICE_PATH);
+    return {
+      ...actual,
+      recalculateBudget: recalculateBudgetMock,
+    };
+  });
+
+  const refreshReportMock = jest.fn(refreshReportImpl || (async () => {}));
+  jest.doMock(REPORT_SERVICE_PATH, () => ({
+    refreshReport: refreshReportMock,
+    getReport: jest.fn(),
+  }));
+
+  const syncRecoveryService = require(SYNC_RECOVERY_SERVICE_PATH);
+  return {
+    syncRecoveryService,
+    findOneMock,
+    findOneAndUpdateMock,
+    updateOneMock,
+    recalculateBudgetMock,
+    refreshReportMock,
+  };
+}
+
+const USER_ID = "sync-recovery-user";
+const JAN_2026 = new Date("2026-01-15T00:00:00.000Z");
+const FEB_2026 = new Date("2026-02-03T00:00:00.000Z");
+
+describe("markPending", () => {
+  it("is a defensive no-op that never creates an empty marker when nothing failed", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    const result = await syncRecoveryService.markPending({ userId: USER_ID });
+
+    expect(result).toBeNull();
+    expect(findOneAndUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("upserts a new marker with an atomic $inc revision, $addToSet budget months, and sanitized error", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    await syncRecoveryService.markPending({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+      reportPending: true,
+      error: new Error("simulated recalculateBudget failure"),
+    });
+
+    expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
+    const [filter, update, options] = findOneAndUpdateMock.mock.calls[0];
+    expect(filter).toEqual({ user: USER_ID });
+    expect(update.$inc).toEqual({ revision: 1 });
+    expect(update.$addToSet.pendingBudgetMonths.$each).toHaveLength(1);
+    expect(update.$set.reportPending).toBe(true);
+    expect(update.$set.lastError).toBe("simulated recalculateBudget failure");
+    expect(options).toEqual({ upsert: true, new: true, setDefaultsOnInsert: true });
+  });
+
+  it("de-duplicates multiple dates within the same month down to a single anchor", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    const sameMonthLater = new Date("2026-01-28T00:00:00.000Z");
+    await syncRecoveryService.markPending({
+      userId: USER_ID,
+      budgetDates: [JAN_2026, sameMonthLater],
+    });
+
+    const [, update] = findOneAndUpdateMock.mock.calls[0];
+    expect(update.$addToSet.pendingBudgetMonths.$each).toHaveLength(1);
+  });
+
+  it("never sets reportPending:false -- only clearIfRevisionMatches clears it", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    await syncRecoveryService.markPending({ userId: USER_ID, budgetDates: [JAN_2026] });
+
+    const [, update] = findOneAndUpdateMock.mock.calls[0];
+    expect(update.$set).not.toHaveProperty("reportPending");
+  });
+});
+
+describe("getPendingSync", () => {
+  it("returns null via a plain lean lookup when the user has no marker", async () => {
+    const { syncRecoveryService, findOneMock } = loadService();
+
+    const result = await syncRecoveryService.getPendingSync(USER_ID);
+
+    expect(result).toBeNull();
+    expect(findOneMock).toHaveBeenCalledWith({ user: USER_ID });
+  });
+});
+
+describe("clearIfRevisionMatches", () => {
+  it("pulls only the specified repaired months and clears reportPending when the revision still matches", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 3, pendingBudgetMonths: [], reportPending: false }),
+    });
+
+    const result = await syncRecoveryService.clearIfRevisionMatches({
+      userId: USER_ID,
+      revision: 3,
+      repairedBudgetMonths: [JAN_2026],
+      reportCleared: true,
+    });
+
+    expect(result.matched).toBe(true);
+    const [filter, update] = findOneAndUpdateMock.mock.calls[0];
+    expect(filter).toEqual({ user: USER_ID, revision: 3 });
+    expect(update.$pull.pendingBudgetMonths.$in).toHaveLength(1);
+    expect(update.$set).toEqual({ reportPending: false });
+  });
+
+  it("is a no-op that never calls the model when there is nothing to clear", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    const result = await syncRecoveryService.clearIfRevisionMatches({ userId: USER_ID, revision: 1 });
+
+    expect(result).toEqual({ matched: false });
+    expect(findOneAndUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("CRITICAL: does not clear a newer mutation's pending work when the revision moved during repair", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneAndUpdateImpl: async () => null,
+    });
+
+    const result = await syncRecoveryService.clearIfRevisionMatches({
+      userId: USER_ID,
+      revision: 3,
+      repairedBudgetMonths: [JAN_2026],
+      reportCleared: true,
+    });
+
+    expect(result).toEqual({ matched: false, record: null });
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: USER_ID, revision: 3 },
+      expect.any(Object),
+      { new: true }
+    );
+  });
+});
+
+describe("reserve", () => {
+  it("is a no-op that never touches the model when there is nothing to reserve", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    const result = await syncRecoveryService.reserve({ userId: USER_ID });
+
+    expect(result).toEqual({ budgetReservations: [], reportReservation: null, userWideReservation: null });
+    expect(findOneAndUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("pushes a token+timestamp reservation per distinct month and a report reservation, upserting", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    const result = await syncRecoveryService.reserve({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+      reserveReport: true,
+    });
+
+    expect(result.budgetReservations).toHaveLength(1);
+    expect(result.budgetReservations[0].token).toEqual(expect.any(String));
+    expect(result.budgetReservations[0].reservedAt).toBeInstanceOf(Date);
+    expect(result.reportReservation.token).toEqual(expect.any(String));
+
+    expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
+    const [filter, update, options] = findOneAndUpdateMock.mock.calls[0];
+    expect(filter).toEqual({ user: USER_ID });
+    expect(update.$push.reservedBudgetMonths.$each).toHaveLength(1);
+    expect(update.$set.reservedReport.token).toEqual(expect.any(String));
+    expect(options).toEqual({ upsert: true, setDefaultsOnInsert: true });
+  });
+
+  it("does NOT touch pendingBudgetMonths/reportPending -- this is a separate, not-immediately-repair-eligible tier", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    await syncRecoveryService.reserve({ userId: USER_ID, budgetDates: [JAN_2026], reserveReport: true });
+
+    const [, update] = findOneAndUpdateMock.mock.calls[0];
+    expect(update.$addToSet).toBeUndefined();
+    expect(update.$inc).toBeUndefined();
+    expect(update.$set.reportPending).toBeUndefined();
+  });
+
+  it("each call generates a distinct token even for the same month (never reused, defeats ABA)", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService();
+
+    const first = await syncRecoveryService.reserve({ userId: USER_ID, budgetDates: [JAN_2026] });
+    const second = await syncRecoveryService.reserve({ userId: USER_ID, budgetDates: [JAN_2026] });
+
+    expect(first.budgetReservations[0].token).not.toEqual(second.budgetReservations[0].token);
+    expect(findOneAndUpdateMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("confirm", () => {
+  it("atomically bumps revision, adds Tier-1 pending months/report, and releases the given reservation tokens", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 7 }),
+    });
+
+    const revision = await syncRecoveryService.confirm({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+      confirmReport: true,
+      budgetTokens: ["budget-tok-1"],
+      reportToken: "report-tok-1",
+    });
+
+    expect(revision).toBe(7);
+    expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
+    const [filter, update, options] = findOneAndUpdateMock.mock.calls[0];
+    expect(filter).toEqual({ user: USER_ID });
+    expect(update.$inc).toEqual({ revision: 1 });
+    expect(update.$addToSet.pendingBudgetMonths.$each).toHaveLength(1);
+    expect(update.$set.reportPending).toBe(true);
+    expect(update.$pull.reservedBudgetMonths.token.$in).toEqual(["budget-tok-1"]);
+    expect(update.$set.reservedReport).toEqual({ token: null, reservedAt: null });
+    expect(options).toEqual({ upsert: true, new: true, setDefaultsOnInsert: true });
+  });
+
+  it("still marks Tier-1 pending work even when no reservation tokens are supplied (e.g. an idempotent replay)", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    await syncRecoveryService.confirm({ userId: USER_ID, budgetDates: [JAN_2026], confirmReport: true });
+
+    const [, update] = findOneAndUpdateMock.mock.calls[0];
+    expect(update.$addToSet.pendingBudgetMonths.$each).toHaveLength(1);
+    expect(update.$set.reportPending).toBe(true);
+    expect(update.$pull).toBeUndefined();
+    expect(update.$set.reservedReport).toBeUndefined();
+  });
+});
+
+describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
+  it("attempts nothing and never touches recalculateBudget/refreshReport when no marker exists", async () => {
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock } = loadService();
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    expect(result).toEqual({
+      attempted: false,
+      revisionMatchedOnClear: false,
+      budgetRepairFailed: false,
+      reportRepairFailed: false,
+      stillPending: false,
+    });
+    expect(recalculateBudgetMock).not.toHaveBeenCalled();
+    expect(refreshReportMock).not.toHaveBeenCalled();
+  });
+
+  it("attempts nothing when a marker exists but has no actual pending work (empty months, reportPending false)", async () => {
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock } = loadService({
+      findOneImpl: () => ({
+        lean: jest
+          .fn()
+          .mockResolvedValueOnce({
+            revision: 1,
+            pendingBudgetMonths: [],
+            reportPending: false,
+            reservedBudgetMonths: [],
+            reservedReport: { token: null, reservedAt: null },
+          })
+          .mockResolvedValueOnce({
+            revision: 1,
+            pendingBudgetMonths: [],
+            reportPending: false,
+            reservedBudgetMonths: [],
+            reservedReport: { token: null, reservedAt: null },
+          }),
+      }),
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    expect(result.attempted).toBe(false);
+    expect(result.stillPending).toBe(false);
+    expect(recalculateBudgetMock).not.toHaveBeenCalled();
+    expect(refreshReportMock).not.toHaveBeenCalled();
+  });
+
+  it("successfully repairs a pending budget month and the report (fenced by the captured revision), then clears exactly that revision", async () => {
+    const leanMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        revision: 5,
+        pendingBudgetMonths: [JAN_2026],
+        reportPending: true,
+        reservedBudgetMonths: [],
+        reservedReport: { token: null, reservedAt: null },
+      })
+      .mockResolvedValueOnce({ revision: 5, reservedBudgetMonths: [], reservedReport: { token: null, reservedAt: null } })
+      .mockResolvedValueOnce(null); // "after" re-fetch: fully cleared
+
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock, findOneAndUpdateMock } =
+      loadService({
+        findOneImpl: () => ({ lean: leanMock }),
+        findOneAndUpdateImpl: async () => ({ revision: 5, pendingBudgetMonths: [], reportPending: false }),
+      });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    expect(recalculateBudgetMock).toHaveBeenCalledTimes(1);
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 5 });
+    expect(refreshReportMock).toHaveBeenCalledWith(USER_ID, { fenceRevision: 5 });
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: USER_ID, revision: 5 },
+      expect.objectContaining({ $set: { reportPending: false } }),
+      { new: true }
+    );
+    expect(result).toEqual({
+      attempted: true,
+      revisionMatchedOnClear: true,
+      budgetRepairFailed: false,
+      reportRepairFailed: false,
+      stillPending: false,
+    });
+  });
+
+  it("treats a fence-skipped recompute as unrepaired -- leaves the month pending rather than clearing it", async () => {
+    const leanMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        revision: 5,
+        pendingBudgetMonths: [JAN_2026],
+        reportPending: false,
+        reservedBudgetMonths: [],
+        reservedReport: { token: null, reservedAt: null },
+      })
+      .mockResolvedValueOnce({ revision: 6, reservedBudgetMonths: [], reservedReport: { token: null, reservedAt: null } })
+      .mockResolvedValueOnce({ revision: 6, pendingBudgetMonths: [JAN_2026], reportPending: false });
+
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+      recalculateBudgetImpl: async () => ({ skipped: true, reason: "superseded" }),
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    // Phase C.4 -- allocateRepairRevision() now issues its own atomic $inc
+    // through this same seam BEFORE the recompute is even attempted, so
+    // findOneAndUpdate IS called once for that ticket allocation -- even
+    // though the recompute itself is skipped (superseded) and
+    // clearIfRevisionMatches has nothing further to pull/set afterward.
+    expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: USER_ID },
+      { $inc: { revision: 1 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    expect(result.budgetRepairFailed).toBe(true);
+    expect(result.stillPending).toBe(true);
+  });
+
+  it("a failed budget repair leaves that exact month pending (repeated failure never advances lastError-free)", async () => {
+    const marker = {
+      revision: 2,
+      pendingBudgetMonths: [JAN_2026],
+      reportPending: false,
+      reservedBudgetMonths: [],
+      reservedReport: { token: null, reservedAt: null },
+    };
+    const leanMock = jest
+      .fn()
+      .mockResolvedValueOnce(marker)
+      .mockResolvedValueOnce({ revision: 2, reservedBudgetMonths: [], reservedReport: { token: null, reservedAt: null } })
+      .mockResolvedValueOnce(marker);
+
+    const { syncRecoveryService, recalculateBudgetMock, findOneAndUpdateMock, updateOneMock } =
+      loadService({
+        findOneImpl: () => ({ lean: leanMock }),
+        recalculateBudgetImpl: async () => {
+          throw new Error("Mongo aggregate timed out");
+        },
+      });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    // Phase C.4 -- same rationale as the fence-skipped test above: the $inc
+    // ticket allocation happens once, unconditionally, before the
+    // recompute attempt that then fails.
+    expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: USER_ID },
+      { $inc: { revision: 1 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    expect(updateOneMock).toHaveBeenCalledWith(
+      { user: USER_ID },
+      { $set: { lastError: "Mongo aggregate timed out", lastAttemptAt: expect.any(Date) } }
+    );
+    expect(result.budgetRepairFailed).toBe(true);
+    expect(result.stillPending).toBe(true);
+  });
+
+  it("CRITICAL: an older repair does not clear a newer mutation's pending work recorded mid-repair", async () => {
+    // Phase C.4 -- this repair attempt now allocates its OWN fresh ticket
+    // (via allocateRepairRevision()'s $inc) rather than reusing the
+    // statically-read `before.revision` -- see syncRecoveryService.js's own
+    // doc comment on allocateRepairRevision() for why. The scenario this
+    // test proves is unchanged in spirit: a mutation confirms NEW pending
+    // work (here, February) STRICTLY AFTER this repair claimed its own
+    // ticket (6, simulating a real atomic $inc from the marker's
+    // pre-repair revision of 5) but BEFORE this repair's own
+    // clearIfRevisionMatches call runs -- bumping the marker to 7. This
+    // repair's clear, CAS'd against its own ticket (6), must then fail to
+    // match (the document is now at 7), so it correctly clears nothing and
+    // the newer mutation's February/reportPending work survives untouched.
+    const leanMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        revision: 5,
+        pendingBudgetMonths: [JAN_2026],
+        reportPending: true,
+        reservedBudgetMonths: [],
+        reservedReport: { token: null, reservedAt: null },
+      })
+      .mockResolvedValueOnce({ revision: 7, reservedBudgetMonths: [], reservedReport: { token: null, reservedAt: null } })
+      .mockResolvedValueOnce({ revision: 7, pendingBudgetMonths: [FEB_2026], reportPending: true });
+
+    let findOneAndUpdateCalls = 0;
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+      findOneAndUpdateImpl: async () => {
+        findOneAndUpdateCalls += 1;
+        if (findOneAndUpdateCalls === 1) {
+          // This repair attempt's own ticket allocation ($inc).
+          return { revision: 6 };
+        }
+        // clearIfRevisionMatches CAS'd against ticket 6 -- the concurrent
+        // mutation already advanced the real document to 7, so this
+        // exact-match filter finds nothing.
+        return null;
+      },
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    expect(findOneAndUpdateMock).toHaveBeenNthCalledWith(
+      1,
+      { user: USER_ID },
+      { $inc: { revision: 1 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    expect(findOneAndUpdateMock).toHaveBeenNthCalledWith(
+      2,
+      { user: USER_ID, revision: 6 },
+      expect.any(Object),
+      { new: true }
+    );
+    expect(result.revisionMatchedOnClear).toBe(false);
+    expect(result.stillPending).toBe(true);
+  });
+
+  it("never throws even when the initial marker lookup itself fails, and never runs any repair step", async () => {
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock } = loadService({
+      findOneImpl: () => ({
+        lean: jest.fn().mockRejectedValue(new Error("Mongo connection lost")),
+      }),
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    expect(result).toEqual({ attempted: false, stillPending: true, repairLookupFailed: true });
+    expect(recalculateBudgetMock).not.toHaveBeenCalled();
+    expect(refreshReportMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("repairIfPending -- Tier 2 (age-gated reservation recovery / crash-gap closure)", () => {
+  const NOW = new Date("2026-03-01T00:00:00.000Z").getTime();
+  const FRESH_RESERVED_AT = new Date(NOW - 2000); // 2s old -- well within a single request's latency
+  const STALE_RESERVED_AT = new Date(NOW - 20000); // 20s old -- past RESERVATION_STALE_MS (15s)
+
+  it("does NOT touch a fresh reservation -- a genuinely in-flight request's evidence is left alone", async () => {
+    const marker = {
+      revision: 1,
+      pendingBudgetMonths: [],
+      reportPending: false,
+      reservedBudgetMonths: [{ month: JAN_2026, token: "fresh-tok", reservedAt: FRESH_RESERVED_AT }],
+      reservedReport: { token: null, reservedAt: null },
+    };
+    const leanMock = jest.fn().mockResolvedValue(marker);
+
+    const { syncRecoveryService, recalculateBudgetMock, findOneAndUpdateMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID, { now: NOW });
+
+    expect(recalculateBudgetMock).not.toHaveBeenCalled();
+    expect(findOneAndUpdateMock).not.toHaveBeenCalled();
+    expect(result.stillPending).toBe(true);
+  });
+
+  it("CRASH-GAP CLOSURE: recomputes (but NEVER releases) a reservation once it is older than RESERVATION_STALE_MS, with no Tier-1 marker ever having existed", async () => {
+    // This is the exact scenario the crash gap describes: a process
+    // reserved a month, then crashed before ever calling confirm() -- so
+    // pendingBudgetMonths/reportPending were NEVER set. Only the Tier-2
+    // reservation survives. Once it ages past the threshold, repair must
+    // still find and act on it -- but Phase C.2: a fixed timeout can never
+    // PROVE the owner will not still write later, so this pass only ever
+    // performs a defensive, fence-guarded recompute. It must NEVER pull/
+    // clear the reservation itself -- that is reserved exclusively for the
+    // owner's own confirm()/abandon() (see syncRecoveryService.js's Tier-2
+    // doc comment and the dedicated 7-step interleaving test in
+    // mutationRecoveryCorrectness.test.js).
+    const marker = {
+      revision: 0,
+      pendingBudgetMonths: [],
+      reportPending: false,
+      reservedBudgetMonths: [{ month: JAN_2026, token: "crashed-tok", reservedAt: STALE_RESERVED_AT }],
+      reservedReport: { token: null, reservedAt: null },
+    };
+    const leanMock = jest.fn().mockResolvedValue(marker);
+
+    const { syncRecoveryService, recalculateBudgetMock, updateOneMock, findOneAndUpdateMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+      // Phase C.4 -- the Tier-2 pass now allocates its own fresh ticket
+      // (via allocateRepairRevision()'s atomic $inc) rather than reusing
+      // the statically re-read `current.revision` -- simulates a real
+      // $inc from the marker's revision 0 to 1.
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID, { now: NOW });
+
+    // The recompute is fenced by a FRESH ticket this repair attempt itself
+    // allocates at the top of the Tier-2 pass, the same atomic-CAS
+    // discipline every other write in this file uses.
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: USER_ID },
+      { $inc: { revision: 1 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 1 });
+    // No $pull, no updateOne call of any kind -- a successful defensive
+    // recompute leaves the reservation completely untouched.
+    expect(updateOneMock).not.toHaveBeenCalled();
+    expect(result.attempted).toBe(true);
+  });
+
+  it("CRASH-GAP CLOSURE: an aged report reservation with no Tier-1 marker is still recovered, and never released by this pass", async () => {
+    const marker = {
+      revision: 0,
+      pendingBudgetMonths: [],
+      reportPending: false,
+      reservedBudgetMonths: [],
+      reservedReport: { token: "crashed-report-tok", reservedAt: STALE_RESERVED_AT },
+    };
+    const leanMock = jest.fn().mockResolvedValue(marker);
+
+    const { syncRecoveryService, refreshReportMock, updateOneMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+      // Phase C.4 -- see the previous test's identical comment.
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID, { now: NOW });
+
+    expect(refreshReportMock).toHaveBeenCalledWith(USER_ID, { fenceRevision: 1 });
+    // Deliberately no reservedReport clear on this pass -- see Phase C.2's
+    // Tier-2 doc comment in syncRecoveryService.js.
+    expect(updateOneMock).not.toHaveBeenCalled();
+    expect(result.attempted).toBe(true);
+  });
+
+  it("HARD-DELETE RECOVERY: an aged reservation is repaired purely from the reservation's own presence, and remains present afterward -- no expense document or timestamp/count evidence is needed", async () => {
+    // Simulates a crashed delete: the expense is already gone (hard
+    // delete leaves nothing behind), so recalculateBudget's own aggregate
+    // over the now-smaller expense set is the entire recovery mechanism --
+    // the reservation is only ever evidence that a recompute for this
+    // month is owed, never a value to restore, and is never itself cleared
+    // by this defensive pass.
+    const marker = {
+      revision: 0,
+      pendingBudgetMonths: [],
+      reportPending: false,
+      reservedBudgetMonths: [{ month: JAN_2026, token: "crashed-delete-tok", reservedAt: STALE_RESERVED_AT }],
+      reservedReport: { token: null, reservedAt: null },
+    };
+    const leanMock = jest.fn().mockResolvedValue(marker);
+    const recalculateBudgetMock = jest.fn(async () => ({ spent: 0 }));
+
+    const { syncRecoveryService, updateOneMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+      recalculateBudgetImpl: recalculateBudgetMock,
+      // Phase C.4 -- see the earlier Tier-2 test's identical comment.
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    await syncRecoveryService.repairIfPending(USER_ID, { now: NOW });
+
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 1 });
+    expect(updateOneMock).not.toHaveBeenCalled();
+  });
+
+  it("a genuinely in-flight reservation is never disturbed even while a DIFFERENT, aged reservation for the same user is defensively recomputed", async () => {
+    const marker = {
+      revision: 0,
+      pendingBudgetMonths: [],
+      reportPending: false,
+      reservedBudgetMonths: [
+        { month: JAN_2026, token: "aged-tok", reservedAt: STALE_RESERVED_AT },
+        { month: FEB_2026, token: "fresh-tok", reservedAt: FRESH_RESERVED_AT },
+      ],
+      reservedReport: { token: null, reservedAt: null },
+    };
+    const leanMock = jest.fn().mockResolvedValue(marker);
+
+    const { syncRecoveryService, recalculateBudgetMock, updateOneMock } = loadService({
+      findOneImpl: () => ({ lean: leanMock }),
+      // Phase C.4 -- see the earlier Tier-2 tests' identical comment.
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    await syncRecoveryService.repairIfPending(USER_ID, { now: NOW });
+
+    expect(recalculateBudgetMock).toHaveBeenCalledTimes(1);
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 1 });
+    expect(recalculateBudgetMock).not.toHaveBeenCalledWith(USER_ID, FEB_2026, expect.anything());
+    // Neither reservation is ever pulled/released by this pass -- for
+    // EITHER month, aged or fresh.
+    expect(updateOneMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("synchronizeAfterMutation", () => {
+  it("calls confirm() FIRST (unconditionally) before any recompute -- durable evidence exists even if a crash happens immediately after", async () => {
+    const callOrder = [];
+    const { syncRecoveryService, findOneAndUpdateMock, recalculateBudgetMock, refreshReportMock } =
+      loadService({
+        findOneAndUpdateImpl: async () => {
+          callOrder.push("confirm-or-clear");
+          return { revision: 1 };
+        },
+        recalculateBudgetImpl: async () => {
+          callOrder.push("recalculateBudget");
+        },
+        refreshReportImpl: async () => {
+          callOrder.push("refreshReport");
+        },
+      });
+
+    await syncRecoveryService.synchronizeAfterMutation({ userId: USER_ID, budgetDates: [JAN_2026] });
+
+    // confirm() is the FIRST findOneAndUpdate call, strictly before any
+    // recompute attempt.
+    expect(callOrder[0]).toBe("confirm-or-clear");
+    expect(callOrder).toContain("recalculateBudget");
+    expect(callOrder).toContain("refreshReport");
+  });
+
+  it("fences its own recompute+persist with the revision confirm() returned, and clears using that same revision", async () => {
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock, findOneAndUpdateMock } =
+      loadService({
+        findOneAndUpdateImpl: async () => ({ revision: 9 }),
+      });
+
+    await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+      budgetTokens: ["tok-a"],
+      reportToken: "tok-b",
+    });
+
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 9 });
+    expect(refreshReportMock).toHaveBeenCalledWith(USER_ID, { fenceRevision: 9 });
+    // Second findOneAndUpdate call is the clear, gated on revision 9.
+    const clearCall = findOneAndUpdateMock.mock.calls[1];
+    expect(clearCall[0]).toEqual({ user: USER_ID, revision: 9 });
+  });
+
+  it("passes the reservation tokens through to confirm() for release", async () => {
+    const { syncRecoveryService, findOneAndUpdateMock } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+      budgetTokens: ["tok-a"],
+      reportToken: "tok-b",
+    });
+
+    const confirmCall = findOneAndUpdateMock.mock.calls[0];
+    expect(confirmCall[1].$pull.reservedBudgetMonths.token.$in).toEqual(["tok-a"]);
+    expect(confirmCall[1].$set.reservedReport).toEqual({ token: null, reservedAt: null });
+  });
+
+  it("returns a fully synchronized result when everything succeeds", async () => {
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+    });
+
+    const result = await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+    });
+
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 1 });
+    expect(refreshReportMock).toHaveBeenCalledWith(USER_ID, { fenceRevision: 1 });
+    expect(result).toEqual({
+      status: "synchronized",
+      budget: "synchronized",
+      report: "synchronized",
+      recoveryPending: false,
+    });
+  });
+
+  it("returns a committed-but-pending result when recalculateBudget fails", async () => {
+    const { syncRecoveryService } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+      recalculateBudgetImpl: async () => {
+        throw new Error("simulated budget aggregate failure");
+      },
+    });
+
+    const result = await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+    });
+
+    expect(result).toEqual({
+      status: "pending",
+      budget: "pending",
+      report: "synchronized",
+      recoveryPending: true,
+    });
+  });
+
+  it("returns a committed-but-pending result when refreshReport fails", async () => {
+    const { syncRecoveryService } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+      refreshReportImpl: async () => {
+        throw new Error("simulated report persistence failure");
+      },
+    });
+
+    const result = await syncRecoveryService.synchronizeAfterMutation({ userId: USER_ID, budgetDates: [] });
+
+    expect(result).toEqual({
+      status: "pending",
+      budget: "synchronized",
+      report: "pending",
+      recoveryPending: true,
+    });
+  });
+
+  it("treats a fence-skip (superseded) the same as a failure -- leaves it pending, not falsely synchronized", async () => {
+    const { syncRecoveryService } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+      recalculateBudgetImpl: async () => ({ skipped: true, reason: "superseded" }),
+      refreshReportImpl: async () => ({ skipped: true, reason: "superseded" }),
+    });
+
+    const result = await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+    });
+
+    expect(result.budget).toBe("pending");
+    expect(result.report).toBe("pending");
+    expect(result.recoveryPending).toBe(true);
+  });
+
+  it("attempts every affected month independently -- one month failing does not skip the other (edit crossing months)", async () => {
+    const recalculateBudgetMock = jest.fn(async (userId, date) => {
+      if (date.getTime() === FEB_2026.getTime()) {
+        throw new Error("February recalculation failed");
+      }
+    });
+    const { syncRecoveryService } = loadService({
+      findOneAndUpdateImpl: async () => ({ revision: 1 }),
+      recalculateBudgetImpl: recalculateBudgetMock,
+    });
+
+    const result = await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026, FEB_2026],
+    });
+
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026, { fenceRevision: 1 });
+    expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, FEB_2026, { fenceRevision: 1 });
+    expect(result.budget).toBe("pending");
+  });
+});
