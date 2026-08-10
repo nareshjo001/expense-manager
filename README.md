@@ -29,7 +29,7 @@ The design principle throughout: **calculations are deterministic and owned by t
 
 ## Current status
 
-Actively developed. Core finance management, analytics, charts, receipt OCR and ML category prediction are implemented and in use. **SIA V1** — the read-only explanation layer — is implemented and shipped behind feature flags that default to off. Forecasting, risk prediction and anomaly-detection models remain planned.
+Actively developed. Core finance management, analytics, charts, receipt OCR and ML category prediction are implemented and in use. **SIA V1** — the read-only explanation layer — is implemented and shipped behind feature flags that default to off. Spending forecasting, budget-risk prediction, and statistical expense-anomaly analytics are implemented.
 
 ## What is implemented
 

@@ -2,6 +2,7 @@ import Header from "./Header";
 import BudgetIntelligence from "./BudgetIntelligence";
 import SpendingInsights from "./SpendingInsights";
 import SpendingForecast from "./SpendingForecast";
+import AnomalyInsights from "./AnomalyInsights";
 import OverallInsight from "./OverallInsight";
 import { Spinner } from "../imports/Imports";
 import { useReport } from "../../hooks/useReport";
@@ -23,6 +24,10 @@ export default function MonthlyInsightPage () {
       {/* Prediction Layer V1: reads report.forecast from the SAME report
           query every section above already uses -- no extra fetch. */}
       <SpendingForecast report={report} />
+      {/* Anomaly Detection Layer V1: reads report.anomalies from the SAME
+          report query every section above already uses -- no extra fetch,
+          no second useReport() call. */}
+      <AnomalyInsights report={report} />
       <OverallInsight report={report} />
     </div>
   )

@@ -1,10 +1,12 @@
 // Phase 1 (V1): a pure, deterministic expense-anomaly analyzer.
 //
-// Scope boundary (frozen for this milestone): this file performs NO
-// database, Redis, filesystem, HTTP, ML-service, or provider calls. It is
-// not wired into reportGenerator.js, FinancialReport, Redis, expense
-// mutations, the frontend, or SIA -- that wiring is later, separately
-// approved phases. Calling `analyze()` here has no side effects at all.
+// Scope boundary: this file performs NO database, Redis, filesystem, HTTP,
+// ML-service, or provider calls itself -- reportGenerator.js is the only
+// caller, feeding it exclusively provider/context data (see the `analyze`
+// call site there) and storing its return value unmodified on the
+// generated report's `anomalies` section. Calling `analyze()` here has no
+// side effects at all; it is a pure statistical function used by the report
+// pipeline, not a standalone service.
 //
 // Detects expenses that are unusually LARGE relative to the authenticated
 // user's own historical spending in the exact same stored category --
