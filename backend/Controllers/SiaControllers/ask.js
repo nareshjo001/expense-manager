@@ -158,20 +158,38 @@ const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 // engineering framework. Read-only framing throughout: explain using only
 // the supplied structured context, never invent facts, never claim access
 // to raw transactions, never suggest data was changed.
+// Evidence-boundary addendum (historical-decline remediation): this
+// context always carries only the user's CURRENT financial-health result
+// (report.financialHealth.overall/.risk.label at the moment of this turn's
+// report) -- never a historical series -- so the prompt must not let the
+// model describe a single current score as evidence of change over time.
+// Mirrored by backend/sia/responseValidator.js's new
+// DECLINE_LANGUAGE_PATTERN check, scoped to this intent unconditionally
+// (this intent's context can never support decline language, by contract).
 const HEALTH_SYSTEM_PROMPT =
   "You are SIA, BALENISA's read-only financial explanation assistant. " +
   "Explain the user's financial-health result using only the supplied " +
   "structured context. Treat the context as authoritative. Do not invent " +
   "facts, recalculate financial values, claim access to raw transactions, " +
-  "or suggest that you changed any data. If the context does not support " +
-  "a claim, say so. Keep the explanation concise, clear, and " +
-  "non-judgmental.";
+  "or suggest that you changed any data. This context reflects only the " +
+  "user's CURRENT financial-health score -- describe it as the current " +
+  "score, and never as declining, deteriorating, falling, or worsening " +
+  "over time. If the context does not support a claim, say so. Keep the " +
+  "explanation concise, clear, and non-judgmental.";
 
 // "contributed to" / "accounted for" / "was associated with the change" is
 // deliberately the strongest causal language permitted -- the structured
 // context (trend comparisons and totals) does not establish true causality
 // for any single category, so the prompt must not ask the model to claim a
 // category "caused" a change.
+// Evidence-boundary addendum (temporal-overstatement remediation): the
+// comparison in this context (trends.monthlyTrend) is always exactly one
+// current-month-vs-previous-month comparison -- never a multi-period
+// series -- so the prompt must not let the model dress a single comparison
+// up as a persistent/sustained/long-term/repeated/multi-month trend, which
+// is exactly the overstatement risk backend/sia/responseValidator.js's new
+// PERSISTENCE_LANGUAGE_PATTERN check (intent-scoped to this intent) exists
+// to catch deterministically if the prompt alone is not enough.
 const SPENDING_CHANGE_SYSTEM_PROMPT =
   "You are SIA, BALENISA's read-only financial explanation assistant. " +
   "Explain the user's spending change using only the supplied structured " +
@@ -179,9 +197,12 @@ const SPENDING_CHANGE_SYSTEM_PROMPT =
   "changes, comparisons, and contributing categories shown in the " +
   "context. Do not invent causes, intentions, missing transactions, or " +
   "lifestyle explanations. Do not recalculate financial values, claim " +
-  "access to raw transactions, or suggest that you changed any data. If " +
-  "the context does not support a claim, say so. Keep the explanation " +
-  "concise, clear, and non-judgmental.";
+  "access to raw transactions, or suggest that you changed any data. The " +
+  "comparison in this context reflects only the current month versus the " +
+  "previous month -- describe it as a change compared with last month, " +
+  "and never as a persistent, sustained, long-term, repeated, or " +
+  "multi-month trend. If the context does not support a claim, say so. " +
+  "Keep the explanation concise, clear, and non-judgmental.";
 
 // Mirrors the exact fixed text approved for this milestone; only the
 // existing string-concatenation style (not the wording) was adapted to
@@ -273,20 +294,57 @@ const FORECAST_SYSTEM_PROMPT =
 // Risk must be explained FROM the supplied evidence, never presented as a
 // certainty or a calibrated probability, and never as investment, credit,
 // lending, tax, or legal advice.
+//
+// Evidence-boundary hardening (semantic-accuracy remediation): the three
+// risk reasonCodes below are internal rule names whose plain-English
+// meaning overstates what their evidence actually proves (confirmed by
+// direct source inspection of backend/analytics/analyzers/riskAnalyzer.js
+// and forecastAnalyzer.js):
+//   - FORECASTED_FINANCIAL_PRESSURE's evidence is sourced from
+//     forecast.nextMonthForecast (evaluateForecastedPressure), which
+//     forecastAnalyzer.js documents projects the ANCHOR ordinal -- the
+//     CURRENT, in-progress month -- never the next calendar month.
+//   - PERSISTENT_SPENDING_GROWTH's evidence (evaluatePersistentSpendingGrowth)
+//     is trends.monthlyTrend.percentageChange, exactly ONE
+//     current-vs-previous-month comparison, never a multi-period trend.
+//   - DETERIORATING_HEALTH's evidence (evaluateDeterioratingHealth) is
+//     financialHealth.overall alone, the CURRENT score only, with no
+//     historical comparison.
+// The enumeration below was itself rewritten to stop mirroring the
+// reasonCode names ("persistent spending growth", "forecasted pressure")
+// into the model's own instructions, and the explicit boundary sentences
+// after it are the primary defense. backend/sia/responseValidator.js's new
+// intent-and-signal-conditional checks are the deterministic backstop if
+// the model does not follow this prompt.
 const RISK_SYSTEM_PROMPT =
   "You are SIA, BALENISA's read-only financial explanation assistant. " +
   "Explain the user's financial risk using only the supplied structured " +
   "context of rule-detected risk signals and their evidence. Treat the " +
   "context as authoritative. Describe only the specific signals and " +
   "evidence present (for example, an overspent or nearly-exhausted " +
-  "budget, persistent spending growth, unusual expenses, forecasted " +
-  "pressure, or a low financial-health score) -- never invent a risk " +
-  "that has no corresponding signal, and never state a risk as a " +
-  "certainty or a numeric probability/percentage chance. If riskLevel is " +
-  "\"none\" or there are no signals, say plainly that no risk signals " +
-  "were found. Do not give investment, credit, lending, tax, or legal " +
-  "advice, and do not instruct the user to take a specific financial " +
-  "action. Keep the explanation concise, clear, and non-judgmental.";
+  "budget, a month-over-month increase in spending, unusual expenses, a " +
+  "current-month spending projection nearing or exceeding the budget, or " +
+  "a low financial-health score) -- never invent a risk that has no " +
+  "corresponding signal, and never state a risk as a certainty or a " +
+  "numeric probability/percentage chance. A signal about a spending " +
+  "projection compares projected spending for the CURRENT, in-progress " +
+  "month (or projected month-end spending) against the configured budget " +
+  "-- describe it as projected spending for this month that may reach or " +
+  "exceed the configured budget, and never as a forecast or pressure for " +
+  "next month or any future calendar month. A signal about increased " +
+  "spending proves only that spending is higher than the previous month " +
+  "-- describe it as spending that increased compared with last month, " +
+  "and never as persistent, sustained, long-term, repeated, or " +
+  "multi-month growth. A signal about a low financial-health score " +
+  "proves only that the CURRENT score is low -- describe the current " +
+  "financial-health score as low, and never as declining, deteriorating, " +
+  "falling, or worsening over time. If riskLevel is \"none\" or there are " +
+  "no signals, say plainly that no active risk signals were detected " +
+  "from the currently available data -- never present this as proof that " +
+  "the user has no financial risk. Do not give investment, credit, " +
+  "lending, tax, or legal advice, and do not instruct the user to take a " +
+  "specific financial action. Keep the explanation concise, clear, and " +
+  "non-judgmental.";
 
 const SYSTEM_PROMPTS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_SYSTEM_PROMPT,

@@ -185,6 +185,141 @@ const NEWLY_VALIDATED_CASES = [
   },
 ];
 
+// Semantic-accuracy remediation: hoisted to module scope (originally
+// defined inside the "Batch 3D: grounding rejection + idempotency
+// interaction" describe block below) so both that describe block and the
+// new "validator checks are wired end-to-end" describe block above can
+// share the identical harness. Behavior is byte-for-byte unchanged from
+// the original in-describe definitions -- this is a pure scope move.
+//
+// Note: findOneAndUpdate is required here too, not just
+// create/findOne/deleteOne -- the SUCCESSFUL retry path this suite also
+// exercises reaches idempotencyService.markCompleted(), which is a
+// findOneAndUpdate compare-and-set (see backend/sia/idempotencyService.js).
+// Only the initial REJECTED call stays confined to create/deleteOne.
+function createMinimalSiaRequestFake() {
+  const docs = [];
+  let nextId = 1;
+
+  const matches = (doc, filter) =>
+    Object.keys(filter).every((key) => String(doc[key]) === String(filter[key]));
+
+  return {
+    async findOne(filter) {
+      return docs.find((d) => matches(d, filter)) || null;
+    },
+    async create(attrs) {
+      const clash = docs.find((d) => String(d.user) === String(attrs.user) && d.clientMessageId === attrs.clientMessageId);
+      if (clash) throw Object.assign(new Error("E11000 duplicate key error"), { code: 11000 });
+      const doc = { _id: `req-${nextId++}`, ...attrs };
+      docs.push(doc);
+      return doc;
+    },
+    async findOneAndUpdate(filter, update) {
+      // Compare-and-set, exactly as the real model's contract requires:
+      // only a caller whose filter (including the exact prior
+      // ownerToken) still matches may mutate.
+      const doc = docs.find((d) => matches(d, filter));
+      if (!doc) return null;
+      Object.assign(doc, update.$set);
+      return doc;
+    },
+    async deleteOne(filter) {
+      const index = docs.findIndex((d) => matches(d, filter));
+      if (index >= 0) docs.splice(index, 1);
+      return { deletedCount: index >= 0 ? 1 : 0 };
+    },
+    __docs: docs,
+  };
+}
+
+function loadAppWithIdempotency({ buildContextImpl, askLlmImpl }) {
+  jest.resetModules();
+
+  jest.doMock("../sia/config", () => ({ enabled: true, provider: "openai", model: "sia-test-model", timeoutMs: 8000 }));
+
+  const { classifyIntent: realClassifyIntent } = jest.requireActual("../sia/intentClassifier");
+  jest.doMock("../sia/intentClassifier", () => ({ classifyIntent: jest.fn(realClassifyIntent) }));
+
+  const buildContextMock = jest.fn(buildContextImpl);
+  jest.doMock("../sia/contextBuilder", () => ({ buildContext: buildContextMock }));
+
+  const { LlmProviderError: RealLlmProviderError } = jest.requireActual("../sia/llmService");
+  const askLlmMock = jest.fn(askLlmImpl);
+  jest.doMock("../sia/llmService", () => ({ askLlm: askLlmMock, LlmProviderError: RealLlmProviderError }));
+
+  const createSessionMock = jest.fn(async (userId) => ({ _id: "should-never-be-created", user: userId }));
+  const appendTurnMock = jest.fn(async () => ({ deduplicated: false }));
+  jest.doMock("../sia/sessionService", () => ({
+    findOwnedSession: jest.fn(async () => null),
+    createSession: createSessionMock,
+    getOrCreateSession: jest.fn(),
+    appendTurn: appendTurnMock,
+    loadRecentTurns: jest.fn(async () => []),
+    listSessions: jest.fn(async () => []),
+    listMessages: jest.fn(async () => null),
+    deleteSession: jest.fn(async () => false),
+  }));
+
+  jest.doMock("../sia/sessionStoreAvailability", () => ({ isSessionStoreAvailable: () => true }));
+
+  const requestFake = createMinimalSiaRequestFake();
+  const { REQUEST_STATUS } = jest.requireActual("../models/SiaRequest");
+  jest.doMock("../models/SiaRequest", () => {
+    const exported = requestFake;
+    exported.REQUEST_STATUS = REQUEST_STATUS;
+    return exported;
+  });
+
+  const app = require("../app");
+  return { app, createSessionMock, appendTurnMock, requestFake, askLlmMock };
+}
+
+// Windows timeout diagnosis (semantic-accuracy remediation follow-up):
+// Windows CI reported "rejects an invented monetary figure..." (the first
+// test below) exceeding Jest's default 5000ms testTimeout. Traced from
+// source, not assumed:
+//   - That test sends no clientMessageId, so ask.js's ENTIRE idempotency-
+//     reservation block (`if (requestedClientMessageId) { ... }`) is
+//     structurally unreachable for it -- confirmed by reading ask.js's
+//     control flow directly, not inferred. It never calls
+//     loadAppWithIdempotency/createMinimalSiaRequestFake at all, so the
+//     hoisted-helper shared-state hypothesis does not apply to it either --
+//     createMinimalSiaRequestFake() allocates a fresh `docs = []` array
+//     per call, byte-for-byte identical to its pre-hoist form, and this
+//     test never calls it.
+//   - This file's `ask.js`/`responseValidator.js` diff (see
+//     tests/sia.responseValidator.test.js's own coverage for the
+//     production logic) adds zero control-flow to ask.js (string/comment
+//     content only) and adds four new responseValidator.js checks that are
+//     each gated behind an `intent === ...` condition this test's
+//     SPENDING_FORECAST_EXPLANATION answer never satisfies -- none of the
+//     new code executes for this test's case at all.
+//   - The remaining, source-consistent explanation: this is the FIRST call
+//     to loadApp()/loadAppWithIdempotency() in the whole file, and
+//     therefore the first `require("../app")` in this Jest worker for
+//     these two grounding-focused files. Babel-jest's transform of that
+//     require's full graph (Express, Mongoose, every Controller/Route/
+//     Service, the analytics engine, and backend/sia/ -- now larger after
+//     this remediation's prompt/validator additions) is cached across
+//     `jest.resetModules()` calls (resetModules only clears the MODULE
+//     REGISTRY -- it never clears Jest's separate source-transform cache),
+//     so every loadApp()/loadAppWithIdempotency() call AFTER the first
+//     only pays cheap re-execution cost, never re-transformation. That
+//     one-time transform cost was previously charged entirely against this
+//     one test's individual testTimeout budget.
+// Fix: pay that one-time cost here, at module-evaluation time, which Jest
+// does not subject to any per-test/per-hook testTimeout at all -- so it no
+// longer counts against any single test's 5000ms budget. This performs no
+// request, no assertion, and no network/LLM call -- it only forces the
+// require graph to be resolved and transformed once, up front. Not a
+// timeout increase, not a sleep, not a poll, not a fake timer, not a
+// weakened assertion, not a retry.
+loadApp({
+  buildContextImpl: async () => null,
+  askLlmImpl: async () => ({ answer: "warmup", model: "warmup", latencyMs: 0 }),
+});
+
 describe("POST /sia/ask -- grounded-response validation wiring (Batch 2)", () => {
   it("rejects an invented monetary figure with the same generic 503 contract, and never leaks the invented figure", async () => {
     const { app, askLlmMock } = loadApp({
@@ -328,89 +463,186 @@ describe("POST /sia/ask -- grounded-response validation wiring (Batch 2)", () =>
 // keeping this file's mocking self-contained per this repository's
 // existing one-file-one-loadApp convention.
 // ---------------------------------------------------------------------
-describe("POST /sia/ask -- Batch 3D: grounding rejection + idempotency interaction for the four newly-validated intents", () => {
-  // Note: findOneAndUpdate is required here too, not just
-  // create/findOne/deleteOne -- the SUCCESSFUL retry path this suite also
-  // exercises reaches idempotencyService.markCompleted(), which is a
-  // findOneAndUpdate compare-and-set (see backend/sia/idempotencyService.js).
-  // Only the initial REJECTED call stays confined to create/deleteOne.
-  function createMinimalSiaRequestFake() {
-    const docs = [];
-    let nextId = 1;
+// ---------------------------------------------------------------------
+// Semantic-accuracy remediation: proves (a) the risk/spending-change/
+// health system prompts actually carry the new evidence-boundary
+// instructions, via the SAME established pattern this file already uses
+// (capturing askLlmMock.mock.calls[0][0].systemPrompt through a real
+// request), and (b) the new responseValidator.js checks are genuinely
+// wired into POST /sia/ask end-to-end -- same generic 503 contract, no
+// persisted turn, no second provider call, reservation released for a
+// legitimate retry.
+// ---------------------------------------------------------------------
+const riskForecastPressureContext = () => ({
+  intent: "FINANCIAL_RISK_EXPLANATION",
+  fields: {
+    risk: {
+      hasData: true,
+      riskLevel: "high",
+      signalCount: 1,
+      signals: [
+        {
+          reasonCode: "FORECASTED_FINANCIAL_PRESSURE",
+          severity: "high",
+          evidence: { forecastedAmount: 6000, configuredBudget: 5000, ratio: 1.2 },
+        },
+      ],
+    },
+    summary: { totalSpent: 5000, budgetStatus: "AtRisk" },
+  },
+  sourceReportGeneratedAt: "2026-08-08T00:00:00.000Z",
+});
 
-    const matches = (doc, filter) =>
-      Object.keys(filter).every((key) => String(doc[key]) === String(filter[key]));
-
-    return {
-      async findOne(filter) {
-        return docs.find((d) => matches(d, filter)) || null;
-      },
-      async create(attrs) {
-        const clash = docs.find((d) => String(d.user) === String(attrs.user) && d.clientMessageId === attrs.clientMessageId);
-        if (clash) throw Object.assign(new Error("E11000 duplicate key error"), { code: 11000 });
-        const doc = { _id: `req-${nextId++}`, ...attrs };
-        docs.push(doc);
-        return doc;
-      },
-      async findOneAndUpdate(filter, update) {
-        // Compare-and-set, exactly as the real model's contract requires:
-        // only a caller whose filter (including the exact prior
-        // ownerToken) still matches may mutate.
-        const doc = docs.find((d) => matches(d, filter));
-        if (!doc) return null;
-        Object.assign(doc, update.$set);
-        return doc;
-      },
-      async deleteOne(filter) {
-        const index = docs.findIndex((d) => matches(d, filter));
-        if (index >= 0) docs.splice(index, 1);
-        return { deletedCount: index >= 0 ? 1 : 0 };
-      },
-      __docs: docs,
-    };
-  }
-
-  function loadAppWithIdempotency({ buildContextImpl, askLlmImpl }) {
-    jest.resetModules();
-
-    jest.doMock("../sia/config", () => ({ enabled: true, provider: "openai", model: "sia-test-model", timeoutMs: 8000 }));
-
-    const { classifyIntent: realClassifyIntent } = jest.requireActual("../sia/intentClassifier");
-    jest.doMock("../sia/intentClassifier", () => ({ classifyIntent: jest.fn(realClassifyIntent) }));
-
-    const buildContextMock = jest.fn(buildContextImpl);
-    jest.doMock("../sia/contextBuilder", () => ({ buildContext: buildContextMock }));
-
-    const { LlmProviderError: RealLlmProviderError } = jest.requireActual("../sia/llmService");
-    const askLlmMock = jest.fn(askLlmImpl);
-    jest.doMock("../sia/llmService", () => ({ askLlm: askLlmMock, LlmProviderError: RealLlmProviderError }));
-
-    const createSessionMock = jest.fn(async (userId) => ({ _id: "should-never-be-created", user: userId }));
-    const appendTurnMock = jest.fn(async () => ({ deduplicated: false }));
-    jest.doMock("../sia/sessionService", () => ({
-      findOwnedSession: jest.fn(async () => null),
-      createSession: createSessionMock,
-      getOrCreateSession: jest.fn(),
-      appendTurn: appendTurnMock,
-      loadRecentTurns: jest.fn(async () => []),
-      listSessions: jest.fn(async () => []),
-      listMessages: jest.fn(async () => null),
-      deleteSession: jest.fn(async () => false),
-    }));
-
-    jest.doMock("../sia/sessionStoreAvailability", () => ({ isSessionStoreAvailable: () => true }));
-
-    const requestFake = createMinimalSiaRequestFake();
-    const { REQUEST_STATUS } = jest.requireActual("../models/SiaRequest");
-    jest.doMock("../models/SiaRequest", () => {
-      const exported = requestFake;
-      exported.REQUEST_STATUS = REQUEST_STATUS;
-      return exported;
+describe("POST /sia/ask -- semantic-accuracy remediation: system prompts carry the evidence-boundary instructions", () => {
+  it("the risk prompt instructs current-month (not next-month) pressure wording, no-persistence wording, no-decline wording, and no-'no financial risk' wording for a zero-signal result", async () => {
+    const { app, askLlmMock } = loadApp({
+      buildContextImpl: async () => riskForecastPressureContext(),
+      askLlmImpl: async () => ({
+        answer: "Projected spending for this month may reach or exceed the configured budget.",
+        model: "mock-model",
+        latencyMs: 5,
+      }),
     });
+    const token = signToken("user-prompt-risk-1");
 
-    const app = require("../app");
-    return { app, createSessionMock, appendTurnMock, requestFake, askLlmMock };
-  }
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Do I have any financial risks right now?" });
+
+    expect(res.status).toBe(200);
+    const usedPrompt = askLlmMock.mock.calls[0][0].systemPrompt;
+    // Requirement 1: all three evidence-boundary instructions present.
+    expect(usedPrompt).toEqual(expect.stringContaining("never as a forecast or pressure for next month"));
+    expect(usedPrompt).toEqual(
+      expect.stringContaining("never as persistent, sustained, long-term, repeated, or multi-month growth")
+    );
+    expect(usedPrompt).toEqual(
+      expect.stringContaining("never as declining, deteriorating, falling, or worsening over time")
+    );
+    expect(usedPrompt).toEqual(expect.stringContaining("never present this as proof that the user has no financial risk"));
+  });
+
+  it("the spending-change prompt prohibits unsupported persistence claims", async () => {
+    const { app } = loadApp({
+      buildContextImpl: async () => spendingChangeContext(),
+      askLlmImpl: async ({ systemPrompt }) => ({
+        answer: systemPrompt.includes("persistent, sustained, long-term, repeated, or multi-month trend")
+          ? "Your spending is now $1200 this month, up from $900 last month."
+          : "WRONG_PROMPT",
+        model: "mock-model",
+        latencyMs: 5,
+      }),
+    });
+    const token = signToken("user-prompt-spending-1");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Why did my spending increase?" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.answer).not.toBe("WRONG_PROMPT");
+  });
+
+  it("the health prompt prohibits unsupported historical-decline claims", async () => {
+    const { app } = loadApp({
+      buildContextImpl: async () => healthContext(),
+      askLlmImpl: async ({ systemPrompt }) => ({
+        answer: systemPrompt.includes("never as declining, deteriorating, falling, or worsening over time")
+          ? "Your financial health score is 75, reflecting Low overall risk."
+          : "WRONG_PROMPT",
+        model: "mock-model",
+        latencyMs: 5,
+      }),
+    });
+    const token = signToken("user-prompt-health-1");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Why is my financial health score low?" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.answer).not.toBe("WRONG_PROMPT");
+  });
+});
+
+describe("POST /sia/ask -- semantic-accuracy remediation: validator checks are wired end-to-end", () => {
+  it("rejects an overstated 'next month' risk answer with the same generic 503 contract, never leaking the reasonCode, and never calls the provider twice", async () => {
+    const { app, askLlmMock } = loadApp({
+      buildContextImpl: async () => riskForecastPressureContext(),
+      askLlmImpl: async () => ({
+        answer: "Your spending pressure for next month looks high.",
+        model: "mock-model",
+        latencyMs: 5,
+      }),
+    });
+    const token = signToken("user-semantic-reject-1");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Do I have any financial risks right now?" });
+
+    // Requirement 14: only the established generic client response.
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+    expect(JSON.stringify(res.body)).not.toContain("UNSUPPORTED_TEMPORAL_CLAIM");
+    expect(JSON.stringify(res.body)).not.toContain("next month");
+    // Requirement 15: no automatic second provider request for this single call.
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("an invalid provider answer (unsupported persistence claim) is never persisted, and idempotency/session behave exactly like every other grounding rejection", async () => {
+    const { app, createSessionMock, appendTurnMock, requestFake, askLlmMock } = loadAppWithIdempotency({
+      buildContextImpl: async () => spendingChangeContext(),
+      askLlmImpl: async () => ({
+        answer: "Your spending shows a persistent, sustained upward trend.",
+        model: "mock-model",
+        latencyMs: 5,
+      }),
+    });
+    const token = signToken("user-semantic-reject-2");
+    const body = { question: "Why did my spending increase?", clientMessageId: "key-semantic-persistence" };
+
+    const rejected = await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send(body);
+
+    expect(rejected.status).toBe(503);
+    expect(rejected.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+    const rawBody = JSON.stringify(rejected.body);
+    expect(rawBody).not.toContain("persistent");
+    expect(rawBody).not.toContain("UNSUPPORTED_PERSISTENCE_CLAIM");
+
+    // Requirement 13: never persisted -- no turn, no session.
+    expect(appendTurnMock).not.toHaveBeenCalled();
+    expect(createSessionMock).not.toHaveBeenCalled();
+
+    // Reservation released, not poisoned -- and the existing zero-provider-
+    // retry policy and idempotency/reservation cleanup are unchanged: a
+    // legitimate retry under the identical key succeeds with exactly one
+    // fresh provider call, never an automatic second call on the original
+    // attempt (askLlmMock was called exactly once above).
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+    expect(requestFake.__docs.length).toBe(0);
+
+    askLlmMock.mockImplementationOnce(async () => ({
+      answer: "Your spending increased compared with last month.",
+      model: "mock-model",
+      latencyMs: 5,
+    }));
+    const retried = await request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send(body);
+    expect(retried.status).toBe(200);
+    expect(askLlmMock).toHaveBeenCalledTimes(2); // one rejected, one accepted -- never automatic
+  });
+});
+
+describe("POST /sia/ask -- Batch 3D: grounding rejection + idempotency interaction for the four newly-validated intents", () => {
+  // createMinimalSiaRequestFake/loadAppWithIdempotency are defined at
+  // module scope above (semantic-accuracy remediation: hoisted so the new
+  // "validator checks are wired end-to-end" describe block above can reuse
+  // the identical harness rather than duplicating it) -- behavior
+  // unchanged from the original in-describe definitions.
 
   it.each(NEWLY_VALIDATED_CASES.map((c) => [c.intent, c]))(
     "%s: a grounding rejection uses the public 503 contract, persists no turn, creates no session, releases the reservation for a legitimate retry, and leaks no validator/context internals",

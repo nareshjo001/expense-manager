@@ -97,6 +97,67 @@ const FRAUD_LANGUAGE_PATTERN = /\b(fraud(ulent)?|theft|stolen|stole|scam(med)?|e
 const ADVICE_LANGUAGE_PATTERN =
   /\b(invest in|take out a loan|refinance your|consult (a|your) (lawyer|attorney|tax advisor)|you should (buy|sell) (stocks?|shares?|bonds?)|tax deduction advice|legal advice)\b/i;
 
+// Reason-code-name overstatement guardrails (semantic-accuracy
+// remediation). These are deliberately NOT global word bans -- each is
+// gated to exactly the intent (and, for FINANCIAL_RISK_EXPLANATION, the
+// specific signal actually present in THIS turn's real context) whose
+// evidence can never support the flagged language. "next month" stays
+// completely untouched for SPENDING_FORECAST_EXPLANATION, where it is
+// accurate (that intent's context is genuinely the next calendar month --
+// see sia/contextBuilder.js's nextCalendarMonthForecast); it is only
+// checked against FINANCIAL_RISK_EXPLANATION answers that were grounded on
+// a FORECASTED_FINANCIAL_PRESSURE signal, whose evidence
+// (analytics/analyzers/riskAnalyzer.js's evaluateForecastedPressure) is
+// sourced from the LEGACY forecast.nextMonthForecast field --
+// forecastAnalyzer.js's own documentation confirms that field projects the
+// ANCHOR ordinal (the current, in-progress month), never next month.
+const NEXT_MONTH_LANGUAGE_PATTERN = /\bnext\s+(calendar\s+)?month\b/i;
+
+// PERSISTENT_SPENDING_GROWTH's evidence (riskAnalyzer.js's
+// evaluatePersistentSpendingGrowth) and SPENDING_CHANGE_EXPLANATION's own
+// context (trends.monthlyTrend) are both exactly one
+// current-vs-previous-month comparison, never a multi-period series.
+const PERSISTENCE_LANGUAGE_PATTERN = /\b(persistent(ly)?|sustained|long[- ]term|multi[- ]month|repeated(ly)?)\b/i;
+
+// DETERIORATING_HEALTH's evidence (riskAnalyzer.js's
+// evaluateDeterioratingHealth) and HEALTH_EXPLANATION's own context both
+// carry only the CURRENT financial-health score, never a historical
+// series.
+const DECLINE_LANGUAGE_PATTERN = /\b(declin(?:e|es|ing|ed)|deteriorat(?:e|es|ing|ed)|falling|worsen(?:ing|ed|s)?)\b/i;
+
+// A completed zero-signal risk result (hasData:true, signals:[]) means no
+// active rule-based signal was detected from currently available data --
+// never that the user has no financial risk. Narrowly scoped to explicit
+// "no financial risk"/"not at risk" framing (with a negative lookahead for
+// "signals"/"indicators") so the REQUIRED, accurate "no risk signals were
+// found" wording the risk prompt itself uses is never flagged.
+const NO_RISK_CLAIM_PATTERNS = [
+  /\bno\s+financial\s+risk\b(?!\s*(?:signals?|indicators?))/i,
+  /\byou\s+(?:are|have)\s+no\s+financial\s+risk\b/i,
+  /\bnot\s+at\s+(?:any\s+)?financial\s+risk\b/i,
+];
+
+// True only when contextFields.risk.signals[] (the exact, bounded array
+// sia/contextBuilder.js's copyRiskSignal supplied for this turn) contains a
+// signal whose reasonCode matches -- never a guess, never derived from the
+// answer text itself.
+function hasRiskSignal(contextFields, reasonCode) {
+  const signals = contextFields && contextFields.risk && Array.isArray(contextFields.risk.signals) ? contextFields.risk.signals : [];
+  return signals.some((signal) => signal && signal.reasonCode === reasonCode);
+}
+
+// True only for a genuine completed zero-signal result -- contextFields.risk
+// present with a real (possibly empty) signals array. A malformed/absent
+// risk object is left alone here (ask.js's buildContext already routes a
+// truly missing/invalid risk section to the separate no-data path before
+// the provider is ever called, so this function only ever sees a real,
+// hasData:true risk object at this layer).
+function isZeroSignalRiskResult(contextFields) {
+  const risk = contextFields && contextFields.risk;
+  if (!risk || !Array.isArray(risk.signals)) return false;
+  return risk.signals.length === 0;
+}
+
 const round2 = (value) => Math.round(value * 100) / 100;
 
 // Recursively collects every finite numeric leaf value out of the
@@ -227,6 +288,45 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
 
   if (intent === FINANCIAL_RISK_EXPLANATION && ADVICE_LANGUAGE_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "OUT_OF_SCOPE_ADVICE" };
+  }
+
+  // Reason-code-name overstatement guardrails. Each check below is gated
+  // to the exact intent (and, for FINANCIAL_RISK_EXPLANATION, the exact
+  // signal present in contextFields.risk.signals) whose evidence can never
+  // support the flagged language -- see the pattern/helper definitions
+  // above for the full source-cited rationale. None of these apply to
+  // ANOMALY_EXPLANATION, BUDGET_STATUS_EXPLANATION,
+  // CATEGORY_SPENDING_EXPLANATION, or SPENDING_FORECAST_EXPLANATION, whose
+  // existing behavior (including SPENDING_FORECAST_EXPLANATION's accurate
+  // use of "next month") is unchanged.
+  if (intent === FINANCIAL_RISK_EXPLANATION && hasRiskSignal(contextFields, "FORECASTED_FINANCIAL_PRESSURE")) {
+    if (NEXT_MONTH_LANGUAGE_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_TEMPORAL_CLAIM" };
+    }
+  }
+
+  if (
+    intent === SPENDING_CHANGE_EXPLANATION ||
+    (intent === FINANCIAL_RISK_EXPLANATION && hasRiskSignal(contextFields, "PERSISTENT_SPENDING_GROWTH"))
+  ) {
+    if (PERSISTENCE_LANGUAGE_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_PERSISTENCE_CLAIM" };
+    }
+  }
+
+  if (
+    intent === HEALTH_EXPLANATION ||
+    (intent === FINANCIAL_RISK_EXPLANATION && hasRiskSignal(contextFields, "DETERIORATING_HEALTH"))
+  ) {
+    if (DECLINE_LANGUAGE_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_DECLINE_CLAIM" };
+    }
+  }
+
+  if (intent === FINANCIAL_RISK_EXPLANATION && isZeroSignalRiskResult(contextFields)) {
+    if (NO_RISK_CLAIM_PATTERNS.some((pattern) => pattern.test(answer))) {
+      return { valid: false, reasonCode: "UNSUPPORTED_NO_RISK_CLAIM" };
+    }
   }
 
   const contextNumbers = collectNumericValues(contextFields, new Set());
