@@ -247,7 +247,18 @@ describe("SIA availability -- fails closed", () => {
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
     openPanel();
 
-    await screen.findByText(UNAVAILABLE_TEXT);
+    // Bounded wait, not a sleep: useSiaStatusQuery.js hardcodes `retry: 1`
+    // on the query itself, which takes precedence over this test's
+    // client-level `retry: false` default. For the "a rejected request"
+    // case specifically, that means TanStack performs one real retry with
+    // its default ~1000ms backoff before the query settles into its error
+    // state -- the same intentional retry lifecycle already documented in
+    // the "SIA availability -- retry" describe block below. findByText's
+    // implicit 1000ms default sits right at that boundary, which is fine
+    // running this file alone but can tip over under full-suite CPU
+    // contention. 3000ms comfortably covers the retry + backoff without
+    // masking a genuine failure to reach the unavailable state.
+    await screen.findByText(UNAVAILABLE_TEXT, {}, { timeout: 3000 });
     expect(composer()).toBeDisabled();
     expect(askButton()).toBeDisabled();
 
@@ -269,7 +280,12 @@ describe("SIA availability -- fails closed", () => {
     const { container } = renderEntryPoint();
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
     openPanel();
-    await screen.findByText(UNAVAILABLE_TEXT);
+    // Same bounded wait as the parameterized "a rejected request" case
+    // above: this is also a genuinely rejected getSiaStatus call, so it
+    // hits useSiaStatusQuery.js's real `retry: 1` and its ~1000ms default
+    // backoff before settling into the error state -- findByText's
+    // implicit 1000ms default sits right at that boundary.
+    await screen.findByText(UNAVAILABLE_TEXT, {}, { timeout: 3000 });
 
     const text = container.textContent;
     for (const forbidden of ["openai", "gpt-4", "sk-secret", "OPENAI_API_KEY", "SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_MODEL", "ECONNREFUSED"]) {
