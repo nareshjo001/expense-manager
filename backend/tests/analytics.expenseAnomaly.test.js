@@ -185,18 +185,33 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       expect(result.flaggedCount).toBe(0); // hasData:true even though nothing was flagged
     });
 
-    it("uses exact stored-category matching -- a different-case category never contributes to the baseline", () => {
-      const recentExpensePool = makeBaselineRecords("food", MODIFIED_Z_BASELINE_AMOUNTS); // lowercase
+    // Rewritten for the category-normalization fix: case/whitespace/alias
+    // variants of the SAME category are now intended to share one baseline
+    // (see analytics.expenseAnomaly.test.js's "category normalization"
+    // describe block below), so a "different-case category never
+    // contributes" expectation would directly contradict that fix. What
+    // must still hold -- and what this test now proves instead -- is that
+    // there is still no overall-user or cross-CATEGORY fallback: a
+    // genuinely unrelated canonical category's abundant history can never
+    // satisfy a different category's insufficient baseline, no matter how
+    // much of it exists in the same pool.
+    it("does not fall back to an unrelated canonical category's baseline -- 'Food' stays below the minimum even with plentiful 'Rent' history in the same pool", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("Food", [500, 510, 490]), // only 3 -- below minBaselineSampleSize (10)
+        ...makeBaselineRecords("Rent", MODIFIED_Z_BASELINE_AMOUNTS), // 10 -- plenty, but a different category
+      ];
 
       const result = analyze({
-        currentMonthExpenses: [makeCandidate({ expenseCategory: "Food" })], // capitalized
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Food", expenseAmount: 3500 })],
         recentExpensePool,
         currentMonthStart: CURRENT_MONTH_START,
       });
 
       expect(result.hasData).toBe(false);
       expect(result.reasonCode).toBe("NO_BASELINE_YET");
+      expect(result.eligibleCategoryCount).toBe(0);
       expect(result.insufficientHistoryCategoryCount).toBe(1);
+      expect(result.flaggedCount).toBe(0);
     });
 
     it("never falls back to an overall-user baseline across categories", () => {
@@ -997,9 +1012,24 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
   });
 
   describe("remediation: prototype-pollution-shaped category names", () => {
-    it.each(["__proto__", "constructor", "hasOwnProperty"])(
-      'treats "%s" as an ordinary category string, isolated from other categories',
-      (category) => {
+    // Updated for the shared normalizer's own prototype-pollution fix
+    // (utils/categoryNormalization.js's CATEGORY_ALIASES is now a
+    // null-prototype lookup): the analyzer's `category` output is the
+    // CANONICAL grouping value, not a raw pass-through, so a prototype-
+    // shaped input no longer necessarily round-trips to its own original
+    // spelling -- exactly the same "unknown category -> Title-Cased
+    // display string" fallback every other unknown category already goes
+    // through (see categoryNormalization.test.js's own dedicated
+    // prototype-pollution suite for the normalizer-level proof). Expected
+    // values are hardcoded literals here, not computed by calling the
+    // production normalizer inside the assertion.
+    it.each([
+      ["__proto__", "__proto__"],
+      ["constructor", "Constructor"],
+      ["hasOwnProperty", "Hasownproperty"],
+    ])(
+      'treats "%s" as an ordinary category string, normalized to its canonical "%s" form and isolated from other categories',
+      (category, expectedCanonicalCategory) => {
         const recentExpensePool = makeBaselineRecords(category, MODIFIED_Z_BASELINE_AMOUNTS);
 
         const result = analyze({
@@ -1010,9 +1040,11 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
 
         expect(result.hasData).toBe(true);
         expect(result.flaggedCount).toBe(1);
-        expect(result.anomalies[0].category).toBe(category);
+        expect(typeof result.anomalies[0].category).toBe("string");
+        expect(result.anomalies[0].category).toBe(expectedCanonicalCategory);
         // Confirms no leakage into/from Object.prototype internals: an
-        // unrelated category must still be evaluated independently.
+        // unrelated category must still be evaluated independently, and
+        // Object.prototype itself is never touched by analysis.
         expect(Object.prototype.toString.call({})).toBe("[object Object]");
       }
     );
@@ -1162,6 +1194,193 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       });
 
       expect(after).toEqual(before);
+    });
+  });
+
+  // Category normalization fix: candidate and historical-baseline categories
+  // now both go through utils/categoryNormalization.js's
+  // normalizeCategoryForGrouping() -- the same shared utility
+  // forecastInputAggregator.js already uses -- instead of an exact raw
+  // string comparison. All tests above this point are unmodified.
+  describe("category normalization (candidate + baseline)", () => {
+    it("1. merges case-variant categories ('Food'/'food'/'FOOD') into one baseline", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("Food", [50, 150, 250, 350, 450]),
+        ...makeBaselineRecords("food", [550, 650, 750, 850, 950]),
+      ];
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "FOOD", expenseAmount: 3500 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      expect(result.eligibleCategoryCount).toBe(1);
+      expect(result.insufficientHistoryCategoryCount).toBe(0);
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].baseline.sampleCount).toBe(10);
+      expect(result.anomalies[0].baseline.medianAmount).toBe(500);
+      expect(result.anomalies[0].category).toBe("Food");
+    });
+
+    it("2. merges leading/trailing-whitespace-variant categories into one baseline", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("Food", [50, 150, 250, 350, 450]),
+        ...makeBaselineRecords("  Food  ", [550, 650, 750, 850, 950]),
+      ];
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: " Food ", expenseAmount: 3500 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      expect(result.eligibleCategoryCount).toBe(1);
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].baseline.sampleCount).toBe(10);
+      expect(result.anomalies[0].category).toBe("Food");
+    });
+
+    it("3. merges a real configured alias pair ('medical'/'Health'/'healthcare') into one canonical 'Health' baseline", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("medical", [50, 150, 250, 350, 450]),
+        ...makeBaselineRecords("Health", [550, 650, 750, 850, 950]),
+      ];
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "healthcare", expenseAmount: 3500 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      expect(result.eligibleCategoryCount).toBe(1);
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].baseline.sampleCount).toBe(10);
+      expect(result.anomalies[0].category).toBe("Health");
+    });
+
+    it("4. individually-fragmented groups (5 + 5, each below the 10-record minimum alone) combine to satisfy minBaselineSampleSize", () => {
+      const fragmentA = makeBaselineRecords("Food", [50, 150, 250, 350, 450]);
+      const fragmentB = makeBaselineRecords("food", [550, 650, 750, 850, 950]);
+
+      // A lone 5-record fragment is genuinely insufficient on its own --
+      // this is not a normalization question, just the existing
+      // minBaselineSampleSize gate, asserted here as the baseline this test
+      // then shows the MERGE overcomes.
+      const loneFragment = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Food", expenseAmount: 3500 })],
+        recentExpensePool: fragmentA,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+      expect(loneFragment.reasonCode).toBe("NO_BASELINE_YET");
+      expect(loneFragment.insufficientHistoryCategoryCount).toBe(1);
+
+      const merged = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Food", expenseAmount: 3500 })],
+        recentExpensePool: [...fragmentA, ...fragmentB],
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+      expect(merged.hasData).toBe(true);
+      expect(merged.eligibleCategoryCount).toBe(1);
+      expect(merged.insufficientHistoryCategoryCount).toBe(0);
+    });
+
+    it("5. the combined baseline correctly flags a qualifying current-month expense", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("Food", [50, 150, 250, 350, 450]),
+        ...makeBaselineRecords("food", [550, 650, 750, 850, 950]),
+      ];
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "FOOD", expenseAmount: 3500 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].detection.method).toBe("MODIFIED_Z");
+      expect(result.anomalies[0].severity).toBe("high");
+    });
+
+    it("6. both candidate-side and historical-side variants are independently normalized (mismatched casing on each side still merges)", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("FOOD", [50, 150, 250, 350, 450]), // historical side: all-caps
+        ...makeBaselineRecords("Food", [550, 650, 750, 850, 950]), // historical side: canonical
+      ];
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "food", expenseAmount: 3500 })], // candidate side: lowercase
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].baseline.sampleCount).toBe(10);
+    });
+
+    it("7. unrelated canonical categories remain isolated after normalization", () => {
+      const recentExpensePool = [
+        ...makeBaselineRecords("Food", MODIFIED_Z_BASELINE_AMOUNTS),
+        ...makeBaselineRecords("Rent", MAD_ZERO_BASELINE_AMOUNTS),
+      ];
+      // One candidate per category (categoryStats is only ever computed for
+      // categories a current-month candidate actually needs), each using
+      // lowercase/uppercase input on the candidate side to prove
+      // normalization still resolves each to its OWN distinct canonical
+      // category rather than merging them together.
+      const result = analyze({
+        currentMonthExpenses: [
+          makeCandidate({ _id: "food-candidate", expenseCategory: "food", expenseAmount: 3500 }),
+          makeCandidate({ _id: "rent-candidate", expenseCategory: "RENT", expenseAmount: 2000, expenseDate: new Date(2026, 7, 16) }),
+        ],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      // Both Food and Rent independently reach the baseline minimum --
+      // normalization never merges genuinely different canonical categories.
+      expect(result.eligibleCategoryCount).toBe(2);
+      expect(result.flaggedCount).toBe(2);
+      const byCategory = Object.fromEntries(result.anomalies.map((a) => [a.category, a]));
+      expect(byCategory.Food.baseline.sampleCount).toBe(10); // not 20 -- Rent never leaks into Food's baseline
+      expect(byCategory.Rent.baseline.sampleCount).toBe(10); // not 20 -- Food never leaks into Rent's baseline
+    });
+
+    it("8. already-canonical input produces the same result the analyzer produced before this fix", () => {
+      const recentExpensePool = makeBaselineRecords("Food", MODIFIED_Z_BASELINE_AMOUNTS);
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Food", expenseAmount: 3500 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      // Identical to the pre-existing "candidate eligibility"/output-contract
+      // assertions elsewhere in this file for the same canonical input --
+      // the fix changes nothing when the input was already canonical.
+      expect(result.hasData).toBe(true);
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].category).toBe("Food");
+      expect(result.anomalies[0].baseline.sampleCount).toBe(10);
+      expect(result.anomalies[0].baseline.medianAmount).toBe(500);
+    });
+
+    it("9. threshold boundary, MAD-zero fallback, severity, and flag/no-flag behaviour are unchanged when routed through normalization", () => {
+      // Reuses the exact MAD==0 fixture and boundary values from the
+      // "MAD == 0 fallback" / "severity boundaries" describe blocks above,
+      // now with lowercase historical input and an all-caps candidate, to
+      // prove the fix changes nothing about the surrounding rules.
+      const recentExpensePool = makeBaselineRecords("rent", MAD_ZERO_BASELINE_AMOUNTS);
+
+      const atThreshold = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "RENT", expenseAmount: 2000 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+      expect(atThreshold.anomalies[0].detection.method).toBe("MEDIAN_RATIO");
+      expect(atThreshold.anomalies[0].detection.amountRatio).toBe(4);
+      expect(atThreshold.anomalies[0].severity).toBe("moderate");
+
+      const belowThreshold = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "RENT", expenseAmount: 1999.99 })],
+        recentExpensePool,
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+      expect(belowThreshold.flaggedCount).toBe(0);
     });
   });
 });

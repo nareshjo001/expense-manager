@@ -247,3 +247,85 @@ describe("categoryNormalization: groupByCategoryHelper (read-time grouping corre
     expect(grouped.Others).toHaveLength(1);
   });
 });
+
+// Security correction: CATEGORY_ALIASES's bracket lookup previously walked
+// Object.prototype for any key not explicitly configured -- an
+// attacker/user-controlled category string such as "__proto__" or
+// "constructor" could resolve an INHERITED property instead of a real
+// alias, and normalizeCategory() would return that non-string value as-is.
+// Fixed by giving CATEGORY_ALIASES a null prototype (Object.create(null)),
+// plus a defensive typeof guard at the lookup site. Expected values below
+// are hardcoded literals (never computed by calling normalizeCategory
+// itself), per the requirement that this regression suite verify the
+// documented fallback contract independently of the implementation under
+// test.
+describe("categoryNormalization: prototype-pollution / inherited-property safety", () => {
+  it("1. __proto__, constructor, and hasOwnProperty each normalize to a deterministic primitive string, never an inherited object/function", () => {
+    // "__proto__": collapseWhitespace is a no-op (no whitespace), toLowerCase
+    // is a no-op (no letters), and the Title-Case regex's word-boundary match
+    // only touches the leading underscore (itself unaffected by
+    // toUpperCase()) -- the whole run of underscores/letters is one
+    // contiguous \w sequence, so the string passes through unchanged.
+    expect(normalizeCategory("__proto__")).toBe("__proto__");
+    // "constructor": one contiguous word -- only the leading letter is
+    // Title-Cased, exactly like any other unknown single-word category.
+    expect(normalizeCategory("constructor")).toBe("Constructor");
+    // "hasOwnProperty": lowercased first, then only the leading letter is
+    // Title-Cased -- same fallback convention as any other unknown category.
+    expect(normalizeCategory("hasOwnProperty")).toBe("Hasownproperty");
+  });
+
+  it("2. other Object.prototype-shaped inputs cannot escape as objects/functions -- every result is a plain string", () => {
+    const inherited = ["toString", "valueOf", "isPrototypeOf", "propertyIsEnumerable", "__defineGetter__", "toLocaleString"];
+    for (const raw of inherited) {
+      const result = normalizeCategory(raw);
+      expect(typeof result).toBe("string");
+      expect(result).not.toBe(Object.prototype[raw]);
+    }
+  });
+
+  it("3. known aliases and canonical names still resolve to their existing canonical categories, unaffected by the null-prototype fix", () => {
+    expect(normalizeCategory("medical")).toBe("Health");
+    expect(normalizeCategory("healthcare")).toBe("Health");
+    expect(normalizeCategory("Health")).toBe("Health");
+    expect(normalizeCategory("utilities")).toBe("Bills");
+    expect(normalizeCategory("emi")).toBe("Bills");
+    expect(normalizeCategory("income")).toBe("Salary");
+    expect(normalizeCategory("personal care")).toBe("Personal Care");
+  });
+
+  it("4. unknown ordinary categories retain their previous fallback behaviour", () => {
+    expect(normalizeCategory("crypto TRADING")).toBe("Crypto Trading");
+    expect(normalizeCategory("PET CARE")).toBe("Pet Care");
+    expect(normalizeCategory("newsubcategory")).toBe("Newsubcategory");
+  });
+
+  it("5. Object.prototype itself is never mutated by any lookup", () => {
+    const before = JSON.stringify(Object.getOwnPropertyNames(Object.prototype));
+    normalizeCategory("__proto__");
+    normalizeCategory("constructor");
+    normalizeCategory("hasOwnProperty");
+    normalizeCategory("__defineGetter__");
+    const after = JSON.stringify(Object.getOwnPropertyNames(Object.prototype));
+
+    expect(after).toBe(before);
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
+    expect(({}).constructor).toBe(Object);
+  });
+
+  it("6. repeated normalization of prototype-shaped input is deterministic", () => {
+    expect(normalizeCategory("__proto__")).toBe(normalizeCategory("__proto__"));
+    expect(normalizeCategory("constructor")).toBe(normalizeCategory("constructor"));
+    expect(normalizeCategoryForGrouping("__proto__")).toBe(normalizeCategoryForGrouping("__proto__"));
+  });
+
+  it("CATEGORY_ALIASES itself has a null prototype and cannot resolve an inherited key", () => {
+    expect(Object.getPrototypeOf(CATEGORY_ALIASES)).toBeNull();
+    expect(CATEGORY_ALIASES.__proto__).toBeUndefined();
+    expect(CATEGORY_ALIASES.constructor).toBeUndefined();
+    expect(CATEGORY_ALIASES.hasOwnProperty).toBeUndefined();
+    // Own, intentionally-configured entries are still present and correct.
+    expect(CATEGORY_ALIASES.food).toBe("Food");
+    expect(CATEGORY_ALIASES.medical).toBe("Health");
+  });
+});

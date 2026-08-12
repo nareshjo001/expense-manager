@@ -345,3 +345,42 @@ describe("reportGenerator + real expenseAnomalyAnalyzer: no raw data leakage (D)
     expect(report.anomalies).not.toHaveProperty("currentMonthExpenses");
   });
 });
+
+// Category normalization fix -- requirement #10: the corrected, canonical
+// anomaly result must flow unchanged through report generation into
+// riskAnalyzer.js's own ABNORMAL_HIGH_VALUE_EXPENSES evidence. riskAnalyzer
+// is never mocked by loadHarnessWithRealAnomalyAnalyzer() above, so this
+// exercises the REAL, unmocked riskAnalyzer.js -- no risk rule/threshold is
+// touched by this change or this test.
+describe("reportGenerator + real expenseAnomalyAnalyzer + real riskAnalyzer: normalized category flows into risk evidence (E)", () => {
+  it("a category-variant-merged anomaly's canonical category appears in riskAnalyzer's ABNORMAL_HIGH_VALUE_EXPENSES evidence", async () => {
+    // Baseline fragmented across case variants ("Food" / "food"), exactly
+    // the scenario the category-normalization fix merges into one 10-record
+    // baseline (see analytics.expenseAnomaly.test.js's own coverage of this
+    // same fixture shape).
+    const recentExpensePool = [
+      ...makeBaselineRecords("Food", [50, 150, 250, 350, 450]),
+      ...makeBaselineRecords("food", [550, 650, 750, 850, 950]),
+    ];
+    const currentMonthExpenses = [makeExpense({ expenseCategory: "FOOD", expenseAmount: 3500 })];
+
+    const { generateReport } = loadHarnessWithRealAnomalyAnalyzer({ recentExpensePool, currentMonthExpenses });
+
+    const report = await generateReport("user-1");
+
+    // Anomaly section: merged baseline, canonical category, flagged.
+    expect(report.anomalies.hasData).toBe(true);
+    expect(report.anomalies.flaggedCount).toBe(1);
+    expect(report.anomalies.anomalies[0].category).toBe("Food");
+    expect(report.anomalies.anomalies[0].baseline.sampleCount).toBe(10);
+    expect(["high", "very_high"]).toContain(report.anomalies.anomalies[0].severity);
+
+    // Risk section (real, unmocked riskAnalyzer.js): the same canonical
+    // category reaches ABNORMAL_HIGH_VALUE_EXPENSES's evidence, no rule or
+    // threshold in riskRules.js touched.
+    expect(report.risk).toBeDefined();
+    const riskSignal = report.risk.signals.find((s) => s.reasonCode === "ABNORMAL_HIGH_VALUE_EXPENSES");
+    expect(riskSignal).toBeDefined();
+    expect(riskSignal.evidence.anomalies[0].category).toBe("Food");
+  });
+});

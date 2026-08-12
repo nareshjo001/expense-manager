@@ -49,7 +49,23 @@
 // flush, no migration: models/Report.js stores every section as Mixed, so
 // the added keys need no schema change, and a stale v3 document is simply
 // regenerated on next read.
-const CURRENT_REPORT_VERSION = 4;
+// Bumped from 4 to 5 for the Anomaly Detection category-normalization fix:
+// expenseAnomalyAnalyzer.js's candidate and baseline category comparisons
+// now go through the shared normalizeCategoryForGrouping() utility instead
+// of comparing raw stored strings, so the CONTENT of `report.anomalies`
+// (which categories get evaluated, which baseline records feed a given
+// category's median/MAD, and the canonical `category` string on each
+// flagged record) can differ from a report generated before this fix, even
+// though the section's SHAPE is unchanged. isCurrentReport() below only
+// ever inspects metadata.version, never a section's content (see this
+// module's own top comment), so without this bump an already-cached or
+// -persisted version-4 report would keep being served as "fresh"
+// indefinitely for any user whose data revision does not happen to change
+// -- this bump is what makes that stale content regenerate on next read,
+// through the exact same lazy-regeneration path every previous version
+// bump already relied on (no migration, no cache flush, no forced
+// recomputation elsewhere).
+const CURRENT_REPORT_VERSION = 5;
 
 // True only when `report` carries a numeric metadata.version at least as
 // new as the current contract. Anything else (missing report, missing/

@@ -65,7 +65,25 @@ const CANONICAL_CATEGORIES = [
 // an out-of-sync alias here is never a correctness failure for THIS
 // module: an alias miss simply falls through to the unknown-category
 // pass-through path (see normalizeCategory), never an error.
-const CATEGORY_ALIASES = {
+// Security correction (confirmed defect): a plain `{}` object literal
+// inherits from Object.prototype, so a bracket lookup keyed on
+// attacker/user-controlled input (`CATEGORY_ALIASES[someString]`) can
+// resolve an INHERITED property instead of an intentionally-configured
+// alias -- e.g. `CATEGORY_ALIASES["__proto__"]` previously returned
+// Object.prototype itself, and `CATEGORY_ALIASES["constructor"]` returned
+// the `Object` constructor function, both truthy, both silently returned
+// AS-IS by normalizeCategory() below in place of a string. `CATEGORY_ALIASES`
+// is therefore built as a null-prototype object (`Object.create(null)` as
+// the target of `Object.assign`, populated with the exact same literal
+// entries as before): a lookup key that is not one of the 23 keys
+// explicitly assigned below now simply reads `undefined`, exactly like any
+// other genuinely-unknown category, regardless of what Object.prototype
+// happens to define. No alias/canonical mapping, casing, or fallback
+// behavior changes -- this only removes the prototype the lookup could
+// otherwise walk. Object.keys/values/entries (used elsewhere, e.g. this
+// module's own tests) are unaffected by a null prototype; they only ever
+// consider own enumerable properties.
+const CATEGORY_ALIASES = Object.assign(Object.create(null), {
     // canonical categories (identity mappings)
     food: "Food",
     transport: "Transport",
@@ -96,7 +114,7 @@ const CATEGORY_ALIASES = {
     emi: "Bills",
 
     income: "Salary",
-};
+});
 
 // Explicit fallback for malformed/missing category data encountered at a
 // READ boundary (e.g. a legacy document whose expenseCategory is empty,
@@ -187,8 +205,14 @@ function normalizeCategory(raw) {
         return null;
     }
 
+    // The `typeof aliasMatch === "string"` check is defense-in-depth, not
+    // the primary fix (CATEGORY_ALIASES's null prototype above already
+    // means an unconfigured key reads `undefined`, never an inherited
+    // Object.prototype value) -- it guarantees this function can never
+    // return a non-string even if a future edit to the table above ever
+    // accidentally assigned a non-string value.
     const aliasMatch = CATEGORY_ALIASES[cleaned.toLowerCase()];
-    if (aliasMatch) {
+    if (typeof aliasMatch === "string") {
         return aliasMatch;
     }
 

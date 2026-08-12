@@ -373,8 +373,17 @@ describe("models/Report.js: forecast and risk section schema round-trip (Batch 2
     // targetMonth and budgetRisk). A version-3 document is therefore stale
     // by the same gate -- asserted explicitly below so this is a deliberate
     // contract change, not an accidental drift.
-    expect(CURRENT_REPORT_VERSION).toBe(4);
     expect(isCurrentReport({ metadata: { version: 3 } })).toBe(false);
-    expect(isCurrentReport({ metadata: { version: 4 } })).toBe(true);
+  });
+
+  it("the Anomaly Detection category-normalization fix bumped the contract from 4 to 5 -- a version-4 document is now stale, version 5 is current", () => {
+    // See analytics/reportContractVersion.js's own comment: the fix changed
+    // report.anomalies's CONTENT (which categories/baseline records are
+    // grouped together), not its shape, so isCurrentReport() -- which only
+    // ever inspects metadata.version -- would otherwise keep serving a
+    // pre-fix version-4 report as current forever.
+    expect(CURRENT_REPORT_VERSION).toBe(5);
+    expect(isCurrentReport({ metadata: { version: 4 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 5 } })).toBe(true);
   });
 });

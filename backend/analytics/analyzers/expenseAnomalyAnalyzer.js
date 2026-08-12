@@ -17,6 +17,25 @@
 "use strict";
 
 const { anomaly: RULES } = require("./scores/expenseAnomalyRules");
+// Category normalization fix (confirmed defect): this analyzer previously
+// compared `expenseCategory` as an exact, raw stored string on both the
+// candidate side and the historical-baseline side, so case/whitespace
+// variants and approved aliases of the SAME category (e.g. "Food"/"food",
+// or "Medical"/"Health") were treated as separate categories. That could
+// silently keep a category below `RULES.minBaselineSampleSize` even when
+// the user had well over that many same-category expenses in aggregate, or
+// compute a thinner/noisier median-MAD baseline than the data actually
+// supports -- suppressing or weakening detection. Fixed by normalizing
+// through the SAME shared grouping utility forecastInputAggregator.js
+// already uses for the identical class of problem in forecasting
+// (`normalizeCategoryForGrouping`) -- not a second, divergent
+// normalization implementation. Only grouping/comparison and the public
+// `category` field are affected; every other rule below (minimum sample
+// size, baseline window, upper-tail-only, modified-Z/median-ratio
+// thresholds, severity tiers, sorting, top-10 cap, malformed-record and
+// invalid-amount handling, user isolation, temporal boundaries) is
+// unchanged.
+const { normalizeCategoryForGrouping } = require("../../utils/categoryNormalization");
 
 // Narrowly guarded numeric coercion -- Number() throws for a Symbol, and
 // can throw for an object with no usable valueOf/toString (e.g. an
@@ -97,18 +116,28 @@ const toCandidate = (expense, monthStart, monthEndExclusive) => {
   return {
     id,
     name: isNonBlankString(expense.expenseName) ? expense.expenseName : "",
-    category: expense.expenseCategory, // exact stored value, no normalization
+    // Canonical grouping value (categoryNormalization.js), not the raw
+    // stored string -- the isNonBlankString guard above already guarantees
+    // a non-empty string here, so this can never fall back to the
+    // "Uncategorized" read-time marker; it only ever resolves a known
+    // alias to its canonical name or display-cases a genuinely new
+    // category, exactly like forecastInputAggregator.js's own grouping key.
+    category: normalizeCategoryForGrouping(expense.expenseCategory),
     amount,
     date,
   };
 };
 
 // True when a baseline record is a valid, in-window, same-category,
-// positive-amount historical data point. `category` must match the
-// candidate's exact stored category string -- no case-folding, no trimming.
+// positive-amount historical data point. `category` is already the
+// candidate's CANONICAL grouping value (see toCandidate above), so the
+// comparison here normalizes the baseline record's own raw stored category
+// through the identical shared utility before comparing -- case variants,
+// whitespace variants, and approved aliases on the historical side now
+// converge on the same baseline as the candidate side.
 const isValidBaselineRecord = (expense, category, baselineStart, baselineEndExclusive) => {
   if (!expense || typeof expense !== "object") return false;
-  if (expense.expenseCategory !== category) return false;
+  if (normalizeCategoryForGrouping(expense.expenseCategory) !== category) return false;
 
   const amount = toFiniteAmount(expense.expenseAmount);
   if (amount === null || amount <= 0) return false;
