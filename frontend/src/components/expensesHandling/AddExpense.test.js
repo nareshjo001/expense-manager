@@ -294,3 +294,75 @@ describe("AddExpense -- genuine failure and idempotency-conflict UX", () => {
     expect(mockAddMutate.mock.calls[1][0].id).toBe(payload.id);
   });
 });
+
+// Category Normalization -- single implementation pass, required test
+// scenarios #17 ("edit-open displays mechanically normalized historical
+// category") and #18 ("unknown categories still render/submit normally").
+describe("AddExpense -- Category Normalization: edit-load display and unknown-category submit", () => {
+  beforeEach(() => {
+    useAddExpenseMutation.mockReturnValue({ mutate: jest.fn() });
+    useUpdateExpenseMutation.mockReturnValue({ mutate: jest.fn() });
+  });
+
+  it("#17: displays a historical category's mechanically-normalized (trimmed/collapsed/Title-Cased) form when loaded into edit mode", async () => {
+    queryClient.fetchQuery.mockResolvedValue({
+      data: {
+        expenseName: "Doctor visit",
+        expenseCategory: "  medical   checkup ",
+        expenseAmount: 200,
+        expenseDate: "2026-01-10T00:00:00.000Z",
+        expenseDescription: "Routine checkup",
+      },
+    });
+
+    await act(async () => {
+      renderAddExpense({ enableEdit: true, expense_id: "existing-expense-1" }, jest.fn());
+    });
+    await waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalled());
+
+    // Same mechanical cleanup AddExpense.js's own submit-time
+    // normalizeCategory already applies: trim + collapse whitespace +
+    // Title-Case each word. This is a display/UX aid only -- the backend
+    // remains the authoritative normalizer/validator.
+    await waitFor(() =>
+      expect(screen.getByLabelText(/category/i).value).toBe("Medical Checkup")
+    );
+  });
+
+  it("#17b: an already-canonical historical category loads unchanged", async () => {
+    queryClient.fetchQuery.mockResolvedValue({
+      data: {
+        expenseName: "Groceries",
+        expenseCategory: "Food",
+        expenseAmount: 50,
+        expenseDate: "2026-01-10T00:00:00.000Z",
+        expenseDescription: "Weekly groceries",
+      },
+    });
+
+    await act(async () => {
+      renderAddExpense({ enableEdit: true, expense_id: "existing-expense-2" }, jest.fn());
+    });
+    await waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalled());
+
+    await waitFor(() => expect(screen.getByLabelText(/category/i).value).toBe("Food"));
+  });
+
+  it("#18: an unknown/custom category remains freely editable and submits normally (no fixed dropdown/allowlist)", () => {
+    const mockAddMutate = jest.fn();
+    useAddExpenseMutation.mockReturnValue({ mutate: mockAddMutate });
+
+    renderAddExpense();
+    fireEvent.change(screen.getByLabelText(/name of the expense/i), { target: { value: "Fish tank filter" } });
+    fireEvent.change(screen.getByLabelText(/category/i), { target: { value: "Pet Supplies" } });
+    fireEvent.change(screen.getByLabelText(/amount spent/i), { target: { value: "25" } });
+    fireEvent.change(screen.getByLabelText(/date spent/i), { target: { value: "2026-01-15" } });
+
+    expect(screen.getByLabelText(/category/i).value).toBe("Pet Supplies");
+
+    fireEvent.submit(document.querySelector("form.add-expense"));
+
+    expect(mockAddMutate).toHaveBeenCalledTimes(1);
+    expect(mockAddMutate.mock.calls[0][0].expenseCategory).toBe("Pet Supplies");
+  });
+});

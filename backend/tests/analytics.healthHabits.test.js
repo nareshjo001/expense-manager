@@ -500,3 +500,106 @@ describe("healthAnalyzer boundary: raw-transaction isolation (F)", () => {
     expect(serialized).not.toContain("expenseCategory");
   });
 });
+
+// Category Normalization -- single implementation pass, required scenario
+// #15 ("Shopping and impulse analytics recognize historical
+// casing/spacing variants"). Confirmed problem (discovery report):
+// calculateShoppingFrequency's old `e?.expenseCategory === "Shopping"` and
+// calculateImpulseSpending's old `new Set(config.categories).has(...)`
+// were both exact, case-sensitive string comparisons -- a stored category
+// of "shopping", "SHOPPING", or " Shopping " (any variant other than the
+// literal configured string) silently never matched, understating both
+// metrics with no error or signal. These tests prove the fix: real,
+// unmocked habitAnalyzer functions, fed variant-cased/whitespace-padded
+// category strings, must produce results IDENTICAL to canonically-cased
+// input -- and a missing/invalid category must fail the match safely
+// (never throw, never appear as a false match).
+describe("Category Normalization: shopping/impulse analytics recognize historical casing and spacing variants (G)", () => {
+  const habitAnalyzer = require(path.join("..", "analytics", "analyzers", "habitAnalyzer"));
+  const habitRules = require(path.join("..", "analytics", "analyzers", "scores", "habitRules"));
+
+  it("calculateShoppingFrequency counts a lower-cased, whitespace-padded historical 'shopping' the same as canonical 'Shopping'", () => {
+    const canonical = [
+      { expenseCategory: "Shopping", expenseAmount: 100, expenseDate: "2026-08-01" },
+      { expenseCategory: "Shopping", expenseAmount: 100, expenseDate: "2026-08-05" },
+    ];
+    const variant = [
+      { expenseCategory: "  shopping ", expenseAmount: 100, expenseDate: "2026-08-01" },
+      { expenseCategory: "SHOPPING", expenseAmount: 100, expenseDate: "2026-08-05" },
+    ];
+
+    const canonicalResult = habitAnalyzer.calculateShoppingFrequency(canonical);
+    const variantResult = habitAnalyzer.calculateShoppingFrequency(variant);
+
+    expect(variantResult).toEqual(canonicalResult);
+    expect(variantResult.shoppingTransactions).toBe(2);
+  });
+
+  it("calculateShoppingFrequency never throws and reports zero shopping activity for missing/invalid categories", () => {
+    const expenses = [
+      { expenseCategory: null, expenseAmount: 50, expenseDate: "2026-08-01" },
+      { expenseAmount: 50, expenseDate: "2026-08-02" },
+      { expenseCategory: "   ", expenseAmount: 50, expenseDate: "2026-08-03" },
+    ];
+
+    expect(() => habitAnalyzer.calculateShoppingFrequency(expenses)).not.toThrow();
+    const result = habitAnalyzer.calculateShoppingFrequency(expenses);
+    expect(result.shoppingTransactions).toBe(0);
+  });
+
+  it("calculateImpulseSpending recognizes alias/casing/whitespace variants of the configured impulse categories", () => {
+    // habitRules.habits.impulseSpending.categories includes "Shopping",
+    // "Entertainment", "Food", "Personal Care" -- exercised here with
+    // casing/whitespace variants plus one non-impulse category (Rent).
+    const canonical = [
+      { expenseCategory: "Shopping", expenseAmount: 200, expenseDate: "2026-08-01" },
+      { expenseCategory: "Personal Care", expenseAmount: 150, expenseDate: "2026-08-02" },
+      { expenseCategory: "Rent", expenseAmount: 500, expenseDate: "2026-08-03" },
+    ];
+    const variant = [
+      { expenseCategory: "shopping", expenseAmount: 200, expenseDate: "2026-08-01" },
+      { expenseCategory: "personal   care", expenseAmount: 150, expenseDate: "2026-08-02" },
+      { expenseCategory: "Rent", expenseAmount: 500, expenseDate: "2026-08-03" },
+    ];
+
+    const canonicalResult = habitAnalyzer.calculateImpulseSpending(canonical, habitRules.habits.impulseSpending);
+    const variantResult = habitAnalyzer.calculateImpulseSpending(variant, habitRules.habits.impulseSpending);
+
+    expect(variantResult.transactionCount).toBe(canonicalResult.transactionCount);
+    expect(variantResult.totalSpent).toBe(canonicalResult.totalSpent);
+    expect(variantResult.transactionCount).toBe(2);
+    expect(variantResult.topImpulseCategory).toBe("Shopping");
+  });
+
+  it("calculateImpulseSpending recognizes an approved alias ('Medical') as the canonical configured category ('Health') when the rule itself is extended to include it", () => {
+    // Uses a LOCAL config (not habitRules.habits, which does not configure
+    // Health as impulsive) purely to prove the alias-awareness of the
+    // comparison itself, without changing which categories the real
+    // business rule considers impulsive.
+    const config = { categories: ["Health"] };
+    const expenses = [
+      { expenseCategory: "Medical", expenseAmount: 80, expenseDate: "2026-08-01" },
+      { expenseCategory: "healthcare", expenseAmount: 40, expenseDate: "2026-08-02" },
+      { expenseCategory: "Rent", expenseAmount: 500, expenseDate: "2026-08-03" },
+    ];
+
+    const result = habitAnalyzer.calculateImpulseSpending(expenses, config);
+
+    expect(result.transactionCount).toBe(2);
+    expect(result.totalSpent).toBe(120);
+    expect(result.topImpulseCategory).toBe("Health");
+  });
+
+  it("calculateImpulseSpending never throws and excludes expenses with missing/invalid categories from matching", () => {
+    const expenses = [
+      { expenseCategory: null, expenseAmount: 999, expenseDate: "2026-08-01" },
+      { expenseAmount: 999, expenseDate: "2026-08-02" },
+      { expenseCategory: "Shopping", expenseAmount: 50, expenseDate: "2026-08-03" },
+    ];
+
+    expect(() => habitAnalyzer.calculateImpulseSpending(expenses, habitRules.habits.impulseSpending)).not.toThrow();
+    const result = habitAnalyzer.calculateImpulseSpending(expenses, habitRules.habits.impulseSpending);
+    expect(result.transactionCount).toBe(1);
+    expect(result.totalSpent).toBe(50);
+  });
+});

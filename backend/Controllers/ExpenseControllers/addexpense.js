@@ -1,14 +1,17 @@
 const { UserModel, ExpenseModel, MlFeedbackModel } = require('../../config/Schemas');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
+const { normalizeCategory } = require('../../utils/categoryNormalization');
 const axios = require("axios");
 
-// Lowercases + trims for comparison only; never throws on missing/non-string input.
-const normalizeForComparison = (value) => {
-  if (typeof value !== 'string') {
-    return '';
-  }
-  return value.trim().toLowerCase();
+// Category Normalization -- controlled 400 for an invalid/missing category,
+// matching IDEMPOTENCY_CONFLICT_RESPONSE's existing shape/error-code
+// convention below. Returned BEFORE any reservation or write is attempted,
+// so there is nothing to clean up on this path.
+const INVALID_CATEGORY_RESPONSE = {
+  success: false,
+  message: 'Expense category is required and must be a valid, non-empty value.',
+  errorCode: 'INVALID_CATEGORY',
 };
 
 // Phase C -- Expense Mutation Reliability: add-expense idempotency.
@@ -26,13 +29,29 @@ const normalizeForComparison = (value) => {
 // expenseDescription/mlPredictedCategory/mlConfidence/wasMlCorrected
 // (incidental metadata, not the expense's identity) and never includes any
 // server-generated timestamp.
+// Category Normalization -- `categoryMatches` now compares BOTH sides
+// through the shared normalizeCategory() (case/whitespace/alias-aware),
+// not a raw trimmed string compare. This is what makes a replay whose
+// category differs only by casing, whitespace, or an approved alias
+// (e.g. the original request said "food", a retried request says "Food")
+// still recognized as the SAME expense, while a genuinely different
+// category (normalizes to a different canonical/cleaned value) still
+// correctly falls through to the existing 409 conflict response below.
+// `incoming.expenseCategory` is always already-normalized by the time this
+// runs (the caller validates/normalizes it up front and never reaches this
+// function otherwise) -- normalizeCategory() is still applied to it here
+// too so this helper is safe to call with a raw value from any future
+// caller. A stored value that itself fails to normalize (only possible for
+// pre-existing malformed legacy data) never matches ANY incoming value,
+// rather than two malformed values comparing equal as `null === null`.
 const isSameExpensePayload = (stored, incoming) => {
   if (!stored) return false;
 
   const nameMatches =
     String(stored.expenseName ?? '').trim() === String(incoming.expenseName ?? '').trim();
-  const categoryMatches =
-    String(stored.expenseCategory ?? '').trim() === String(incoming.expenseCategory ?? '').trim();
+  const storedCategory = normalizeCategory(stored.expenseCategory);
+  const incomingCategory = normalizeCategory(incoming.expenseCategory);
+  const categoryMatches = storedCategory !== null && storedCategory === incomingCategory;
   const amountMatches = Number(stored.expenseAmount) === Number(incoming.expenseAmount);
 
   const storedDate = new Date(stored.expenseDate);
@@ -75,19 +94,33 @@ const buildReplayResponse = async (userId, existingExpense) => {
 // Server-derived source of truth for whether a genuine ML correction occurred.
 // The client-supplied `wasMlCorrected` flag is no longer trusted directly —
 // it is recomputed here from the actual predicted vs. saved category.
+//
+// Category Normalization -- both sides now go through the SAME
+// normalizeCategory() the rest of this controller uses, not the old
+// lowercase+trim-only comparison. This closes a real false-positive: the
+// ML model always predicts an already-canonical label (e.g. "Health"), but
+// a user is free to type an alias of it ("Medical", "medical", "  Health ")
+// -- the old comparison treated that as a correction (predicted !== actual
+// after only lowercasing/trimming, since "medical" !== "health"); alias-
+// aware normalization now correctly recognizes both sides as the SAME
+// canonical category, so this is never misreported as a correction. A
+// genuinely different category (normalizes to a different value) is still
+// correctly reported as `corrected: true`.
+// `normalizedExpenseCategory` is the ALREADY-normalized, already-validated
+// category this request is being saved with (computed once, up front, by
+// the caller) -- never re-derived here from a raw value.
 // Returns { hasPrediction, corrected }:
 //   hasPrediction=false  -> no valid ML prediction was involved at all
 //   hasPrediction=true, corrected=false -> prediction accepted as-is
 //   hasPrediction=true, corrected=true  -> user's saved category differs from the prediction
-const deriveMlCorrection = (mlPredictedCategory, expenseCategory) => {
-  const predicted = normalizeForComparison(mlPredictedCategory);
+const deriveMlCorrection = (mlPredictedCategory, normalizedExpenseCategory) => {
+  const predicted = normalizeCategory(mlPredictedCategory);
 
   if (!predicted) {
     return { hasPrediction: false, corrected: false };
   }
 
-  const actual = normalizeForComparison(expenseCategory);
-  return { hasPrediction: true, corrected: predicted !== actual };
+  return { hasPrediction: true, corrected: predicted !== normalizedExpenseCategory };
 };
 
 const addExpense = async (req, res) => {
@@ -155,12 +188,26 @@ const addExpense = async (req, res) => {
     }
     ownerUserId = user._id;
 
+    // Category Normalization -- validated and canonicalized BEFORE the
+    // idempotency check, before any reservation, and before any write.
+    // `normalizedCategory` (never the raw `expenseCategory`) is what gets
+    // compared for idempotency, persisted, sent to ML description
+    // generation, and used for ML-correction detection below. An invalid
+    // category (non-string, empty, or whitespace-only after trimming --
+    // see categoryNormalization.js's own doc comment) is rejected with a
+    // controlled 400, never a Mongoose validation error surfacing as a 500,
+    // and never a silent default category.
+    const normalizedCategory = normalizeCategory(expenseCategory);
+    if (normalizedCategory === null) {
+      return res.status(400).json(INVALID_CATEGORY_RESPONSE);
+    }
+
     // Idempotency check -- BEFORE any write. Ownership-scoped: the lookup
     // is always { userId: req.userId, id }, so another user's request
     // identifier can never be replayed or inspected here.
     const existingById = await ExpenseModel.findOne({ userId: user._id, id }).lean();
     if (existingById) {
-      if (isSameExpensePayload(existingById, { expenseName, expenseCategory, expenseAmount, expenseDate })) {
+      if (isSameExpensePayload(existingById, { expenseName, expenseCategory: normalizedCategory, expenseAmount, expenseDate })) {
         const replayResponse = await buildReplayResponse(user._id, existingById);
         return res.status(201).json(replayResponse);
       }
@@ -176,7 +223,7 @@ const addExpense = async (req, res) => {
               `${process.env.ML_ROUTE}/generate-description`,
               {
                   expenseName,
-                  expenseCategory,
+                  expenseCategory: normalizedCategory,
                   expenseAmount
               },
               { timeout: 5000 }
@@ -194,7 +241,7 @@ const addExpense = async (req, res) => {
         userId: user._id,
         id,
         expenseName,
-        expenseCategory,
+        expenseCategory: normalizedCategory,
         expenseAmount,
         expenseDate,
         expenseDescription: finalDescription,
@@ -207,16 +254,20 @@ const addExpense = async (req, res) => {
     // `corrected` and `status` are derived server-side from the actual
     // predicted vs. saved category — the client-supplied `wasMlCorrected`
     // flag is not trusted for this decision (see deriveMlCorrection above).
+    // Category Normalization -- `normalizedCategory` (never the raw
+    // `expenseCategory`) is what deriveMlCorrection compares against, so an
+    // alias-equivalent entry (predicted "Health", user typed "Medical") is
+    // never misreported as a correction.
     const { hasPrediction, corrected: mlCorrected } = deriveMlCorrection(
       mlPredictedCategory,
-      expenseCategory
+      normalizedCategory
     );
 
     if (hasPrediction && mlConfidence !== undefined) {
         const mlFeedback = new MlFeedbackModel({
             expenseName,
             predictedCategory: mlPredictedCategory,
-            actualCategory: expenseCategory,
+            actualCategory: normalizedCategory,
             confidence: mlConfidence,
             // Backward compatibility: the current cron and export_feedback.py
             // still read this boolean directly (Phase A keeps it in sync with
@@ -308,7 +359,7 @@ const addExpense = async (req, res) => {
         }).catch(() => {});
 
         const winner = await ExpenseModel.findOne({ userId: user._id, id }).lean();
-        if (winner && isSameExpensePayload(winner, { expenseName, expenseCategory, expenseAmount, expenseDate })) {
+        if (winner && isSameExpensePayload(winner, { expenseName, expenseCategory: normalizedCategory, expenseAmount, expenseDate })) {
           const replayResponse = await buildReplayResponse(user._id, winner);
           return res.status(201).json(replayResponse);
         }

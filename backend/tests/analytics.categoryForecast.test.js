@@ -68,7 +68,13 @@ describe("forecastInputAggregator -- category series (Prediction Layer V1)", () 
     expect(food.monthlySeries.map((point) => point.totalAmount)).toEqual([30, 20, 10]);
   });
 
-  it("skips malformed records and blank/non-string categories without throwing", () => {
+  // Category Normalization -- updated for the deliberate behaviour change
+  // in buildCompletedMonthCategorySeries: a blank/non-string category is no
+  // longer SKIPPED, it groups under the explicit `Uncategorized` marker, so
+  // its amount is still counted somewhere (it already counted toward the
+  // overall completed-month total this breakdown reconciles against). The
+  // date/amount skip rules below are unchanged and still drop those records.
+  it("groups blank/non-string categories under Uncategorized and still skips malformed records without throwing", () => {
     const pool = [
       expense(1, 100, "Food"),
       null,
@@ -81,7 +87,14 @@ describe("forecastInputAggregator -- category series (Prediction Layer V1)", () 
 
     expect(() => buildCompletedMonthCategorySeries(pool, MONTH_START)).not.toThrow();
     const series = buildCompletedMonthCategorySeries(pool, MONTH_START);
-    expect(series.map((entry) => entry.category)).toEqual(["Food"]);
+    expect(series.map((entry) => entry.category)).toEqual(["Food", "Uncategorized"]);
+
+    // Only the two records with a valid date AND amount but an unusable
+    // category land in Uncategorized (10 + 10); the invalid-date and
+    // uncoercible-amount records are still dropped entirely.
+    const uncategorized = series.find((entry) => entry.category === "Uncategorized");
+    const uncategorizedTotal = uncategorized.monthlySeries.reduce((sum, p) => sum + p.totalAmount, 0);
+    expect(uncategorizedTotal).toBe(20);
   });
 
   it("counts distinct active days, not the calendar span", () => {

@@ -1,7 +1,23 @@
-// To group expenses by category
+const { normalizeCategoryForGrouping } = require('../../utils/categoryNormalization');
+
+// To group expenses by category.
+//
+// Category Normalization -- groups by the NORMALIZED category, not the
+// raw stored string. This is what makes "Food", "food", and "FOOD" (or an
+// approved alias pair like "Medical"/"Health") collapse into ONE bucket
+// instead of silently fragmenting totals across differently-cased/aliased
+// duplicates -- the exact defect confirmed in the prior discovery report.
+// A missing or invalid stored category (empty, null, non-string -- only
+// possible for legacy data written before write-time validation existed)
+// groups under the explicit "Uncategorized" bucket, never silently folded
+// into "Others" (a real, distinct, user-choosable category whose total
+// would otherwise be misrepresented). Every OTHER unknown-but-valid
+// category (a genuinely new, non-aliased name) still gets its own,
+// separate bucket -- normalizeCategoryForGrouping() never merges two
+// different category names together, only variants of the same one.
 const groupByCategoryHelper = (expenses) => {
     return expenses.reduce((groups, exp) => {
-            const cat = exp.expenseCategory || 'Others';
+            const cat = normalizeCategoryForGrouping(exp.expenseCategory);
             if(!groups[cat]) groups[cat] = [];
             groups[cat].push(exp);
             return groups;

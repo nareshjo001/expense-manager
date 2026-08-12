@@ -13,6 +13,30 @@ import { queryKeys } from '../../query/queryKeys';
 import { useAddExpenseMutation } from '../../hooks/mutations/useAddExpenseMutation';
 import { useUpdateExpenseMutation } from '../../hooks/mutations/useUpdateExpenseMutation';
 
+// Category Normalization -- moved to module scope (react-hooks/exhaustive-
+// deps remediation). sanitizeText/normalizeCategory are purely mechanical:
+// each is a function of its own argument only, with no reference to
+// component state, props, refs, or any other hook -- there is nothing here
+// that could ever go stale between renders, so giving them a stable
+// module-level identity (rather than useCallback, which would still need
+// its own -- trivially empty -- dependency array) is both simpler and
+// correctly satisfies the edit-loading effect's exhaustive-deps requirement
+// without suppressing the lint rule. Behavior is byte-identical to the
+// previous in-component definitions: same trim/whitespace-collapse
+// (sanitizeText), same lowercase-then-Title-Case display casing
+// (normalizeCategory) used identically at submit time and edit-load time.
+const sanitizeText = (text = '') => {
+    return text
+        .trim()
+        .replace(/\s+/g, ' ');
+};
+
+const normalizeCategory = (category = '') => {
+    return sanitizeText(category)
+        .toLowerCase()
+        .replace(/\b\w/g, c => c.toUpperCase());
+};
+
 // Expense creation/editing form with debounced ML category prediction and bill-scan/edit-load auto-fill.
 const AddExpense = ({ isEdit, setIsEdit }) => {
     const [expenseName, setName] = useState('');
@@ -55,18 +79,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
     const addExpenseMutation = useAddExpenseMutation();
     const updateExpenseMutation = useUpdateExpenseMutation();
-
-    const sanitizeText = (text = '') => {
-        return text
-            .trim()
-            .replace(/\s+/g, ' ');
-    };
-
-    const normalizeCategory = (category = '') => {
-        return sanitizeText(category)
-            .toLowerCase()
-            .replace(/\b\w/g, c => c.toUpperCase());
-    };
 
     // Debounced ML category prediction: skips programmatic name changes and short text, and cancels an in-flight prediction when superseded.
     useEffect(() => {
@@ -159,7 +171,18 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     // Marks this name as programmatic so prediction doesn't overwrite the stored category being loaded.
                     programmaticNameRef.current = exp.expenseName || '';
                     setName(exp.expenseName || '');
-                    setCategory(exp.expenseCategory || '');
+                    // Category Normalization -- a historical expense's stored
+                    // category may predate/precede the write-time normalization
+                    // now enforced backend-side (or, for a legacy document,
+                    // simply have never been normalized). Applying the SAME
+                    // mechanical cleanup/display casing used on submit here
+                    // means a differently-cased/whitespace-padded value is
+                    // shown normalized in the edit form immediately, rather
+                    // than only being fixed the next time this expense happens
+                    // to be resubmitted. Purely a display/UX aid, exactly like
+                    // normalizeCategory's existing submit-time use -- the
+                    // backend remains the authoritative validator/normalizer.
+                    setCategory(exp.expenseCategory ? normalizeCategory(exp.expenseCategory) : '');
                     setAmount(exp.expenseAmount || '');
                     setDate(exp.expenseDate?.split('T')[0] || '');
                     setDescription(exp.expenseDescription || '');

@@ -1,5 +1,6 @@
 const { RecurringExpenseModel } = require('../../models/RecurringExpense');
 const { ExpenseModel } = require('../../config/Schemas');
+const { normalizeCategory } = require('../../utils/categoryNormalization');
 
 const recurring = async (req, res) => {
 
@@ -34,12 +35,25 @@ const recurring = async (req, res) => {
             0, 0, 0
          ));
 
+         // Category Normalization -- `expense.expenseCategory` is copied
+         // from an already-persisted Expense document. On a fresh write
+         // (post-normalization) it is already canonical; this normalizes
+         // it again defensively so a pre-existing LEGACY expense (written
+         // before this change, potentially inconsistent casing/whitespace)
+         // still produces a canonical RecurringExpense definition. Falls
+         // back to the raw stored value only in the practically
+         // unreachable case where it fails to normalize at all (the source
+         // field is itself `required: true`, so this is not expected to
+         // ever actually happen) -- never blocks marking an expense
+         // recurring over a data-quality issue in an unrelated field.
+         const recurringCategory = normalizeCategory(expense.expenseCategory) || expense.expenseCategory;
+
          // Create a recurring expense entry
          await RecurringExpenseModel.create({
             userId: req.userId,
             expenseId,
             expenseName: expense.expenseName,
-            expenseCategory: expense.expenseCategory,
+            expenseCategory: recurringCategory,
             expenseAmount: expense.expenseAmount,
             lastLoggedDate: new Date(expense.expenseDate),
             nextDueDate

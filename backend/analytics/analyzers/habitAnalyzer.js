@@ -1,3 +1,5 @@
+const { normalizeCategory } = require('../../utils/categoryNormalization');
+
 const toSafeNumber = (value, fallback = 0) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -155,20 +157,43 @@ const calculateMicroSpending = (expenses = [], config = {}) => {
   };
 };
  
+// Category Normalization -- both sides of the impulse-category match are
+// normalized through the SAME shared normalizeCategory() before
+// comparing: `config.categories` (the business rule's own configured
+// list, e.g. habitRules.js's ["Shopping", "Entertainment", "Food",
+// "Personal Care"]) and every expense's own stored `expenseCategory`.
+// Confirmed problem (discovery report): the old `new Set(config.categories)`
+// + `.has(e?.expenseCategory)` was an exact, case-sensitive string match --
+// a stored category of "shopping" (any casing/whitespace variant other
+// than the literal configured string) silently never matched, understating
+// impulse-spending totals with no error or signal. This does NOT change
+// WHICH categories the business rule considers impulsive -- only makes the
+// comparison itself normalization-aware. An expense whose own category
+// fails to normalize (missing/invalid legacy data) simply never matches
+// (normalizeCategory returns `null`, which is filtered out of the
+// configured set below and can therefore never equal any expense's
+// normalized value either) -- fails the match safely, never throws.
 const calculateImpulseSpending = (expenses = [], config = {}) => {
   const list = Array.isArray(expenses) ? expenses : [];
-  const impulseCategories = new Set(config.categories ?? []);
- 
-  const impulseExpenses = list.filter((e) => impulseCategories.has(e?.expenseCategory));
- 
+  const impulseCategories = new Set(
+    (config.categories ?? []).map((c) => normalizeCategory(c)).filter(Boolean)
+  );
+
+  const impulseExpenses = list.filter((e) => impulseCategories.has(normalizeCategory(e?.expenseCategory)));
+
   const totalSpent = round2(list.reduce((sum, e) => sum + toSafeNumber(e?.expenseAmount), 0));
   const impulseAmount = round2(
     impulseExpenses.reduce((sum, e) => sum + toSafeNumber(e?.expenseAmount), 0)
   );
- 
+
   const categoryTotals = {};
   for (const expense of impulseExpenses) {
-    const category = expense?.expenseCategory;
+    // Every item in impulseExpenses already matched a normalized category
+    // above, so normalizeCategory(...) here is guaranteed non-null --
+    // grouping by the normalized value (not the raw stored string) keeps
+    // this breakdown consistent with the same collapsing behavior
+    // groupByCategoryHelper applies elsewhere.
+    const category = normalizeCategory(expense?.expenseCategory);
     categoryTotals[category] = round2(
       (categoryTotals[category] || 0) + toSafeNumber(expense?.expenseAmount)
     );
@@ -234,9 +259,19 @@ const calculateSubscriptionPattern = (expenses = []) => {
   };
 };
  
+// Category Normalization -- compares the NORMALIZED category against the
+// canonical literal "Shopping" (itself already a stable, normalized
+// value), not the raw stored string. Confirmed problem (discovery
+// report): the old `e?.expenseCategory === "Shopping"` exact match
+// silently reported zero shopping activity for any historical or
+// differently-cased/whitespace-padded variant ("shopping", "Shopping ",
+// etc.). Does not change WHICH category name counts as shopping -- only
+// makes the comparison itself normalization-aware. A missing/invalid
+// stored category normalizes to `null`, which can never equal "Shopping"
+// -- fails the match safely, never throws.
 const calculateShoppingFrequency = (expenses = []) => {
   const list = Array.isArray(expenses) ? expenses : [];
-  const shoppingExpenses = list.filter((e) => e?.expenseCategory === "Shopping");
+  const shoppingExpenses = list.filter((e) => normalizeCategory(e?.expenseCategory) === "Shopping");
  
   const shoppingDates = [
     ...new Set(

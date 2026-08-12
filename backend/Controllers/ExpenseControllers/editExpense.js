@@ -2,6 +2,16 @@ const mongoose = require('mongoose');
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
+const { normalizeCategory } = require('../../utils/categoryNormalization');
+
+// Category Normalization -- controlled 400 for an explicitly-supplied but
+// invalid category, matching addexpense.js's own convention. Returned
+// before reserve() and before any write is attempted.
+const INVALID_CATEGORY_RESPONSE = {
+    success: false,
+    message: 'Expense category must be a valid, non-empty value.',
+    errorCode: 'INVALID_CATEGORY',
+};
 
 const editexpense = async (req, res) => {
   // Phase C.2 -- declared outside the try block so the catch below can
@@ -70,6 +80,24 @@ const editexpense = async (req, res) => {
             if (Object.prototype.hasOwnProperty.call(req.body, field)) {
                 updates[field] = req.body[field];
             }
+        }
+
+        // Category Normalization -- ONLY when the client actually supplied
+        // expenseCategory in this edit (category is never made mandatory
+        // for an edit that doesn't touch it -- an edit changing only the
+        // amount, for instance, leaves `updates` without this key at all
+        // and this block is skipped entirely). An explicitly-supplied but
+        // invalid category (non-string, empty, whitespace-only) is
+        // rejected with a controlled 400 BEFORE reserve() or any write --
+        // never a silent default, never a Mongoose validation error
+        // surfacing as a 500. The canonical/cleaned value replaces the raw
+        // one in `updates` so the write below persists it directly.
+        if (Object.prototype.hasOwnProperty.call(updates, 'expenseCategory')) {
+            const normalizedCategory = normalizeCategory(updates.expenseCategory);
+            if (normalizedCategory === null) {
+                return res.status(400).json(INVALID_CATEGORY_RESPONSE);
+            }
+            updates.expenseCategory = normalizedCategory;
         }
 
         // Recalculate only when the amount or date changed.

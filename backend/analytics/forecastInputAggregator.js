@@ -18,6 +18,7 @@
 "use strict";
 
 const { forecast: RULES } = require("./analyzers/scores/forecastRules");
+const { normalizeCategoryForGrouping } = require("../utils/categoryNormalization");
 
 const toFiniteAmount = (value) => {
   // `Number(Object.create(null))` (and similar valueOf/toString-less
@@ -134,9 +135,39 @@ function computeCurrentPartialMonthTotal(currentMonthExpenses) {
  *
  * Categories are discovered ENTIRELY from the data: there is no fixed list,
  * no fixed count, and no hard-coded category name anywhere in this
- * function. A record whose category is missing/blank/non-string is skipped
- * rather than being bucketed under a guessed default, so the breakdown
- * never invents a category the user does not actually have.
+ * function. The one non-data-derived string that can appear is the shared
+ * `Uncategorized` marker (see below), which is an explicit signal that the
+ * SOURCE data was invalid -- never a guess at what the user meant.
+ *
+ * Category Normalization -- the grouping key is the value produced by the
+ * shared backend normalizer (utils/categoryNormalization.js), not the raw
+ * stored string. Confirmed problem (completion-verification review): this
+ * function previously grouped by a trim-only value, so historical variants
+ * of the SAME category ("Food"/"food"/"FOOD", or the approved alias pair
+ * "Medical"/"Health") each became their own separate forecast category.
+ * That silently fragmented a category's history across two or more
+ * entries, and because each fragment then got its own trend fit and its
+ * own share of the reconciled total, it distorted the per-category
+ * breakdown rather than merely mislabelling it. Normalizing here merges
+ * case, repeated-whitespace, and approved alias variants into one entry,
+ * while a genuinely new/unknown category is preserved as its own distinct
+ * (only mechanically cleaned) category -- never folded into an existing
+ * bucket.
+ *
+ * BEHAVIOUR CHANGE, deliberate and required: a record whose category is
+ * missing/blank/non-string is NO LONGER skipped. It now groups under the
+ * explicit `Uncategorized` marker (never silently under "Others", a real
+ * category a user can genuinely choose). Skipping it was a real
+ * conservation defect: such a record's amount still counted toward the
+ * overall completed-month total that this breakdown reconciles against,
+ * but belonged to no category at all, so the category amounts could not
+ * sum to the published total. Only the CATEGORY skip is removed -- records
+ * with an invalid date or uncoercible amount are still skipped exactly as
+ * before, by the unchanged guards below.
+ *
+ * This changes no forecast formula, period, window, ordering rule, output
+ * shape, or caching behaviour -- only which bucket a given amount is
+ * counted in.
  *
  * Same window, same exclusions and same skip-don't-throw policy as
  * buildCompletedMonthSeries(): complete calendar months strictly before
@@ -191,15 +222,19 @@ function buildCompletedMonthCategorySeries(expensePool, monthStart) {
   for (const record of source) {
     if (!record || typeof record !== "object") continue;
 
-    const category = typeof record.expenseCategory === "string" ? record.expenseCategory.trim() : "";
-    if (category === "") continue;
-
     const date = parseDate(record.expenseDate);
     if (!date) continue;
     if (date < earliestAllowed || date >= monthStart) continue;
 
     const amount = toFiniteAmount(record.expenseAmount);
     if (amount === null) continue;
+
+    // Computed only for records that survive the date/amount guards above,
+    // so a dropped record is never normalized needlessly. Never returns
+    // null/empty (see normalizeCategoryForGrouping), so every record whose
+    // amount reaches the overall completed-month total also reaches exactly
+    // one category bucket here.
+    const category = normalizeCategoryForGrouping(record.expenseCategory);
 
     const key = monthKeyOf(date);
     if (!byCategory.has(category)) byCategory.set(category, new Map());

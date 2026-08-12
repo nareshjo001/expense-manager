@@ -9,6 +9,7 @@ const { sendPush } = require('../Services/push.service');
 const { recalculateBudget } = require('../Services/BudgetServices/budget.service');
 const { clearUserExpenseCache } = require('../utils/expenseCache');
 const { refreshReport } = require('../Services/reportService');
+const { normalizeCategory, UNCATEGORIZED } = require('../utils/categoryNormalization');
 
 cron.schedule("30 20 * * *", async () => {
 
@@ -56,12 +57,26 @@ cron.schedule("30 20 * * *", async () => {
 
          if (!updated) continue; // already processed
 
+         // Category Normalization -- this path constructs a brand-new
+         // ExpenseModel document directly, entirely bypassing
+         // Controllers/ExpenseControllers/addexpense.js and its
+         // normalization above. Normalized here defensively/independently
+         // so an auto-logged recurring expense is canonical even if the
+         // RecurringExpense definition itself predates this change or was
+         // otherwise never normalized. Falls back to the explicit
+         // "Uncategorized" marker (never silently to "Others", a real,
+         // distinct, user-choosable category) in the practically
+         // unreachable case where the stored value fails to normalize at
+         // all -- this auto-logger must never throw and skip logging a due
+         // recurring expense over a category data-quality issue.
+         const normalizedRecurringCategory = normalizeCategory(recurring.expenseCategory) || UNCATEGORIZED;
+
          // Log the recurring expense.
          const expense = await ExpenseModel.create({
             userId: recurring.userId,
             id: crypto.randomUUID(),
             expenseName: recurring.expenseName,
-            expenseCategory: recurring.expenseCategory,
+            expenseCategory: normalizedRecurringCategory,
             expenseAmount: recurring.expenseAmount,
             expenseDate: new Date(),
             expenseDescription: "Auto logged recurring expense",
