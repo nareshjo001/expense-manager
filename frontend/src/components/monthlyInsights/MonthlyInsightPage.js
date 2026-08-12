@@ -3,6 +3,7 @@ import BudgetIntelligence from "./BudgetIntelligence";
 import SpendingInsights from "./SpendingInsights";
 import SpendingForecast from "./SpendingForecast";
 import AnomalyInsights from "./AnomalyInsights";
+import RiskInsights from "./RiskInsights";
 import OverallInsight from "./OverallInsight";
 import { Spinner } from "../imports/Imports";
 import { useReport } from "../../hooks/useReport";
@@ -28,6 +29,11 @@ export default function MonthlyInsightPage () {
           report query every section above already uses -- no extra fetch,
           no second useReport() call. */}
       <AnomalyInsights report={report} />
+      {/* Risk Intelligence V1: reads report.risk from the SAME report query
+          every section above already uses -- no extra fetch, no second
+          useReport() call. Placed after the forecast/anomaly detail panels
+          it summarizes. */}
+      <RiskInsights report={report} />
       <OverallInsight report={report} />
     </div>
   )
