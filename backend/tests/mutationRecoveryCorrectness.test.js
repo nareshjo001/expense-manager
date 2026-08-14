@@ -53,8 +53,8 @@ function makeFakePendingSyncModel() {
       lastError: null,
       lastAttemptAt: null,
       reservedBudgetMonths: [],
-      reservedReport: { token: null, reservedAt: null },
-      reservedUserWide: { token: null, reservedAt: null },
+      reservedReports: [],
+      reservedUserWideReservations: [],
     };
   }
 
@@ -140,9 +140,6 @@ function makeFakePendingSyncModel() {
       lean: async () => {
         const doc = store.get(String(filter.user));
         if (!doc) return null;
-        if (filter["reservedReport.token"] !== undefined) {
-          if (!doc.reservedReport || doc.reservedReport.token !== filter["reservedReport.token"]) return null;
-        }
         if (filter.revision !== undefined && doc.revision !== filter.revision) return null;
         return clone(doc);
       },
@@ -174,11 +171,6 @@ function makeFakePendingSyncModel() {
       const userId = String(filter.user);
       const doc = store.get(userId);
       if (!doc) return { matchedCount: 0 };
-      if (filter["reservedReport.token"] !== undefined) {
-        if (!doc.reservedReport || doc.reservedReport.token !== filter["reservedReport.token"]) {
-          return { matchedCount: 0 };
-        }
-      }
       const updated = applyUpdate({ ...doc }, update);
       store.set(userId, updated);
       return { matchedCount: 1 };
@@ -247,7 +239,7 @@ function makeFakeBudgetModel() {
       }),
     })),
     // Phase C.3 -- backs syncRecoveryService.js's repairIfPending() Tier-2
-    // reservedUserWide pass, which enumerates EVERY existing BudgetModel
+    // reservedUserWideReservations pass, which enumerates EVERY existing BudgetModel
     // month for a user (it deliberately does not know which single month
     // the owning edit/delete actually affected) via
     // `BudgetModel.find({ userId }).select("month").lean()`.
@@ -572,7 +564,7 @@ describe("Required test 6/7/8: an older synchronization (A) cannot clobber a new
     // trace in the marker either.
     const finalMarker = await syncRecoveryService.getPendingSync(USER_ID);
     expect(finalMarker.reportPending).toBe(false);
-    expect(finalMarker.reservedReport).toEqual({ token: null, reservedAt: null });
+    expect(finalMarker.reservedReports).toEqual([]);
   });
 });
 
@@ -918,7 +910,7 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
   // Both tests below model the WORST case explicitly: the primary write
   // commits, and the process terminates before ANY post-write call
   // whatsoever -- confirm() is never invoked, synchronizeAfterMutation() is
-  // never invoked. The single broad reservedUserWide reservation taken
+  // never invoked. The single broad reservedUserWideReservations entry taken
   // BEFORE the write (see reserve()'s doc comment) is the ONLY durable
   // evidence that survives. A later read (repairIfPending, once the
   // reservation is stale) must fully reconstruct every affected month's
@@ -959,7 +951,8 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     const beforeCrash = await syncRecoveryService.getPendingSync(USER_ID);
     expect(beforeCrash.pendingBudgetMonths).toHaveLength(0);
     expect(beforeCrash.reportPending).toBe(false);
-    expect(beforeCrash.reservedUserWide.token).toBe(userWideReservation.token);
+    expect(beforeCrash.reservedUserWideReservations).toHaveLength(1);
+    expect(beforeCrash.reservedUserWideReservations[0].token).toBe(userWideReservation.token);
 
     // A later read occurs once the reservation is stale. CURRENT
     // authoritative data (post-delete): January now totals 0 (the expense
@@ -969,7 +962,10 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     fakeExpenseModel.queueAggregate(async () => []); // January
     fakeExpenseModel.queueAggregate(async () => [{ _id: null, total: 500 }]); // February
 
-    const farFuture = beforeCrash.reservedUserWide.reservedAt.getTime() + syncRecoveryService.RESERVATION_STALE_MS + 1000;
+    const farFuture =
+      beforeCrash.reservedUserWideReservations[0].reservedAt.getTime() +
+      syncRecoveryService.RESERVATION_STALE_MS +
+      1000;
     const repairResult = await syncRecoveryService.repairIfPending(USER_ID, { now: farFuture });
 
     expect(repairResult.attempted).toBe(true);
@@ -981,7 +977,7 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     expect(fakeBudgetModel.get(USER_ID, JAN_MONTH_KEY).spent).toBe(0);
     expect(fakeBudgetModel.get(USER_ID, FEB_MONTH_KEY).spent).toBe(500);
 
-    // Report state: the reservedReport reservation (also taken before the
+    // Report state: the reservedReports reservation (also taken before the
     // write, also never confirmed) is independently repaired by its own
     // Tier-2 pass in the SAME repairIfPending call.
     const report = await reportService.getReport(USER_ID);
@@ -996,8 +992,10 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     // it correctly remains as durable evidence that this delete's own
     // confirm() never actually ran, even though the data is now correct.
     const after = await syncRecoveryService.getPendingSync(USER_ID);
-    expect(after.reservedUserWide.token).toBe(userWideReservation.token);
-    expect(after.reservedReport.token).toBe(reportReservation.token);
+    expect(after.reservedUserWideReservations).toHaveLength(1);
+    expect(after.reservedUserWideReservations[0].token).toBe(userWideReservation.token);
+    expect(after.reservedReports).toHaveLength(1);
+    expect(after.reservedReports[0].token).toBe(reportReservation.token);
   });
 
   it("EDIT: pre-reads January, a competing edit moves the expense to February first, THEN this edit's own write moves it to March, the process terminates before ANY post-write call -- a later read fully reconstructs January, February, AND March", async () => {
@@ -1023,7 +1021,8 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     // synchronizeAfterMutation() is ever called for this edit.
     const beforeCrash = await syncRecoveryService.getPendingSync(USER_ID);
     expect(beforeCrash.pendingBudgetMonths).toHaveLength(0);
-    expect(beforeCrash.reservedUserWide.token).toBe(userWideReservation.token);
+    expect(beforeCrash.reservedUserWideReservations).toHaveLength(1);
+    expect(beforeCrash.reservedUserWideReservations[0].token).toBe(userWideReservation.token);
 
     // A later read occurs once the reservation is stale. CURRENT
     // authoritative data: January (never actually touched by this edit at
@@ -1034,15 +1033,18 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     fakeExpenseModel.queueAggregate(async () => []); // February
     fakeExpenseModel.queueAggregate(async () => [{ _id: null, total: 500 }]); // March
 
-    const farFuture = beforeCrash.reservedUserWide.reservedAt.getTime() + syncRecoveryService.RESERVATION_STALE_MS + 1000;
+    const farFuture =
+      beforeCrash.reservedUserWideReservations[0].reservedAt.getTime() +
+      syncRecoveryService.RESERVATION_STALE_MS +
+      1000;
     const repairResult = await syncRecoveryService.repairIfPending(USER_ID, { now: farFuture });
 
     expect(repairResult.attempted).toBe(true);
     expect(repairResult.budgetRepairFailed).toBe(false);
-    // The reservedUserWide repair pass reconstructs EVERY existing
-    // BudgetModel month for this user -- not just the ones this specific
-    // edit happened to touch -- so all three end up correct regardless of
-    // which one(s) this particular write actually affected.
+    // The reservedUserWideReservations repair pass reconstructs EVERY
+    // existing BudgetModel month for this user -- not just the ones this
+    // specific edit happened to touch -- so all three end up correct
+    // regardless of which one(s) this particular write actually affected.
     expect(fakeBudgetModel.get(USER_ID, JAN_MONTH_KEY).spent).toBe(0);
     expect(fakeBudgetModel.get(USER_ID, FEB_MONTH_KEY).spent).toBe(0);
     expect(fakeBudgetModel.get(USER_ID, MAR_MONTH_KEY).spent).toBe(500);
@@ -1050,7 +1052,8 @@ describe("Phase C.3 requirement #1: the post-write corrective-reservation gap is
     // The reservation survives, untouched, as durable evidence that this
     // edit's own confirm() never ran.
     const after = await syncRecoveryService.getPendingSync(USER_ID);
-    expect(after.reservedUserWide.token).toBe(userWideReservation.token);
+    expect(after.reservedUserWideReservations).toHaveLength(1);
+    expect(after.reservedUserWideReservations[0].token).toBe(userWideReservation.token);
   });
 });
 
@@ -1062,7 +1065,7 @@ describe("Phase C.4 requirement #4: repair-fence uniqueness across two concurren
     // value it allocated itself. Two overlapping repairIfPending() calls
     // for the SAME stale reservation (e.g. two concurrent GET /report or
     // GET /budgets requests, both finding the identical stale
-    // reservedUserWide token, with no intervening confirm()/markPending()
+    // reservedUserWideReservations token, with no intervening confirm()/markPending()
     // call to bump the shared counter in between) would therefore both
     // fence their writes to the IDENTICAL revision value. recalculateBudget's
     // CAS filter (`syncRevision <= fenceRevision`) allows an EQUAL
@@ -1083,7 +1086,7 @@ describe("Phase C.4 requirement #4: repair-fence uniqueness across two concurren
     // confirm() never ran (identical setup to the crash-gap tests above).
     // Two independent, concurrent reads each trigger their OWN
     // repairIfPending() call for this SAME stale reservation -- repair
-    // never clears reservedUserWide itself (only the owning mutation's own
+    // never clears reservedUserWideReservations itself (only the owning mutation's own
     // confirm()/abandon() does), so BOTH calls find and act on it.
     const { userWideReservation } = await syncRecoveryService.reserve({
       userId: USER_ID,
@@ -1146,12 +1149,13 @@ describe("Phase C.4 requirement #4: repair-fence uniqueness across two concurren
     // defensive Tier-2 pass -- only the owning mutation's own confirm()/
     // abandon() ever retires it.
     const after = await syncRecoveryService.getPendingSync(USER_ID);
-    expect(after.reservedUserWide.token).toBe(userWideReservation.token);
+    expect(after.reservedUserWideReservations).toHaveLength(1);
+    expect(after.reservedUserWideReservations[0].token).toBe(userWideReservation.token);
   });
 
   it("Tier-1 pass: an older repair attempt's own ticket allocation is strictly lower than a concurrent repair attempt's, so its stale snapshot cannot overwrite the newer attempt's already-persisted result either", async () => {
     // Same corruption, same fix, but exercised through the Tier-1
-    // (pendingBudgetMonths) pass instead of Tier-2's reservedUserWide pass
+    // (pendingBudgetMonths) pass instead of Tier-2's reservedUserWideReservations pass
     // -- confirming allocateRepairRevision() closes the identical gap
     // regardless of which pass triggers it.
     const { syncRecoveryService, fakeBudgetModel, fakeExpenseModel, fakePendingSync } = loadReal();
@@ -1168,8 +1172,8 @@ describe("Phase C.4 requirement #4: repair-fence uniqueness across two concurren
       lastError: null,
       lastAttemptAt: null,
       reservedBudgetMonths: [],
-      reservedReport: { token: null, reservedAt: null },
-      reservedUserWide: { token: null, reservedAt: null },
+      reservedReports: [],
+      reservedUserWideReservations: [],
     });
 
     const aGate = deferred();

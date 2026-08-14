@@ -4,6 +4,10 @@ const axios = require("axios");
 const router = express.Router();
 
 const verifyToken = require("../Middlewares/Auth");
+// Remediation Workstream C -- shared ML_ROUTE validation + operations-token
+// header attachment (ml-service's /predict-category now requires the same
+// shared-secret token /ml-status has always required).
+const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
 
 // Bounded timeout for the ML service call -- previously unset, meaning a
 // hung ML service could block this request indefinitely (found during the
@@ -27,12 +31,13 @@ router.post("/predict-category", verifyToken, async (req, res) => {
         }
 
         const response = await axios.post(
-            `${process.env.ML_ROUTE}/predict-category`,
+            buildMlServiceUrl("/predict-category"),
             {
                 expenseName
             },
             {
-                timeout: PREDICT_TIMEOUT_MS
+                timeout: PREDICT_TIMEOUT_MS,
+                headers: mlOperationsHeaders()
             }
         );
 

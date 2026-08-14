@@ -212,8 +212,8 @@ function makeFakePendingSyncModel() {
       lastError: null,
       lastAttemptAt: null,
       reservedBudgetMonths: [],
-      reservedReport: { token: null, reservedAt: null },
-      reservedUserWide: { token: null, reservedAt: null },
+      reservedReports: [],
+      reservedUserWideReservations: [],
     };
   }
 
@@ -495,9 +495,10 @@ describe("Phase C.4 requirement #1 -- ambiguous write outcomes: ADD", () => {
     // 4. The reservation survives -- not abandoned.
     const pendingBefore = await syncRecoveryService.getPendingSync(USER_ID);
     // add uses per-month budgetTokens, not the userWide reservation.
-    expect(pendingBefore.reservedUserWide).toEqual({ token: null, reservedAt: null });
+    expect(pendingBefore.reservedUserWideReservations).toHaveLength(0);
     expect(pendingBefore.reservedBudgetMonths).toHaveLength(1);
-    expect(pendingBefore.reservedReport.token).toBeTruthy();
+    expect(pendingBefore.reservedReports).toHaveLength(1);
+    expect(pendingBefore.reservedReports[0].token).toBeTruthy();
 
     // 5. A later read repairs Budget, report, and Redis from the
     // authoritative (already-committed) expense data.
@@ -535,9 +536,10 @@ describe("Phase C.4 requirement #1 -- ambiguous write outcomes: EDIT", () => {
 
     // The reservation survives.
     const pendingBefore = await syncRecoveryService.getPendingSync(USER_ID);
-    expect(pendingBefore.reservedUserWide.token).toBeTruthy();
+    expect(pendingBefore.reservedUserWideReservations).toHaveLength(1);
+    expect(pendingBefore.reservedUserWideReservations[0].token).toBeTruthy();
 
-    const farFuture = pendingBefore.reservedUserWide.reservedAt.getTime() + syncRecoveryService.RESERVATION_STALE_MS + 1000;
+    const farFuture = pendingBefore.reservedUserWideReservations[0].reservedAt.getTime() + syncRecoveryService.RESERVATION_STALE_MS + 1000;
     const repairResult = await syncRecoveryService.repairIfPending(USER_ID, { now: farFuture });
 
     expect(repairResult.attempted).toBe(true);
@@ -567,9 +569,10 @@ describe("Phase C.4 requirement #1 -- ambiguous write outcomes: DELETE", () => {
     expect(expenseModelFns._store.has(EXPENSE_ID)).toBe(false);
 
     const pendingBefore = await syncRecoveryService.getPendingSync(USER_ID);
-    expect(pendingBefore.reservedUserWide.token).toBeTruthy();
+    expect(pendingBefore.reservedUserWideReservations).toHaveLength(1);
+    expect(pendingBefore.reservedUserWideReservations[0].token).toBeTruthy();
 
-    const farFuture = pendingBefore.reservedUserWide.reservedAt.getTime() + syncRecoveryService.RESERVATION_STALE_MS + 1000;
+    const farFuture = pendingBefore.reservedUserWideReservations[0].reservedAt.getTime() + syncRecoveryService.RESERVATION_STALE_MS + 1000;
     const repairResult = await syncRecoveryService.repairIfPending(USER_ID, { now: farFuture });
 
     expect(repairResult.attempted).toBe(true);
@@ -651,8 +654,9 @@ describe("Phase C.4 -- retained proof: a DEFINITE no-write outcome still safely 
 
     // The edit's own reservation (taken before its own findOneAndUpdate)
     // was abandoned -- only the delete's own (already confirmed) Tier-1
-    // work remains, no leaked reservedUserWide token from the failed edit.
+    // work remains, no leaked reservedUserWideReservations entry from the
+    // failed edit.
     const pending = await syncRecoveryService.getPendingSync(USER_ID);
-    expect(pending.reservedUserWide).toEqual({ token: null, reservedAt: null });
+    expect(pending.reservedUserWideReservations).toHaveLength(0);
   });
 });

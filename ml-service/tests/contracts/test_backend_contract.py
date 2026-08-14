@@ -77,11 +77,41 @@ class TestPredictCategoryContractStatic:
 
 
 class TestRetrainModelContractStatic:
-    def test_cron_triggers_retrain_model_with_no_body(self):
+    def test_cron_triggers_retrain_model_via_buildMlServiceUrl_with_no_body_and_operations_headers(self):
+        """
+        Remediation Workstream C: retrain-model is now authenticated via the
+        shared mlServiceClient helpers, not a raw ML_ROUTE template-literal
+        call. Asserts the CURRENT, intended shape: the URL is built through
+        buildMlServiceUrl("/retrain-model"), no request payload is sent (an
+        explicit undefined/null placeholder, matching app.py's
+        RetrainTriggerRequest being Optional[...] = None), and the
+        operations token is attached as axios request CONFIGURATION (the
+        third positional argument), never as the request body.
+        """
         src = _read(BACKEND_CRON)
         assert "retrain-model" in src
-        # No request body, matching app.py's RetrainTriggerRequest being Optional[...] = None.
-        assert re.search(r"axios\.post\(`\$\{process\.env\.ML_ROUTE\}/retrain-model`\)", src)
+
+        # Whitespace-tolerant match of the real, multi-line axios.post call
+        # -- deliberately structural (argument order/shape), not a loose
+        # collection of unrelated substring checks, so a regression that
+        # moves headers into the body position (or drops
+        # buildMlServiceUrl/mlOperationsHeaders) cannot pass.
+        call_pattern = re.compile(
+            r"axios\.post\(\s*"
+            r"buildMlServiceUrl\(\s*[\"']\/retrain-model[\"']\s*\)\s*,\s*"
+            r"(?:undefined|null)\s*,\s*"
+            r"\{\s*headers:\s*mlOperationsHeaders\(\)\s*\}\s*"
+            r"\)"
+        )
+        assert call_pattern.search(src), (
+            'Expected axios.post(buildMlServiceUrl("/retrain-model"), undefined, '
+            "{ headers: mlOperationsHeaders() } ) -- headers must be request "
+            "configuration (3rd argument), never the request body (2nd argument)."
+        )
+
+        # URL construction is centralized in buildMlServiceUrl() -- never a
+        # direct, unvalidated `process.env.ML_ROUTE` concatenation.
+        assert "process.env.ML_ROUTE" not in src
 
     def test_cron_handles_existingRun_as_a_normal_non_error_result(self):
         """

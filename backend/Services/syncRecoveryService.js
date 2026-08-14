@@ -54,12 +54,18 @@
 //   Tier 1 (pendingBudgetMonths / reportPending, on PendingSync itself) --
 //   "confirmed, immediately repair-eligible" work. Governed by the
 //   `revision` compare-and-set, unchanged in spirit from Phase C.
-//   Tier 2 (reservedBudgetMonths / reservedReport, on PendingSync) --
-//   pre-write "intent" evidence, written by reserve() BEFORE the primary
-//   write. This is what closes the crash gap (evidence exists before the
-//   write even happens) without reintroducing the premature-clear race a
-//   plain pre-write marker would cause (see reserve()'s doc comment for the
-//   exact interleaving this defeats).
+//   Tier 2 (reservedBudgetMonths / reservedReports / reservedUserWideReservations,
+//   on PendingSync) -- pre-write "intent" evidence, written by reserve()
+//   BEFORE the primary write. This is what closes the crash gap (evidence
+//   exists before the write even happens) without reintroducing the
+//   premature-clear race a plain pre-write marker would cause (see
+//   reserve()'s doc comment for the exact interleaving this defeats). All
+//   three Tier-2 fields are OWNED-TOKEN ARRAYS (system-wide reservation-
+//   ownership correction) -- every reserve() call pushes its own entry, and
+//   confirm()/abandon() only ever pull the specific token they own, so
+//   multiple simultaneous reservations for the same user never clobber each
+//   other's evidence. See models/PendingSync.js's reservedReports doc
+//   comment for the exact hazard this closes.
 //
 //   Phase C.2 correction: a reservation older than RESERVATION_STALE_MS is
 //   treated as "worth a defensive recompute" but is NEVER released/cleared
@@ -261,31 +267,38 @@ async function reserve({ userId, budgetDates = [], reserveReport = false, reserv
   const reportReservation = reserveReport ? { token: newToken(), reservedAt: now } : null;
   // Phase C.3 -- the broad, month-agnostic reservation edit/delete take
   // BEFORE their primary write instead of a per-month guess. See
-  // models/PendingSync.js's reservedUserWide doc comment for why this
-  // closes the post-write corrective-reservation gap: it is valid
+  // models/PendingSync.js's reservedUserWideReservations doc comment for
+  // why this closes the post-write corrective-reservation gap: it is valid
   // regardless of which month the document occupies once the write
   // actually happens, so no SECOND reservation call is ever needed after
   // the write to cover the true result.
   const userWideReservation = reserveUserWide ? { token: newToken(), reservedAt: now } : null;
 
-  const update = { $set: {} };
+  // System-wide reservation-ownership correction -- every reservation,
+  // including report/user-wide, is now PUSHED as its own array entry
+  // (never $set, which would silently overwrite an earlier, still-
+  // unconfirmed reservation's entry). Multiple concurrent/sequential
+  // reservations for the same user therefore always coexist, exactly like
+  // reservedBudgetMonths already did before this fix -- see
+  // models/PendingSync.js's reservedReports doc comment for the exact
+  // loss sequence this closes and tests/syncRecoveryService.
+  // reservationOwnership.test.js for the reproduction-then-fix proof.
+  const push = {};
   if (budgetReservations.length > 0) {
-    update.$push = { reservedBudgetMonths: { $each: budgetReservations } };
+    push.reservedBudgetMonths = { $each: budgetReservations };
   }
   if (reportReservation) {
-    update.$set.reservedReport = reportReservation;
+    push.reservedReports = reportReservation;
   }
   if (userWideReservation) {
-    update.$set.reservedUserWide = userWideReservation;
-  }
-  if (Object.keys(update.$set).length === 0) {
-    delete update.$set;
+    push.reservedUserWideReservations = userWideReservation;
   }
 
-  await PendingSync.findOneAndUpdate({ user: userId }, update, {
-    upsert: true,
-    setDefaultsOnInsert: true,
-  });
+  await PendingSync.findOneAndUpdate(
+    { user: userId },
+    { $push: push },
+    { upsert: true, setDefaultsOnInsert: true }
+  );
 
   return { budgetReservations, reportReservation, userWideReservation };
 }
@@ -330,19 +343,31 @@ async function confirm({
   if (confirmReport) {
     update.$set.reportPending = true;
   }
+
+  // System-wide reservation-ownership correction -- $pull releases ONLY
+  // the specific token(s) THIS call owns, from the owned-token arrays
+  // (reservedReports/reservedUserWideReservations), never a blind $set to
+  // null. A DIFFERENT, still-in-flight reservation for the same user (a
+  // different token, its own array entry) is therefore never touched by
+  // this call -- see models/PendingSync.js's reservedReports doc comment.
+  const pull = {};
   if (budgetTokens.length > 0) {
-    update.$pull = { reservedBudgetMonths: { token: { $in: budgetTokens } } };
+    pull.reservedBudgetMonths = { token: { $in: budgetTokens } };
   }
   if (reportToken) {
-    update.$set.reservedReport = { token: null, reservedAt: null };
+    pull.reservedReports = { token: reportToken };
   }
   // Phase C.3 -- this is the SAME atomic call that already records the
-  // now-known TRUE affected month(s) as Tier-1 pending work: releasing the
-  // broad reservedUserWide reservation here means there is never a window
-  // where the true months are covered by neither the (now-released)
-  // broad reservation NOR a Tier-1 marker -- one atomic write does both.
+  // now-known TRUE affected month(s) as Tier-1 pending work: releasing
+  // THIS call's own reservedUserWideReservations entry here means there is
+  // never a window where the true months are covered by neither the
+  // (now-released) reservation NOR a Tier-1 marker -- one atomic write
+  // does both.
   if (userWideToken) {
-    update.$set.reservedUserWide = { token: null, reservedAt: null };
+    pull.reservedUserWideReservations = { token: userWideToken };
+  }
+  if (Object.keys(pull).length > 0) {
+    update.$pull = pull;
   }
 
   const record = await PendingSync.findOneAndUpdate({ user: userId }, update, {
@@ -373,22 +398,25 @@ async function confirm({
 async function abandon({ userId, budgetTokens = [], reportToken = null, userWideToken = null } = {}) {
   if (budgetTokens.length === 0 && !reportToken && !userWideToken) return null;
 
-  const update = {};
+  // System-wide reservation-ownership correction -- abandon() may release
+  // ONLY evidence owned by the exact token(s) passed in, via $pull against
+  // the owned-token arrays. It can never clear a DIFFERENT, still-valid
+  // reservation for the same user/field -- there is no longer a single
+  // overwritable slot to blindly null out. See models/PendingSync.js's
+  // reservedReports doc comment for the exact hazard this closes.
+  const pull = {};
   if (budgetTokens.length > 0) {
-    update.$pull = { reservedBudgetMonths: { token: { $in: budgetTokens } } };
+    pull.reservedBudgetMonths = { token: { $in: budgetTokens } };
   }
-  if (reportToken || userWideToken) {
-    update.$set = {};
-    if (reportToken) {
-      update.$set.reservedReport = { token: null, reservedAt: null };
-    }
-    if (userWideToken) {
-      update.$set.reservedUserWide = { token: null, reservedAt: null };
-    }
+  if (reportToken) {
+    pull.reservedReports = { token: reportToken };
+  }
+  if (userWideToken) {
+    pull.reservedUserWideReservations = { token: userWideToken };
   }
 
   try {
-    return await PendingSync.findOneAndUpdate({ user: userId }, update, { new: true });
+    return await PendingSync.findOneAndUpdate({ user: userId }, { $pull: pull }, { new: true });
   } catch (err) {
     console.error("syncRecoveryService.abandon failed:", sanitizeError(err));
     return null;
@@ -440,13 +468,19 @@ async function clearIfRevisionMatches({ userId, revision, repairedBudgetMonths =
 // next relevant budget/report read if pending" from the selected
 // architecture.
 //
-// Two passes:
+// Three passes:
+//   0. Legacy compatibility (rolling-deployment recovery) -- new in the
+//      final correctness pass. Promotes any STALE legacy single-object
+//      `reservedReport`/`reservedUserWide` reservation (see
+//      models/PendingSync.js's doc comment on those two fields) into
+//      modern Tier-1 evidence before pass 1 below runs, so this SAME call
+//      can immediately reconcile it via the existing Tier-1 machinery.
 //   1. Tier-1 (pendingBudgetMonths/reportPending) -- unchanged in spirit
 //      from Phase C, EXCEPT the recompute+persist calls now also pass
 //      `fenceRevision` so an old/slow repair cannot clobber fresher data
 //      that landed mid-repair (previously only the marker CLEAR was
 //      fenced, not the write itself).
-//   2. Tier-2 (reservedBudgetMonths/reservedReport) -- new in Phase C.1.
+//   2. Tier-2 (reservedBudgetMonths/reservedReports/reservedUserWideReservations) -- new in Phase C.1.
 //      Only reservations older than RESERVATION_STALE_MS are touched (see
 //      reserve()'s doc comment for why), and only the EXACT token found is
 //      released -- never a blanket per-month/report clear -- so a
@@ -469,6 +503,146 @@ async function repairIfPending(userId, options = {}) {
         : typeof options.now === "number"
         ? options.now
         : Date.now();
+    const staleThreshold = nowMs - RESERVATION_STALE_MS;
+
+    // -- Pass 0: legacy backward-compatibility (rolling-deployment
+    // recovery) ----------------------------------------------------------
+    //
+    // Confirmed gap: an OLD-version process may have written a legacy
+    // single-object `reservedReport`/`reservedUserWide` reservation, had
+    // its primary mutation COMMIT, then crashed before confirm() ever ran
+    // -- leaving ONLY that legacy Tier-2 evidence behind. The array-based
+    // reserve()/confirm()/abandon() above never read or write these two
+    // legacy field names (by design -- see the system-wide reservation-
+    // ownership correction elsewhere in this file), so without this pass,
+    // that surviving evidence would be permanently invisible to repair,
+    // silently losing the recovery signal for a mutation that IS durably
+    // committed. This is a materially different (and worse) failure mode
+    // than an ordinary stale Tier-2 entry: an ordinary one is still found
+    // and defensively recomputed forever by pass 2 below; a legacy one,
+    // left unhandled, is found NEVER.
+    //
+    // Design: runtime dual-read compatibility (no migration script). Each
+    // STALE legacy reservation (same RESERVATION_STALE_MS age-gate as
+    // every other Tier-2 entry -- a fresh one might still belong to a
+    // genuinely in-flight OLD-version request and must not be touched) is
+    // atomically PROMOTED into the exact modern Tier-1 evidence it
+    // represents, in the SAME MongoDB write that clears the legacy field.
+    // A single atomic findOneAndUpdate can only either fully apply or not
+    // apply at all, so there is no window where the evidence exists in
+    // neither representation, and no window where the legacy field is
+    // cleared without having been promoted first. Once promoted, pass 1
+    // immediately below (which re-reads a FRESH `before`) picks up the
+    // newly-set reportPending/pendingBudgetMonths and reconciles it using
+    // the exact same fenced, retry-safe, already-proven Tier-1 machinery
+    // every other marker uses -- no bespoke recompute path is added for
+    // legacy data, and a failure in that reconciliation leaves the
+    // now-modern Tier-1 evidence durable/retryable exactly like any other
+    // Tier-1 failure (see pass 1's own failure handling below).
+    //
+    // Idempotency: each promotion's filter is CAS'd on the legacy field's
+    // OWN token (`"reservedReport.token": token`). The SAME write that
+    // matches also clears the field, so that exact filter can never match
+    // again -- a concurrent or later repeated repairIfPending() call for
+    // the same stale legacy reservation finds zero matching documents and
+    // is a correct, safe no-op (identical CAS discipline to
+    // clearIfRevisionMatches()/confirm()/abandon() elsewhere in this file,
+    // applied to a per-field token instead of the shared revision
+    // counter). recalculateBudget's own $addToSet for the userWide
+    // promotion's month enumeration is separately idempotent regardless.
+    //
+    // Non-stale legacy reservations are deliberately left completely
+    // untouched (same age-gate rationale as every other Tier-2 entry) --
+    // they remain visible in THIS call's own `stillPending` result (see
+    // the end of this function) until they age past the threshold, at
+    // which point this same pass promotes them on a later call.
+    let legacyReportPromoted = false;
+    let legacyUserWidePromoted = false;
+
+    try {
+      const legacySnapshot = await getPendingSync(userId);
+      const legacyReport = legacySnapshot && legacySnapshot.reservedReport;
+      if (
+        legacyReport &&
+        legacyReport.token &&
+        new Date(legacyReport.reservedAt).getTime() < staleThreshold
+      ) {
+        const promoted = await PendingSync.findOneAndUpdate(
+          { user: userId, "reservedReport.token": legacyReport.token },
+          {
+            $set: { reportPending: true, lastAttemptAt: new Date() },
+            $inc: { revision: 1 },
+            $unset: { reservedReport: "" },
+          },
+          { new: true }
+        );
+        legacyReportPromoted = Boolean(promoted);
+      }
+    } catch (err) {
+      // Promotion itself failed (e.g. a transient Mongo error) -- the
+      // legacy reservation survives completely untouched (an atomic
+      // findOneAndUpdate either fully applies or not at all) and remains
+      // durable, stale evidence for the NEXT repairIfPending() call to
+      // retry -- never lost, never partially applied.
+      try {
+        await PendingSync.updateOne(
+          { user: userId },
+          { $set: { lastError: sanitizeError(err), lastAttemptAt: new Date() } }
+        );
+      } catch (_e) {
+        // Intentionally swallowed -- see outer catch's rationale.
+      }
+    }
+
+    try {
+      const legacySnapshot = await getPendingSync(userId);
+      const legacyUserWide = legacySnapshot && legacySnapshot.reservedUserWide;
+      if (
+        legacyUserWide &&
+        legacyUserWide.token &&
+        new Date(legacyUserWide.reservedAt).getTime() < staleThreshold
+      ) {
+        // Same broad-recovery principle as the modern
+        // reservedUserWideReservations Tier-2 pass below: the legacy
+        // reservation does not know which month(s) its owning mutation
+        // actually affected, so promotion enumerates EVERY existing
+        // BudgetModel month for this user into pendingBudgetMonths. This
+        // enumeration read is safe to repeat/race -- $addToSet is itself
+        // idempotent, and the promotion write as a whole is still guarded
+        // by the legacy token CAS below.
+        const existingBudgetMonths = await BudgetModel.find({ userId }).select("month").lean();
+        const monthAnchors = [];
+        for (const doc of existingBudgetMonths) {
+          const anchor = getMonthAnchorFromKey(doc.month);
+          if (anchor) monthAnchors.push(anchor); // defensively skip any unparsable legacy month key
+        }
+
+        const update = {
+          $set: { lastAttemptAt: new Date() },
+          $inc: { revision: 1 },
+          $unset: { reservedUserWide: "" },
+        };
+        if (monthAnchors.length > 0) {
+          update.$addToSet = { pendingBudgetMonths: { $each: monthAnchors } };
+        }
+
+        const promoted = await PendingSync.findOneAndUpdate(
+          { user: userId, "reservedUserWide.token": legacyUserWide.token },
+          update,
+          { new: true }
+        );
+        legacyUserWidePromoted = Boolean(promoted);
+      }
+    } catch (err) {
+      try {
+        await PendingSync.updateOne(
+          { user: userId },
+          { $set: { lastError: sanitizeError(err), lastAttemptAt: new Date() } }
+        );
+      } catch (_e) {
+        // Intentionally swallowed -- see outer catch's rationale.
+      }
+    }
 
     const before = await getPendingSync(userId);
     const hasTier1 = Boolean(before && (before.pendingBudgetMonths.length > 0 || before.reportPending));
@@ -591,24 +765,32 @@ async function repairIfPending(userId, options = {}) {
     // cost becomes a real concern in practice, the correct fix is
     // operator-visible alerting/monitoring on old reservations (out of
     // scope here), never a time-based auto-release.
-    const staleThreshold = nowMs - RESERVATION_STALE_MS;
+    //
+    // `staleThreshold` was already computed at the top of this function
+    // (pass 0 needs it too) -- reused here unchanged.
     const current = await getPendingSync(userId);
 
     const staleBudgetReservations = ((current && current.reservedBudgetMonths) || []).filter(
       (r) => new Date(r.reservedAt).getTime() < staleThreshold
     );
-    const reportReservation = current && current.reservedReport;
-    const reportReservationStale = Boolean(
-      reportReservation &&
-        reportReservation.token &&
-        new Date(reportReservation.reservedAt).getTime() < staleThreshold
+    // System-wide reservation-ownership correction -- reservedReports/
+    // reservedUserWideReservations are now arrays, so MULTIPLE independent
+    // reservations for the same user can be simultaneously stale (e.g. an
+    // abandoned R1 alongside a genuinely still-in-flight, not-yet-stale
+    // R2). staleness is evaluated per-entry; the report/budget itself only
+    // needs ONE recompute regardless of how many stale entries exist
+    // (refreshReport/recalculateBudget always recompute from CURRENT live
+    // data, never a delta tied to a specific reservation), so the presence
+    // of ANY stale entry triggers exactly one recompute below -- never one
+    // recompute per stale entry.
+    const staleReportReservations = ((current && current.reservedReports) || []).filter(
+      (r) => new Date(r.reservedAt).getTime() < staleThreshold
     );
-    const userWideReservation = current && current.reservedUserWide;
-    const userWideReservationStale = Boolean(
-      userWideReservation &&
-        userWideReservation.token &&
-        new Date(userWideReservation.reservedAt).getTime() < staleThreshold
+    const reportReservationStale = staleReportReservations.length > 0;
+    const staleUserWideReservations = ((current && current.reservedUserWideReservations) || []).filter(
+      (r) => new Date(r.reservedAt).getTime() < staleThreshold
     );
+    const userWideReservationStale = staleUserWideReservations.length > 0;
 
     // Phase C.4 requirement #4 -- exactly the same fix as the Tier-1 pass
     // above, applied to Tier-2: a FRESH ticket for THIS repair attempt's
@@ -621,7 +803,7 @@ async function repairIfPending(userId, options = {}) {
     // stale never churns the counter. See allocateRepairRevision()'s doc
     // comment for the exact corruption this prevents: without a per-attempt
     // ticket, two concurrent repairs of the SAME stale reservation (most
-    // notably reservedUserWide, whose own required proof test exercises
+    // notably reservedUserWideReservations, whose own required proof test exercises
     // this exact interleaving) could otherwise both fence their writes to
     // the SAME revision, letting whichever one persists SECOND silently
     // overwrite a fresher result with a staler one.
@@ -652,7 +834,10 @@ async function repairIfPending(userId, options = {}) {
     if (reportReservationStale) {
       try {
         await refreshReport(userId, { fenceRevision: tier2Revision });
-        // Deliberately no reservedReport clear here -- see comment above.
+        // Deliberately no reservedReports clear here -- see comment above.
+        // A stale entry survives this pass regardless of outcome; only the
+        // owning mutation's own confirm() or abandon() ever removes ITS
+        // OWN entry.
       } catch (err) {
         reportRepairFailed = true;
         try {
@@ -666,23 +851,25 @@ async function repairIfPending(userId, options = {}) {
       }
     }
 
-    // Phase C.3 -- reservedUserWide's own defensive recompute. Unlike
-    // reservedBudgetMonths (which names specific months), this reservation
-    // deliberately does not know which month(s) the owning edit/delete
-    // actually affected -- it was taken BEFORE the write, precisely so it
-    // remains valid no matter which month the write lands in. Once stale,
-    // the only sound recovery is to reconstruct EVERY month this user
-    // currently has a BudgetModel document for, straight from
-    // authoritative expense data -- including a month whose expense total
-    // is now zero (recalculateBudget's own aggregate naturally returns 0
-    // when nothing matches, so a month the edit/delete emptied out is
-    // still correctly repaired here, not skipped). A month the user never
-    // set a budget for has no BudgetModel document and nothing user-facing
-    // to repair -- recalculateBudget's fenced call already returns `null`
-    // for that case unchanged, exactly as it does for any other month
-    // without a document. Same non-destructive principle as every other
-    // Tier-2 pass: NEVER releases reservedUserWide itself -- only the
-    // owning mutation's own confirm() or abandon() ever does that.
+    // Phase C.3 -- reservedUserWideReservations' own defensive recompute.
+    // Unlike reservedBudgetMonths (which names specific months), this
+    // reservation deliberately does not know which month(s) the owning
+    // edit/delete actually affected -- it was taken BEFORE the write,
+    // precisely so it remains valid no matter which month the write lands
+    // in. Once ANY entry is stale, the only sound recovery is to
+    // reconstruct EVERY month this user currently has a BudgetModel
+    // document for, straight from authoritative expense data -- including
+    // a month whose expense total is now zero (recalculateBudget's own
+    // aggregate naturally returns 0 when nothing matches, so a month the
+    // edit/delete emptied out is still correctly repaired here, not
+    // skipped). A month the user never set a budget for has no
+    // BudgetModel document and nothing user-facing to repair --
+    // recalculateBudget's fenced call already returns `null` for that
+    // case unchanged, exactly as it does for any other month without a
+    // document. Same non-destructive principle as every other Tier-2
+    // pass: NEVER releases any reservedUserWideReservations entry itself
+    // -- only the owning mutation's own confirm() or abandon() ever
+    // removes ITS OWN entry.
     if (userWideReservationStale) {
       try {
         const existingBudgetMonths = await BudgetModel.find({ userId }).select("month").lean();
@@ -691,7 +878,8 @@ async function repairIfPending(userId, options = {}) {
           if (!monthAnchor) continue; // defensively skip any unparsable legacy month key
           try {
             await recalculateBudget(userId, monthAnchor, { fenceRevision: tier2Revision });
-            // Deliberately no reservedUserWide clear here -- see comment above.
+            // Deliberately no reservedUserWideReservations clear here --
+            // see comment above.
           } catch (err) {
             budgetRepairFailed = true;
             try {
@@ -722,18 +910,44 @@ async function repairIfPending(userId, options = {}) {
     }
 
     const after = await getPendingSync(userId);
+    // Requirement (final correctness pass, legacy compatibility) -- a
+    // NON-stale legacy reservation is never touched by pass 0 above, so it
+    // must still be represented here: `stillPending` reflects it exactly
+    // like any other untouched-but-present piece of pending state, so a
+    // caller never mistakes "nothing to do" for "there is legacy evidence
+    // still waiting to age past the threshold".
     const stillPending = Boolean(
       after &&
         (after.pendingBudgetMonths.length > 0 ||
           after.reportPending ||
           (after.reservedBudgetMonths && after.reservedBudgetMonths.length > 0) ||
-          (after.reservedReport && after.reservedReport.token) ||
-          (after.reservedUserWide && after.reservedUserWide.token))
+          (after.reservedReports && after.reservedReports.length > 0) ||
+          (after.reservedUserWideReservations && after.reservedUserWideReservations.length > 0) ||
+          Boolean(after.reservedReport && after.reservedReport.token) ||
+          Boolean(after.reservedUserWide && after.reservedUserWide.token))
     );
 
     return {
+      // legacyReportPromoted/legacyUserWidePromoted deliberately NOT
+      // included in the returned object -- neither
+      // Controllers/BudgetControllers/getbudgets.js (discards the return
+      // value entirely) nor Controllers/report.controller.js (reads only
+      // repairLookupFailed/reportRepairFailed/stillPending) needs them, so
+      // this previously-stable public contract is kept unchanged. The two
+      // local flags above still feed `attempted` below (a promotion IS
+      // work this call attempted) and legacy-promotion itself is fully
+      // provable from persisted document state (reservedReport/
+      // reservedUserWide cleared, reportPending/pendingBudgetMonths set)
+      // and from the Tier-1 pass's own recompute/clear side effects that
+      // immediately follow a promotion in the same call -- see
+      // tests/syncRecoveryService.legacyCompatibility.test.js.
       attempted:
-        hasTier1 || staleBudgetReservations.length > 0 || reportReservationStale || userWideReservationStale,
+        hasTier1 ||
+        staleBudgetReservations.length > 0 ||
+        reportReservationStale ||
+        userWideReservationStale ||
+        legacyReportPromoted ||
+        legacyUserWidePromoted,
       revisionMatchedOnClear,
       budgetRepairFailed,
       reportRepairFailed,

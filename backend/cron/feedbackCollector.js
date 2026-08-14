@@ -2,6 +2,10 @@ const cron = require("node-cron");
 const axios = require("axios");
 
 const { MlFeedbackModel } = require("../config/Schemas");
+// Remediation Workstream C -- shared ML_ROUTE validation + operations-token
+// header attachment (ml-service's /retrain-model now requires the same
+// shared-secret token /ml-status has always required).
+const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
 
 // Runs every day at 20:30 server time.
 cron.schedule("30 20 * * *", async () => {
@@ -33,7 +37,11 @@ cron.schedule("30 20 * * *", async () => {
         console.log("Retraining threshold reached");
 
         // Threshold met — trigger a model retrain on the ML service.
-        const response = await axios.post(`${process.env.ML_ROUTE}/retrain-model`);
+        const response = await axios.post(
+            buildMlServiceUrl("/retrain-model"),
+            undefined,
+            { headers: mlOperationsHeaders() }
+        );
 
         // Phase G item 11: {"existingRun": true, "runId": "..."} is a
         // NORMAL, expected result -- it means a retrain was already in

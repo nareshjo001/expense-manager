@@ -1447,16 +1447,21 @@ describe("POST /sia/ask", () => {
     expect(askLlmMock).not.toHaveBeenCalled();
   });
 
-  it("returns 422 for an ambiguous cross-domain category question and calls neither buildContext nor askLlm", async () => {
-    const ambiguousQuestions = [
-      "Which category should I cut to stay under budget?",
-      "Which category is hurting my financial health?",
-      "Predict my highest spending category next month.",
-      "Show my categories.",
-      "Create a category.",
-    ];
-
-    for (const question of ambiguousQuestions) {
+  // Each phrase gets its own it() (loadApp() cold-reloads the entire app.js
+  // graph via jest.resetModules()) rather than looping all five inside one
+  // it() -- five sequential cold reloads previously ran under one shared
+  // 5000ms budget and could exceed it, even though each individual reload
+  // is the same cost every other single-loadApp() test in this file already
+  // pays under the default timeout.
+  it.each([
+    "Which category should I cut to stay under budget?",
+    "Which category is hurting my financial health?",
+    "Predict my highest spending category next month.",
+    "Show my categories.",
+    "Create a category.",
+  ])(
+    "returns 422 for the ambiguous cross-domain category question %j and calls neither buildContext nor askLlm",
+    async (question) => {
       const { app, buildContextMock, askLlmMock } = loadApp({
         configOverrides: { enabled: true },
       });
@@ -1476,7 +1481,7 @@ describe("POST /sia/ask", () => {
       expect(buildContextMock).not.toHaveBeenCalled();
       expect(askLlmMock).not.toHaveBeenCalled();
     }
-  });
+  );
 
   it("returns a generic 503 for category when askLlm rejects with LlmProviderError", async () => {
     const { app, LlmProviderError } = loadApp({

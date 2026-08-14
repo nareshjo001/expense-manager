@@ -240,22 +240,71 @@ const IncomeSchema = new mongoose.Schema({
     },
     incomeAmount: {
         type: Number,
-        required: true 
+        required: true
     },
     incomeDate: {
         type: Date,
         required: true
+    },
+    // Remediation Workstream B -- client-generated idempotency key for
+    // income CREATION only (mirrors expenseSchema's own `id` field/unique
+    // index, the established idempotency pattern in this codebase). Not
+    // `required` and has no schema-level default: legacy income documents
+    // created before this field existed simply never have it set, and must
+    // remain valid/queryable exactly as before -- see the partial unique
+    // index below for why that is safe.
+    idempotencyKey: {
+        type: String,
+        default: undefined
     }
 });
-    
+
 
 
 // Support per-user income lookups and date range queries.
 IncomeSchema.index({ userId: 1, incomeDate: 1 });
+
+// Remediation Workstream B -- durable database-level uniqueness for income
+// creation, not just an application-level check. A PARTIAL index (not a
+// plain unique index) is required here: a plain `unique: true` index on
+// `{ userId, idempotencyKey }` would treat every document that lacks the
+// field as `idempotencyKey: null` for indexing purposes, and MongoDB's
+// unique index enforcement then rejects a SECOND missing-field document per
+// userId as a duplicate of the first -- exactly the "every legacy missing
+// value treated as the same key" trap. `partialFilterExpression` scopes this
+// index to ONLY documents that actually have the field set, so existing
+// income records created before this remediation (which have no
+// idempotencyKey at all) are entirely excluded from the index and remain
+// valid and unaffected, while every new income creation (which always sets
+// this field, see Controllers/IncomeControllers/addincome.js) is protected.
+//
+// Exported as a single named spec (rather than inlined only here) so that
+// backend/scripts/ensureIncomeIdempotencyIndex.js -- the deployment-time
+// index-bootstrap script required because server startup does not await
+// background index creation, see that script's header comment -- creates
+// EXACTLY this index and nothing else, with zero risk of the two definitions
+// drifting apart over time.
+const INCOME_IDEMPOTENCY_INDEX = {
+    key: { userId: 1, idempotencyKey: 1 },
+    options: {
+        unique: true,
+        partialFilterExpression: { idempotencyKey: { $exists: true } },
+        name: 'userId_1_idempotencyKey_1',
+    },
+};
+
+IncomeSchema.index(INCOME_IDEMPOTENCY_INDEX.key, INCOME_IDEMPOTENCY_INDEX.options);
 
 const ExpenseModel = mongoose.model('expenses', expenseSchema);
 const UserModel = mongoose.model('users', userSchema);
 const IncomeModel = mongoose.model('incomes', IncomeSchema);
 const BudgetModel = mongoose.model('budget', budgetSchema);
 const MlFeedbackModel = mongoose.model('mlFeedback', MlFeedbackSchema);
-module.exports = { UserModel, ExpenseModel, IncomeModel, BudgetModel, MlFeedbackModel };
+module.exports = {
+    UserModel,
+    ExpenseModel,
+    IncomeModel,
+    BudgetModel,
+    MlFeedbackModel,
+    INCOME_IDEMPOTENCY_INDEX,
+};

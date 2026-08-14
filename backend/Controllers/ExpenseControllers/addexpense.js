@@ -3,6 +3,10 @@ const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
 const { normalizeCategory } = require('../../utils/categoryNormalization');
 const axios = require("axios");
+// Remediation Workstream C -- shared ML_ROUTE validation + operations-token
+// header attachment (ml-service's /generate-description now requires the
+// same shared-secret token /ml-status has always required).
+const { buildMlServiceUrl, mlOperationsHeaders } = require('../../utils/mlServiceClient');
 
 // Category Normalization -- controlled 400 for an invalid/missing category,
 // matching IDEMPOTENCY_CONFLICT_RESPONSE's existing shape/error-code
@@ -220,13 +224,13 @@ const addExpense = async (req, res) => {
     if (!expenseDescription || expenseDescription.trim() === '') {
         try {
             const response = await axios.post(
-              `${process.env.ML_ROUTE}/generate-description`,
+              buildMlServiceUrl("/generate-description"),
               {
                   expenseName,
                   expenseCategory: normalizedCategory,
                   expenseAmount
               },
-              { timeout: 5000 }
+              { timeout: 5000, headers: mlOperationsHeaders() }
             );
 
             finalDescription = response.data.description;

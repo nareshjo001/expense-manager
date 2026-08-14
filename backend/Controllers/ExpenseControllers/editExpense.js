@@ -13,6 +13,57 @@ const INVALID_CATEGORY_RESPONSE = {
     errorCode: 'INVALID_CATEGORY',
 };
 
+// Remediation Workstream A -- edit-expense amount integrity. addexpense.js's
+// route-level Joi schema (`expenseAmount: Joi.number().positive().required()`,
+// Middlewares/AuthValidation.js) is never wired onto `PUT /update-expense`
+// (Routes/expense.routes.js only applies `expenseValidation` to the add
+// route), and editExpense.js itself performed no equivalent check before
+// this fix -- an edit could persist `expenseAmount: 0`, a negative number,
+// `NaN`/`Infinity`, or any other raw `req.body` value directly into Mongo,
+// silently corrupting every downstream budget/report total derived from it.
+//
+// This mirrors, rather than duplicates, the add path's own contract: Joi's
+// `Joi.number()` (with its default `convert: true`) accepts a real number OR
+// a fully-numeric string and coerces it via the same rules `Number(...)`
+// applies -- it does NOT accept a partially-numeric string like "100abc"
+// (Joi's numeric coercion parses the ENTIRE string or rejects it, never a
+// permissive `parseFloat` partial parse). `.positive()` additionally rejects
+// zero and negative values. Reproducing that exact contract here (rather
+// than importing Joi into this controller) keeps this check a pure,
+// synchronous, dependency-free predicate that runs before any reservation or
+// write.
+//
+// Explicitly rejected, all as `null` (never partially parsed, never coerced
+// via truthiness):
+//   - 0, negative numbers, NaN, Infinity, -Infinity (Number.isFinite/`> 0`)
+//   - null, undefined (typeof guard below)
+//   - empty or whitespace-only strings ("" / "   ")
+//   - partially numeric strings ("100abc", "12,000") -- `Number(...)`
+//     returns NaN for these, unlike `parseFloat`
+//   - booleans -- `typeof` guard rejects them before ever reaching
+//     `Number(true) === 1`
+//   - arrays/objects -- `typeof` guard rejects them before ever reaching
+//     `Number([])`/`Number([5]) === 5`'s surprising array-coercion behavior
+function normalizeExpenseAmount(rawValue) {
+    if (typeof rawValue !== 'number' && typeof rawValue !== 'string') {
+        return null;
+    }
+    if (typeof rawValue === 'string' && rawValue.trim() === '') {
+        return null;
+    }
+    const normalized = Number(rawValue);
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+        return null;
+    }
+    return normalized;
+}
+
+const INVALID_AMOUNT_RESPONSE = {
+    success: false,
+    message: 'Expense amount must be a valid, positive, finite number.',
+    errorCode: 'INVALID_AMOUNT',
+};
+
 const editexpense = async (req, res) => {
   // Phase C.2 -- declared outside the try block so the catch below can
   // release any reservation(s) already made if the primary update itself
@@ -100,6 +151,23 @@ const editexpense = async (req, res) => {
             updates.expenseCategory = normalizedCategory;
         }
 
+        // Remediation Workstream A -- ONLY when the client actually supplied
+        // expenseAmount in this edit (an edit that doesn't touch amount
+        // leaves `updates` without this key at all, exactly like the
+        // category block above, and this is skipped entirely). Runs BEFORE
+        // reserve() and BEFORE the primary write -- an invalid amount is
+        // rejected with a controlled 400 and produces no ML call, no
+        // database mutation, no reservation, no cache/revision/report side
+        // effect. The normalized (never raw) value replaces the one in
+        // `updates` so the write below persists a real, validated number.
+        if (Object.prototype.hasOwnProperty.call(updates, 'expenseAmount')) {
+            const normalizedAmount = normalizeExpenseAmount(updates.expenseAmount);
+            if (normalizedAmount === null) {
+                return res.status(400).json(INVALID_AMOUNT_RESPONSE);
+            }
+            updates.expenseAmount = normalizedAmount;
+        }
+
         // Recalculate only when the amount or date changed.
         const amountOrDateChanged =
             Object.prototype.hasOwnProperty.call(updates, 'expenseAmount') ||
@@ -116,7 +184,7 @@ const editexpense = async (req, res) => {
         // actually affects, so nothing further needs to be reserved once
         // the write's true result is known -- see
         // Services/syncRecoveryService.js's reserve()/models/PendingSync.js
-        // reservedUserWide doc comments.
+        // reservedUserWideReservations doc comments.
         const preWriteReservation = await reserve({
             userId: user._id,
             reserveUserWide: true,
@@ -211,7 +279,7 @@ const editexpense = async (req, res) => {
         // raw string here meant an edit that actually moved an expense to a
         // new month never recorded Tier-1 pending work for that new month
         // (confirm()'s own dedupeMonthAnchors call would drop it too, while
-        // still releasing the broad reservedUserWide token in the SAME
+        // still releasing the broad reservedUserWideReservations token in the SAME
         // call), reopening exactly the crash-gap window Phase C.3 closed,
         // specifically for the new-month case. `trueNewDate` (already
         // computed as a real `new Date(...)` two lines below) is the

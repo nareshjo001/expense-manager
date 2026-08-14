@@ -517,8 +517,25 @@ def training_run_list(
 
 
 @app.post("/predict-category")
-def predict(data: PredictionRequest):
-
+def predict(
+    data: PredictionRequest,
+    x_ml_operations_token: Optional[str] = Header(None),
+):
+    """
+    Remediation Workstream C -- this endpoint previously had NO
+    authentication at all, unlike /ml-status and /training-runs* (which have
+    always required the shared-secret operations token). Reuses the exact
+    same fail-closed guard (_require_operations_token /
+    status_api.check_operations_token) rather than introducing a second,
+    redundant secret -- there is no evidence a separate privilege tier is
+    needed between "can read operational status" and "can request a
+    prediction/trigger retraining"; both are backend-only, service-to-service
+    calls today (see Routes/ml.router.js, Controllers/ExpenseControllers/
+    addexpense.js, cron/feedbackCollector.js on the Node side). The token
+    check runs BEFORE any prediction work, so a rejected caller never
+    triggers the actual inference.
+    """
+    _require_operations_token(x_ml_operations_token)
     return predict_category(
         data.expenseName
     )
@@ -526,9 +543,15 @@ def predict(data: PredictionRequest):
 
 @app.post("/generate-description")
 def generate_description_api(
-    data: DescriptionRequest
+    data: DescriptionRequest,
+    x_ml_operations_token: Optional[str] = Header(None),
 ):
-
+    """
+    Remediation Workstream C -- same fail-closed operations-token guard as
+    /predict-category above; see that endpoint's doc comment for the full
+    rationale. Checked before any description-generation work runs.
+    """
+    _require_operations_token(x_ml_operations_token)
     return generate_description_response(
         expense_name=data.expenseName,
         category=data.expenseCategory,
@@ -1087,7 +1110,21 @@ def _service_unavailable():
 
 
 @app.post("/retrain-model")
-def retrain_model(payload: Optional[RetrainTriggerRequest] = None):
+def retrain_model(
+    payload: Optional[RetrainTriggerRequest] = None,
+    x_ml_operations_token: Optional[str] = Header(None),
+):
+    """
+    Remediation Workstream C -- this is the most consequential of the three
+    previously-unauthenticated endpoints (it starts a real background
+    retraining run, and had NO authentication at all before this fix). Same
+    fail-closed shared-secret guard as /predict-category and
+    /generate-description; see _require_operations_token's own doc comment.
+    Checked FIRST, before the active-run fast path, the persistent run
+    record, or the lock claim -- a rejected caller creates no TrainingRun
+    document and starts no background thread.
+    """
+    _require_operations_token(x_ml_operations_token)
 
     requested_source = payload.source if payload else None
 

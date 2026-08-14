@@ -35,7 +35,7 @@ const MONTH_ABBREVIATIONS = [
 // `monthStart.toLocaleString('default', { month: 'short', year: 'numeric' })`
 // formatting: turns a stored BudgetModel `month` string (e.g. "Jan 2026")
 // back into the first-instant-of-month Date recalculateBudget expects.
-// Needed by syncRecoveryService.js's broad (reservedUserWide) repair pass,
+// Needed by syncRecoveryService.js's broad (reservedUserWideReservations) repair pass,
 // which discovers WHICH months to recompute by enumerating existing
 // BudgetModel documents for a user -- it only has each one's string
 // `month` key, not a Date. Deliberately hand-parsed (not `new Date(key)`)

@@ -1,7 +1,24 @@
 const mongoose = require('mongoose');
 const { UserModel, IncomeModel } = require('../../config/Schemas');
+const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
 
+// Remediation Workstream B -- report/cache synchronization. Edit is left
+// with its existing, simpler idempotency contract: a retried
+// `PUT /income/edit` with the same { incomeId, newAmount } naturally
+// produces the same end state (an atomic `$set` on the same document, not
+// an insert) -- no evidence of a concrete duplication risk equivalent to
+// income CREATION's (see addincome.js), so no idempotency key was added
+// here. What WAS missing is that a successful edit never advanced the
+// user's derived-data revision, invalidated any cache entry, or triggered a
+// report refresh at all -- a cached/stored report could understate or omit
+// an edited income amount indefinitely. This now uses the exact same
+// reserve()/write/synchronizeAfterMutation() reliability lifecycle
+// addexpense.js/editExpense.js already use for expenses.
 const editIncome = async (req, res) => {
+  let ownerUserId = null;
+  let reportReservation = null;
+  let writeStatus = "not-dispatched"; // not-dispatched | dispatched-ambiguous | no-write | committed
+
   try {
     // Destructure updated data from request body
     const { incomeId, newAmount } = req.body;
@@ -11,36 +28,88 @@ const editIncome = async (req, res) => {
     if (!user) {
       return res.status(401).json({ message: 'User does not exist', success: false });
     }
+    ownerUserId = user._id;
 
     // Reject malformed income IDs.
     if (!mongoose.isValidObjectId(incomeId)) {
       return res.status(400).json({ success: false, message: 'Invalid income ID' });
     }
 
-    // Update the caller's own income record atomically.
-    const income = await IncomeModel.findOneAndUpdate(
-      {
-        _id: incomeId,
-        userId: user._id
-      },
-      {
-        $set: { incomeAmount: newAmount }
-      },
-      {
-        new: true,
-        runValidators: true
-      }
-    );
+    // Reserve BEFORE the primary write -- durable pre-write evidence that
+    // survives a process crash between the write committing and the
+    // post-write confirm() call inside synchronizeAfterMutation().
+    const reserved = await reserve({ userId: user._id, reserveReport: true });
+    reportReservation = reserved.reportReservation;
+
+    // Update the caller's own income record atomically. writeStatus flips to
+    // "dispatched-ambiguous" IMMEDIATELY BEFORE this call -- if it rejects,
+    // that does not prove the update never landed (see editExpense.js's
+    // identical writeStatus doc comment).
+    writeStatus = "dispatched-ambiguous";
+    let income;
+    try {
+      income = await IncomeModel.findOneAndUpdate(
+        {
+          _id: incomeId,
+          userId: user._id
+        },
+        {
+          $set: { incomeAmount: newAmount }
+        },
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+    } catch (writeErr) {
+      throw writeErr;
+    }
 
     if (!income) {
+      // A RESOLVED null is conclusive proof this exact request's update
+      // matched no document -- release the reservation.
+      writeStatus = "no-write";
+      await abandon({
+        userId: user._id,
+        reportToken: reportReservation && reportReservation.token,
+      }).catch(() => {});
       return res.status(404).json({ message: 'Income not found', success: false });
     }
 
-    // Send success response
-    res.status(200).json({ message: 'Income updated successfully', success: true });
+    // The primary write is now KNOWN to have committed.
+    writeStatus = "committed";
+
+    const derivedData = await synchronizeAfterMutation({
+      userId: user._id,
+      reportToken: reportReservation && reportReservation.token,
+    });
+
+    // Send success response. The edit is authoritative and committed
+    // regardless of derivedData.status.
+    res.status(200).json({
+      message: 'Income updated successfully',
+      success: true,
+      data: income,
+      derivedData,
+    });
 
   } catch (err) {
-    // Send generic server error response
+    // abandon() may ONLY run when this attempt's primary write is
+    // definitively known to have never committed.
+    const canSafelyAbandon = writeStatus === "not-dispatched" || writeStatus === "no-write";
+    if (
+      ownerUserId &&
+      canSafelyAbandon &&
+      reportReservation &&
+      reportReservation.token
+    ) {
+      await abandon({
+        userId: ownerUserId,
+        reportToken: reportReservation.token,
+      }).catch(() => {});
+    }
+
+    // Send generic server error response.
     console.error(err);
     res.status(500).json({ message: 'Internal Server Error', success: false });
   }
