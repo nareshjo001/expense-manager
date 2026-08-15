@@ -1,29 +1,11 @@
-// Forecast input aggregation boundary -- Batch 2 architecture closure.
-//
-// This is the ONLY module in the codebase that reads transaction-level
-// fields (`expenseDate`, `expenseAmount`) off a raw expense pool for
-// forecasting purposes. It converts that pool into a bounded,
-// aggregate-only series (`{ monthKey, totalAmount }` per completed
-// calendar month) before anything reaches forecastAnalyzer.js.
-// forecastAnalyzer.js itself has no code path that reads `_id`,
-// `expenseName`, `expenseCategory`, `userId`, or any individual
-// `expenseDate`/`expenseAmount` -- it only ever receives the aggregate
-// numbers this module produces, so a transaction-shaped object reaching it
-// would have no field the analyzer's logic could act on even if leaked.
-//
-// Pure, deterministic, no DB/Redis/HTTP calls, no zero-arg `new Date()`,
-// input-order independent (buckets are built by walking the calendar
-// backward from the anchor date, never by trusting array order), and
-// non-mutating.
+// Forecast input aggregation boundary -- the only module that reads transaction-level fields (expenseDate, expenseAmount) off a raw expense pool; it converts them into a bounded, aggregate-only series before anything reaches forecastAnalyzer.js, which has no code path reading individual transaction fields. Pure, deterministic, non-mutating, no DB/Redis/HTTP calls.
 "use strict";
 
 const { forecast: RULES } = require("./analyzers/scores/forecastRules");
 const { normalizeCategoryForGrouping } = require("../utils/categoryNormalization");
 
 const toFiniteAmount = (value) => {
-  // `Number(Object.create(null))` (and similar valueOf/toString-less
-  // objects) throws a TypeError rather than returning NaN -- caught here
-  // so a single malformed record can never crash aggregation.
+  // Number(Object.create(null)) and similar valueOf/toString-less objects throw a TypeError rather than returning NaN -- caught so one malformed record can't crash aggregation.
   let num;
   try {
     num = Number(value);
@@ -40,36 +22,17 @@ const parseDate = (value) => {
 
 const round2 = (value) => Number(Number(value).toFixed(2));
 
-// `YYYY-M` bucket key from a Date's LOCAL calendar fields -- matches this
-// repository's established local-time convention.
+// `YYYY-M` bucket key from a Date's local calendar fields -- matches this repository's established local-time convention.
 const monthKeyOf = (date) => `${date.getFullYear()}-${date.getMonth()}`;
 
 /**
- * Builds the bounded, aggregate-only completed-month series forecasting
- * consumes. Malformed source records (non-object, invalid/missing date,
- * uncoercible amount) are silently skipped -- never thrown, never mutating
- * `expensePool`. The current, in-progress month (>= `monthStart`) is never
- * included. A month with genuinely zero recorded expenses still appears as
- * an explicit `{ totalAmount: 0 }` entry rather than being silently
- * omitted, so "no data that month" and "not enough history at all" remain
- * distinguishable.
+ * Builds the bounded, aggregate-only completed-month series forecasting consumes. Malformed records are silently skipped, never thrown. The current in-progress month is never included. A month with a recorded expense total of exactly 0 still appears as an explicit entry; a month with NO recorded expenses at all has no entry (genuinely absent from history, not zero-filled) -- these two cases are indistinguishable from stored data alone, so this module only counts months it has direct evidence for.
  *
  * @param {Array} expensePool - raw expense records (e.g. recentExpensePool).
  * @param {Date} monthStart - the first instant of the current, in-progress
  *   month; the aggregation window is the `RULES.maxHistoryMonths` complete
  *   calendar months strictly before this date.
  * @returns {Array<{monthKey: string, totalAmount: number}>} oldest first.
- *
- * Missing-month policy (explicit, deterministic, unchanged from V1): a
- * month with at least one recorded expense that happens to sum to exactly
- * 0 still appears as a real `{ totalAmount: 0 }` entry. A month with NO
- * recorded expenses AT ALL has no entry at all -- it is not zero-filled,
- * it is genuinely absent from history, and does not count toward
- * `historyMonthsAvailable`. This is a deliberate choice, not an oversight:
- * a month a user genuinely had zero spending activity in is
- * indistinguishable, from the stored data alone, from a month with no
- * data collected at all, so this module does not claim to tell them apart
- * and instead only counts months it has direct evidence for.
  */
 function buildCompletedMonthSeries(expensePool, monthStart) {
   if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) {
@@ -111,11 +74,7 @@ function buildCompletedMonthSeries(expensePool, monthStart) {
   return series;
 }
 
-/**
- * Aggregate scalar total for the current, in-progress month -- a single
- * number, never the raw record array itself, so this too never crosses the
- * forecastAnalyzer.js boundary as transaction-shaped data.
- */
+// Aggregate scalar total for the current in-progress month -- a single number, never the raw record array, so it never crosses the forecastAnalyzer.js boundary as transaction-shaped data.
 function computeCurrentPartialMonthTotal(currentMonthExpenses) {
   const source = Array.isArray(currentMonthExpenses) ? currentMonthExpenses : [];
   const total = source.reduce((sum, record) => {
@@ -127,78 +86,7 @@ function computeCurrentPartialMonthTotal(currentMonthExpenses) {
 }
 
 /**
- * Prediction Layer V1: the per-CATEGORY equivalent of
- * buildCompletedMonthSeries() above, and the only place transaction-level
- * `expenseCategory` is read for forecasting purposes. Emits aggregate-only
- * `{ category, monthlySeries: [{ monthKey, totalAmount }] }` entries --
- * never a raw record, never an amount attributable to a single expense.
- *
- * Categories are discovered ENTIRELY from the data: there is no fixed list,
- * no fixed count, and no hard-coded category name anywhere in this
- * function. The one non-data-derived string that can appear is the shared
- * `Uncategorized` marker (see below), which is an explicit signal that the
- * SOURCE data was invalid -- never a guess at what the user meant.
- *
- * Category Normalization -- the grouping key is the value produced by the
- * shared backend normalizer (utils/categoryNormalization.js), not the raw
- * stored string. Confirmed problem (completion-verification review): this
- * function previously grouped by a trim-only value, so historical variants
- * of the SAME category ("Food"/"food"/"FOOD", or the approved alias pair
- * "Medical"/"Health") each became their own separate forecast category.
- * That silently fragmented a category's history across two or more
- * entries, and because each fragment then got its own trend fit and its
- * own share of the reconciled total, it distorted the per-category
- * breakdown rather than merely mislabelling it. Normalizing here merges
- * case, repeated-whitespace, and approved alias variants into one entry,
- * while a genuinely new/unknown category is preserved as its own distinct
- * (only mechanically cleaned) category -- never folded into an existing
- * bucket.
- *
- * BEHAVIOUR CHANGE, deliberate and required: a record whose category is
- * missing/blank/non-string is NO LONGER skipped. It now groups under the
- * explicit `Uncategorized` marker (never silently under "Others", a real
- * category a user can genuinely choose). Skipping it was a real
- * conservation defect: such a record's amount still counted toward the
- * overall completed-month total that this breakdown reconciles against,
- * but belonged to no category at all, so the category amounts could not
- * sum to the published total. Only the CATEGORY skip is removed -- records
- * with an invalid date or uncoercible amount are still skipped exactly as
- * before, by the unchanged guards below.
- *
- * This changes no forecast formula, period, window, ordering rule, output
- * shape, or caching behaviour -- only which bucket a given amount is
- * counted in.
- *
- * Same window, same exclusions and same skip-don't-throw policy as
- * buildCompletedMonthSeries(): complete calendar months strictly before
- * `monthStart` only, bounded to `RULES.maxHistoryMonths`, malformed records
- * silently dropped, input never mutated, output order deterministic
- * (categories sorted by name ascending; each series oldest-first).
- *
- * TIMELINE ALIGNMENT (Prediction Layer V1 correction). Every category is
- * aligned against ONE canonical completed-month timeline -- exactly the
- * months buildCompletedMonthSeries() emitted, i.e. the months in which the
- * user had ANY eligible spending. A month that is on that timeline but in
- * which this category recorded nothing is emitted as an explicit
- * `totalAmount: 0` point, not omitted.
- *
- * This is the fix for a real misallocation defect: previously a category
- * seen in only 3 scattered months of a 12-month active timeline produced a
- * 3-point series, so its own trend fit (and the sparse smoothed-share
- * fallback) treated those 3 observations as the category's ENTIRE history
- * and predicted as if it spent that much every month -- over-predicting an
- * intermittent category roughly 4x in the observed case and, because the
- * breakdown reconciles to a fixed total, under-predicting the regular
- * categories by the same amount. Zero-filling against the canonical
- * timeline makes "this category was absent that month" a real observation
- * of zero, which is what it actually is.
- *
- * Deliberately bounded: zeros are inserted ONLY for months already on the
- * canonical timeline. The current partial month is never added (it is not
- * on that timeline), months outside the usable history window are never
- * added, and a month in which the user genuinely recorded nothing at all
- * stays absent for every category -- this function never invents activity
- * the user did not have.
+ * Per-category equivalent of buildCompletedMonthSeries() -- the only place transaction-level `expenseCategory` is read for forecasting, emitting aggregate-only entries. Categories are discovered entirely from the data (no fixed list); the grouping key is the shared normalizer's output (utils/categoryNormalization.js), so case/whitespace/alias variants of the same category ("Food"/"food", "Medical"/"Health") merge into one entry instead of fragmenting the trend fit. A record with a missing/blank category groups under the explicit `Uncategorized` marker rather than being skipped, so category amounts still sum to the published total. Every category is aligned against the canonical completed-month timeline buildCompletedMonthSeries() emits: a month on that timeline with nothing recorded for this category becomes an explicit 0 rather than a gap, which is what prevents an intermittent category's sparse history from over-predicting its trend.
  *
  * @param {Array} expensePool - raw expense records (e.g. recentExpensePool).
  * @param {Date} monthStart - first instant of the current, in-progress month.
@@ -229,11 +117,7 @@ function buildCompletedMonthCategorySeries(expensePool, monthStart) {
     const amount = toFiniteAmount(record.expenseAmount);
     if (amount === null) continue;
 
-    // Computed only for records that survive the date/amount guards above,
-    // so a dropped record is never normalized needlessly. Never returns
-    // null/empty (see normalizeCategoryForGrouping), so every record whose
-    // amount reaches the overall completed-month total also reaches exactly
-    // one category bucket here.
+    // Computed only for records that survive the guards above; never returns null/empty, so every record that reaches the total also reaches exactly one category bucket.
     const category = normalizeCategoryForGrouping(record.expenseCategory);
 
     const key = monthKeyOf(date);
@@ -242,11 +126,7 @@ function buildCompletedMonthCategorySeries(expensePool, monthStart) {
     months.set(key, (months.get(key) ?? 0) + amount);
   }
 
-  // The canonical completed-month timeline: exactly the months
-  // buildCompletedMonthSeries() emits for this same pool and anchor -- the
-  // months the user had ANY eligible spending in. Derived by calling that
-  // function rather than re-deriving the rule here, so the two can never
-  // disagree about which months are eligible.
+  // Canonical completed-month timeline, derived by calling buildCompletedMonthSeries() rather than re-deriving the rule here, so the two can never disagree about which months are eligible.
   const canonicalMonthKeys = buildCompletedMonthSeries(expensePool, monthStart).map(
     (point) => point.monthKey
   );
@@ -254,10 +134,7 @@ function buildCompletedMonthCategorySeries(expensePool, monthStart) {
   return [...byCategory.entries()]
     .map(([category, months]) => ({
       category,
-      // Aligned against every canonical month: a month on the timeline in
-      // which this category recorded nothing becomes an explicit 0, so an
-      // intermittent category is evaluated over its true timeline rather
-      // than only the months it happened to appear in.
+      // Aligned against every canonical month: a month with nothing recorded becomes an explicit 0, so an intermittent category is evaluated over its true timeline, not just the months it appeared in.
       monthlySeries: canonicalMonthKeys.map((key) => ({
         monthKey: key,
         totalAmount: months.has(key) ? round2(months.get(key)) : 0,
@@ -267,17 +144,7 @@ function buildCompletedMonthCategorySeries(expensePool, monthStart) {
     .sort((a, b) => (a.category < b.category ? -1 : a.category > b.category ? 1 : 0));
 }
 
-/**
- * Prediction Layer V1: count of DISTINCT calendar days carrying at least
- * one valid expense inside the same completed-month window. A single
- * descriptive scalar for the forecast's data-quality summary -- never a
- * date list, never a per-day breakdown, so nothing transaction-shaped
- * crosses this boundary.
- *
- * "Active days" deliberately counts days with recorded activity, not the
- * calendar span: a user who logged expenses on 12 days spread across 6
- * months has 12 active days, not ~180.
- */
+// Count of distinct calendar days with at least one valid expense in the completed-month window -- a single scalar for the forecast's data-quality summary, never a date list. Counts days with recorded activity, not calendar span (12 days spread across 6 months is 12 active days, not ~180).
 function countActiveDays(expensePool, monthStart) {
   if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) {
     return 0;

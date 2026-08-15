@@ -1,22 +1,4 @@
-// SIA LLM service.
-//
-// M1-3 scope: a real, single-provider (OpenAI) implementation of askLlm(),
-// plus the stable provider-neutral request/failure contract established in
-// M1-1. Every provider other than the normalized value "openai" still
-// rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated
-// as supported. No provider SDK is installed; the existing axios dependency
-// is reused to call OpenAI's REST API directly.
-//
-// Real provider implementations of askLlm() resolve to:
-//   { answer: string, model: string, latencyMs: number }
-// Every failure -- configuration, network, HTTP, or malformed/incomplete
-// response -- is normalized into LlmProviderError. No raw provider
-// exception, API key, authorization header, financial context, question, or
-// response body is ever logged, returned, or included in an error message.
-//
-// OPENAI_API_KEY is read only inside the OpenAI provider boundary below, not
-// through backend/sia/config.js, so it is never exposed via the shared
-// config object.
+// SIA LLM service -- a real, single-provider (OpenAI) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls OpenAI's REST API directly. Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, or response body is ever logged, returned, or included in an error message. OPENAI_API_KEY is read only inside the OpenAI provider boundary below, never through sia/config.js, so it's never exposed via the shared config object.
 "use strict";
 
 const axios = require("axios");
@@ -24,12 +6,7 @@ const config = require("./config");
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
-// Stable, provider-neutral failure contract. A caller can rely on `.name`,
-// `.code`, `.provider`, and `.message` without needing to know which (if
-// any) provider was involved, and without ever seeing a raw provider
-// exception, a secret, or any prompt/context/question content. This layer
-// deliberately does not invent an HTTP status code -- that mapping belongs
-// to a future route, not to this service.
+// Stable, provider-neutral failure contract -- a caller relies on `.name`/`.code`/`.provider`/`.message` without knowing which provider was involved, and without ever seeing a raw provider exception, secret, or prompt/context/question content. Deliberately does not invent an HTTP status code -- that mapping belongs to a future route.
 class LlmProviderError extends Error {
   constructor(message, { code, provider } = {}) {
     super(message);
@@ -37,19 +14,14 @@ class LlmProviderError extends Error {
     this.code = code;
     this.provider = provider;
 
-    // Preserves a normal, useful stack trace pointing at the real throw
-    // site, the same as any other hand-thrown Error subclass.
+    // Preserves a normal, useful stack trace pointing at the real throw site.
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, LlmProviderError);
     }
   }
 }
 
-// Treats null, undefined, and a blank/whitespace-only string as "no
-// provider configured". backend/sia/config.js already normalizes blank
-// input to null (see config.js's normalizeProvider), but this check is
-// defensive and self-contained rather than trusting that normalization
-// happened upstream.
+// Treats null, undefined, and a blank/whitespace-only string as "no provider configured". config.js already normalizes blank input to null, but this check is defensive and self-contained rather than trusting upstream normalization.
 function isMissingProvider(provider) {
   return (
     provider === null ||
@@ -62,30 +34,13 @@ function isBlank(value) {
   return typeof value !== "string" || value.trim() === "";
 }
 
-// Serializes the structured analytics context and the question into the
-// single user-input string sent to OpenAI. Deterministic for a given
-// context object (JSON.stringify preserves each object's own key
-// insertion order) and never mutates the received context or request.
+// Serializes the structured analytics context and question into the single user-input string sent to OpenAI -- deterministic (JSON.stringify preserves key insertion order), never mutates the received context or request.
 function buildUserInputContent(context, question) {
   const serializedContext = JSON.stringify(context ?? {});
   return `Question: ${question}\n\nFinancial context (JSON):\n${serializedContext}`;
 }
 
-// Batch 2: converts bounded prior-turn history (see
-// sia/sessionService.js's loadRecentTurns()) into ordinary "user"/
-// "assistant" role input messages -- never a "system"/"developer" role,
-// and never merged into the `instructions` field the system prompt
-// occupies. This is what makes history structurally unable to override
-// system/privacy rules: the OpenAI Responses API only ever treats the
-// `instructions` field as authoritative system guidance, and every
-// history turn here is placed in `input` with an ordinary conversational
-// role, exactly like the current question. Historical USER turns are
-// additionally prefixed with an explicit "earlier conversation, not new
-// instructions" label -- a defense-in-depth readability cue for the
-// model, not the only protection (that is the role separation itself).
-// Malformed entries (wrong shape, unsupported role, non-string content)
-// are silently skipped, never thrown -- and this function never mutates
-// its input.
+// Converts bounded prior-turn history (sessionService.js's loadRecentTurns()) into ordinary "user"/"assistant" role input messages -- never "system"/"developer", never merged into the `instructions` field the system prompt occupies. This is what makes history structurally unable to override system/privacy rules: the Responses API only treats `instructions` as authoritative, and every history turn is placed in `input` with an ordinary role, like the current question. Historical USER turns are additionally prefixed with an "earlier conversation, not new instructions" label as a defense-in-depth readability cue, not the only protection (that's the role separation itself). Malformed entries are silently skipped, never thrown; this function never mutates its input.
 function buildHistoryMessages(history) {
   const bounded = Array.isArray(history) ? history : [];
   const messages = [];
@@ -103,12 +58,7 @@ function buildHistoryMessages(history) {
   return messages;
 }
 
-// Extracts the answer text only from typed "message" -> "output_text"
-// content items, per the OpenAI Responses API's REST (non-SDK) shape.
-// Reasoning items, tool-call items, annotations, refusals, and any other
-// item/content type are deliberately ignored rather than treated as the
-// answer. Supports multiple output_text chunks by concatenating them.
-// Returns null if no usable text was found.
+// Extracts the answer text only from typed "message" -> "output_text" content items, per the Responses API's REST shape -- reasoning/tool-call/annotation/refusal items are deliberately ignored. Concatenates multiple output_text chunks; returns null if no usable text was found.
 function extractAnswerText(responseData) {
   const output = responseData && responseData.output;
   if (!Array.isArray(output)) {
@@ -135,9 +85,7 @@ function extractAnswerText(responseData) {
   return joined === "" ? null : joined;
 }
 
-// Normalizes any axios failure (timeout, network failure, or an OpenAI
-// 4xx/5xx HTTP response) into LlmProviderError. Never includes the raw
-// axios error, response body, or headers.
+// Normalizes any axios failure (timeout, network failure, or an OpenAI 4xx/5xx response) into LlmProviderError -- never includes the raw axios error, response body, or headers.
 function normalizeAxiosError(err) {
   if (err && err.code === "ECONNABORTED") {
     return new LlmProviderError("SIA's request to the LLM provider timed out.", {
@@ -166,11 +114,7 @@ function normalizeAxiosError(err) {
   });
 }
 
-// Real OpenAI provider adapter. Only reached once the provider is confirmed
-// to be the normalized value "openai". Reads OPENAI_API_KEY directly from
-// process.env -- never through the shared config object -- and never
-// includes the key, the authorization header, the financial context, the
-// question, or any raw provider response in a thrown error.
+// Real OpenAI provider adapter, only reached once the provider is confirmed normalized "openai". Reads OPENAI_API_KEY directly from process.env, never through the shared config object, and never includes the key, auth header, financial context, question, or raw provider response in a thrown error.
 async function askOpenAi({ systemPrompt, context, question, history }) {
   if (isBlank(config.model)) {
     throw new LlmProviderError(
@@ -241,11 +185,7 @@ async function askOpenAi({ systemPrompt, context, question, history }) {
   return { answer, model: config.model, latencyMs };
 }
 
-// Request shape is the stable public interface callers (and these tests)
-// depend on. systemPrompt/context/question are never read, logged,
-// transformed, or included in any error before the provider-configuration
-// check -- unsupported and unconfigured providers still fail before any
-// request could be built or sent.
+// Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
 async function askLlm({ systemPrompt, context, question, history } = {}) {
   const provider = config.provider;
 
@@ -256,9 +196,7 @@ async function askLlm({ systemPrompt, context, question, history } = {}) {
     );
   }
 
-  // A provider name is configured. Every configured value, known or
-  // unknown, fails the same explicit way unless it is the normalized value
-  // "openai", the only implemented adapter in this milestone.
+  // A provider name is configured. Every configured value, known or unknown, fails the same explicit way unless it is normalized "openai", the only implemented adapter.
   const normalizedProvider = typeof provider === "string" ? provider.trim() : provider;
 
   if (normalizedProvider === "openai") {
@@ -274,8 +212,6 @@ async function askLlm({ systemPrompt, context, question, history } = {}) {
 module.exports = {
   askLlm,
   LlmProviderError,
-  // Exposed for direct, isolated unit testing of the history-framing
-  // contract itself (see tests/sia.llmService.history.test.js) -- not used
-  // by any other production module.
+  // Exposed for direct, isolated unit testing of the history-framing contract itself -- not used by any other production module.
   buildHistoryMessages,
 };

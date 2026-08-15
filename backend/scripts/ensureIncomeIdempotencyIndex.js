@@ -118,11 +118,7 @@ async function run({ dryRun = false } = {}) {
         await mongoose.disconnect();
         return { created: true, alreadyPresent: false };
     } catch (err) {
-        // Never swallowed: an IndexOptionsConflict (existing index with this
-        // name but different options) or a duplicate-key error surfaced
-        // during the build (pre-existing data violating the new unique
-        // constraint) must reach the operator verbatim so they can resolve
-        // the conflict before retrying -- not be silently ignored.
+        // Never swallowed -- an IndexOptionsConflict or duplicate-key error must reach the operator verbatim so they can resolve it before retrying.
         console.error('[ensureIncomeIdempotencyIndex] failed:', err && err.message);
         try {
             await mongoose.disconnect();

@@ -1,48 +1,11 @@
-// Phase 1 (V1): a pure, deterministic expense-anomaly analyzer.
-//
-// Scope boundary: this file performs NO database, Redis, filesystem, HTTP,
-// ML-service, or provider calls itself -- reportGenerator.js is the only
-// caller, feeding it exclusively provider/context data (see the `analyze`
-// call site there) and storing its return value unmodified on the
-// generated report's `anomalies` section. Calling `analyze()` here has no
-// side effects at all; it is a pure statistical function used by the report
-// pipeline, not a standalone service.
-//
-// Detects expenses that are unusually LARGE relative to the authenticated
-// user's own historical spending in the exact same stored category --
-// never relative to other users, never relative to a different category,
-// and never in the downward direction (refunds/small expenses are out of
-// scope by design). This is a personal-history observation, not a fraud,
-// wrongdoing, or "financial problem" signal.
+// A pure, deterministic expense-anomaly analyzer -- no database/Redis/filesystem/HTTP/ML-service calls; reportGenerator.js is the only caller and stores the return value unmodified. Detects expenses unusually large relative to the authenticated user's own historical spending in the exact same category, never relative to other users or categories, and never downward (refunds excluded by design) -- a personal-history observation, not a fraud or "financial problem" signal.
 "use strict";
 
 const { anomaly: RULES } = require("./scores/expenseAnomalyRules");
-// Category normalization fix (confirmed defect): this analyzer previously
-// compared `expenseCategory` as an exact, raw stored string on both the
-// candidate side and the historical-baseline side, so case/whitespace
-// variants and approved aliases of the SAME category (e.g. "Food"/"food",
-// or "Medical"/"Health") were treated as separate categories. That could
-// silently keep a category below `RULES.minBaselineSampleSize` even when
-// the user had well over that many same-category expenses in aggregate, or
-// compute a thinner/noisier median-MAD baseline than the data actually
-// supports -- suppressing or weakening detection. Fixed by normalizing
-// through the SAME shared grouping utility forecastInputAggregator.js
-// already uses for the identical class of problem in forecasting
-// (`normalizeCategoryForGrouping`) -- not a second, divergent
-// normalization implementation. Only grouping/comparison and the public
-// `category` field are affected; every other rule below (minimum sample
-// size, baseline window, upper-tail-only, modified-Z/median-ratio
-// thresholds, severity tiers, sorting, top-10 cap, malformed-record and
-// invalid-amount handling, user isolation, temporal boundaries) is
-// unchanged.
+// Category grouping is normalized through the same shared utility forecastInputAggregator.js uses (normalizeCategoryForGrouping), so case/whitespace/alias variants of the same category ("Food"/"food", "Medical"/"Health") share one baseline instead of silently fragmenting sample size on both the candidate and historical sides.
 const { normalizeCategoryForGrouping } = require("../../utils/categoryNormalization");
 
-// Narrowly guarded numeric coercion -- Number() throws for a Symbol, and
-// can throw for an object with no usable valueOf/toString (e.g. an
-// Object.create(null) value, or one with a deliberately throwing
-// valueOf/toString). Any such value is simply invalid data to skip, the
-// same as a non-finite result -- this is not a broad try/catch around the
-// analyzer's own logic, only around this one primitive coercion.
+// Narrowly guarded numeric coercion -- Number() can throw for a Symbol or a valueOf/toString-less object; any such value is treated as invalid data to skip, same as a non-finite result.
 const toFiniteAmount = (value) => {
   let num;
   try {
@@ -62,11 +25,7 @@ const round2 = (value) => Number(Number(value).toFixed(2));
 
 const isNonBlankString = (value) => typeof value === "string" && value.trim() !== "";
 
-// The single, safe identifier-serialization helper. Coerces `_id` to a
-// string exactly once; a missing, blank, or uncoercible value (including a
-// stateful or throwing toString()) is treated as invalid and rejected
-// without ever crashing analyze(). The original `_id` value itself is
-// never retained or exposed -- only this serialized string is.
+// The single, safe identifier-serialization helper -- coerces `_id` to a string exactly once; a missing/blank/uncoercible value is rejected without crashing analyze(). The original `_id` is never retained or exposed, only this serialized string.
 const serializeId = (value) => {
   if (value === undefined || value === null) return null;
 
@@ -128,13 +87,7 @@ const toCandidate = (expense, monthStart, monthEndExclusive) => {
   };
 };
 
-// True when a baseline record is a valid, in-window, same-category,
-// positive-amount historical data point. `category` is already the
-// candidate's CANONICAL grouping value (see toCandidate above), so the
-// comparison here normalizes the baseline record's own raw stored category
-// through the identical shared utility before comparing -- case variants,
-// whitespace variants, and approved aliases on the historical side now
-// converge on the same baseline as the candidate side.
+// True when a baseline record is a valid, in-window, same-category, positive-amount historical data point -- normalizes the baseline record's raw category through the same shared utility before comparing, so historical-side variants converge on the same baseline as the candidate side.
 const isValidBaselineRecord = (expense, category, baselineStart, baselineEndExclusive) => {
   if (!expense || typeof expense !== "object") return false;
   if (normalizeCategoryForGrouping(expense.expenseCategory) !== category) return false;
@@ -222,10 +175,7 @@ const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMon
 
   const baselineSource = Array.isArray(recentExpensePool) ? recentExpensePool : [];
 
-  // Only compute baselines for categories that at least one candidate
-  // actually needs -- matches how eligibleCategoryCount /
-  // insufficientHistoryCategoryCount are defined (over candidate
-  // categories), and avoids wasted work over irrelevant categories.
+  // Only compute baselines for categories at least one candidate needs -- matches how eligibleCategoryCount/insufficientHistoryCategoryCount are defined and avoids wasted work.
   const candidateCategories = [...new Set(candidates.map((c) => c.category))];
 
   const categoryStats = new Map();

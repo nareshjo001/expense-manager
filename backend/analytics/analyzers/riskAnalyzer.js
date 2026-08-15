@@ -1,16 +1,4 @@
-// Risk Intelligence V1: a pure, deterministic, explainable risk analyzer.
-//
-// Scope boundary (mirrors expenseAnomalyAnalyzer.js / forecastAnalyzer.js):
-// this file performs NO database, Redis, filesystem, HTTP, ML-service, or
-// SIA/LLM calls, and never calls `new Date()`. It consumes ONLY
-// already-computed report sections (spending, budgets, trends,
-// financialHealth, anomalies, forecast) -- never raw Expense/Budget/Income
-// collections -- and never lets an LLM invent a risk: every signal below is
-// a concrete, rule-based check against fields those sections already
-// guarantee, with one fixed reason code and one fixed severity each (see
-// analytics/analyzers/scores/riskRules.js). There is no opaque aggregate
-// score and no probabilistic ("70% chance...") language anywhere in this
-// output.
+// Risk Intelligence V1: pure, deterministic, explainable risk analyzer -- no DB/Redis/HTTP/ML-service/SIA calls, no `new Date()`; consumes only already-computed report sections (never raw collections); every signal is a concrete rule-based check with one fixed reason code and severity (see scores/riskRules.js), no opaque aggregate score, no probabilistic language.
 "use strict";
 
 const { risk: RULES } = require("./scores/riskRules");
@@ -21,9 +9,7 @@ const round2 = (value) => Number(Number(value).toFixed(2));
 
 const SEVERITY_RANK = { low: 0, moderate: 1, high: 2 };
 
-// Deterministic tie-break: severity descending, then reasonCode
-// lexicographically ascending -- never insertion order, never a hidden
-// timestamp.
+// Deterministic tie-break: severity descending, then reasonCode ascending -- never insertion order or a hidden timestamp.
 function compareSignals(a, b) {
   const rankDiff = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
   if (rankDiff !== 0) return rankDiff;
@@ -40,11 +26,7 @@ function buildSignal(reasonCode, evidence) {
   };
 }
 
-// -- individual signal evaluators --------------------------------------
-// Each returns a signal object or null. Every evidence field copied here
-// is a plain number/string/boolean already present on the source report
-// section -- no raw record, no user identifier, no internal sort key is
-// ever included.
+// -- individual signal evaluators -- each returns a signal object or null; evidence fields are plain number/string/boolean values already present on the source section -- no raw record, user identifier, or internal sort key.
 
 function evaluateBudgetOverspent(budgets) {
   if (!isPlainObject(budgets) || budgets.hasData !== true || budgets.hasBudget !== true) return null;
@@ -57,10 +39,7 @@ function evaluateBudgetOverspent(budgets) {
   });
 }
 
-// Deliberately mutually exclusive with evaluateBudgetOverspent: only
-// evaluated when isOverspent is explicitly false, so the same underlying
-// "budget is under pressure" condition is never counted by both signals at
-// once.
+// Deliberately mutually exclusive with evaluateBudgetOverspent (only runs when isOverspent is explicitly false), so one "budget under pressure" condition is never double-counted.
 function evaluateLowRemainingBudget(budgets) {
   if (!isPlainObject(budgets) || budgets.hasData !== true || budgets.hasBudget !== true) return null;
   if (budgets.isOverspent !== false) return null;
@@ -93,9 +72,7 @@ function evaluateAbnormalHighValueExpenses(anomalies) {
 
   if (risky.length === 0) return null;
 
-  // Bounded, allowlisted evidence -- only the fields already safe on the
-  // anomaly record (expenseAnomalyAnalyzer.js's own output contract, which
-  // never carries userId, raw expense objects, or internal sort keys).
+  // Bounded, allowlisted evidence -- only fields already safe on the anomaly record's own output contract (never userId, raw expense objects, or sort keys).
   const evidenceAnomalies = risky.slice(0, RULES.maxAnomalyEvidenceCount).map((a) => ({
     expenseId: a.expenseId,
     category: a.category,
@@ -109,11 +86,7 @@ function evaluateAbnormalHighValueExpenses(anomalies) {
   });
 }
 
-// Forecast is explicitly OPTIONAL evidence: when forecast is missing or
-// forecast.nextMonthForecast.hasData is false, this signal is simply
-// skipped (returns null) -- it never makes the whole risk analyzer fail or
-// return no-data. See the module-level note above and
-// analytics/reportGenerator.js's integration comment.
+// Forecast is explicitly OPTIONAL evidence -- when missing/unavailable this signal is simply skipped (returns null), never fails the whole analyzer or forces no-data.
 function evaluateForecastedPressure(forecast, budgets) {
   const nextMonth = forecast && forecast.nextMonthForecast;
   if (!isPlainObject(nextMonth) || nextMonth.hasData !== true) return null;
@@ -149,8 +122,7 @@ function evaluateDeterioratingHealth(financialHealth) {
  * @param {object} [input.trends]
  * @param {object} [input.financialHealth]
  * @param {object} [input.anomalies]
- * @param {object} [input.forecast] - optional; a missing/unavailable forecast
- *   never invalidates the rest of the risk section (see evaluateForecastedPressure).
+ * @param {object} [input.forecast] - optional; missing/unavailable never invalidates the rest of the section.
  */
 const analyze = ({ spending, budgets, trends, financialHealth, anomalies, forecast } = {}) => {
   const hasAnySourceData =

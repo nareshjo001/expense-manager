@@ -157,22 +157,7 @@ const calculateMicroSpending = (expenses = [], config = {}) => {
   };
 };
  
-// Category Normalization -- both sides of the impulse-category match are
-// normalized through the SAME shared normalizeCategory() before
-// comparing: `config.categories` (the business rule's own configured
-// list, e.g. habitRules.js's ["Shopping", "Entertainment", "Food",
-// "Personal Care"]) and every expense's own stored `expenseCategory`.
-// Confirmed problem (discovery report): the old `new Set(config.categories)`
-// + `.has(e?.expenseCategory)` was an exact, case-sensitive string match --
-// a stored category of "shopping" (any casing/whitespace variant other
-// than the literal configured string) silently never matched, understating
-// impulse-spending totals with no error or signal. This does NOT change
-// WHICH categories the business rule considers impulsive -- only makes the
-// comparison itself normalization-aware. An expense whose own category
-// fails to normalize (missing/invalid legacy data) simply never matches
-// (normalizeCategory returns `null`, which is filtered out of the
-// configured set below and can therefore never equal any expense's
-// normalized value either) -- fails the match safely, never throws.
+// Both sides of the impulse-category match go through the shared normalizeCategory() before comparing (config.categories vs each expense's stored expenseCategory) -- fixes the old exact-string match that silently understated totals for case/whitespace variants, without changing which categories count as impulsive; a category that fails to normalize just never matches (null is filtered from the configured set), never throws.
 const calculateImpulseSpending = (expenses = [], config = {}) => {
   const list = Array.isArray(expenses) ? expenses : [];
   const impulseCategories = new Set(
@@ -259,16 +244,7 @@ const calculateSubscriptionPattern = (expenses = []) => {
   };
 };
  
-// Category Normalization -- compares the NORMALIZED category against the
-// canonical literal "Shopping" (itself already a stable, normalized
-// value), not the raw stored string. Confirmed problem (discovery
-// report): the old `e?.expenseCategory === "Shopping"` exact match
-// silently reported zero shopping activity for any historical or
-// differently-cased/whitespace-padded variant ("shopping", "Shopping ",
-// etc.). Does not change WHICH category name counts as shopping -- only
-// makes the comparison itself normalization-aware. A missing/invalid
-// stored category normalizes to `null`, which can never equal "Shopping"
-// -- fails the match safely, never throws.
+// Compares the normalized category against canonical "Shopping" rather than the raw stored string -- fixes the old exact-match that silently missed cased/whitespace-padded variants, without changing which name counts as shopping; a missing/invalid category normalizes to null and simply never matches.
 const calculateShoppingFrequency = (expenses = []) => {
   const list = Array.isArray(expenses) ? expenses : [];
   const shoppingExpenses = list.filter((e) => normalizeCategory(e?.expenseCategory) === "Shopping");

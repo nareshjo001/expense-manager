@@ -1,11 +1,6 @@
 const rules = require("../scores/healthRules");
 
-/**
- * Stability = consistency of financial DISCIPLINE across budget/trend/
- * habits signals. Distinct from spendingScore's coefficient-of-variation
- * (week-to-week spending VOLATILITY) — deliberately not merged, but
- * note it partially overlaps with budget/trend scores.
- */
+// Stability = consistency of financial DISCIPLINE across budget/trend/habits signals -- distinct from spendingScore's CV-based volatility, deliberately not merged though it partially overlaps.
 const calculateStabilityScore = ({ budget = {}, trend = {}, habits = {} } = {}) => {
   if (budget.hasBudget === false && trend.hasData === false && habits.hasData === false) {
     return {
@@ -47,12 +42,7 @@ const calculateStabilityScore = ({ budget = {}, trend = {}, habits = {} } = {}) 
   };
 };
 
-/**
- * Weighted average of each module's normalizedScore. Modules with
- * score:null are EXCLUDED and remaining weights renormalized — a
- * missing module must never count as 0 or shrink the max achievable
- * score unfairly.
- */
+// Weighted average of each module's normalizedScore -- score:null modules are excluded and remaining weights renormalized, so a missing module never counts as 0 or shrinks the max achievable score.
 const calculateHealthScore = (scores = {}) => {
   const entries = Object.entries(rules.weights)
     .map(([key, weight]) => ({ key, weight, result: scores[key] }))

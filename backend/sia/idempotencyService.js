@@ -1,30 +1,4 @@
-// SIA request-level idempotency service -- Batch 3B.1.
-//
-// Owns every read/write to models/SiaRequest.js and is the ONLY place the
-// (user, clientMessageId) reservation lifecycle is implemented.
-//
-// The guarantee this provides, precisely stated:
-//
-//   For a given (userId, clientMessageId), at most one caller at a time
-//   holds an unexpired `processing` lease, and only that caller may invoke
-//   the LLM provider. Every other concurrent or later caller either
-//   replays the already-stored response, resumes from an already-stored
-//   validated answer, or is told the request is still in progress. No
-//   follower ever calls the provider.
-//
-// THE BOUNDARY (deliberately not overstated): this is NOT crash-proof
-// "exactly once" delivery, and it cannot be. If the owning process dies
-// after the provider produced an answer but before markAnswerReady()
-// committed it, that answer is lost and the lease eventually expires, so a
-// later retry legitimately calls the provider a second time. Mongo can
-// guarantee mutual exclusion and durable state transitions; it cannot make
-// a remote HTTP call to OpenAI atomic with a local database write. What is
-// guaranteed is: no DUPLICATE CONCURRENT provider call, no silently
-// divergent answer, and no unbounded lock.
-//
-// Never stores or returns the structured financial context, the system
-// prompt, the raw provider response, or an API key -- only the bounded
-// fields models/SiaRequest.js's schema allows.
+// SIA request-level idempotency service -- owns every read/write to models/SiaRequest.js. Guarantees at most one caller per (userId, clientMessageId) holds an unexpired lease and may call the provider; this is not crash-proof exactly-once (a crash between provider response and markAnswerReady() loses the answer and lets a later retry call the provider again), but it prevents duplicate concurrent provider calls, divergent answers, and unbounded locks. Never stores the structured financial context, system prompt, raw provider response, or an API key -- only models/SiaRequest.js's bounded fields.
 "use strict";
 
 const crypto = require("crypto");
@@ -33,23 +7,11 @@ const SiaRequest = require("../models/SiaRequest");
 const { REQUEST_STATUS } = require("../models/SiaRequest");
 const config = require("./config");
 
-// How long a single reservation may hold the exclusive right to call the
-// provider. Aligned with the ACTUAL provider timeout (sia/config.js's
-// timeoutMs, default 8000ms) plus a fixed allowance for the work that
-// surrounds the provider call inside one request: context building before
-// it, and grounded-response validation plus session persistence after it.
-// Bounded on purpose -- an owner that crashes mid-flight must not hold the
-// key forever, and this is the interval after which a later retry may
-// safely take over.
+// How long a reservation may hold the exclusive right to call the provider -- the provider timeout plus a fixed allowance for context building and post-call validation/persistence, bounded so a crashed owner doesn't hold the key forever.
 const LEASE_OVERHEAD_MS = 7000;
 const LEASE_MS = () => config.timeoutMs + LEASE_OVERHEAD_MS;
 
-// How long a FOLLOWER (a concurrent duplicate that lost the reservation
-// race) waits for the owner to finish before giving up with a deterministic
-// 409. Deliberately shorter than the owner's own lease so a follower always
-// resolves one way or the other while the owner is still legitimately
-// working -- it never waits long enough to see the lease expire and
-// mistake itself for an eligible new owner.
+// How long a follower waits for the owner to finish before giving up with a 409 -- deliberately shorter than the owner's own lease so it never mistakes an expiring lease for eligibility to become a new owner.
 const FOLLOWER_WAIT_MS = () => Math.min(config.timeoutMs, 10000);
 const FOLLOWER_POLL_INTERVAL_MS = 150;
 
@@ -70,21 +32,12 @@ const OUTCOME = Object.freeze({
   CONFLICT: "CONFLICT",
 });
 
-// Normalizes a question for fingerprinting ONLY -- never for answering.
-// Trims and collapses internal whitespace runs so that cosmetically
-// identical submissions (a trailing newline, a double space) are correctly
-// recognized as the same request. Deliberately case-SENSITIVE: treating
-// two differently-cased questions as identical would risk replaying an
-// answer for a question the user did not actually ask, and the safe
-// failure mode here is a 409 conflict, not a wrong replay.
+// Normalizes a question for fingerprinting only (never for answering) -- trims/collapses whitespace but stays case-sensitive, since misclassifying two differently-cased questions as identical risks replaying the wrong answer.
 function normalizeQuestion(question) {
   return typeof question === "string" ? question.trim().replace(/\s+/g, " ") : "";
 }
 
-// A hash, not the question text -- the question is already stored once, in
-// models/SiaMessage.js, under the conversation's own ownership rules.
-// Storing it a second time here would duplicate user content into an
-// operational record for no benefit.
+// A hash, not the question text -- the question is already stored once in models/SiaMessage.js, so duplicating it here would put user content into an operational record for no benefit.
 function fingerprintQuestion(question) {
   return crypto.createHash("sha256").update(normalizeQuestion(question), "utf8").digest("hex");
 }
@@ -99,24 +52,14 @@ function leaseExpiryFromNow() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// True when the supplied session id materially disagrees with the one
-// already recorded for this request. An OMITTED session id never
-// conflicts -- that is exactly the first-turn-retry case (the client never
-// learned the session id because the original response was lost), and it
-// must be allowed to recover.
+// True when the supplied session id disagrees with the one already recorded. An omitted session id never conflicts -- that's the first-turn-retry case, which must be allowed to recover.
 function sessionConflicts(existingSessionId, requestedSessionId) {
   if (!requestedSessionId) return false;
   if (!existingSessionId) return false;
   return String(existingSessionId) !== String(requestedSessionId);
 }
 
-// Atomically takes ownership of a request whose lease has expired (an
-// abandoned owner) or which is sitting in `answer_ready` (a completed
-// provider call whose persistence never finished). The compare-and-set is
-// the `findOneAndUpdate` filter itself: it matches on the EXACT prior
-// ownerToken and status, so two racing takeover attempts cannot both
-// succeed -- only the first to reach MongoDB matches, and the second finds
-// the document already mutated and matches nothing.
+// Atomically takes ownership of a request with an expired lease or sitting in `answer_ready` -- the findOneAndUpdate filter is the CAS itself (exact prior ownerToken + status), so only one of two racing takeover attempts can match.
 async function takeOverRequest(existing, expectedStatus) {
   const ownerToken = newOwnerToken();
   const taken = await SiaRequest.findOneAndUpdate(
@@ -163,10 +106,7 @@ async function reserveRequest({ userId, clientMessageId, question, requestedSess
       });
       return { outcome: OUTCOME.OWNED, record: created, ownerToken };
     } catch (err) {
-      // A concurrent duplicate won the unique-index race between our
-      // findOne above and this create. MongoDB -- not application logic --
-      // is what decided the single winner. We are definitively the
-      // follower; fall through to evaluate the winner's record below.
+      // A concurrent duplicate won the unique-index race between findOne and this create -- MongoDB decided the winner; fall through to evaluate it as the follower.
       if (!err || err.code !== 11000) throw err;
       const winner = await SiaRequest.findOne({ user: userId, clientMessageId });
       if (!winner) throw err;
@@ -178,9 +118,7 @@ async function reserveRequest({ userId, clientMessageId, question, requestedSess
 }
 
 async function evaluateExisting(existing, questionFingerprint, requestedSessionId) {
-  // Same key, different payload -- always a conflict, decided BEFORE the
-  // provider could ever be reached, regardless of what state the prior
-  // request is in.
+  // Same key, different payload -- always a conflict, decided before the provider could ever be reached.
   if (existing.questionFingerprint !== questionFingerprint) {
     return { outcome: OUTCOME.CONFLICT, record: existing };
   }
@@ -194,28 +132,14 @@ async function evaluateExisting(existing, questionFingerprint, requestedSessionI
   }
 
   if (existing.status === REQUEST_STATUS.ANSWER_READY) {
-    // Batch 3G narrow regression fix: markAnswerReady() below renews
-    // processingExpiresAt to a fresh lease at the exact moment it commits
-    // the validated answer -- the original owner is then actively
-    // finishing finalization (session creation + persistence +
-    // markCompleted). Before this check existed, a duplicate arriving in
-    // that live window could take over immediately (the compare-and-set
-    // below still matches, since the live owner hasn't changed its own
-    // ownerToken yet), letting TWO finalizers run concurrently for the same
-    // first turn. Mirrors the PROCESSING branch's own lease check above
-    // exactly -- a live lease is never taken over, an expired or never-set
-    // one (0) remains recoverable via the existing atomic takeover.
+    // markAnswerReady() renews processingExpiresAt to a fresh lease when it commits the answer, so a live lease here means the original owner is still finishing finalization -- without this check a duplicate could start a second, concurrent finalizer for the same turn.
     const readyExpiresAt = existing.processingExpiresAt ? new Date(existing.processingExpiresAt).getTime() : 0;
     if (Number.isFinite(readyExpiresAt) && readyExpiresAt > Date.now()) {
-      // An owner is actively finishing finalization right now. This caller
-      // is a follower and must NOT start a second finalizer.
+      // An owner is actively finalizing right now -- this caller is a follower and must not start a second one.
       return { outcome: OUTCOME.IN_PROGRESS, record: existing };
     }
 
-    // A validated answer already exists and no owner is actively
-    // finalizing it. Take ownership so exactly one caller finishes the
-    // outstanding persistence -- and note that no provider call happens on
-    // this path at all.
+    // No owner is actively finalizing -- take ownership so exactly one caller finishes the outstanding persistence (no provider call on this path).
     const taken = await takeOverRequest(existing, REQUEST_STATUS.ANSWER_READY);
     if (taken) {
       return { outcome: OUTCOME.RESUME_ANSWER_READY, record: taken.record, ownerToken: taken.ownerToken };
@@ -227,14 +151,11 @@ async function evaluateExisting(existing, questionFingerprint, requestedSessionI
   // status === processing
   const expiresAt = existing.processingExpiresAt ? new Date(existing.processingExpiresAt).getTime() : 0;
   if (Number.isFinite(expiresAt) && expiresAt > Date.now()) {
-    // An owner is legitimately active. This caller is a follower and must
-    // NOT call the provider.
+    // An owner is legitimately active -- this caller is a follower and must not call the provider.
     return { outcome: OUTCOME.IN_PROGRESS, record: existing };
   }
 
-  // The lease expired -- the previous owner crashed or failed without
-  // releasing. Controlled takeover so the key stays retryable rather than
-  // being permanently poisoned.
+  // Lease expired -- the previous owner crashed or failed without releasing. Controlled takeover keeps the key retryable rather than permanently poisoned.
   const taken = await takeOverRequest(existing, REQUEST_STATUS.PROCESSING);
   if (taken) {
     return { outcome: OUTCOME.OWNED, record: taken.record, ownerToken: taken.ownerToken };
@@ -242,14 +163,7 @@ async function evaluateExisting(existing, questionFingerprint, requestedSessionI
   return { outcome: OUTCOME.IN_PROGRESS, record: existing };
 }
 
-// Commits the validated answer before session creation/persistence is
-// attempted. This is the checkpoint that makes a persistence failure
-// recoverable WITHOUT a second provider call.
-//
-// Batch 3F: `grounding` (optional) is committed at this exact same
-// checkpoint as `answer`/`intent` -- see models/SiaRequest.js -- so a
-// RESUME_ANSWER_READY recovery can rebuild the identical response the
-// original attempt would have returned, grounding included.
+// Commits the validated answer (including optional `grounding`, see models/SiaRequest.js) before session creation/persistence is attempted -- the checkpoint that makes a persistence failure recoverable without a second provider call, since RESUME_ANSWER_READY can rebuild the identical response from it.
 async function markAnswerReady({ requestId, ownerToken, answer, intent, sessionId, grounding }) {
   return SiaRequest.findOneAndUpdate(
     { _id: requestId, ownerToken },
@@ -267,8 +181,7 @@ async function markAnswerReady({ requestId, ownerToken, answer, intent, sessionI
   );
 }
 
-// Records the exact public payload that was returned, so any later
-// duplicate replays it verbatim rather than regenerating anything.
+// Records the exact public payload returned, so any later duplicate replays it verbatim rather than regenerating anything.
 async function markCompleted({ requestId, ownerToken, responseStatus, responsePayload, sessionId }) {
   return SiaRequest.findOneAndUpdate(
     { _id: requestId, ownerToken },
@@ -286,22 +199,12 @@ async function markCompleted({ requestId, ownerToken, responseStatus, responsePa
   );
 }
 
-// Releases a reservation after a failure that produced no usable answer
-// (provider error, grounding rejection, unclassifiable question). Deleting
-// rather than marking failed is deliberate: it leaves the key immediately
-// and cleanly retryable, which is exactly the required "a provider or
-// validation failure must not permanently poison the key" behaviour. The
-// compare-and-set on ownerToken means a caller can only ever release a
-// reservation it actually owns.
+// Releases a reservation after a failure that produced no usable answer. Deleting rather than marking failed leaves the key immediately, cleanly retryable; the ownerToken CAS means a caller can only release a reservation it actually owns.
 async function releaseRequest({ requestId, ownerToken }) {
   return SiaRequest.deleteOne({ _id: requestId, ownerToken });
 }
 
-// Bounded follower wait. Polls for the owner to reach `completed` and
-// returns the stored response so the duplicate caller receives exactly the
-// same answer the original caller did. Returns null if the owner is still
-// working when the budget expires -- the controller then answers with the
-// deterministic in-progress 409 rather than calling the provider itself.
+// Bounded follower wait -- polls for the owner to reach `completed` and returns the stored response; returns null if still working when the budget expires, so the controller answers with a 409 rather than calling the provider itself.
 async function awaitCompletedResponse({ userId, clientMessageId, waitMs }) {
   const budget = typeof waitMs === "number" ? waitMs : FOLLOWER_WAIT_MS();
   const deadline = Date.now() + budget;
@@ -310,10 +213,7 @@ async function awaitCompletedResponse({ userId, clientMessageId, waitMs }) {
     const current = await SiaRequest.findOne({ user: userId, clientMessageId }).lean();
 
     if (!current) {
-      // The owner released the reservation after a failure. There is no
-      // stored response to replay and this caller must not silently become
-      // a new provider caller inside the same request -- report
-      // in-progress/unresolved and let the client retry explicitly.
+      // The owner released the reservation after a failure -- no stored response to replay; report unresolved and let the client retry explicitly.
       return null;
     }
 

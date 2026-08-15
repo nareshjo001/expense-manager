@@ -1,49 +1,12 @@
-// SIA runtime-readiness evaluation -- Batch 3E.
-//
-// THE single authoritative answer to "can SIA answer a new question right
-// now?". Both GET /sia/status (Controllers/SiaControllers/status.js) and
-// POST /sia/ask (Controllers/SiaControllers/ask.js) call isSiaReady()
-// below -- the rules are deliberately implemented exactly once, so the
-// status endpoint can never advertise an availability the ask endpoint
-// would then refuse (or vice versa).
-//
-// WHAT THIS PROVES, PRECISELY: every locally verifiable configuration
-// requirement the currently-implemented provider adapter actually enforces
-// is satisfied. Each condition below mirrors a real, existing failure
-// branch in sia/llmService.js -- this module adds no new requirement of
-// its own, it only evaluates the same conditions EARLIER (before a request
-// is admitted) instead of after a provider call has already been attempted.
-//
-// WHAT THIS DELIBERATELY DOES NOT PROVE (the honest boundary): that OpenAI
-// is currently reachable, that the credential is accepted by OpenAI, that
-// the configured model exists or is entitled to this account, or that the
-// account has remaining quota. NO network request, provider call, DNS
-// lookup, or external probe happens here -- readiness is a purely local,
-// synchronous, deterministic configuration check. A ready result therefore
-// means "correctly configured", never "verified working". A request that
-// passes this gate can still legitimately fail later with the existing
-// generic 503 (see llmService.js's PROVIDER_* error codes), and that
-// remains the correct behaviour for a genuine provider/network failure.
-//
-// The credential itself is read ONLY to test whether a non-blank value
-// exists. It is never returned, logged, serialized, included in an error,
-// length-reported, or exposed in any form -- and it is deliberately NOT
-// validated against a prefix, character set, or assumed length, since
-// provider key formats change and a format guess would reject a valid key.
+// SIA runtime-readiness evaluation -- the single authoritative "can SIA answer a new question right now?" check, called by both GET /sia/status and POST /sia/ask so neither can diverge. Purely local/synchronous/deterministic: no network, provider, or DNS call, so "ready" means "correctly configured", never "verified working" -- a request that passes can still legitimately hit a 503 later (see llmService.js's PROVIDER_* codes). The credential is read only to test presence, never logged, returned, or format-validated.
 "use strict";
 
 const config = require("./config");
 
-// The providers this codebase actually implements an adapter for. Kept in
-// sync with sia/llmService.js's askLlm() dispatch, which throws
-// PROVIDER_NOT_IMPLEMENTED for every other value -- a provider named here
-// that llmService cannot dispatch would be exactly the "status says ready,
-// ask says 503" divergence this module exists to prevent. Batch 3E adds no
-// new provider.
+// Providers this codebase actually implements an adapter for -- kept in sync with llmService.js's askLlm() dispatch (which throws PROVIDER_NOT_IMPLEMENTED for anything else), so this module can never advertise readiness for a provider ask.js can't actually serve.
 const IMPLEMENTED_PROVIDERS = Object.freeze(["openai"]);
 
-// Mirrors llmService.js's own isBlank(): null, undefined, a non-string, and
-// a whitespace-only string all count as "not configured".
+// Mirrors llmService.js's own isBlank(): null, undefined, a non-string, and a whitespace-only string all count as "not configured".
 function isBlank(value) {
   return typeof value !== "string" || value.trim() === "";
 }
@@ -69,27 +32,18 @@ function normalizedProvider() {
  *        OpenAI adapter -- read for presence only, never exposed)
  */
 function isSiaReady() {
-  // 1. Feature flag. config.js already fails closed for any value other
-  //    than the exact string "true".
+  // 1. Feature flag -- config.js already fails closed for anything other than the exact string "true".
   if (config.enabled !== true) return false;
 
-  // 2. Provider must be configured AND implemented here. An unimplemented
-  //    provider name is treated exactly as llmService.js treats it -- not
-  //    usable -- rather than being optimistically reported as ready.
+  // 2. Provider must be configured and implemented here, same as llmService.js treats it.
   const provider = normalizedProvider();
   if (isBlank(provider)) return false;
   if (!IMPLEMENTED_PROVIDERS.includes(provider)) return false;
 
-  // 3. Model. llmService.js's askOpenAi() throws MODEL_NOT_CONFIGURED for
-  //    a blank model, and config.js deliberately supplies no default, so a
-  //    missing model genuinely means SIA cannot answer.
+  // 3. Model -- llmService.js's askOpenAi() throws MODEL_NOT_CONFIGURED for a blank model, and config.js supplies no default.
   if (isBlank(config.model)) return false;
 
-  // 4. Credential, per the configured provider's own requirement. Read
-  //    directly from process.env (never through the shared config object)
-  //    for exactly the same reason llmService.js does: keeping the secret
-  //    off the shared, widely-imported config surface. Presence only --
-  //    the value is never captured, compared, measured, or returned.
+  // 4. Credential presence only, read directly from process.env (never the shared config object) to keep the secret off the widely-imported config surface.
   if (provider === "openai" && isBlank(process.env.OPENAI_API_KEY)) return false;
 
   return true;

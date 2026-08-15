@@ -1,19 +1,4 @@
-// Anomaly Detection V1 -- Batch 1: integration between
-// analytics/reportGenerator.js, analytics/analyticsContext.js,
-// analytics/analyzers/expenseAnomalyAnalyzer.js, and
-// analytics/reportAssembler.js.
-//
-// Sections A-B exercise the real reportGenerator.js orchestration function
-// with its collaborators mocked (mirrors tests/analytics.healthHabits.test.js's
-// loadReportGeneratorHarness() pattern), proving real production
-// call-argument wiring: the analyzer receives exactly the three inputs
-// analyticsContext computes, and the shared currentMonthStart anchor is the
-// same object reused for both the analyzer call and (indirectly) the
-// baseline window. Sections C-E exercise the REAL, unmocked
-// expenseAnomalyAnalyzer + reportAssembler together through reportGenerator,
-// proving actual anomaly detection, zero-anomaly, and malformed-input
-// behavior survive end-to-end report generation. No jest.mock/jest.doMock
-// touches MongoDB, Redis, the ML service, or SIA anywhere in this file.
+// Anomaly Detection V1 -- Batch 1: integration between reportGenerator.js, analyticsContext.js, expenseAnomalyAnalyzer.js, and reportAssembler.js. Sections A-B exercise real reportGenerator.js orchestration with collaborators mocked (loadReportGeneratorHarness() pattern), proving production call-argument wiring (analyzer receives analyticsContext's three inputs; shared currentMonthStart anchor reused). Sections C-E exercise the REAL, unmocked expenseAnomalyAnalyzer + reportAssembler together, proving anomaly detection/zero-anomaly/malformed-input behavior survives end-to-end. No jest.mock/doMock touches MongoDB, Redis, the ML service, or SIA anywhere in this file.
 "use strict";
 
 const ANALYTICS_CONTEXT_PATH = "../analytics/analyticsContext";

@@ -1,24 +1,4 @@
-// SIA context builder.
-//
-// M1-2 scope: retrieves a user's existing Financial Report through
-// reportService.getReport(userId) -- the same, unmodified service the
-// authenticated GET /report route already uses -- and narrows it down to
-// only the fields a known SIA intent needs. This module never queries
-// MongoDB, Redis, or any model directly, never calls reportGenerator or an
-// analyzer directly, and never returns the whole Report object. It performs
-// no calculation, transformation, or reinterpretation of any financial
-// value -- every returned value is passed through exactly as reportService
-// returned it.
-//
-// M2-3A scope: adds a third intent, BUDGET_STATUS_EXPLANATION, sourced
-// from report.budgets (the canonical analytics/analyzers/budgetAnalyzer.js
-// output). Context foundation only -- no intent classification, prompts,
-// controller wiring, or response formatting are added in this milestone.
-//
-// M2-4A scope: adds a fourth intent, CATEGORY_SPENDING_EXPLANATION, sourced
-// from report.categories.monthly (the canonical
-// analytics/analyzers/categoryAnalyzer.js output for the user's current
-// month). Context foundation only -- same restriction as M2-3A.
+// SIA context builder -- retrieves a user's existing Financial Report via reportService.getReport(userId) (the same service GET /report uses) and narrows it to only the fields a known SIA intent needs. Never queries MongoDB/Redis/any model directly, never calls reportGenerator or an analyzer directly, never returns the whole Report object, and performs no calculation/transformation/reinterpretation -- every returned value passes through exactly as reportService returned it.
 "use strict";
 
 const reportService = require("../Services/reportService");
@@ -28,22 +8,18 @@ const SUPPORTED_INTENTS = new Set([
   "SPENDING_CHANGE_EXPLANATION",
   "BUDGET_STATUS_EXPLANATION",
   "CATEGORY_SPENDING_EXPLANATION",
-  // Batch 2: additive only -- every existing intent above is unchanged.
+  // Additive only -- every existing intent above is unchanged.
   "ANOMALY_EXPLANATION",
   "SPENDING_FORECAST_EXPLANATION",
   "FINANCIAL_RISK_EXPLANATION",
 ]);
 
-// -- Batch 2 shared helpers -----------------------------------------------
+// -- shared helpers -----------------------------------------------
 
 const isFiniteNumberCtx = (value) => typeof value === "number" && Number.isFinite(value);
 const isPlainObjectCtx = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 
-// Bounded copy of one public anomaly record -- only the exact fields
-// expenseAnomalyAnalyzer.js's own frozen output contract guarantees
-// (already free of userId/raw expense objects/internal sort keys). A newly
-// constructed object every time, so no reference to the stored Report is
-// ever retained.
+// Bounded copy of one public anomaly record -- only the exact fields expenseAnomalyAnalyzer.js's frozen output contract guarantees (already free of userId/raw expense objects/sort keys); a newly constructed object every time, so no reference to the stored Report is ever retained.
 function copyAnomalyRecord(record) {
   if (!isPlainObjectCtx(record)) return null;
   return {
@@ -56,10 +32,7 @@ function copyAnomalyRecord(record) {
   };
 }
 
-// Bounded copy of one forecast horizon's public fields -- estimate/range
-// only, always paired with `isEstimate: true` so the LLM (and, downstream,
-// the user-facing prompt) can never mistake a statistical projection for an
-// authoritative recorded fact.
+// Bounded copy of one forecast horizon's public fields -- estimate/range only, always paired with `isEstimate: true` so the LLM can never mistake a statistical projection for a recorded fact.
 function copyForecastHorizon(horizon) {
   if (!isPlainObjectCtx(horizon)) return null;
   return {
@@ -78,15 +51,7 @@ function copyForecastHorizon(horizon) {
   };
 }
 
-// Prediction Layer V1: the bounded per-category forecast breakdown.
-//
-// Only the category NAME, its predicted amount and its share are copied --
-// these are already-aggregated monthly projections, never a transaction,
-// never a merchant/expense name, never an id or date. Capped at
-// MAX_FORECAST_CATEGORIES so an account with many categories cannot grow
-// the prompt without bound; the analyzer's own output is already sorted
-// largest-first, so the cap keeps exactly the categories a "which category
-// will be highest" question is about.
+// Bounded per-category forecast breakdown -- only category NAME, predicted amount and share are copied (already-aggregated monthly projections, never a transaction/merchant/id/date). Capped at MAX_FORECAST_CATEGORIES so many categories can't grow the prompt unbounded; the analyzer's output is already sorted largest-first, so the cap keeps exactly the categories a "which category will be highest" question needs.
 const MAX_FORECAST_CATEGORIES = 5;
 
 function copyForecastCategories(categories) {
@@ -103,9 +68,7 @@ function copyForecastCategories(categories) {
     .filter((entry) => entry.category !== null);
 }
 
-// Prediction Layer V1: forecast-vs-budget risk for the target month, copied
-// field-by-field from forecastBudgetRisk.js's own bounded output. Carries no
-// budget document, no month history and no user identifier.
+// Forecast-vs-budget risk for the target month, copied field-by-field from forecastBudgetRisk.js's bounded output -- carries no budget document, month history, or user identifier.
 function copyForecastBudgetRisk(budgetRisk) {
   if (!isPlainObjectCtx(budgetRisk)) return null;
   return {
@@ -119,10 +82,7 @@ function copyForecastBudgetRisk(budgetRisk) {
   };
 }
 
-// Prediction Layer V1: the descriptive data-quality summary, so SIA can
-// explain WHY a forecast is limited or unavailable instead of inventing a
-// prediction. `warnings` are fixed, developer-authored reason codes from
-// forecastRules.js -- never free text derived from user data.
+// Descriptive data-quality summary, so SIA can explain WHY a forecast is limited/unavailable instead of inventing a prediction. `warnings` are fixed, developer-authored reason codes from forecastRules.js -- never free text derived from user data.
 function copyForecastDataQuality(dataQuality) {
   if (!isPlainObjectCtx(dataQuality)) return null;
   return {
@@ -135,9 +95,7 @@ function copyForecastDataQuality(dataQuality) {
   };
 }
 
-// Bounded copy of one risk signal's public fields -- reasonCode/severity
-// plus its own already-bounded evidence object (riskAnalyzer.js's own
-// contract never carries a raw record or user identifier inside evidence).
+// Bounded copy of one risk signal's public fields -- reasonCode/severity plus its own already-bounded evidence object (riskAnalyzer.js's contract never carries a raw record or user identifier inside evidence).
 function copyRiskSignal(signal) {
   if (!isPlainObjectCtx(signal)) return null;
   return {
@@ -147,9 +105,7 @@ function copyRiskSignal(signal) {
   };
 }
 
-// Deliberately `!== undefined && !== null`, not a truthiness check -- a
-// valid `0` (e.g. totalSpent, comparePastMonth, healthScore) or a valid
-// falsy-but-real value must never be treated as "missing".
+// Deliberately `!== undefined && !== null`, not a truthiness check -- a valid `0` or other falsy-but-real value must never be treated as "missing".
 function isPresent(value) {
   return value !== undefined && value !== null;
 }
@@ -158,22 +114,13 @@ function noDataResult(intent) {
   return { intent, fields: null, reason: "no_data" };
 }
 
-// The report's own generation timestamp -- analytics/reportGenerator.js
-// sets this exact field (`metadata.generatedAt`, an ISO string produced via
-// `new Date().toISOString()`) once, at generation time. It is the only
-// existing, authoritative "when was this report generated" value in the
-// Report shape (confirmed in analytics/reportGenerator.js and mirrored by
-// the M0-2 fixtures' buildFakeCachedReport). This module never generates a
-// replacement timestamp of its own.
+// The report's own generation timestamp -- reportGenerator.js sets `metadata.generatedAt` once, at generation time; the only authoritative "when was this generated" value in the Report shape. This module never generates a replacement timestamp of its own.
 function getSourceReportGeneratedAt(report) {
   return report.metadata && report.metadata.generatedAt;
 }
 
 async function buildContext(userId, intent) {
-  // No intent classifier or fuzzy matching exists in this milestone (see
-  // backend/sia/README.md). An intent outside the currently supported
-  // values is handled with the same explicit, unguessed result as any other
-  // no-data case, rather than being coerced into one of the known intents.
+  // No fuzzy matching -- an intent outside the supported values is handled with the same explicit, unguessed no-data result rather than coerced into a known intent.
   if (!SUPPORTED_INTENTS.has(intent)) {
     return noDataResult(intent);
   }
@@ -197,17 +144,7 @@ async function buildContext(userId, intent) {
   const summary = report.summary || {};
 
   if (intent === "HEALTH_EXPLANATION") {
-    // Corrected mapping (M1-2 production-contract fix, Option A): the real
-    // report shape never populates summary.healthScore/summary.riskLevel --
-    // healthAnalyzer.js's return object has no such keys, so
-    // reportGenerator.js's `healthScore: healthReport.healthScore` and
-    // `riskLevel: healthReport.riskLevel` are always undefined (confirmed
-    // by tracing healthAnalyzer.js -> reportGenerator.js -> Report.js).
-    // The real, currently-populated source values are
-    // report.financialHealth.overall and report.financialHealth.risk.label.
-    // The external M1-2 output keys (`healthScore`, `riskLevel`) are kept
-    // unchanged -- only their internal source expressions changed, as
-    // plain aliases with no calculation or reinterpretation.
+    // Corrected mapping: summary.healthScore/summary.riskLevel are never populated (healthAnalyzer.js's return has no such keys, so reportGenerator.js's aliases are always undefined) -- the real source values are report.financialHealth.overall/.risk.label. The external output keys (healthScore/riskLevel) are kept unchanged, only their internal source expressions changed, as plain aliases with no calculation.
     const financialHealth = report.financialHealth;
     const overall = financialHealth && financialHealth.overall;
     const risk = financialHealth && financialHealth.risk;
@@ -236,9 +173,7 @@ async function buildContext(userId, intent) {
   }
 
   if (intent === "SPENDING_CHANGE_EXPLANATION") {
-    // Unchanged from the original M1-2 implementation; summary.comparePastMonth
-    // and summary.totalSpent are genuinely populated in real reports (see the
-    // M1-2 contract-gap verification), so no correction applies here.
+    // summary.comparePastMonth and summary.totalSpent are genuinely populated in real reports, so no correction applies here.
     const trends = report.trends;
     const comparePastMonth = summary.comparePastMonth;
     const totalSpent = summary.totalSpent;
@@ -260,33 +195,7 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // intent === "BUDGET_STATUS_EXPLANATION" -- M2-3A scope (context
-  // foundation only; no classifier/prompt/response-formatting work belongs
-  // here). Sourced exclusively from report.budgets, the canonical
-  // analytics/analyzers/budgetAnalyzer.js output for the user's current
-  // month, assembled verbatim by analytics/reportGenerator.js as
-  // `budgets: { ...budgetReport, budgetInsights }`. summary.budgetUtilization
-  // and summary.budgetStatus are NOT used -- confirmed duplicates of
-  // budgets.utilization/budgets.status (reportGenerator.js sets
-  // summary.comparePastMonth etc. from the same budgetReport object at
-  // generation time), so the canonical analyzer object is preferred here,
-  // per this milestone's grounding rules.
-  //
-  // Deliberately excluded from this context, and why:
-  //  - budgetInsights: not a budgetAnalyzer.js value at all -- pre-written
-  //    advisory/recommendation text from
-  //    Services/BudgetServices/budgetInsight.service.js, including direct
-  //    instructions ("Avoid additional spending...", "Set a monthly
-  //    budget..."). Passing it through would risk SIA echoing financial
-  //    advice, which this milestone and M2-3 explicitly forbid.
-  //  - currentStreak / longestStreak / streakBrokenReason: describe
-  //    multi-month budgeting discipline, a different concept from "current
-  //    budget status", out of scope for this intent.
-  //  - daysUntilExhaustion: unlike every other calculateBudgetProjection()
-  //    field, it can legitimately be null even when hasBudget === true
-  //    (whenever the report's dailyAverage <= 0), so its presence is not
-  //    provably guaranteed the way the fields below are. Excluded rather
-  //    than guessed at.
+  // BUDGET_STATUS_EXPLANATION: context foundation only, sourced exclusively from report.budgets (budgetAnalyzer.js's canonical output). summary.budgetUtilization/budgetStatus are NOT used -- confirmed duplicates of budgets.utilization/.status, so the canonical object is preferred. Deliberately excluded: budgetInsights (pre-written advisory text, not a budgetAnalyzer.js value -- passing it through risks SIA echoing financial advice); currentStreak/longestStreak/streakBrokenReason (multi-month discipline, out of scope for "current status"); daysUntilExhaustion (can legitimately be null even when hasBudget===true, unlike every other projection field, so excluded rather than guessed at).
   if (intent === "BUDGET_STATUS_EXPLANATION") {
     const budgets = report.budgets;
 
@@ -313,28 +222,12 @@ async function buildContext(userId, intent) {
       return noDataResult(intent);
     }
 
-    // hasBudget === false means no budget is configured for the current
-    // month (budgetAnalyzer.js's calculateBudgetUtilization returns
-    // utilization/remainingBudget/budgetLeft as null in exactly that case
-    // -- a real, legitimate value, not missing data). This milestone
-    // treats "no budget configured" as no-data for
-    // BUDGET_STATUS_EXPLANATION: there is no budget to report a status
-    // against yet, and a dedicated user-facing message for that distinct
-    // state is left to the milestone that owns response formatting, not
-    // this context-only foundation. This is a judgment call -- see the
-    // M2-3A report.
+    // hasBudget === false means no budget is configured (calculateBudgetUtilization legitimately returns utilization/remainingBudget/budgetLeft as null, not missing data). Treated as no-data for this intent -- a dedicated user-facing message for that state belongs to response formatting, not this context-only foundation.
     if (hasBudget !== true) {
       return noDataResult(intent);
     }
 
-    // Gating on hasBudget === true above guarantees, by
-    // calculateBudgetUtilization/calculateBudgetStatus/
-    // calculateBudgetProjection in budgetAnalyzer.js, that utilization,
-    // remainingBudget, budgetLeft, and the projection fields below are
-    // real values, never null (their null branches are exactly the
-    // safeBudget <= 0 branch that hasBudget === false already excludes).
-    // Verified explicitly here rather than assumed, matching this
-    // module's existing isPresent-everywhere convention.
+    // Gating on hasBudget === true guarantees (via budgetAnalyzer.js's calculate* functions) that utilization/remainingBudget/budgetLeft/projection fields are real values, never null -- verified explicitly here rather than assumed, matching this module's isPresent-everywhere convention.
     if (
       !isPresent(status) ||
       !isPresent(isOverspent) ||
@@ -375,101 +268,31 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // intent === "CATEGORY_SPENDING_EXPLANATION" -- M2-4A scope (context
-  // foundation only; no classifier/prompt/response-formatting work belongs
-  // here). Sourced exclusively from report.categories.monthly, the
-  // canonical analytics/analyzers/categoryAnalyzer.js output for the
-  // user's current month vs. previous month, assembled verbatim by
-  // analytics/reportAssembler.js as `categories: { monthly:
-  // monthlyCategoryReport, yearly: yearlyCategoryReport }`.
-  // summary.topCategory is NOT used -- confirmed to be a lossy derived
-  // alias (`monthlyCategoryReport.topCategory?.category ?? "N/A"`, the
-  // category NAME only, with a fallback that indistinguishably conflates
-  // "no data" with a real category literally named "N/A"), so the
-  // canonical monthly object (which carries the full {category, total}
-  // pair and cannot be confused with a missing value) is preferred, per
-  // this milestone's grounding rules.
+  // CATEGORY_SPENDING_EXPLANATION: context foundation only, sourced exclusively from report.categories.monthly (categoryAnalyzer.js's canonical output). summary.topCategory is NOT used -- a lossy derived alias whose "N/A" fallback conflates "no data" with a real category literally named "N/A" -- the canonical monthly {category, total} object is preferred. report.categories.yearly is deliberately excluded: gating on both monthly and yearly independently having hasData would spuriously no-data a user with full current-month data but, e.g., a first year of app usage; left to a future milestone to scope. Excluded fields: biggestJump/biggestDrop (genuinely nullable even in the hasData:true branch, e.g. when every category is brand new, so not provable the way the fields below are); no pre-written insights/advisory text exists in categoryAnalyzer.js's output at all (unlike budgetAnalyzer.js).
   //
-  // report.categories.yearly is deliberately NOT included in this
-  // context: while it shares the exact same guaranteed, safe
-  // categoryAnalyzer.js contract as monthly, every other SIA intent so
-  // far (health, spending-change, budget) is scoped to the current
-  // reporting period only, and gating success on *both* monthly and
-  // yearly independently having hasData === true would make this intent
-  // spuriously return no-data for a user who has full current-month
-  // category data but, e.g., is in their first year of using the app.
-  // Adding yearly is left to a future milestone that can justify and
-  // scope it on its own, per "do not include data merely because it
-  // exists".
-  //
-  // Deliberately excluded from the selected fields below, and why:
-  //  - biggestJump / biggestDrop: unlike every other field
-  //    categoryAnalyzer.js's analyze() returns in its hasData: true
-  //    branch, these two are genuinely nullable even then (e.g. when
-  //    every current category is brand new -- no previous-period data to
-  //    compare against -- categoryGrowth's growthPercentage/change values
-  //    exclude every entry from both the "increases" and "decreases"
-  //    lists that calculateBiggestChanges filters over, so both come back
-  //    null). Their absence is not provable the way the fields below are,
-  //    so they are excluded rather than guessed at or used to gate the
-  //    whole context to no-data over an otherwise-valid month.
-  //  - No pre-written insights/recommendations/advisory text exists
-  //    anywhere in categoryAnalyzer.js's output (confirmed by reading its
-  //    full source) -- unlike budgetAnalyzer.js, there is no sibling
-  //    "generateCategoryInsights"-style service to separately exclude
-  //    here.
-  //
-  // M2-4A reconciliation remediation: an earlier draft of this branch only
-  // validated the outer monthly-object shape (isPresent + Array.isArray on
-  // the six top-level fields) and then returned topCategory/leastCategory/
-  // categoryDistribution/categoryGrowth by direct reference into the
-  // stored Report -- neither validating each record's own nested contract
-  // (categoryAnalyzer.js's exact {category, total} /
-  // {category, amount, percentage} / {category, previous, current, change,
-  // growthPercentage, isNewCategory, trend} shapes) nor copying them, so a
-  // malformed nested record could reach the success context and a caller
-  // mutating the returned context could silently corrupt the
-  // cached/stored Report. The isFiniteNumber/isPlainObject/isValid*/copy*
-  // helpers below fix both: every nested record is validated against its
-  // exact analyzer contract before being trusted, and every returned
-  // object/array is a newly-constructed, explicit-field-selection copy
-  // that shares no reference with `report`.
+  // Every nested record below is validated against its exact analyzer contract (not just checked for top-level presence) and copied into a newly-constructed object -- an earlier draft returned records by direct reference into the stored Report, so a malformed nested record could reach the success context and a caller mutating the returned context could silently corrupt the cached Report.
 
-  // True only for a genuine finite number -- rejects undefined, null,
-  // NaN, +/-Infinity, and numeric strings (Number.isFinite never coerces,
-  // unlike the global isFinite). Accepts legitimate zero, negative, and
-  // decimal values, matching categoryAnalyzer.js's real value ranges
-  // (e.g. total/amount/change/previous/current can all be negative --
-  // refunds -- or exactly 0).
+  // True only for a genuine finite number (Number.isFinite never coerces, unlike global isFinite) -- accepts legitimate zero/negative/decimal values, matching categoryAnalyzer.js's real ranges (refunds can be negative).
   function isFiniteNumber(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
 
-  // True only for a real, non-array, non-null object -- excludes arrays
-  // (which a naive `typeof value === "object"` check would wrongly admit)
-  // and null (also `typeof null === "object"`).
+  // True only for a real, non-array, non-null object -- excludes arrays and null (both `typeof === "object"`).
   function isPlainObject(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
-  // Validates a categoryAnalyzer.js {category, total} record (topCategory
-  // or leastCategory) against its exact contract. `category` is accepted
-  // as-is -- no trimming, normalization, or allowlist -- and `total` must
-  // be a finite number (zero/negative/decimal all valid).
+  // Validates a categoryAnalyzer.js {category, total} record (topCategory/leastCategory) against its exact contract -- `category` accepted as-is, `total` must be a finite number.
   function isValidCategoryTotal(value) {
     return isPlainObject(value) && typeof value.category === "string" && isFiniteNumber(value.total);
   }
 
-  // Builds a new {category, total} object containing only the two
-  // approved fields -- breaks reference sharing with the stored Report
-  // and silently excludes any unexpected/extra properties from leaking.
+  // Builds a new {category, total} object with only the two approved fields -- breaks reference sharing with the stored Report and silently excludes any unexpected extra properties.
   function copyCategoryTotal(value) {
     return { category: value.category, total: value.total };
   }
 
-  // Validates a single categoryDistribution record against
-  // calculateCategoryDistribution()'s exact {category, amount, percentage}
-  // contract.
+  // Validates a single categoryDistribution record against calculateCategoryDistribution()'s exact {category, amount, percentage} contract.
   function isValidDistributionRecord(value) {
     return (
       isPlainObject(value) &&
@@ -485,10 +308,7 @@ async function buildContext(userId, intent) {
 
   const VALID_CATEGORY_TRENDS = new Set(["up", "down", "same"]);
 
-  // Validates a single categoryGrowth record against
-  // calculateCategoryGrowth()'s exact contract. growthPercentage is the
-  // one field analyzer.js can legitimately leave null (whenever
-  // `previous <= 0`) -- accepted as null OR a finite number, nothing else.
+  // Validates a single categoryGrowth record against calculateCategoryGrowth()'s exact contract. growthPercentage is the one field that can legitimately be null (whenever `previous <= 0`) -- accepted as null OR a finite number, nothing else.
   function isValidGrowthRecord(value) {
     return (
       isPlainObject(value) &&
@@ -528,10 +348,7 @@ async function buildContext(userId, intent) {
     const top3Concentration = monthlyCategories.top3Concentration;
     const categoryGrowth = monthlyCategories.categoryGrowth;
 
-    // Every nested record is validated against categoryAnalyzer.js's exact
-    // contract -- not just checked for top-level presence -- so a stale,
-    // differently-shaped, or partially-corrupted stored Report document
-    // returns no-data instead of leaking malformed data into the context.
+    // Every nested record is validated against categoryAnalyzer.js's exact contract -- so a stale, differently-shaped, or corrupted stored Report returns no-data instead of leaking malformed data into the context.
     if (
       !isValidCategoryTotal(topCategory) ||
       !isValidCategoryTotal(leastCategory) ||
@@ -547,11 +364,7 @@ async function buildContext(userId, intent) {
       return noDataResult(intent);
     }
 
-    // Explicit field selection into newly-constructed objects/arrays --
-    // shares no reference with `report`, and cannot leak any unexpected or
-    // sensitive extra property a stored record might carry. Array order is
-    // preserved exactly (.map() never reorders); no value is coerced,
-    // rounded, formatted, or recalculated.
+    // Explicit field selection into newly-constructed objects/arrays -- shares no reference with `report`, cannot leak an unexpected extra property. Array order preserved exactly; no value coerced, rounded, or recalculated.
     return {
       intent,
       fields: {
@@ -568,13 +381,7 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // intent === "ANOMALY_EXPLANATION" -- Batch 2. Sourced exclusively from
-  // report.anomalies (expenseAnomalyAnalyzer.js's own frozen output,
-  // already free of raw expense records/userId/internal sort keys). A
-  // valid hasData:false no-data/zero-anomaly result is a legitimate,
-  // present answer -- NOT treated as "no context" here, per the explicit
-  // requirement that a report's own no-data/zero-anomaly state must be
-  // distinguished from SIA's "insufficient report data" no-data case.
+  // ANOMALY_EXPLANATION: sourced exclusively from report.anomalies (expenseAnomalyAnalyzer.js's frozen output, already free of raw records/userId/sort keys). A valid hasData:false zero-anomaly result is a legitimate, present answer -- NOT treated as "no context", distinguishing the report's own no-data state from SIA's "insufficient report data" case.
   if (intent === "ANOMALY_EXPLANATION") {
     const anomalies = report.anomalies;
     if (!isPresent(anomalies) || typeof anomalies.hasData !== "boolean") {
@@ -590,9 +397,7 @@ async function buildContext(userId, intent) {
           hasData: anomalies.hasData,
           reasonCode: typeof anomalies.reasonCode === "string" ? anomalies.reasonCode : null,
           flaggedCount: isFiniteNumberCtx(anomalies.flaggedCount) ? anomalies.flaggedCount : 0,
-          // Already bounded to at most 10 by expenseAnomalyRules.js's
-          // maxAnomalies -- copied again here defensively (never trusts a
-          // stored document's array length without re-validating).
+          // Already bounded to at most 10 by expenseAnomalyRules.js's maxAnomalies -- copied again here defensively, never trusting a stored document's array length without re-validating.
           records: anomalyList.slice(0, 10).map(copyAnomalyRecord).filter(Boolean),
         },
       },
@@ -600,25 +405,14 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // intent === "SPENDING_FORECAST_EXPLANATION" -- Batch 2. Sourced
-  // exclusively from report.forecast (forecastAnalyzer.js's own output).
-  // All three horizons are included (bounded, small, already public) since
-  // the classifier does not itself extract which specific horizon a
-  // question named -- every value is explicitly marked `isEstimate: true`
-  // so it can never be presented as a recorded fact.
+  // SPENDING_FORECAST_EXPLANATION: sourced exclusively from report.forecast (forecastAnalyzer.js's output). All three horizons are included (bounded, small, already public) since the classifier doesn't itself extract which horizon a question named -- every value marked `isEstimate: true` so it can never be presented as recorded fact.
   if (intent === "SPENDING_FORECAST_EXPLANATION") {
     const forecast = report.forecast;
     if (!isPresent(forecast) || typeof forecast.hasData !== "boolean") {
       return noDataResult(intent);
     }
 
-    // Prediction Layer V1 (corrected): the answer is grounded on the TRUE
-    // next-calendar-month forecast. The legacy `nextMonthForecast` field is
-    // deliberately NOT sent -- despite its name it projects the CURRENT,
-    // in-progress month, so grounding a "how much might I spend next month"
-    // answer on it would silently answer a different question. If the true
-    // field is absent (e.g. an older cached report), the context reports it
-    // as unavailable rather than substituting the legacy value.
+    // Grounded on the TRUE next-calendar-month forecast -- the legacy `nextMonthForecast` field is deliberately NOT sent: despite its name it projects the CURRENT in-progress month, which would silently answer a different question. If the true field is absent (older cached report), the context reports it unavailable rather than substituting the legacy value.
     const nextCalendarMonth = copyForecastHorizon(forecast.nextCalendarMonthForecast);
 
     return {
@@ -630,12 +424,7 @@ async function buildContext(userId, intent) {
           historyMonthsAvailable: isFiniteNumberCtx(forecast.historyMonthsAvailable)
             ? forecast.historyMonthsAvailable
             : 0,
-          // The target period, the data-quality summary (so an unavailable/
-          // limited forecast can be explained with the real reason rather
-          // than guessed at), the per-category breakdown and the
-          // target-month budget-risk status. Every one of these is a
-          // bounded, already-aggregated figure -- no transaction, no raw
-          // history series, no identifier reaches the provider.
+          // The target period, data-quality summary (so a limited forecast can be explained with the real reason), per-category breakdown, and target-month budget-risk status -- every one a bounded, already-aggregated figure; no transaction, raw history series, or identifier reaches the provider.
           targetMonth: typeof forecast.targetMonth === "string" ? forecast.targetMonth : null,
           dataQuality: copyForecastDataQuality(forecast.dataQuality),
           nextCalendarMonthForecast: nextCalendarMonth
@@ -657,11 +446,7 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // intent === "FINANCIAL_RISK_EXPLANATION" -- Batch 2. Sourced from
-  // report.risk (riskAnalyzer.js's own bounded, allowlisted output) plus
-  // only the two directly-referenced summary fields riskAnalyzer.js's own
-  // evidence already reflects (totalSpent, budgetStatus) -- never the
-  // complete report, never raw budget/spending internals.
+  // FINANCIAL_RISK_EXPLANATION: sourced from report.risk (riskAnalyzer.js's bounded, allowlisted output) plus only the two summary fields its evidence already reflects (totalSpent, budgetStatus) -- never the complete report or raw budget/spending internals.
   if (intent === "FINANCIAL_RISK_EXPLANATION") {
     const risk = report.risk;
     if (!isPresent(risk) || typeof risk.hasData !== "boolean") {
@@ -689,12 +474,7 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // Unreachable: SUPPORTED_INTENTS above only ever admits the seven
-  // intents handled explicitly above. Kept as an explicit, honest
-  // fallback rather than an assumption, matching this module's existing
-  // "never assume" convention -- if an eighth intent is ever added to
-  // SUPPORTED_INTENTS without a matching branch here, this returns the
-  // same safe no-data shape instead of silently returning undefined.
+  // Unreachable: SUPPORTED_INTENTS only ever admits the seven intents handled above. Kept as an explicit, honest fallback -- if an eighth intent is ever added without a matching branch, this returns the same safe no-data shape instead of silently returning undefined.
   return noDataResult(intent);
 }
 

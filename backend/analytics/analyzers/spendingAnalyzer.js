@@ -101,11 +101,7 @@ const calculateTimeStatistics = (currentMonthExpenses = [], totalSpent = 0, opti
   };
 };
 
-/**
- * Coefficient of variation of WEEKLY spend totals — see spendingRules.js
- * header comment for why weekly (not daily) buckets are used, and the
- * known limitation around legitimate large recurring expenses.
- */
+// Coefficient of variation of WEEKLY spend totals -- see spendingRules.js header for why weekly (not daily) buckets, and the known limitation around large recurring expenses.
 const calculateSpendingStability = (expenses = [], options = {}) => {
   const list = Array.isArray(expenses) ? expenses : [];
   const asOfDate = options.asOfDate instanceof Date ? options.asOfDate : new Date();

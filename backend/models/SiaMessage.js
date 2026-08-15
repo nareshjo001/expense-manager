@@ -1,50 +1,13 @@
-// SIA conversation message -- Batch 2. One document per turn (one user
-// question OR one assistant answer -- never both combined), always scoped
-// to exactly one SiaSession and one owning user. This is the bounded
-// alternative to storing messages in an unbounded array on the session
-// document itself: pagination is a normal indexed query here, not an
-// array slice that grows the parent document without limit.
-//
-// Deliberately NEVER stores: the complete Financial Report, the raw LLM
-// prompt, an API key, the raw provider response body, the raw structured
-// context payload sent to the LLM, or any hidden model reasoning/
-// chain-of-thought. `metadata` is a small, explicit, bounded set of safe
-// operational fields only (see the schema below) -- not a free-form dump.
+// SIA conversation message -- one document per turn (one user question OR one assistant answer, never both), scoped to exactly one SiaSession and owning user. Bounded alternative to an unbounded array on the session document: pagination is a normal indexed query here. Deliberately NEVER stores: the complete Financial Report, raw LLM prompt, API key, raw provider response body, raw structured context, or hidden model reasoning; `metadata` is a small explicit set of safe operational fields, not a free-form dump.
 "use strict";
 
 const mongoose = require("mongoose");
 
-// Mirrors Controllers/SiaControllers/ask.js's own MAX_QUESTION_LENGTH for
-// a user turn; an assistant answer is allowed a larger but still explicitly
-// bounded ceiling so a malformed/misbehaving provider response can never
-// grow a document without limit.
+// Mirrors ask.js's MAX_QUESTION_LENGTH for a user turn; an assistant answer gets a larger but still bounded ceiling so a malformed provider response can never grow a document unbounded.
 const MAX_USER_CONTENT_LENGTH = 500;
 const MAX_ASSISTANT_CONTENT_LENGTH = 4000;
 
-// Batch 3F: the answer-grounding transparency snapshot -- which BALENISA
-// analytics sections actually grounded THIS assistant answer, deterministically
-// produced by backend/sia/groundingService.js at generation time (never by
-// the LLM, never from the client). Assistant messages only; a user-role
-// message never sets this field. Small and bounded by construction: at
-// most one entry per backend/sia/groundingService.js allowlist key (8 today),
-// each carrying only a short server-owned key/label and an optional
-// short period string -- never a raw path, metric value, prompt, or
-// identifier. `default: undefined` (not `[]`/`{}`) so a pre-3F message, or
-// a no-data/legacy turn that never computed a grounding snapshot, stores no
-// `grounding` field at all rather than a hollow empty object -- existing
-// documents and existing readers that don't know this field remain fully
-// compatible.
-// `period` deliberately declares NO default. An earlier version used
-// `default: null`, which meant a snapshot generated without a period (the
-// only kind backend/sia/groundingService.js currently produces) came back
-// out of persistence as `period: null` -- present-but-empty rather than
-// absent. That broke the batch's core guarantee that the IDENTICAL snapshot
-// survives fresh response, persistence, resume, replay and history: the
-// fresh route returned `{key, label}` while history and answer-ready resume
-// returned `{key, label, period: null}`. With no default, an unset path
-// stays `undefined` and Mongoose omits it from toObject()/toJSON()
-// entirely, so all four paths now serialize byte-identically. An
-// explicitly supplied, valid period is still stored and returned unchanged.
+// The answer-grounding transparency snapshot -- which analytics sections grounded THIS assistant answer, deterministically produced by groundingService.js at generation time (never by the LLM or client). Assistant messages only. Bounded by construction: at most one entry per groundingService.js allowlist key, each a short server-owned key/label and optional period string. `default: undefined` so a pre-existing or no-data turn stores no field at all rather than a hollow object. `period` declares NO default (not `default: null`) so an unset period stays `undefined` and Mongoose omits it from serialization entirely -- this is what makes the fresh response, persistence, resume, and history paths serialize byte-identically; an earlier `default: null` version broke that guarantee by making an absent period come back present-but-null.
 const siaGroundingSourceSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, maxlength: 64 },
@@ -70,9 +33,7 @@ const siaMessageSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Denormalized onto every message (not just the session) so an
-    // ownership check never has to join back through the session document
-    // first -- every message-level query can filter on `user` directly.
+    // Denormalized onto every message (not just the session) so an ownership check never has to join back through the session document -- every message-level query filters on `user` directly.
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "users",
@@ -92,27 +53,20 @@ const siaMessageSchema = new mongoose.Schema(
       maxlength: MAX_ASSISTANT_CONTENT_LENGTH,
     },
 
-    // The classified intent for a user turn, or the intent that was
-    // answered for an assistant turn -- null only for a turn where
-    // classification produced no supported intent.
+    // The classified intent for a user turn, or the answered intent for an assistant turn -- null only when classification produced no supported intent.
     intent: {
       type: String,
       default: null,
     },
 
-    // Optional client-supplied idempotency key (see
-    // Controllers/SiaControllers/ask.js's optional `clientMessageId` body
-    // field). Sparse + unique per session so a retried identical request
-    // cannot create a duplicate pair of messages, while omitting it
-    // entirely (existing clients) remains fully supported.
+    // Optional client-supplied idempotency key (ask.js's `clientMessageId`). Sparse + unique per session so a retried identical request can't create a duplicate pair of messages, while omitting it stays fully supported.
     clientMessageId: {
       type: String,
       default: null,
       maxlength: 100,
     },
 
-    // Small, explicit, bounded set of safe operational fields only --
-    // never the raw prompt, context, provider response, or API key.
+    // Small, explicit, bounded set of safe operational fields only -- never the raw prompt, context, provider response, or API key.
     metadata: {
       provider: { type: String, default: null },
       model: { type: String, default: null },
@@ -120,7 +74,7 @@ const siaMessageSchema = new mongoose.Schema(
       errorCode: { type: String, default: null },
     },
 
-    // Batch 3F. See siaGroundingSchema above.
+    // See siaGroundingSchema above.
     grounding: { type: siaGroundingSchema, default: undefined },
   },
   {
@@ -129,15 +83,10 @@ const siaMessageSchema = new mongoose.Schema(
   }
 );
 
-// Powers "paginate this session's messages in order" -- the core
-// pagination query sia/sessionService.js's listMessages() runs, and the
-// ownership-plus-recency query loadRecentTurns() runs to bound how much
-// history is ever loaded into an LLM call.
+// Powers "paginate this session's messages in order" (listMessages()) and the ownership-plus-recency query loadRecentTurns() runs to bound LLM history.
 siaMessageSchema.index({ session: 1, createdAt: 1 });
 
-// Idempotency: at most one message per (session, clientMessageId) pair,
-// but only when a client actually supplied one (sparse skips the index
-// entirely for the common null case, so omitting it never collides).
+// Idempotency: at most one message per (session, clientMessageId) pair, only when supplied (sparse skips the index for the common null case, so omitting it never collides).
 siaMessageSchema.index({ session: 1, clientMessageId: 1 }, { unique: true, sparse: true });
 
 const SiaMessage = mongoose.model("SiaMessage", siaMessageSchema);

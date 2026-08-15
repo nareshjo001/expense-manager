@@ -1,10 +1,4 @@
-// Separate Jest configuration for the M0-2 integration suite ONLY.
-//
-// backend/jest.config.js (M0-T) is untouched -- its testMatch
-// ("<rootDir>/tests/**/*.test.js") cannot match this suite's files, which
-// use the deliberately different ".itest.js" suffix below. `npm test`
-// therefore continues to discover only the M0-T smoke test and never
-// requires MongoDB/Redis/TEST_* variables.
+// Separate Jest config for the integration suite only -- jest.config.js's testMatch can't match this suite's ".itest.js" files, so `npm test` never requires MongoDB/Redis/TEST_* variables.
 module.exports = {
   testEnvironment: "node",
   rootDir: __dirname,

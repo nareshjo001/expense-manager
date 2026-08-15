@@ -1,11 +1,4 @@
-// Prediction Layer V1: per-category forecast breakdown regression suite.
-//
-// Covers the aggregation boundary (forecastInputAggregator's category
-// series + active-day count), the allocator's own contract (dynamic
-// categories, sparse fallback, non-negativity, EXACT reconciliation to the
-// published total, deterministic ordering) and the analyzer's integration
-// of both. Everything here uses the real production modules -- no mocked
-// analyzer, no pre-decided allocation.
+// Prediction Layer V1: per-category forecast breakdown regression suite. Covers the aggregation boundary (forecastInputAggregator's category series + active-day count), the allocator's own contract (dynamic categories, sparse fallback, non-negativity, EXACT reconciliation to the published total, deterministic ordering), and the analyzer's integration of both -- real production modules throughout, no mocked analyzer, no pre-decided allocation.
 "use strict";
 
 const {

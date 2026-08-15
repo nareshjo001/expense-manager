@@ -1,16 +1,4 @@
-// Shared robust-trend math for the forecasting layer.
-//
-// Extracted (Prediction Layer V1) from forecastAnalyzer.js purely so the
-// overall forecast and the per-category breakdown can use the LITERAL SAME
-// trend function instead of two look-alike copies that could drift apart.
-// The arithmetic below is byte-for-byte the V2 implementation
-// forecastAnalyzer.js already shipped -- this extraction changed no
-// formula, no constant and no rounding behavior. forecastAnalyzer.js still
-// re-exports `fitRobustTrend` from its own module surface, so every
-// existing importer and test keeps working unchanged.
-//
-// Pure and deterministic: no I/O, no `new Date()`, no randomness, no
-// mutation of inputs.
+// Shared robust-trend math for the forecasting layer, extracted from forecastAnalyzer.js (which still re-exports fitRobustTrend) so the overall forecast and per-category breakdown use the literal same function instead of two copies that could drift apart. Pure and deterministic -- no I/O, no `new Date()`, no randomness, no mutation of inputs.
 "use strict";
 
 const median = (numbers) => {
@@ -24,25 +12,7 @@ const medianAbsoluteDeviation = (numbers, numbersMedian) => {
   return median(deviations);
 };
 
-/**
- * Theil-Sen robust linear trend: fits `total ≈ intercept + slope * ordinal`
- * over `points` (`{ ordinal, total }`, ascending by `ordinal` -- a real
- * calendar-month ordinal, NEVER an array index, so a gap between observed
- * months is arithmetically visible: January -> March is 2 months apart).
- *
- * `slope` is the median of the slopes between every pair of points, so a
- * single outlier month can only ever be an endpoint of O(n) of the O(n^2)
- * pairs and cannot dominate the fit the way it would dominate least
- * squares. `intercept` is the median residual against that slope.
- * `residualMad` is the median absolute deviation of the fitted line's
- * residuals -- the forecast's uncertainty measure.
- *
- * Degenerate cases (0 or 1 point) return a flat, zero-slope line rather
- * than throwing. Callers gate on their own minimum-history rules before
- * this matters in practice. Every pair has a distinct ordinal by
- * construction (callers merge same-ordinal entries first), so no pairwise
- * division by zero is possible.
- */
+// Theil-Sen robust linear trend: fits total ≈ intercept + slope*ordinal over `points` (ordinal is a real calendar-month ordinal, never an array index, so gaps are visible). `slope` is the median of all pairwise slopes so one outlier can't dominate the fit like least squares; `residualMad` is the fit's uncertainty measure. Degenerate 0/1-point inputs return a flat zero-slope line rather than throwing.
 function fitRobustTrend(points) {
   const n = points.length;
 

@@ -1,10 +1,4 @@
-/**
- * Known limitation (intentionally not solved here): a single large but
- * legitimate recurring cost (rent, annual insurance) still raises CV.
- * Distinguishing "recurring big fixed cost" from "erratic spending"
- * needs recurring-expense detection — a good candidate for a later
- * module, not something this score should silently pretend to solve.
-*/
+// Known limitation (intentionally unsolved): a single large legitimate recurring cost (rent, insurance) still raises CV; needs future recurring-expense detection to distinguish from erratic spending.
 
 module.exports = {
   spending: {

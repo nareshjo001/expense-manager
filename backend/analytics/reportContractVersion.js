@@ -1,77 +1,12 @@
-// Single source of truth for the report contract's version number and the
-// "is this report current?" check. Reuses the pre-existing
-// metadata.version field already stamped by analytics/reportGenerator.js
-// and already asserted by tests/fixtures/reportFixtures.js /
-// tests/report.integration.itest.js -- this is NOT a second, competing
-// version mechanism.
-//
-// Bumped from 1 to 2 for Anomaly Detection V1 (Batch 1): version 2 is the
-// first contract that always includes a complete `anomalies` section.
-//
-// Bumped from 2 to 3 for Forecasting V1 + Risk Intelligence V1 (Batch 2):
-// version 3 is the first contract that always includes complete `forecast`
-// and `risk` sections. A version-2 cached or persisted report is now
-// treated as stale by the exact same mechanism below -- no second version
-// field, no global cache flush, just the same isCurrentReport() gate this
-// module already provides, now comparing against 3.
-//
-// Presence detection deliberately checks metadata.version, not the
-// truthiness or content of `anomalies` itself:
-//   - A valid, current anomaly section can legitimately be
-//     `{ hasData: false, reasonCode: "NO_ELIGIBLE_CURRENT_EXPENSES", ... }`
-//     or `{ hasData: true, flaggedCount: 0, anomalies: [], ... }` -- both
-//     are "present and current," not "missing."
-//   - Checking `report.anomalies` truthiness would treat those valid,
-//     legitimate no-data/zero-anomaly shapes as if they were legacy
-//     documents, which they are not.
-//   - Checking `Object.keys(doc).includes("anomalies")` would be defeated
-//     by models/Report.js's own `anomalies: { ..., default: {} }` schema
-//     default: a legacy Mongoose document with no stored `anomalies` key
-//     would still read back as `{}` in application code once Mongoose
-//     applies defaults, making it indistinguishable from a migrated
-//     document by truthiness/key-presence alone.
-// `metadata.version` has no such default-masking problem: `metadata` is
-// `required: true` with no default, so it is only ever the exact value
-// analytics/reportGenerator.js stamped at generation time -- a legacy
-// document genuinely stored `version: 1` (or nothing, for anything
-// generated before metadata existed at all) and a current document
-// genuinely stores `version: 2`. There is no schema default in between
-// that could make an old document merely *appear* migrated.
+// Single source of truth for the report contract's version number and the "is this report current?" check. Reuses the pre-existing metadata.version field already stamped by analytics/reportGenerator.js and already asserted by tests/fixtures/reportFixtures.js / tests/report.integration.itest.js -- NOT a second, competing version mechanism. History: 1->2 for Anomaly Detection V1 (always includes a complete `anomalies` section); 2->3 for Forecasting V1 + Risk Intelligence V1 (always includes complete `forecast`/`risk` sections) -- each bump treats a lower-versioned cached/persisted report as stale via the same isCurrentReport() gate below, no second version field, no global cache flush.
+// Presence detection deliberately checks metadata.version, not the truthiness/content of `anomalies` itself: a valid current anomaly section can legitimately be `{ hasData: false, reasonCode: ..., }` or `{ hasData: true, flaggedCount: 0, anomalies: [], ... }` -- both "present and current," not "missing" -- so checking `report.anomalies` truthiness would misclassify those as legacy. Checking `Object.keys(doc).includes("anomalies")` would also be defeated by models/Report.js's `anomalies: { ..., default: {} }` schema default, which makes a legacy document with no stored key read back as `{}` once Mongoose applies defaults -- indistinguishable from a migrated document by truthiness/key-presence alone. `metadata.version` has no such default-masking problem: `metadata` is `required: true` with no default, so it's only ever the exact value reportGenerator.js stamped at generation time.
 "use strict";
 
-// Bumped from 3 to 4 for Prediction Layer V1: version 4 is the first
-// contract whose `forecast` section always carries the per-category
-// next-month breakdown (`nextMonthForecast.categories`), the descriptive
-// `dataQuality` summary, the `targetMonth` label and the
-// forecast-vs-target-month `budgetRisk` block. A version-3 cached or
-// persisted report is now treated as stale by the exact same
-// isCurrentReport() gate below -- no second version field, no global cache
-// flush, no migration: models/Report.js stores every section as Mixed, so
-// the added keys need no schema change, and a stale v3 document is simply
-// regenerated on next read.
-// Bumped from 4 to 5 for the Anomaly Detection category-normalization fix:
-// expenseAnomalyAnalyzer.js's candidate and baseline category comparisons
-// now go through the shared normalizeCategoryForGrouping() utility instead
-// of comparing raw stored strings, so the CONTENT of `report.anomalies`
-// (which categories get evaluated, which baseline records feed a given
-// category's median/MAD, and the canonical `category` string on each
-// flagged record) can differ from a report generated before this fix, even
-// though the section's SHAPE is unchanged. isCurrentReport() below only
-// ever inspects metadata.version, never a section's content (see this
-// module's own top comment), so without this bump an already-cached or
-// -persisted version-4 report would keep being served as "fresh"
-// indefinitely for any user whose data revision does not happen to change
-// -- this bump is what makes that stale content regenerate on next read,
-// through the exact same lazy-regeneration path every previous version
-// bump already relied on (no migration, no cache flush, no forced
-// recomputation elsewhere).
+// Bumped 3->4 for Prediction Layer V1: version 4 is the first contract whose `forecast` section always carries the per-category next-month breakdown, the descriptive `dataQuality` summary, `targetMonth`, and the forecast-vs-target-month `budgetRisk` block -- a stale v3 document is simply regenerated on next read via the same isCurrentReport() gate, no migration needed since models/Report.js stores every section as Mixed.
+// Bumped 4->5 for the Anomaly Detection category-normalization fix: expenseAnomalyAnalyzer.js's candidate/baseline category comparisons now go through normalizeCategoryForGrouping() instead of raw strings, so the CONTENT of `report.anomalies` can differ from a pre-fix report even though its SHAPE is unchanged -- since isCurrentReport() only ever inspects metadata.version (never section content), this bump is what forces that stale content to regenerate on next read, through the same lazy-regeneration path every prior bump relied on.
 const CURRENT_REPORT_VERSION = 5;
 
-// True only when `report` carries a numeric metadata.version at least as
-// new as the current contract. Anything else (missing report, missing/
-// non-object metadata, missing/non-numeric/older version) is treated as
-// stale and must be regenerated -- never inferred from `anomalies` or any
-// other section's content.
+// True only when `report` carries a numeric metadata.version at least as new as the current contract; anything else (missing report, missing/non-object metadata, missing/non-numeric/older version) is treated as stale and regenerated -- never inferred from `anomalies` or any other section's content.
 const isCurrentReport = (report) => {
   if (!report || typeof report !== "object") return false;
   const { metadata } = report;

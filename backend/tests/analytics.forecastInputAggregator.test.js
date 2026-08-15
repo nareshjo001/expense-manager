@@ -1,11 +1,4 @@
-// Forecasting V2 architecture-closure: isolated characterization of
-// analytics/forecastInputAggregator.js -- the ONLY module that reads
-// transaction-level fields off a raw expense pool for forecasting
-// purposes. forecastAnalyzer.js itself is proven, in
-// tests/analytics.forecast.test.js, to never receive this raw shape at
-// all -- these tests instead prove the aggregation boundary itself is
-// correct: bounded, aggregate-only, order-independent, non-mutating, and
-// tolerant of malformed input.
+// Forecasting V2 architecture-closure: isolated characterization of forecastInputAggregator.js -- the ONLY module reading transaction-level fields off a raw expense pool for forecasting (forecastAnalyzer.js itself is proven, in analytics.forecast.test.js, to never receive this raw shape). These tests prove the aggregation boundary itself is correct: bounded, aggregate-only, order-independent, non-mutating, tolerant of malformed input.
 "use strict";
 
 const {

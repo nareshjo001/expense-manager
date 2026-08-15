@@ -2,12 +2,7 @@ const rules = require("./healthRules");
 
 const T = rules.insightThresholds;
 
-/**
- * Emits STRUCTURED signals — facts + numbers, not final sentences.
- * A reasoning LLM turns these into personalized narrative; every number
- * the user reads stays traceable to a real computed value instead of
- * being invented by the model.
- */
+// Emits structured signals (facts + numbers, not final sentences) -- an LLM turns these into narrative, so every number stays traceable to a real computed value, never invented.
 const generateSignals = ({ budget = {}, trend = {}, habits = {}, category = {} } = {}) => {
   const signals = [];
   const push = (type, id, metric, value, message) => signals.push({ type, id, metric, value, message });

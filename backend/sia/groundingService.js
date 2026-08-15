@@ -1,38 +1,7 @@
-// SIA answer-grounding transparency -- Batch 3F.
-//
-// Produces the small, human-readable "which BALENISA analytics were used"
-// disclosure that rides alongside a generated answer. This is NOT the
-// existing internal `basedOn` field (backend/sia/responseFormatter.js,
-// Batch 3D/M3-4) -- `basedOn` is an intent-keyed list of raw internal Report
-// field paths (e.g. "financialHealth.risk.label") kept for that milestone's
-// own grounded-response-validation purpose and left completely unchanged
-// here. `grounding` is a separate, additive, user-facing contract: stable
-// allowlisted keys, short human labels, and an optional period -- never a
-// raw path, never a metric value, never anything the LLM said or reasoned.
-//
-// THE RULE THIS MODULE ENFORCES: a source is listed if and only if its
-// field is actually present on the exact `contextResult.fields` object that
-// was handed to the provider for THIS answer -- never because the intent
-// classifier merely selected a section, and never guessed from the intent
-// name alone. backend/sia/contextBuilder.js's own per-intent isPresent
-// gates already guarantee a field is only ever set when it is real,
-// validated data (see that file's extensive contract comments), so reading
-// `contextResult.fields`'s own keys here is both the smallest and the most
-// honest source of truth -- no second analytics query is ever made.
+// SIA answer-grounding transparency -- produces the small, human-readable "which BALENISA analytics were used" disclosure that rides alongside a generated answer. NOT the internal `basedOn` field (responseFormatter.js, unchanged here) -- that's an intent-keyed list of raw internal Report field paths for grounded-response validation; `grounding` is a separate, additive, user-facing contract of stable allowlisted keys, short labels, and an optional period, never a raw path/metric value/anything the LLM said. THE RULE THIS MODULE ENFORCES: a source is listed if and only if its field is actually present on the exact `contextResult.fields` object handed to the provider for THIS answer -- never because the classifier merely selected a section, never guessed from the intent name; contextBuilder.js's per-intent isPresent gates guarantee a field is only set when it's real, validated data, so reading `contextResult.fields`'s own keys is the smallest and most honest source of truth -- no second analytics query is ever made.
 "use strict";
 
-// The complete allowlist. Every entry's `fieldKey` is one of the top-level
-// keys backend/sia/contextBuilder.js's `fields` object can ever carry,
-// across every one of the seven supported intents (see that file). `key` is
-// the stable, server-owned identifier returned to callers (and, eventually,
-// persisted) -- deliberately equal to `fieldKey` here since these are
-// already-generic category names, not internal paths, Mongo ids, or
-// anything else this milestone's "do not expose internal repository
-// details" rule would forbid. `label` is the only human-readable text a
-// client is meant to render. Order here is also the ONLY ordering used when
-// producing a snapshot (see CANONICAL_ORDER below) -- never object-key
-// insertion order, so output is deterministic regardless of how
-// contextBuilder.js happens to construct `fields`.
+// The complete allowlist. `fieldKey` is one of the top-level keys contextBuilder.js's `fields` object can carry, across all seven supported intents. `key` is the stable, server-owned identifier returned to callers -- deliberately equal to `fieldKey` since these are already-generic category names, never internal paths or Mongo ids. `label` is the only human-readable text a client renders. Order here is also the ONLY ordering used when producing a snapshot -- never object-key insertion order, so output is deterministic regardless of how contextBuilder.js constructs `fields`.
 const GROUNDING_SOURCE_ALLOWLIST = Object.freeze([
   Object.freeze({ fieldKey: "financialHealth", key: "financialHealth", label: "Financial health analysis" }),
   Object.freeze({ fieldKey: "summary", key: "summary", label: "Financial summary" }),
@@ -52,52 +21,15 @@ function isPresent(value) {
   return value !== undefined && value !== null;
 }
 
-// Batch 3F acceptance remediation: `sourceReportGeneratedAt` is WHEN the
-// report was generated -- a timestamp about the report run itself -- not
-// the analytics PERIOD any given section represents (e.g. "which month's
-// budget/category data is this"). An earlier version of this module used
-// it as every source's `period`, which was factually wrong (it silently
-// relabelled a generation date as if it were a reporting period) and has
-// been removed entirely. No section this module's allowlist covers
-// currently carries an explicit, authoritative period field within its own
-// contextBuilder.js-selected fields (confirmed by rereading every branch of
-// buildContext(): HEALTH_EXPLANATION's financialHealth/summary, SPENDING_
-// CHANGE_EXPLANATION's trends/summary, BUDGET_STATUS_EXPLANATION's budget,
-// CATEGORY_SPENDING_EXPLANATION's categories, ANOMALY_EXPLANATION's
-// anomalies, SPENDING_FORECAST_EXPLANATION's forecast, and FINANCIAL_RISK_
-// EXPLANATION's risk none of them select a single field that names the
-// calendar period the section covers -- trends.monthlyTrend is an ARRAY of
-// per-month entries, and forecast's historyMonthsUsed/horizonMonths are
-// DURATIONS, neither of which is one authoritative period value).
-//
-// `period` therefore stays permanently unpopulated below until a future,
-// separately-approved change adds a genuine single-value period field to
-// one of contextBuilder.js's selected sections -- this module still
-// supports it (see the `source.period` assignment in buildGroundingSnapshot()
-// below) so that day requires no contract change,
-// but nothing here may infer, calculate from the current date, or reuse an
-// unrelated timestamp to fill it in the meantime. No additional analytics
-// query is performed to obtain one.
+// `sourceReportGeneratedAt` is WHEN the report was generated, not the analytics PERIOD a section represents -- an earlier version used it as every source's `period`, which was factually wrong (relabelling a generation date as a reporting period), and has been removed. No allowlisted section currently carries an explicit single-value period field (trends.monthlyTrend is an array of per-month entries; forecast's historyMonthsUsed/horizonMonths are durations). `period` therefore stays permanently unpopulated until a future change adds a genuine period field to a selected section -- this module still supports it structurally so that day requires no contract change, but nothing here may infer, compute from the current date, or reuse an unrelated timestamp in the meantime.
 function resolveExplicitPeriod(fieldKey, sectionValue) {
-  // No allowlisted section currently exposes an authoritative period value
-  // within its own selected fields (see the comment above). `fieldKey` and
-  // `sectionValue` are accepted here, not read, so the day a section does
-  // gain one, this is the single, obvious place to read it from --
-  // deliberately not from `contextResult.sourceReportGeneratedAt`.
+  // No allowlisted section currently exposes an authoritative period value. `fieldKey`/`sectionValue` are accepted but not read, so the day a section gains one, this is the obvious place to read it from -- deliberately not from `contextResult.sourceReportGeneratedAt`.
   return undefined;
 }
 
-// Builds the immutable grounding snapshot for ONE answer, from the exact
-// `contextResult` backend/sia/contextBuilder.js's buildContext() already
-// returned for this turn -- called once, right after that context is built
-// and BEFORE the provider is ever invoked (see
-// Controllers/SiaControllers/ask.js), so this can never be influenced by,
-// or parsed out of, the LLM's answer text or the constructed prompt.
+// Builds the immutable grounding snapshot for ONE answer, from the exact `contextResult` buildContext() already returned for this turn -- called once, right after context is built and BEFORE the provider is invoked, so this can never be influenced by or parsed out of the LLM's answer text or prompt.
 //
-// Always returns `{ sources: [] }` rather than throwing or returning
-// null/undefined for any input that is not a valid, populated
-// `contextResult.fields` object (no report, no-data, a malformed shape) --
-// an empty snapshot is a valid, honest result, never a fabricated one.
+// Always returns `{ sources: [] }` rather than throwing/null/undefined for any invalid input (no report, no-data, malformed shape) -- an empty snapshot is a valid, honest result, never a fabricated one.
 function buildGroundingSnapshot(contextResult) {
   if (!contextResult || !isPlainObject(contextResult.fields)) {
     return { sources: [] };
@@ -114,8 +46,7 @@ function buildGroundingSnapshot(contextResult) {
 
     seenKeys.add(entry.key);
     const source = { key: entry.key, label: entry.label };
-    // Per-section, not report-wide -- see resolveExplicitPeriod() above.
-    // Currently always undefined; `period` remains correctly omitted.
+    // Per-section, not report-wide -- currently always undefined; `period` remains correctly omitted.
     const period = resolveExplicitPeriod(entry.fieldKey, fields[entry.fieldKey]);
     if (period !== undefined) source.period = period;
     sources.push(source);

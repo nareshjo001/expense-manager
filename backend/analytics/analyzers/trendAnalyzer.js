@@ -26,10 +26,7 @@ const comparePeriods = (currentExpenses = [], previousExpenses = []) => {
  
   if (previous === 0) {
     if (current > 0) {
-      // % change from a zero baseline is mathematically undefined
-      // (division by zero) — NOT "100%". Report null so the UI/
-      // assistant says "new spending of ₹X" instead of a fabricated
-      // percentage that implies a precision that isn't there.
+      // % change from a zero baseline is undefined (division by zero), not "100%" -- report null so the UI says "new spending of ₹X" instead of a fabricated percentage.
       percentageChange = null;
       isNewSpending = true;
     }
@@ -48,13 +45,7 @@ const comparePeriods = (currentExpenses = [], previousExpenses = []) => {
   };
 };
 
-/**
- * Converts a trend into a bounded signal safe for weighted averaging.
- * Raw percentageChange is unbounded: if `previous` is tiny (e.g. ₹1
- * from one stray old transaction), a perfectly ordinary next-period
- * expense can compute as a 49,900% "increase" and would otherwise
- * dominate the whole composite score by itself.
- */
+// Converts a trend into a bounded signal safe for weighted averaging -- raw percentageChange is unbounded (a tiny `previous` can compute as a 49,900% "increase") and would otherwise dominate the composite score.
 const getScoringSignal = (trend) => {
   if (trend.isNewSpending) return NEW_SPENDING_SIGNAL;
   if (trend.percentageChange === null) return 0;
@@ -93,10 +84,7 @@ const analyze = ({ trendData = {}, currentMonthExpenses = [], previousMonthExpen
   );
  
   if (noActivity) {
-    // Zero spend in every window (brand-new user, or a data gap).
-    // "Stable" would be technically true but misleading — there's
-    // nothing to be stable about yet. Let the score layer decide how
-    // to represent that explicitly rather than guessing here.
+    // Zero spend in every window (new user or data gap) -- "Stable" would be technically true but misleading; let the score layer decide how to represent it.
     return { hasData: false, dailyTrend, weeklyTrend, monthlyTrend, quarterlyTrend };
   }
  

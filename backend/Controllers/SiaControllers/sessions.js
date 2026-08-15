@@ -1,15 +1,4 @@
-// SIA session controllers -- Batch 2.
-//
-// Three thin, authenticated handlers over sia/sessionService.js: list the
-// caller's own sessions, list one owned session's messages (paginated),
-// and delete one owned session. Every handler uses req.userId (set only by
-// Middlewares/Auth.js's verifyToken, which always runs before these in
-// Routes/sia.routes.js) as the sole identity -- a client-supplied userId in
-// the body/query/params is never read or trusted anywhere here.
-//
-// A session id that does not exist, or that belongs to a different user,
-// is answered identically (404, same body) -- this endpoint never reveals
-// whether another user's session identifier exists.
+// SIA session controllers -- three thin, authenticated handlers over sia/sessionService.js: list the caller's own sessions, list one owned session's messages (paginated), delete one owned session. Every handler uses req.userId (set only by verifyToken, before these run) as the sole identity -- a client-supplied userId is never read or trusted. A session id that doesn't exist or belongs to another user gets an identical 404 -- never reveals whether another user's session id exists.
 "use strict";
 
 const sessionService = require("../../sia/sessionService");
@@ -58,12 +47,7 @@ const listMessages = async (req, res) => {
         content: m.content,
         intent: m.intent,
         createdAt: m.createdAt,
-        // Batch 3F: the exact grounding snapshot stored with this message
-        // (see models/SiaMessage.js) -- present only on assistant messages
-        // that had one at creation time. `m.grounding` is simply undefined
-        // for every user message and every pre-3F/no-data assistant
-        // message, and JSON.stringify omits an undefined property, so this
-        // adds nothing to any response that never had it.
+        // The exact grounding snapshot stored with this message (models/SiaMessage.js) -- present only on assistant messages that had one; undefined otherwise, and JSON.stringify omits undefined properties.
         grounding: m.grounding,
       })),
     });

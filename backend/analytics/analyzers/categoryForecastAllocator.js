@@ -1,46 +1,8 @@
-// Prediction Layer V1: per-category next-month forecast allocation.
-//
-// Answers "which categories are expected to contribute most next month?"
-// without ever inventing a category list: every category here is discovered
-// dynamically from the user's own aggregated history, so a user with three
-// categories and a user with forty are both handled by the same code with
-// no fixed list, no fixed count, and no hard-coded names anywhere.
-//
-// Aggregate-input boundary (identical guarantee to forecastAnalyzer.js):
-// this module NEVER receives or reads a raw expense record. Its only input
-// is `categorySeries` -- an already-aggregated
-// `{ category, monthlySeries: [{ monthKey, totalAmount }] }` array built by
-// analytics/forecastInputAggregator.js. No line here reads `_id`,
-// `expenseName`, `userId`, or an individual `expenseDate`/`expenseAmount`.
-//
-// Method (deliberately simple and validated, never a "trendy" model):
-//   1. A category with at least `RULES.category.minMonthsForOwnTrend`
-//      observed months is projected with EXACTLY the same Theil-Sen robust
-//      trend the overall forecast uses -- literally forecastAnalyzer.js's
-//      own exported `fitRobustTrend`, not a second divergent method -- then
-//      floored at zero (spending cannot be negative).
-//   2. A sparse/intermittent category (fewer observed months than that)
-//      falls back to its recent SMOOTHED SHARE of total spending, averaged
-//      over the trailing `RULES.category.shareSmoothingMonths` observed
-//      months, applied to the overall predicted total. Fitting a trend to
-//      one or two sparse points would be noise presented as signal.
-//   3. Every raw prediction is then reconciled proportionally so the
-//      category amounts sum to the already-published overall next-month
-//      estimate -- the overall number is the source of truth and is never
-//      altered to match the parts.
-//   4. Rounding uses the largest-remainder method over integer paise, so
-//      the ROUNDED amounts sum EXACTLY to the overall estimate rather than
-//      drifting by a few paise. Ties break on category name ascending, so
-//      the output is fully deterministic for identical input.
-//
-// Pure and deterministic: no DB/Redis/HTTP access, no zero-argument
-// `new Date()`, no randomness, no mutation of its inputs.
+// Per-category next-month forecast allocation. Categories are discovered dynamically from the user's own aggregated history -- no fixed list. Aggregate-input boundary identical to forecastAnalyzer.js: only reads already-aggregated `categorySeries`, never a raw expense record. Method: a category with enough observed months is projected with the same Theil-Sen trend the overall forecast uses (floored at zero); a sparse category falls back to its recent smoothed share of total spending; every raw prediction is then reconciled proportionally to the already-published overall estimate; final rounding uses the largest-remainder method over integer paise so amounts sum exactly to the total. Pure and deterministic -- no DB/Redis/HTTP, no randomness, no mutation of inputs.
 "use strict";
 
 const { forecast: RULES } = require("./scores/forecastRules");
-// Imported from the shared trend module (NOT from forecastAnalyzer.js) so
-// the overall forecast and this breakdown provably use the same function
-// with no circular dependency between the two analyzers.
+// Imported from the shared trend module, not forecastAnalyzer.js, so the overall forecast and this breakdown provably use the same function with no circular dependency.
 const { fitRobustTrend } = require("./robustTrend");
 
 const round2 = (value) => Number(Number(value).toFixed(2));
@@ -49,9 +11,7 @@ const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(v
 
 const MONTH_KEY_PATTERN = /^(-?\d+)-(\d+)$/;
 
-// Same calendar-month ordinal space forecastAnalyzer.js uses, so a gap
-// between observed months is arithmetically visible to the trend fit here
-// too (January -> March is 2 months apart, never 1).
+// Same calendar-month ordinal space forecastAnalyzer.js uses, so a gap between observed months is arithmetically visible here too.
 function monthKeyToOrdinal(monthKey) {
   const match = typeof monthKey === "string" ? MONTH_KEY_PATTERN.exec(monthKey) : null;
   if (!match) return null;
@@ -61,10 +21,7 @@ function monthKeyToOrdinal(monthKey) {
   return year * 12 + monthIndex;
 }
 
-// Validates one category's series into ascending `{ ordinal, total }`
-// points. Malformed entries are dropped, never thrown; same-ordinal
-// duplicates are summed (defense in depth -- the aggregator's own Map
-// keying already prevents them).
+// Validates one category's series into ascending {ordinal, total} points. Malformed entries are dropped, never thrown; same-ordinal duplicates are summed (defense in depth -- the aggregator's own Map keying already prevents them).
 function sanitizeCategorySeries(monthlySeries) {
   const source = Array.isArray(monthlySeries) ? monthlySeries : [];
   const byOrdinal = new Map();
@@ -88,16 +45,7 @@ function sanitizeCategorySeries(monthlySeries) {
     .sort((a, b) => a.ordinal - b.ordinal);
 }
 
-// Mean of a category's share of the overall monthly total, averaged over
-// the trailing months of its ALIGNED series.
-//
-// Because `points` is zero-filled against the canonical completed-month
-// timeline, a month in which the user spent elsewhere but nothing in this
-// category contributes a genuine 0% share to the average -- which is the
-// whole point: an intermittent category's average share must be dragged
-// down by the months it was absent. Only a month where the user spent
-// nothing AT ALL is skipped (it would be a 0/0), never a month where this
-// category alone was zero.
+// Mean of a category's share of the overall monthly total, averaged over the trailing months of its aligned (zero-filled) series -- a month where this category was absent contributes a genuine 0% share, dragging down an intermittent category's average as intended; only a month with zero total spending anywhere is skipped (it would be a 0/0).
 function smoothedShare(points, totalsByOrdinal) {
   const recent = points.slice(-RULES.category.shareSmoothingMonths);
   const shares = [];
@@ -112,21 +60,7 @@ function smoothedShare(points, totalsByOrdinal) {
   return shares.reduce((sum, share) => sum + share, 0) / shares.length;
 }
 
-/**
- * Largest-remainder rounding over integer paise.
- *
- * Guarantees `sum(result) === targetTotal` exactly (to 2dp) whenever
- * `targetTotal` is itself a 2dp value, which it always is here (the overall
- * estimate is already `round2`-ed before it reaches this module). Without
- * this, independently rounding each category would leave the parts summing
- * to something a paisa or two away from the published total -- exactly the
- * kind of small inconsistency that makes a financial figure look untrustworthy.
- *
- * Deterministic tie-breaking: entries are compared by fractional remainder
- * descending, then by category name ascending, so identical input always
- * produces byte-identical output regardless of Array.prototype.sort's
- * stability characteristics.
- */
+// Largest-remainder rounding over integer paise -- guarantees sum(result) === targetTotal exactly, since independently rounding each category would leave the parts a paisa or two off the published total. Deterministic tie-breaking: remainder descending, then category name ascending, so identical input always produces identical output.
 function roundToExactTotal(entries, targetTotal) {
   const targetPaise = Math.round(targetTotal * 100);
 
@@ -154,9 +88,7 @@ function roundToExactTotal(entries, targetTotal) {
       leftover -= 1;
     }
   } else if (leftover < 0) {
-    // Defensive: floor() can never overshoot, so this branch is unreachable
-    // for well-formed input. Kept so a future change cannot silently
-    // produce parts that exceed the published total.
+    // Defensive: floor() can never overshoot, so unreachable for well-formed input -- kept so a future change can't silently produce parts exceeding the total.
     const ascending = [...byRemainder].reverse();
     for (let i = 0; leftover < 0 && ascending.length > 0; i += 1) {
       const entry = ascending[i % ascending.length];
@@ -178,11 +110,8 @@ function roundToExactTotal(entries, targetTotal) {
  * @param {object} input
  * @param {Array<{category: string, monthlySeries: Array<{monthKey: string, totalAmount: number}>}>} input.categorySeries -
  *   aggregate-only per-category history from forecastInputAggregator.js.
- *   Never raw expense records.
- * @param {number|null} input.predictedTotal - the already-published overall
- *   next-month estimate this breakdown must reconcile to.
- * @param {number} input.anchorOrdinal - the target month's calendar-month
- *   ordinal (the same anchor the overall forecast projects to).
+ * @param {number|null} input.predictedTotal - the already-published overall next-month estimate this breakdown must reconcile to.
+ * @param {number} input.anchorOrdinal - the target month's calendar-month ordinal.
  * @returns {{hasData: boolean, reasonCode: string|null,
  *   categories: Array<{category: string, predictedAmount: number,
  *   sharePercentage: number, method: string}>}}
@@ -199,9 +128,7 @@ function allocate({ categorySeries = [], predictedTotal, anchorOrdinal } = {}) {
 
   const source = Array.isArray(categorySeries) ? categorySeries : [];
 
-  // Normalize every category first, so the overall per-month totals used by
-  // the share fallback are derived from the SAME sanitized points the trend
-  // fits use -- not from a separately-computed number that could disagree.
+  // Normalize every category first, so the per-month totals used by the share fallback are derived from the same sanitized points the trend fits use.
   const normalized = [];
   const totalsByOrdinal = new Map();
 
@@ -223,14 +150,7 @@ function allocate({ categorySeries = [], predictedTotal, anchorOrdinal } = {}) {
     return empty(RULES.reasonCodes.noCategoryBreakdown);
   }
 
-  // Raw (pre-reconciliation) prediction per category.
-  //
-  // `points` is the ALIGNED series (zero-filled against the canonical
-  // completed-month timeline), so a month in which this category recorded
-  // nothing is a real observation of 0 here rather than a missing point.
-  // Eligibility for a category's own trend therefore checks BOTH the
-  // aligned timeline length AND how many months carried actual spending --
-  // see forecastRules.js for why either check alone is insufficient.
+  // Raw (pre-reconciliation) prediction per category. `points` is the aligned (zero-filled) series, so eligibility for a category's own trend checks both the timeline length and how many months carried actual spending -- see forecastRules.js for why either check alone is insufficient.
   const raw = normalized.map(({ category, points }) => {
     const nonZeroMonths = points.filter((point) => point.total > 0).length;
 
@@ -259,10 +179,7 @@ function allocate({ categorySeries = [], predictedTotal, anchorOrdinal } = {}) {
 
   const rawSum = raw.reduce((sum, entry) => sum + entry.amount, 0);
 
-  // Every category's own trend projected to zero (e.g. a uniformly
-  // collapsing history) while the overall estimate is still positive.
-  // Rather than fabricating a split, fall back to smoothed shares for ALL
-  // categories; if those are also all zero, report no breakdown honestly.
+  // Every category's own trend projected to zero while the overall estimate is still positive -- rather than fabricating a split, fall back to smoothed shares for all categories; if those are also zero, report no breakdown honestly.
   let reconciledBasis = raw;
   if (rawSum <= 0) {
     const shareBased = normalized.map(({ category, points }) => ({
@@ -292,10 +209,7 @@ function allocate({ categorySeries = [], predictedTotal, anchorOrdinal } = {}) {
     .map((entry) => ({
       category: entry.category,
       predictedAmount: entry.predictedAmount,
-      // Derived from the FINAL reconciled amount, so the displayed share
-      // always matches the displayed amount. Shares are rounded
-      // independently and are therefore indicative -- the amounts, not the
-      // percentages, are the reconciled figures.
+      // Derived from the final reconciled amount so the displayed share matches the displayed amount; shares are rounded independently and are indicative -- amounts are the reconciled figures.
       sharePercentage: round2((entry.predictedAmount / predictedTotal) * 100),
       method: entry.method,
     }))

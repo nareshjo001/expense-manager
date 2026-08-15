@@ -53,12 +53,7 @@ const calculateCategoryDistribution = (totals = []) => {
     }));
 };
 
-/**
- * Herfindahl-Hirschman-style concentration index across ALL categories
- * (0-100 scale, higher = more concentrated). Catches the case where no
- * single category is extreme, but the top few together dominate spend —
- * something top-1 percentage alone can miss entirely.
- */
+// Herfindahl-Hirschman-style concentration index across all categories (0-100, higher = more concentrated) -- catches the case where the top few categories together dominate spend even when no single one is extreme.
 const calculateConcentrationIndex = (distribution = []) => {
   if (!distribution.length) return null;
   

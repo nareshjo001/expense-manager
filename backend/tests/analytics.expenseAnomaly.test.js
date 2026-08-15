@@ -1,13 +1,4 @@
-// Phase 1 (V1): isolated characterization of the pure, deterministic
-// expenseAnomalyAnalyzer.analyze() contract.
-//
-// This suite exercises ONLY backend/analytics/analyzers/expenseAnomalyAnalyzer.js
-// (and, indirectly, its sibling scores/expenseAnomalyRules.js). It never
-// touches MongoDB, Redis, the ML service, the network, the filesystem
-// (beyond one static source-text check below), or SIA. No jest.mock/
-// jest.doMock is used anywhere in this file -- the analyzer takes plain
-// JS values in and returns plain JS values out, so there is nothing to
-// mock.
+// Phase 1 (V1): isolated characterization of the pure, deterministic expenseAnomalyAnalyzer.analyze() contract. Exercises ONLY expenseAnomalyAnalyzer.js (and indirectly scores/expenseAnomalyRules.js) -- never touches MongoDB, Redis, the ML service, the network, the filesystem (beyond one static source-text check below), or SIA. No jest.mock/doMock anywhere -- the analyzer takes plain JS values in and out, so there is nothing to mock.
 "use strict";
 
 const fs = require("fs");

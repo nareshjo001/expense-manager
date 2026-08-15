@@ -1,18 +1,9 @@
-// SIA configuration surface.
-//
-// M1-1 scope: pure environment-variable parsing into a small, safe-by-default
-// configuration object. This module never validates or requires a real
-// provider API key, never logs secrets, never mutates process.env, and never
-// throws -- importing it with no SIA_* variables set is always safe and
-// yields the documented defaults. See backend/sia/README.md.
+// SIA configuration surface -- pure environment-variable parsing into a small, safe-by-default object. Never validates/requires a real provider API key, never logs secrets, never mutates process.env, never throws -- importing with no SIA_* variables set is always safe and yields documented defaults. See sia/README.md.
 "use strict";
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-// SIA_ENABLED is true only when its normalized (whitespace-trimmed) value is
-// exactly the string "true" -- deliberately case-sensitive and exact, not a
-// general "truthy string" parse, so an unexpected value (e.g. "1", "yes",
-// "TRUE") fails closed to disabled rather than silently enabling SIA.
+// SIA_ENABLED is true only when its trimmed value is exactly "true" -- case-sensitive and exact, not a general truthy parse, so an unexpected value fails closed to disabled.
 function normalizeEnabled(rawValue) {
   if (typeof rawValue !== "string") {
     return false;
@@ -30,11 +21,7 @@ function normalizeProvider(rawValue) {
   return trimmed === "" ? null : trimmed;
 }
 
-// Trims the configured model name; blank (or absent) input becomes null --
-// the same closed/unconfigured representation normalizeProvider uses. There
-// is deliberately no hardcoded default model: an unconfigured model must
-// fail the same explicit way a missing provider does, not silently select a
-// specific OpenAI model version.
+// Trims the configured model name; blank/absent becomes null, same as normalizeProvider. No hardcoded default model -- an unconfigured model must fail the same explicit way a missing provider does, never silently select a version.
 function normalizeModel(rawValue) {
   if (typeof rawValue !== "string") {
     return null;
@@ -43,9 +30,7 @@ function normalizeModel(rawValue) {
   return trimmed === "" ? null : trimmed;
 }
 
-// Accepts the configured timeout only when it parses to a finite, strictly
-// positive number. Anything else (absent, blank, non-numeric, zero,
-// negative, Infinity/NaN) falls back to the safe default.
+// Accepts the configured timeout only when it parses to a finite, strictly positive number -- anything else falls back to the safe default.
 function normalizeTimeoutMs(rawValue) {
   if (typeof rawValue !== "string" || rawValue.trim() === "") {
     return DEFAULT_TIMEOUT_MS;
