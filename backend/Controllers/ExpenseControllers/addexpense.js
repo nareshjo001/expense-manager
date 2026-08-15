@@ -19,6 +19,42 @@ const INVALID_CATEGORY_RESPONSE = {
   errorCode: 'INVALID_CATEGORY',
 };
 
+// Hotfix -- production ValidationError: `wasMlCorrected: Cast to Boolean
+// failed for value ""`. The frontend's `mlPredictedCategory && ...`
+// short-circuit sends the LITERAL EMPTY STRING (not `false`) whenever there
+// is no ML prediction, and this raw client value was passed straight into
+// `new ExpenseModel({ ..., wasMlCorrected })` below -- Mongoose's Boolean
+// caster accepts the strings "true"/"false" but rejects "" outright,
+// throwing a CastError that surfaced as an uncaught 500.
+//
+// Deliberately NOT `Boolean(value)`: `Boolean("false")` is `true`, which
+// would silently invert an explicit `wasMlCorrected: "false"` from any
+// caller that already serializes booleans as strings.
+// Returns `{ valid: true, value }` where `value` is `undefined` for
+// undefined/null/"" (letting config/Schemas.js's own
+// `wasMlCorrected: { type: Boolean, default: false }` apply), or
+// `{ valid: false }` for anything else, which the caller turns into the
+// existing controlled-400 pattern (matching INVALID_CATEGORY_RESPONSE
+// above), never a Mongoose CastError surfacing as a 500.
+const normalizeOptionalBoolean = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return { valid: true, value: undefined };
+  }
+  if (value === true || value === 'true') {
+    return { valid: true, value: true };
+  }
+  if (value === false || value === 'false') {
+    return { valid: true, value: false };
+  }
+  return { valid: false };
+};
+
+const INVALID_WAS_ML_CORRECTED_RESPONSE = {
+  success: false,
+  message: 'wasMlCorrected must be a boolean value.',
+  errorCode: 'INVALID_WAS_ML_CORRECTED',
+};
+
 // Phase C -- Expense Mutation Reliability: add-expense idempotency.
 //
 // `id` is the client-supplied identifier already protected by
@@ -213,6 +249,15 @@ const addExpense = async (req, res) => {
       return res.status(400).json(INVALID_CATEGORY_RESPONSE);
     }
 
+    // Hotfix -- normalize the optional `wasMlCorrected` boolean at the
+    // request boundary, before any reservation or write. See
+    // normalizeOptionalBoolean's doc comment above for the exact mapping.
+    const wasMlCorrectedResult = normalizeOptionalBoolean(wasMlCorrected);
+    if (!wasMlCorrectedResult.valid) {
+      return res.status(400).json(INVALID_WAS_ML_CORRECTED_RESPONSE);
+    }
+    const normalizedWasMlCorrected = wasMlCorrectedResult.value;
+
     // Idempotency check -- BEFORE any write. Ownership-scoped: the lookup
     // is always { userId: req.userId, id }, so another user's request
     // identifier can never be replayed or inspected here.
@@ -258,7 +303,7 @@ const addExpense = async (req, res) => {
         expenseDescription: finalDescription,
         mlPredictedCategory,
         mlConfidence,
-        wasMlCorrected
+        wasMlCorrected: normalizedWasMlCorrected
     });
 
     // Create new ML feedback document if a genuine ML prediction is available.

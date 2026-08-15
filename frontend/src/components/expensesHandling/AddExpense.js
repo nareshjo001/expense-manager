@@ -219,7 +219,14 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         e.preventDefault();
         setIsSpinnerLoading(true);
 
-        const wasMlCorrected = mlPredictedCategory && mlPredictedCategory !== normalizeCategory(expenseCategory);
+        // Hotfix -- `mlPredictedCategory && ...` short-circuits to the raw
+        // (falsy) LHS value when there is no ML prediction, i.e. the empty
+        // string "", not `false`. That "" was sent as JSON straight through
+        // to the backend, which passed it directly into
+        // `new ExpenseModel({ wasMlCorrected })` -- Mongoose's Boolean
+        // caster rejects "" outright, throwing a ValidationError. Wrapping
+        // in Boolean(...) guarantees a real boolean is always sent.
+        const wasMlCorrected = Boolean(mlPredictedCategory) && mlPredictedCategory !== normalizeCategory(expenseCategory);
 
         const payload = {
             expenseName: sanitizeText(expenseName),
