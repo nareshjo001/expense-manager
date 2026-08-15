@@ -35,6 +35,24 @@
   --sia-error-text: #fca5a5;
 }
 
+/* Shared button-sizing tokens (theme-independent -- both light/dark
+   selectors above apply to the same .sia-root element, so these cascade
+   to both). One consistent height/radius vocabulary across every button
+   in the panel: header controls, Ask/Send, suggestion cards, secondary/
+   danger/icon buttons, history rows, and retry. `--sia-btn-height` sits
+   just under the previous flat 44px used everywhere, still comfortably
+   above the WCAG 2.2 AA minimum target size (24px) -- 44px is the AAA
+   recommendation, not a hard floor -- and reads far less bulky at this
+   panel's compact width. `--sia-btn-height-lg` is reserved for the one
+   primary call-to-action (Ask/Send) so it still reads as the emphasized
+   control relative to everything else. */
+.sia-root {
+  --sia-btn-height: 38px;
+  --sia-btn-height-lg: 40px;
+  --sia-btn-radius: 10px;
+  --sia-btn-radius-pill: 999px;
+}
+
 /* ===== Launcher button =====
    Positioned above the existing bottom-right ScrollToTopButton
    (.scroll-top-btn, bottom: 30px, z-index: 9999999) so the two never
@@ -71,7 +89,17 @@
   right: 20px;
   width: 360px;
   max-width: calc(100vw - 40px);
-  max-height: 70vh;
+  /* Bounded, viewport-safe height rather than an unsafe fixed value: the
+     panel is anchored bottom:90px/right:20px, so the available vertical
+     space is the viewport minus that bottom offset and a symmetric top
+     margin. The dvh declaration is layered AFTER the vh one so browsers
+     without dvh support keep the vh fallback, and browsers that do
+     support it (accounting for mobile browser chrome) use the more
+     accurate value. max-height keeps the floating desktop panel from
+     ever feeling oversized on a tall display. */
+  height: calc(100vh - 130px);
+  height: calc(100dvh - 130px);
+  max-height: 640px;
   display: flex;
   flex-direction: column;
   background: var(--sia-bg);
@@ -93,25 +121,38 @@
   padding: 12px 16px;
   background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
   flex: 0 0 auto;
+  /* Never wrap to a second row -- an overflowing header must shrink its
+     controls (handled by sia-header-btn's own sizing/media-query rules
+     below), not grow taller. */
+  flex-wrap: nowrap;
 }
 
 .sia-header-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .sia-header-btn {
-  min-height: 44px;
-  padding: 8px 10px;
-  font-size: 0.85rem;
+  min-height: var(--sia-btn-height);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #ffffff;
   background: rgba(255, 255, 255, 0.18);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--sia-btn-radius-pill);
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.sia-header-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .sia-header-btn:disabled {
@@ -137,18 +178,24 @@
 }
 
 .sia-panel-close {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: var(--sia-btn-height);
+  min-height: var(--sia-btn-height);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
+  font-size: 1.25rem;
   line-height: 1;
   color: #ffffff;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.12);
   border: none;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.sia-panel-close:hover {
+  background: rgba(255, 255, 255, 0.24);
 }
 
 .sia-panel-close:focus-visible,
@@ -159,12 +206,26 @@
   outline-offset: 2px;
 }
 
-/* ===== Transcript ===== */
+/* ===== Transcript =====
+   Root-cause fix: this was previously `min-height: 120px`, an explicit
+   floor that overrides flexbox's own automatic (content-based) minimum
+   sizing. Because the panel is height-bounded (see .sia-panel above), that
+   floor reserved 120px even in the empty state (the "large unnecessary
+   blank area below the header") and, combined with .sia-suggestions
+   previously being a separate non-scrolling sibling, could force total
+   content taller than the panel -- which .sia-panel's own `overflow:
+   hidden` then silently clipped, cutting off the lower suggestion cards
+   and the composer entirely. `min-height: 0` lets this flex item shrink
+   to fit the space actually available and scroll its own (now-included)
+   content instead. Suggestions render INSIDE this element now (see
+   SiaPanel.js) so "Try asking" and its cards scroll together with the
+   message list, rather than overflowing past the panel's fixed bounds. */
 .sia-transcript {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -217,20 +278,26 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  /* Matches every other interactive control in this file (44px), rather
-     than the 32px this control originally used -- the disclosure toggle is
-     a real touch target and must not be the one exception. Wrapping and
-     light/dark styling are unaffected: the row still shrinks to content
-     width, and .sia-grounding-toggle-text keeps overflow-wrap: anywhere. */
-  min-height: 44px;
-  padding: 4px 10px;
+  /* Matches every other interactive control in this file (--sia-btn-height,
+     currently 38px) rather than the 32px this control originally used --
+     the disclosure toggle is a real touch target and must not be the one
+     exception. Wrapping and light/dark styling are unaffected: the row
+     still shrinks to content width, and .sia-grounding-toggle-text keeps
+     overflow-wrap: anywhere. */
+  min-height: var(--sia-btn-height);
+  padding: 4px 12px;
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--sia-muted-text);
   background: var(--sia-surface);
   border: 1px solid var(--sia-border);
-  border-radius: 999px;
+  border-radius: var(--sia-btn-radius-pill);
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.sia-grounding-toggle:hover {
+  background: var(--sia-bg);
 }
 
 .sia-grounding-toggle:focus-visible {
@@ -339,51 +406,81 @@
 
 .sia-suggestion {
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: var(--sia-btn-height);
+  padding: 8px 12px;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--sia-text);
   background: var(--sia-surface);
   border: 1px solid var(--sia-border);
-  border-radius: 10px;
+  border-radius: var(--sia-btn-radius);
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.sia-suggestion:hover:not(:disabled) {
+  background: var(--sia-bg);
+  border-color: var(--sia-accent-end);
+}
+
+.sia-suggestion:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ===== Shared buttons ===== */
 .sia-secondary-btn {
-  min-height: 44px;
-  padding: 8px 14px;
-  font-size: 0.9rem;
+  min-height: var(--sia-btn-height);
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--sia-text);
   background: var(--sia-surface);
   border: 1px solid var(--sia-border);
-  border-radius: 10px;
+  border-radius: var(--sia-btn-radius);
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.sia-secondary-btn:hover:not(:disabled) {
+  background: var(--sia-bg);
 }
 
 .sia-danger-btn {
-  min-height: 44px;
-  padding: 8px 14px;
-  font-size: 0.9rem;
+  min-height: var(--sia-btn-height);
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--sia-error-text);
   background: var(--sia-error-bg);
   border: 1px solid var(--sia-error-text);
-  border-radius: 10px;
+  border-radius: var(--sia-btn-radius);
   cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.sia-danger-btn:hover:not(:disabled) {
+  opacity: 0.85;
 }
 
 .sia-icon-btn {
-  min-width: 44px;
-  min-height: 44px;
-  font-size: 1.2rem;
+  min-width: var(--sia-btn-height);
+  min-height: var(--sia-btn-height);
+  font-size: 1.1rem;
   color: var(--sia-muted-text);
   background: transparent;
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.sia-icon-btn:hover:not(:disabled) {
+  background: var(--sia-surface);
 }
 
 /* ===== History ===== */
@@ -401,8 +498,10 @@
 
 .sia-history-body {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 12px 16px 16px;
 }
 
@@ -425,17 +524,22 @@
 .sia-history-open {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: var(--sia-btn-height);
+  padding: 8px 12px;
   text-align: left;
   color: var(--sia-text);
   background: var(--sia-surface);
   border: 1px solid var(--sia-border);
-  border-radius: 10px;
+  border-radius: var(--sia-btn-radius);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.sia-history-open:hover {
+  background: var(--sia-bg);
 }
 
 .sia-history-title {
@@ -562,21 +666,35 @@
 
 .sia-panel-submit {
   align-self: flex-end;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 10px 24px;
-  font-size: 1rem;
+  min-width: var(--sia-btn-height-lg);
+  min-height: var(--sia-btn-height-lg);
+  padding: 0 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #ffffff;
   background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
   border: none;
-  border-radius: 10px;
+  border-radius: var(--sia-btn-radius-pill);
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.sia-panel-submit:hover:not(:disabled) {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.sia-panel-submit:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .sia-panel-submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .sia-panel-status {
@@ -611,19 +729,36 @@
 }
 
 .sia-panel-retry {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 8px 20px;
-  font-size: 0.95rem;
+  min-width: var(--sia-btn-height);
+  min-height: var(--sia-btn-height);
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--sia-text);
   background: var(--sia-surface);
   border: 1px solid var(--sia-border);
-  border-radius: 10px;
+  border-radius: var(--sia-btn-radius);
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
-/* ===== Mobile: bottom-sheet / full-width treatment ===== */
+.sia-panel-retry:hover {
+  background: var(--sia-bg);
+}
+
+/* ===== Mobile: full-screen panel treatment =====
+   Below the breakpoint the panel converts from the floating bottom-sheet
+   to a true full-screen view: `inset: 0` (with explicit longhands for
+   clarity) pins all four edges directly to the viewport so there is no
+   gap at the top for the page behind it to show through, and no reliance
+   on content-based sizing the way `bottom: 0` alone (no `top`) previously
+   was. Height is set in vh first, then overridden with dvh, matching the
+   same safe-fallback pattern used on the desktop panel above -- dvh
+   accounts for mobile browsers' collapsing/expanding chrome so the panel
+   never sits taller than the actually-visible viewport. */
 @media screen and (max-width: 600px) {
   .sia-entry-point {
     bottom: 130px;
@@ -633,24 +768,49 @@
   }
 
   .sia-panel {
+    inset: 0;
+    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
     max-width: 100%;
-    max-height: 85vh;
-    border-radius: 16px 16px 0 0;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+    /* Respect notches/home indicators/rounded corners: the header and
+       composer are the panel's own first/last flex children, so padding
+       here insets the whole column rather than needing separate rules on
+       each of them. */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    box-sizing: border-box;
   }
 
   .sia-panel-submit {
     align-self: stretch;
   }
 
-  /* Header controls stay reachable without pushing the close button off
-     the edge on a 375px viewport. */
+  /* Tighter header on narrow widths -- fits "Ask SIA" plus all three
+     controls on one row without wrapping (enforced by flex-wrap: nowrap
+     above) and without the row reading as oversized. Height comes from
+     the shared --sia-btn-height token (38px) set globally above; only
+     the padding/font/heading around the buttons shrinks further here. */
+  .sia-panel-header {
+    padding: 10px 12px;
+  }
+
+  .sia-panel-heading {
+    font-size: 1.02rem;
+  }
+
   .sia-header-btn {
-    padding: 8px;
-    font-size: 0.8rem;
+    padding: 0 10px;
+    font-size: 0.78rem;
   }
 
   .sia-message {

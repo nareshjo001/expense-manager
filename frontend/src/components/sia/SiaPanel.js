@@ -322,6 +322,33 @@ const SiaPanel = ({
           )}
 
           <div className="sia-transcript" role="log" aria-label="Conversation">
+            {/* Layout fix: suggestions render INSIDE the same scrollable
+                region as the message list (rather than as a separate
+                non-scrolling sibling below it) so a short viewport scrolls
+                them together with the empty state instead of having them
+                overflow the panel's fixed max-height. Only ever shown when
+                messages.length === 0, so this never reorders anything
+                relative to real conversation content. */}
+            {showSuggestions && (
+              <div className="sia-suggestions">
+                <p className="sia-suggestions-label">Try asking:</p>
+                <ul className="sia-suggestion-list">
+                  {SIA_SUGGESTIONS.map((suggestion) => (
+                    <li key={suggestion.id}>
+                      <button
+                        type="button"
+                        className="sia-suggestion"
+                        onClick={() => handleSuggestion(suggestion.text)}
+                        disabled={blockedByAvailability}
+                      >
+                        {suggestion.text}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -374,26 +401,6 @@ const SiaPanel = ({
 
             <div ref={transcriptEndRef} />
           </div>
-
-          {showSuggestions && (
-            <div className="sia-suggestions">
-              <p className="sia-suggestions-label">Try asking:</p>
-              <ul className="sia-suggestion-list">
-                {SIA_SUGGESTIONS.map((suggestion) => (
-                  <li key={suggestion.id}>
-                    <button
-                      type="button"
-                      className="sia-suggestion"
-                      onClick={() => handleSuggestion(suggestion.text)}
-                      disabled={blockedByAvailability}
-                    >
-                      {suggestion.text}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           <form className="sia-composer" onSubmit={handleSubmit}>
             <label htmlFor="sia-question-input" className="sia-panel-label">
