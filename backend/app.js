@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
+const { isFirebaseAvailable } = require("./config/firebaseAdmin");
 
 // Routes
 const authRouter = require("./Routes/auth.routes");
@@ -35,13 +36,20 @@ app.get("/", (req, res) => {
 
 
 app.get("/ping", async (req, res) => {
+  // Firebase/push is an optional capability -- its status is reported
+  // alongside the existing checks but never flips the overall success/status
+  // code, since push notifications being unavailable does not make the
+  // rest of the application unavailable (unrelated routes are unaffected).
+  const push = isFirebaseAvailable() ? "up" : "down";
+
   try {
     await axios.get(`${process.env.ML_ROUTE}/`);
 
     res.status(200).json({
       success: true,
       backend: "up",
-      ml: "up"
+      ml: "up",
+      push
     });
 
   } catch (err) {
@@ -49,6 +57,7 @@ app.get("/ping", async (req, res) => {
       success: false,
       backend: "up",
       ml: "down",
+      push,
       message: "Server Unavailable."
     });
   }

@@ -254,6 +254,40 @@ Values below are placeholders. No real secret is included here or in any tracked
 | `SIA_LLM_MODEL` | Only if SIA is enabled | Model identifier passed to the provider; no default is assumed |
 | `SIA_LLM_TIMEOUT_MS` | No | Per-request provider timeout in ms (default `8000`) |
 | `OPENAI_API_KEY` | Only if SIA is enabled with the OpenAI adapter | Provider API key, read only inside the provider adapter |
+| `FIREBASE_SERVICE_ACCOUNT` | No (optional -- see below) | Firebase service-account credentials, used only for push notifications |
+
+### Firebase / push notifications (optional)
+
+Firebase is used for exactly one thing: sending push notifications
+(`Services/push.service.js`, invoked only by the cron jobs in `cron/`). No
+HTTP route depends on it directly. `config/firebaseAdmin.js` guards its own
+initialization -- a missing, malformed, or structurally invalid
+`FIREBASE_SERVICE_ACCOUNT` never crashes backend startup or any unrelated
+request; push notifications are simply unavailable (`sendPush` returns
+`{success:false}`, which every caller already treats as "schedule a retry" /
+"mark failed").
+
+- **Format**: the exact JSON body of a Firebase service-account key file,
+  as a single-line string (no surrounding quotes beyond what your shell/host
+  needs to pass it as one env var value), e.g.
+  `FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"..."}`.
+  This project does not support a base64-encoded form, a file path, or
+  individual `FIREBASE_*` fields -- only this single raw-JSON-string form is
+  read anywhere in the codebase.
+- **Private key newlines**: the `private_key` field's `\n` sequences must
+  survive whatever your host's env-var mechanism does to the value (most
+  platforms preserve `\n` literally inside a JSON string value correctly;
+  verify after deploying to a new platform rather than assuming).
+- **Local development**: leave `FIREBASE_SERVICE_ACCOUNT` unset. The backend
+  starts normally; push notifications silently no-op.
+- **Production**: set it to your real service-account JSON to enable push
+  notifications; `GET /ping`'s response includes a `push: "up"|"down"` field
+  reflecting current status (this never changes the endpoint's overall
+  success/status code -- push is an optional capability, not a readiness
+  gate).
+- **Never commit** a service-account JSON file or paste real credentials
+  into any tracked file, including this README. `backend/.gitignore` already
+  excludes `.env`, `firebase-key.json`, and `config/serviceAccountKey.json`.
 
 ## Installation and run commands
 
