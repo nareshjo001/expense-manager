@@ -44,14 +44,17 @@ can never disagree. SIA is ready only when **all** of the following hold:
 
 1. SIA is enabled — `SIA_ENABLED` is exactly the string `"true"`.
 2. A provider is configured (`SIA_LLM_PROVIDER`) **and** this codebase
-   implements an adapter for it. Currently `openai` and `gemini` are the only
-   implemented providers; any other value is treated as not ready.
+   implements an adapter for it. Currently `openai`, `gemini`, and `groq` are
+   the only implemented providers; any other value is treated as not ready.
 3. A non-blank model is configured — `SIA_LLM_MODEL` (there is deliberately
    no default model). For Gemini's OpenAI-compatible endpoint this is a
-   Gemini model id, e.g. `gemini-3.6-flash`.
+   Gemini model id, e.g. `gemini-3.6-flash`; for Groq's OpenAI-compatible
+   endpoint this is a Groq-hosted model id, e.g. `openai/gpt-oss-120b`.
 4. A non-blank API credential exists for the configured provider —
    `OPENAI_API_KEY` for the OpenAI adapter, `GEMINI_API_KEY` for the Gemini
-   adapter.
+   adapter, `GROQ_API_KEY` for the Groq adapter. Each provider's credential
+   is looked up only by its own env var name — there is no fallback to
+   another provider's key.
 
 Each condition mirrors a real failure branch that already exists in
 `sia/llmService.js`; readiness adds no new requirement, it only evaluates the
@@ -78,6 +81,25 @@ being returned or persisted. Both adapters share one failure-code vocabulary
 `MODEL_NOT_CONFIGURED`, `PROVIDER_API_KEY_NOT_CONFIGURED`), distinguished only
 by the error's `provider` field -- never surfaced to the client, which always
 sees the same generic unavailable response.
+
+### Groq provider (adapter)
+
+`SIA_LLM_PROVIDER=groq` uses Groq's own OpenAI-compatible Chat Completions
+endpoint — `https://api.groq.com/openai/v1/chat/completions` (see
+https://console.groq.com/docs/api-reference#chat-create) — called directly
+with the existing `axios` dependency, not a Groq SDK. `GROQ_API_KEY` is sent
+only in the request's `Authorization: Bearer` header, read directly from
+`process.env` inside the adapter (never through `sia/config.js`, never
+logged, returned, or included in an error, and never falls back to
+`OPENAI_API_KEY`/`GEMINI_API_KEY` if unset). The Groq adapter reuses the
+exact same system-prompt/history/context/question message construction and
+response-extraction shape as the Gemini adapter (`choices[0].message.content`)
+and shares the same failure-code vocabulary and generic-503 client contract
+described above. Some Groq models (including the `openai/gpt-oss-*` reasoning
+models) return an additional `reasoning`/`reasoning_content` field on the
+response message alongside `content` — the adapter reads only `content`;
+the reasoning field is never accessed, so it can never be returned,
+persisted, or logged.
 
 The credential is read for **presence only**. It is never returned, logged,
 serialized, length-reported, or included in an error, and it is deliberately

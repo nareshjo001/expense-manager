@@ -1,4 +1,4 @@
-// SIA LLM service -- real, multi-provider (OpenAI, Gemini) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai" or "gemini" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls each provider's REST API directly (Gemini via its official OpenAI-compatible Chat Completions endpoint -- https://ai.google.dev/gemini-api/docs/openai -- not a Google SDK). Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, or response body is ever logged, returned, or included in an error message. OPENAI_API_KEY/GEMINI_API_KEY are read only inside their own provider boundary below, never through sia/config.js, so neither is ever exposed via the shared config object.
+// SIA LLM service -- real, multi-provider (OpenAI, Gemini, Groq) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai", "gemini", or "groq" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls each provider's REST API directly (Gemini via its official OpenAI-compatible Chat Completions endpoint -- https://ai.google.dev/gemini-api/docs/openai; Groq via its own OpenAI-compatible Chat Completions endpoint -- https://console.groq.com/docs/api-reference#chat-create -- neither via a Google/Groq SDK). Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, response body, or provider reasoning/thinking field is ever logged, returned, or included in an error message. OPENAI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY are read only inside their own provider boundary below, never through sia/config.js, so none of them is ever exposed via the shared config object.
 "use strict";
 
 const axios = require("axios");
@@ -12,6 +12,13 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 // documented as equivalent by Google; calling the REST endpoint directly
 // avoids adding a new dependency for a single POST request.
 const GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+// Groq's own OpenAI-compatible Chat Completions endpoint (see
+// https://console.groq.com/docs/api-reference#chat-create) -- same
+// rationale as Gemini above: the plain REST URL via the existing axios
+// dependency, no Groq SDK. Live-verified separately (HTTP 200,
+// choices[0].message.content returned) before this adapter was written;
+// no real request is made by anything in this file or its tests.
+const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // Stable, provider-neutral failure contract -- a caller relies on `.name`/`.code`/`.provider`/`.message` without knowing which provider was involved, and without ever seeing a raw provider exception, secret, or prompt/context/question content. Deliberately does not invent an HTTP status code -- that mapping belongs to a future route.
 class LlmProviderError extends Error {
@@ -101,6 +108,37 @@ function extractAnswerText(responseData) {
 // non-array choices, a non-string content, tool-call-only messages with no
 // content) yields null rather than a guessed value.
 function extractGeminiAnswerText(responseData) {
+  const choices = responseData && responseData.choices;
+  if (!Array.isArray(choices) || choices.length === 0) {
+    return null;
+  }
+
+  const firstChoice = choices[0];
+  const content = firstChoice && firstChoice.message && firstChoice.message.content;
+  if (typeof content !== "string") {
+    return null;
+  }
+
+  const trimmed = content.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+// Extracts the answer text only from the documented Groq (OpenAI-compatible
+// Chat Completions) response shape: choices[0].message.content -- see
+// https://console.groq.com/docs/api-reference#chat-create. Identical
+// extraction logic to extractGeminiAnswerText (same response shape family),
+// kept as its own function so each provider owns its full adapter and
+// extractor independently, matching this file's existing convention (only
+// the REQUEST-building helpers -- buildHistoryMessages/
+// buildUserInputContent -- are shared across providers; response
+// extraction is not). Some Groq models (including the openai/gpt-oss-*
+// reasoning models) return an additional `reasoning` or `reasoning_content`
+// field on the SAME message object alongside `content` -- that field is a
+// provider-internal reasoning trace, never the answer. This function reads
+// ONLY `message.content`; `reasoning`/`reasoning_content` are never
+// accessed, so they can never reach the returned answer, a log line, or
+// persisted storage, regardless of whether the response includes them.
+function extractGroqAnswerText(responseData) {
   const choices = responseData && responseData.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
     return null;
@@ -296,6 +334,82 @@ async function askGemini({ systemPrompt, context, question, history }) {
   return { answer, model: config.model, latencyMs };
 }
 
+// Real Groq provider adapter, only reached once the provider is confirmed
+// normalized "groq". Uses Groq's own OpenAI-compatible Chat Completions
+// endpoint (https://console.groq.com/docs/api-reference#chat-create) via
+// the existing axios dependency -- no Groq SDK. Reads GROQ_API_KEY
+// directly from process.env (mirrors askOpenAi's/askGemini's own
+// per-adapter credential handling -- never through the shared config
+// object, never falls back to another provider's key), and sends it ONLY
+// in the server-side Authorization header. Request/failure contract is
+// identical to the other two adapters' -- callers never need to know
+// which provider actually answered.
+async function askGroq({ systemPrompt, context, question, history }) {
+  if (isBlank(config.model)) {
+    throw new LlmProviderError(
+      "SIA has no LLM model configured. Set SIA_LLM_MODEL to use the Groq provider.",
+      { code: "MODEL_NOT_CONFIGURED", provider: "groq" }
+    );
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (isBlank(apiKey)) {
+    throw new LlmProviderError(
+      "SIA has no Groq API key configured. Set GROQ_API_KEY to use the Groq provider.",
+      { code: "PROVIDER_API_KEY_NOT_CONFIGURED", provider: "groq" }
+    );
+  }
+
+  // SAME message construction as askGemini: system prompt first, then the
+  // SAME bounded history framing (ordinary user/assistant roles only), then
+  // the current question + structured context as the final user turn, via
+  // the SAME buildUserInputContent() every adapter uses.
+  const requestBody = {
+    model: config.model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...buildHistoryMessages(history),
+      {
+        role: "user",
+        content: buildUserInputContent(context, question),
+      },
+    ],
+  };
+
+  const startedAt = Date.now();
+  let response;
+  try {
+    response = await axios.post(GROQ_CHAT_COMPLETIONS_URL, requestBody, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: config.timeoutMs,
+    });
+  } catch (err) {
+    throw normalizeAxiosError(err, "groq");
+  }
+  const latencyMs = Date.now() - startedAt;
+
+  const responseData = response && response.data;
+  if (!responseData || typeof responseData !== "object") {
+    throw new LlmProviderError("The LLM provider returned a malformed response.", {
+      code: "PROVIDER_MALFORMED_RESPONSE",
+      provider: "groq",
+    });
+  }
+
+  const answer = extractGroqAnswerText(responseData);
+  if (answer === null) {
+    throw new LlmProviderError("The LLM provider returned no usable answer text.", {
+      code: "PROVIDER_EMPTY_OUTPUT",
+      provider: "groq",
+    });
+  }
+
+  return { answer, model: config.model, latencyMs };
+}
+
 // Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
 async function askLlm({ systemPrompt, context, question, history } = {}) {
   const provider = config.provider;
@@ -307,7 +421,7 @@ async function askLlm({ systemPrompt, context, question, history } = {}) {
     );
   }
 
-  // A provider name is configured. Every configured value, known or unknown, fails the same explicit way unless it is normalized "openai" or "gemini", the only implemented adapters.
+  // A provider name is configured. Every configured value, known or unknown, fails the same explicit way unless it is normalized "openai", "gemini", or "groq", the only implemented adapters.
   const normalizedProvider = typeof provider === "string" ? provider.trim() : provider;
 
   if (normalizedProvider === "openai") {
@@ -316,6 +430,10 @@ async function askLlm({ systemPrompt, context, question, history } = {}) {
 
   if (normalizedProvider === "gemini") {
     return askGemini({ systemPrompt, context, question, history });
+  }
+
+  if (normalizedProvider === "groq") {
+    return askGroq({ systemPrompt, context, question, history });
   }
 
   throw new LlmProviderError(

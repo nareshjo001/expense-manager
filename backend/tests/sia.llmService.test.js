@@ -129,7 +129,7 @@ describe("backend/sia/llmService", () => {
   });
 
   it("never returns a fabricated success value for any provider state", async () => {
-    for (const providerValue of [null, "openai", "anthropic", "gemini"]) {
+    for (const providerValue of [null, "openai", "anthropic", "gemini", "groq"]) {
       const { askLlm } = loadLlmService({ provider: providerValue });
       let resolvedValue;
       let rejected = false;
@@ -206,14 +206,22 @@ describe("backend/sia/llmService", () => {
     expect(serializedError).not.toContain("424242");
   });
 
-  it("does not implicitly recognize any specific provider name as supported (openai and gemini are the only implemented adapters)", async () => {
-    // "gemini" intentionally removed from this list -- it is now a real
-    // implemented adapter (see tests/sia.llmService.gemini.test.js), so it
-    // no longer belongs among the deliberately-unsupported names asserted
-    // here. Also "OpenAI" (capitalized) stays in this list: normalization
-    // trims whitespace but never case-folds, so this remains an explicit
-    // unsupported name distinct from the real "openai".
-    const candidateProviders = ["anthropic", "azure-openai", "some-future-provider", "OpenAI", "Gemini"];
+  it("does not implicitly recognize any specific provider name as supported (openai, gemini, and groq are the only implemented adapters)", async () => {
+    // "gemini" and "groq" intentionally excluded from this list -- both are
+    // now real implemented adapters (see tests/sia.llmService.gemini.test.js
+    // and tests/sia.llmService.groq.test.js), so neither belongs among the
+    // deliberately-unsupported names asserted here. "OpenAI"/"Gemini"/"Groq"
+    // (capitalized) stay in this list: normalization trims whitespace but
+    // never case-folds, so these remain explicit unsupported names distinct
+    // from the real lowercase provider identifiers.
+    const candidateProviders = [
+      "anthropic",
+      "azure-openai",
+      "some-future-provider",
+      "OpenAI",
+      "Gemini",
+      "Groq",
+    ];
 
     for (const providerName of candidateProviders) {
       const { askLlm } = loadLlmService({ provider: providerName });
@@ -227,6 +235,14 @@ describe("backend/sia/llmService", () => {
 
   it('the normalized "gemini" provider no longer uses code "PROVIDER_NOT_IMPLEMENTED" (real Gemini adapter exists)', async () => {
     const { askLlm } = loadLlmService({ provider: "gemini" });
+
+    await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.not.toMatchObject({
+      code: "PROVIDER_NOT_IMPLEMENTED",
+    });
+  });
+
+  it('the normalized "groq" provider no longer uses code "PROVIDER_NOT_IMPLEMENTED" (real Groq adapter exists)', async () => {
+    const { askLlm } = loadLlmService({ provider: "groq" });
 
     await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.not.toMatchObject({
       code: "PROVIDER_NOT_IMPLEMENTED",
