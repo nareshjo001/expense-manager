@@ -250,11 +250,55 @@ Values below are placeholders. No real secret is included here or in any tracked
 | `BREVO_API_KEY` | Yes | Transactional email provider key, used for OTP/reset emails |
 | `PORT` | No | Listen port (defaults to `8080`) |
 | `SIA_ENABLED` | No | `true` enables SIA; any other value or unset disables it (default: disabled) |
-| `SIA_LLM_PROVIDER` | Only if SIA is enabled | Provider identifier; `openai` is the implemented adapter |
-| `SIA_LLM_MODEL` | Only if SIA is enabled | Model identifier passed to the provider; no default is assumed |
-| `SIA_LLM_TIMEOUT_MS` | No | Per-request provider timeout in ms (default `8000`) |
-| `OPENAI_API_KEY` | Only if SIA is enabled with the OpenAI adapter | Provider API key, read only inside the provider adapter |
+| `SIA_LLM_PROVIDER` | Only if SIA is enabled | Provider identifier; `openai` and `gemini` are the two implemented adapters |
+| `SIA_LLM_MODEL` | Only if SIA is enabled | Model identifier passed to the selected provider; no default is assumed |
+| `SIA_LLM_TIMEOUT_MS` | No | Per-request provider timeout in ms, shared by both adapters (default `8000`) |
+| `OPENAI_API_KEY` | Only if `SIA_LLM_PROVIDER=openai` | OpenAI adapter's API key, read only inside that provider adapter |
+| `GEMINI_API_KEY` | Only if `SIA_LLM_PROVIDER=gemini` | Gemini adapter's API key, read only inside that provider adapter, sent only in the request's `Authorization` header |
 | `FIREBASE_SERVICE_ACCOUNT` | No (optional -- see below) | Firebase service-account credentials, used only for push notifications |
+
+### SIA provider configuration (OpenAI or Gemini)
+
+`SIA_LLM_PROVIDER` selects exactly one adapter; only that provider's own
+credential is required. The other provider's key is not read, not validated,
+and does not need to exist in the environment at all -- setting one has no
+effect on which provider is used.
+
+**OpenAI** (`sia/llmService.js`'s `askOpenAi`, OpenAI's Responses API):
+
+```
+SIA_ENABLED=true
+SIA_LLM_PROVIDER=openai
+SIA_LLM_MODEL=<OpenAI model, e.g. gpt-4.1-mini>
+SIA_LLM_TIMEOUT_MS=30000
+OPENAI_API_KEY=<server-only secret>
+```
+
+**Gemini** (`sia/llmService.js`'s `askGemini`, Gemini's official
+OpenAI-compatible Chat Completions endpoint --
+https://ai.google.dev/gemini-api/docs/openai):
+
+```
+SIA_ENABLED=true
+SIA_LLM_PROVIDER=gemini
+SIA_LLM_MODEL=gemini-3.6-flash
+SIA_LLM_TIMEOUT_MS=30000
+GEMINI_API_KEY=<server-only secret>
+```
+
+`SIA_ENABLED` and `SIA_LLM_TIMEOUT_MS` are shared by both providers and are
+not adapter-specific.
+
+Neither `OPENAI_API_KEY` nor `GEMINI_API_KEY` is ever read by, sent to, or
+permitted to exist in the frontend -- both are read only inside their own
+backend provider-adapter boundary in `sia/llmService.js`, never through the
+shared `sia/config.js` object, and this repository has no
+`REACT_APP_OPENAI_API_KEY` / `REACT_APP_GEMINI_API_KEY` or equivalent. See
+`sia/README.md`'s "Runtime readiness and status" section for the full
+readiness contract (`sia/readiness.js` requires the credential matching
+whichever provider is configured, and reports only `available: true|false`
+-- never the provider name, model, or credential presence -- from
+`GET /sia/status`).
 
 ### Firebase / push notifications (optional)
 

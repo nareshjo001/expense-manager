@@ -206,8 +206,14 @@ describe("backend/sia/llmService", () => {
     expect(serializedError).not.toContain("424242");
   });
 
-  it("does not implicitly recognize any specific provider name as supported (openai is the sole implemented adapter)", async () => {
-    const candidateProviders = ["anthropic", "gemini", "azure-openai", "some-future-provider", "OpenAI"];
+  it("does not implicitly recognize any specific provider name as supported (openai and gemini are the only implemented adapters)", async () => {
+    // "gemini" intentionally removed from this list -- it is now a real
+    // implemented adapter (see tests/sia.llmService.gemini.test.js), so it
+    // no longer belongs among the deliberately-unsupported names asserted
+    // here. Also "OpenAI" (capitalized) stays in this list: normalization
+    // trims whitespace but never case-folds, so this remains an explicit
+    // unsupported name distinct from the real "openai".
+    const candidateProviders = ["anthropic", "azure-openai", "some-future-provider", "OpenAI", "Gemini"];
 
     for (const providerName of candidateProviders) {
       const { askLlm } = loadLlmService({ provider: providerName });
@@ -217,5 +223,13 @@ describe("backend/sia/llmService", () => {
         provider: providerName,
       });
     }
+  });
+
+  it('the normalized "gemini" provider no longer uses code "PROVIDER_NOT_IMPLEMENTED" (real Gemini adapter exists)', async () => {
+    const { askLlm } = loadLlmService({ provider: "gemini" });
+
+    await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.not.toMatchObject({
+      code: "PROVIDER_NOT_IMPLEMENTED",
+    });
   });
 });

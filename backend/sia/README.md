@@ -44,16 +44,40 @@ can never disagree. SIA is ready only when **all** of the following hold:
 
 1. SIA is enabled — `SIA_ENABLED` is exactly the string `"true"`.
 2. A provider is configured (`SIA_LLM_PROVIDER`) **and** this codebase
-   implements an adapter for it. Currently `openai` is the only implemented
-   provider; any other value is treated as not ready.
+   implements an adapter for it. Currently `openai` and `gemini` are the only
+   implemented providers; any other value is treated as not ready.
 3. A non-blank model is configured — `SIA_LLM_MODEL` (there is deliberately
-   no default model).
-4. A non-blank API credential exists for the configured provider — for the
-   OpenAI adapter, `OPENAI_API_KEY`.
+   no default model). For Gemini's OpenAI-compatible endpoint this is a
+   Gemini model id, e.g. `gemini-3.6-flash`.
+4. A non-blank API credential exists for the configured provider —
+   `OPENAI_API_KEY` for the OpenAI adapter, `GEMINI_API_KEY` for the Gemini
+   adapter.
 
 Each condition mirrors a real failure branch that already exists in
 `sia/llmService.js`; readiness adds no new requirement, it only evaluates the
 same conditions **earlier**, before a request is admitted.
+
+### Gemini provider (adapter)
+
+`SIA_LLM_PROVIDER=gemini` uses Gemini's official OpenAI-compatible Chat
+Completions endpoint —
+`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`
+(see https://ai.google.dev/gemini-api/docs/openai) — called directly with the
+existing `axios` dependency, not the OpenAI or Google GenAI SDK. `GEMINI_API_KEY`
+is sent only in the request's `Authorization: Bearer` header, read directly
+from `process.env` inside the adapter (never through `sia/config.js`, and
+never logged, returned, or included in an error). The same system prompt,
+bounded conversation history, and structured-context/question construction
+the OpenAI adapter uses are reused as-is and converted into
+`system`/`user`/`assistant` chat-completion messages; only the assistant's
+`choices[0].message.content` text is read from the response, and it still
+passes through the same deterministic `validateGroundedAnswer()` gate before
+being returned or persisted. Both adapters share one failure-code vocabulary
+(`PROVIDER_TIMEOUT`, `PROVIDER_HTTP_ERROR`, `PROVIDER_NETWORK_ERROR`,
+`PROVIDER_MALFORMED_RESPONSE`, `PROVIDER_EMPTY_OUTPUT`,
+`MODEL_NOT_CONFIGURED`, `PROVIDER_API_KEY_NOT_CONFIGURED`), distinguished only
+by the error's `provider` field -- never surfaced to the client, which always
+sees the same generic unavailable response.
 
 The credential is read for **presence only**. It is never returned, logged,
 serialized, length-reported, or included in an error, and it is deliberately
