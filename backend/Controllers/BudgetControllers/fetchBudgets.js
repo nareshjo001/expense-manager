@@ -1,6 +1,19 @@
 const { BudgetModel } = require('../../config/Schemas');
 const { MONTH_ORDER } = require('../../Services/ChartServices/chartConstants');
-const syncRecoveryService = require('../../Services/syncRecoveryService');
+// syncRecoveryService is required LAZILY (inside fetchBudgets(), not here at
+// module scope) because it sits on a real CommonJS require cycle:
+// syncRecoveryService -> reportService -> analytics/reportGenerator ->
+// analytics/analyticsContext -> analytics/dataProvider -> fetchBudgets.
+// A top-level require here made fetchBudgets.js's module.exports still
+// under construction when syncRecoveryService (transitively) required it
+// back, so syncRecoveryService's own export sometimes wasn't finished
+// initializing by the time fetchBudgets ran, yielding
+// "repairIfPending is not a function". Resolving it at call time, after
+// both modules have fully finished their initial `require` pass, avoids
+// depending on module load order. chart.service.js and getbudgets.js were
+// checked and are NOT on this cycle (both are only required by Controllers
+// outside the syncRecoveryService -> reportService -> ... chain), so their
+// top-level requires are left unchanged.
 
 // Order budget records chronologically by month key.
 const sortByMonthKey = (a, b) => {
@@ -21,6 +34,8 @@ const sortByMonthKey = (a, b) => {
 // Budget.spent value into analytics reports indefinitely -- this was the
 // only remaining reader of Budget.spent with no repair step.
 const fetchBudgets = async (userId) => {
+    // Resolve lazily to break the syncRecoveryService → report generation → fetchBudgets cycle.
+    const syncRecoveryService = require('../../Services/syncRecoveryService');
     await syncRecoveryService.repairIfPending(userId);
 
     const budgets = await BudgetModel.find(
