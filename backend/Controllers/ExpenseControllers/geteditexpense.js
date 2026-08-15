@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
+const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
 
 const geteditexpense = async (req, res) => {
     try {
@@ -28,10 +29,13 @@ const geteditexpense = async (req, res) => {
                 return res.status(404).json({ message: 'Expense not found', success: false });
             }
 
-            // Return the expense data
+            // Return the expense data, isRecurring corrected against the
+            // authoritative RecurringExpenseModel rather than the (possibly
+            // stale) stored mirror.
+            const annotatedExpense = await annotateRecurringState(user._id, expense.toObject());
             res.status(200).json({
                 message: 'Expense Retrieved Successfully',
-                data: expense,
+                data: annotatedExpense,
                 success: true
             });
 

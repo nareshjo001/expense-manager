@@ -23,6 +23,7 @@ const request = require("supertest");
 const SCHEMAS_PATH = "../config/Schemas";
 const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
 const EXPENSE_CACHE_PATH = "../utils/expenseCache";
+const RECURRING_MODEL_PATH = "../models/RecurringExpense";
 const APP_PATH = "../app";
 
 const TEST_JWT_SECRET = "expense-mutation-reliability-test-secret";
@@ -186,6 +187,14 @@ function loadApp({
     clearUserExpenseCache: clearUserExpenseCacheMock,
     setCache: jest.fn(async () => {}),
     getCache: jest.fn(async () => null),
+  }));
+
+  // Recurring-state authority remediation -- addexpense.js's replay path
+  // and editExpense.js now call annotateRecurringState, which queries
+  // RecurringExpenseModel. No recurring definitions exist in this file's
+  // scenarios.
+  jest.doMock(RECURRING_MODEL_PATH, () => ({
+    RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
 
   const app = require(APP_PATH);
@@ -436,6 +445,10 @@ describe("POST /expense/add-expense -- idempotency", () => {
       expenseCategory: "Food",
       expenseAmount: 5.5,
       expenseDate: "2026-01-15T00:00:00.000Z",
+      // Recurring-state authority remediation -- buildReplayResponse now
+      // annotates every replay with the authoritative isRecurring; no
+      // definition exists in this fixture, so it is explicitly false.
+      isRecurring: false,
     };
     const { app, saveMock, synchronizeAfterMutationMock } = loadApp({
       findOneImpl: () => ({ lean: jest.fn().mockResolvedValue(existing) }),
@@ -489,6 +502,10 @@ describe("POST /expense/add-expense -- idempotency", () => {
       expenseCategory: "Food",
       expenseAmount: 5.5,
       expenseDate: "2026-01-15T00:00:00.000Z",
+      // Recurring-state authority remediation -- buildReplayResponse now
+      // annotates every replay with the authoritative isRecurring; no
+      // definition exists in this fixture, so it is explicitly false.
+      isRecurring: false,
     };
     let call = 0;
     const { app, synchronizeAfterMutationMock } = loadApp({

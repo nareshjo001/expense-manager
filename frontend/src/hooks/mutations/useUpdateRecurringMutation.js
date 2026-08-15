@@ -54,5 +54,23 @@ export const useUpdateRecurringMutation = () => {
         queryClient.setQueryData(key, data);
       });
     },
+
+    // Reconciles the cache with the server's authoritative isRecurring
+    // (never the client's pre-mutation guess from onMutate) as soon as the
+    // response arrives -- the backend derives this from RecurringExpenseModel
+    // existence, which can legitimately differ from what onMutate guessed.
+    onSuccess: (data, { expenseId }) => {
+      if (data?.success && typeof data.isRecurring === "boolean") {
+        queryClient.setQueriesData({ queryKey: queryKeys.expenses.all }, (old) =>
+          patchRecurringInCache(old, expenseId, data.isRecurring)
+        );
+      }
+    },
+
+    // Refetches so every expense-derived view converges on the same
+    // authoritative state regardless of which cached shape it holds.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all });
+    },
   });
 };

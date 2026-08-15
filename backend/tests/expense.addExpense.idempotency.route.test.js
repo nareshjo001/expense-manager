@@ -39,6 +39,7 @@ const request = require("supertest");
 const SCHEMAS_PATH = "../config/Schemas";
 const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
 const EXPENSE_CACHE_PATH = "../utils/expenseCache";
+const RECURRING_MODEL_PATH = "../models/RecurringExpense";
 const APP_PATH = "../app";
 
 const TEST_JWT_SECRET = "expense-addexpense-idempotency-route-test-secret";
@@ -213,6 +214,13 @@ function loadApp() {
     clearUserExpenseCache: clearUserExpenseCacheMock,
     setCache: jest.fn(async () => {}),
     getCache: jest.fn(async () => null),
+  }));
+
+  // Recurring-state authority remediation -- addexpense.js's replay path
+  // calls annotateRecurringState, which queries RecurringExpenseModel. No
+  // recurring definitions exist in this file's scenarios.
+  jest.doMock(RECURRING_MODEL_PATH, () => ({
+    RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
 
   const app = require(APP_PATH);

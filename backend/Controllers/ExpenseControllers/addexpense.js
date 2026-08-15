@@ -2,6 +2,7 @@ const { UserModel, ExpenseModel, MlFeedbackModel } = require('../../config/Schem
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
 const { normalizeCategory } = require('../../utils/categoryNormalization');
+const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
 const axios = require("axios");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
 // header attachment (ml-service's /generate-description now requires the
@@ -86,10 +87,16 @@ const buildReplayResponse = async (userId, existingExpense) => {
     budgetDates: [existingExpense.expenseDate],
   });
 
+  // A replayed add can return an expense that was marked recurring since
+  // its original creation -- isRecurring must reflect the authoritative
+  // RecurringExpenseModel state, not whatever the stored mirror said at
+  // the time this replay's lookup ran.
+  const annotatedExpense = await annotateRecurringState(userId, existingExpense);
+
   return {
     message: 'Expense Created Successfully',
     success: true,
-    data: existingExpense,
+    data: annotatedExpense,
     derivedData,
     replayed: true,
   };

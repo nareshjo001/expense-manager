@@ -21,6 +21,7 @@ const mongoose = require("mongoose");
 const SCHEMAS_PATH = "../config/Schemas";
 const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
 const EXPENSE_CACHE_PATH = "../utils/expenseCache";
+const RECURRING_MODEL_PATH = "../models/RecurringExpense";
 const APP_PATH = "../app";
 
 const TEST_JWT_SECRET = "expense-category-normalization-route-test-secret";
@@ -199,6 +200,14 @@ function loadApp() {
     clearUserExpenseCache: clearUserExpenseCacheMock,
     setCache: jest.fn(async () => {}),
     getCache: jest.fn(async () => null),
+  }));
+
+  // Recurring-state authority remediation -- addexpense.js's replay path
+  // and editExpense.js now call annotateRecurringState, which queries
+  // RecurringExpenseModel. No recurring definitions exist in this file's
+  // scenarios, so an always-empty result is the correct stub.
+  jest.doMock(RECURRING_MODEL_PATH, () => ({
+    RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
 
   const app = require(APP_PATH);

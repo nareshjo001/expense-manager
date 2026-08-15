@@ -18,6 +18,7 @@ const mongoose = require("mongoose");
 const SCHEMAS_PATH = "../config/Schemas";
 const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
 const EXPENSE_CACHE_PATH = "../utils/expenseCache";
+const RECURRING_MODEL_PATH = "../models/RecurringExpense";
 const EDIT_EXPENSE_PATH = "../Controllers/ExpenseControllers/editExpense";
 
 const USER_ID = "64f1a2b3c4d5e6f7a8b9c0aa";
@@ -72,6 +73,13 @@ function loadEditExpense({ originalExpense, updateResult } = {}) {
   const clearUserExpenseCacheMock = jest.fn(async () => {});
   jest.doMock(EXPENSE_CACHE_PATH, () => ({
     clearUserExpenseCache: clearUserExpenseCacheMock,
+  }));
+
+  // Recurring-state authority remediation -- editExpense.js now calls
+  // annotateRecurringState, which queries RecurringExpenseModel. No
+  // recurring definitions exist in this file's scenarios.
+  jest.doMock(RECURRING_MODEL_PATH, () => ({
+    RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
 
   const { editexpense } = require(EDIT_EXPENSE_PATH);

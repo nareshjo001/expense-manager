@@ -3,6 +3,7 @@ const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
 const { normalizeCategory } = require('../../utils/categoryNormalization');
+const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
 
 // Category Normalization -- controlled 400 for an explicitly-supplied but
 // invalid category, matching addexpense.js's own convention. Returned
@@ -313,13 +314,18 @@ const editexpense = async (req, res) => {
             reportToken: reportReservation && reportReservation.token,
         });
 
+        // isRecurring corrected against the authoritative
+        // RecurringExpenseModel rather than the (possibly stale) mirror
+        // carried over from priorExpense/updates.
+        const annotatedExpense = await annotateRecurringState(user._id, updatedExpense);
+
         // Send response. The edit is authoritative and committed
         // regardless of derivedData.status -- only derivedData
         // distinguishes "fully synchronized" from "saved, still
         // synchronizing".
         res.status(200).json({
             message: 'Expense updated successfully!',
-            data: updatedExpense,
+            data: annotatedExpense,
             success: true,
             derivedData,
             replayed: false,

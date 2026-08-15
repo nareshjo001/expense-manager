@@ -1,4 +1,5 @@
 const dataProvider = require("./dataProvider");
+const { annotateRecurringState } = require("../Services/RecurringServices/recurringStateService");
 const {
     buildCompletedMonthSeries,
     computeCurrentPartialMonthTotal,
@@ -23,11 +24,41 @@ const createAnalyticsContext = async (userId) => {
         dataProvider.getAllBudgets(userId)
     ]);
 
-    const safeCurrentMonth = asArray(currentMonthExpenses);
-    const safePreviousMonth = asArray(previousMonthExpenses);
-    const safeCurrentYear = asArray(currentYearExpenses);
-    const safePreviousYear = asArray(previousYearExpenses);
+    const rawCurrentMonth = asArray(currentMonthExpenses);
+    const rawPreviousMonth = asArray(previousMonthExpenses);
+    const rawCurrentYear = asArray(currentYearExpenses);
+    const rawPreviousYear = asArray(previousYearExpenses);
     const safeBudgetHistory = asArray(budgetHistory);
+
+    // Recurring-state authority (analytics closure): the four ranges above
+    // overlap in expense _ids near month/year boundaries (e.g. currentYear
+    // fully contains currentMonth; previousMonth can fall in previousYear
+    // across a Jan 1st boundary), so annotating each range separately would
+    // issue redundant RecurringExpenseModel queries for the same
+    // definitions. Concatenating first and annotating ONCE lets
+    // annotateRecurringState's internal _id Set collapse all duplicates
+    // into a single batched query (zero queries if every range is empty),
+    // scoped to this userId. Slicing back preserves each range's original
+    // order/length and every other field (annotateRecurringState only ever
+    // overwrites isRecurring).
+    const mergedForAnnotation = [
+        ...rawCurrentMonth,
+        ...rawPreviousMonth,
+        ...rawCurrentYear,
+        ...rawPreviousYear,
+    ];
+    const annotatedMerged = await annotateRecurringState(userId, mergedForAnnotation);
+    let annotationOffset = 0;
+    const takeAnnotated = (originalRange) => {
+        const slice = annotatedMerged.slice(annotationOffset, annotationOffset + originalRange.length);
+        annotationOffset += originalRange.length;
+        return slice;
+    };
+
+    const safeCurrentMonth = takeAnnotated(rawCurrentMonth);
+    const safePreviousMonth = takeAnnotated(rawPreviousMonth);
+    const safeCurrentYear = takeAnnotated(rawCurrentYear);
+    const safePreviousYear = takeAnnotated(rawPreviousYear);
 
     const now = new Date();
     
