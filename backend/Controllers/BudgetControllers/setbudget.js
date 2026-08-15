@@ -1,7 +1,20 @@
-const { UserModel } = require('../../config/Schemas');
-const { setBudgetForCurrentMonth } = require('../../Services/BudgetServices/budget.service');
-const { refreshReport } = require('../../Services/reportService');
+const { UserModel, BudgetModel } = require('../../config/Schemas');
+const { getMonthRange } = require('../../Services/HelperServices/datecal.service');
+const syncRecoveryService = require('../../Services/syncRecoveryService');
+const { clearUserExpenseCache } = require('../../utils/expenseCache');
 
+// Budget Derived-Spent Authority remediation -- this route used to call
+// setBudgetForCurrentMonth(), which upserted `budget` then called
+// recalculateBudget() with NO fenceRevision: an unconditional `$set`
+// completely outside syncRecoveryService's reserve/confirm/repair
+// architecture (unlike every expense-mutation controller). That left two
+// gaps: (1) a crash between the budget-amount write and the recompute left
+// no durable PendingSync evidence, so repairIfPending() could never find
+// or fix it; (2) the unfenced write could silently overwrite a
+// concurrently fenced, fresher expense-mutation repair for the same
+// user+month with no CAS protection. This now follows the exact same
+// reserve -> primary write -> synchronizeAfterMutation (fenced) pattern
+// addexpense.js/editExpense.js/deleteExpense.js already use.
 const setbudget = async (req, res) => {
   try {
     // Validate user
@@ -30,14 +43,40 @@ const setbudget = async (req, res) => {
       return res.status(400).json({ message: 'Budget amount must be a valid, non-negative number', success: false });
     }
 
-    // Set or update budget for the current month
-    await setBudgetForCurrentMonth(user._id, budgetAmount);
+    const now = new Date();
+    const { monthStart } = getMonthRange(now);
+    const month = monthStart.toLocaleString('default', { month: 'short', year: 'numeric' });
 
-    // Update report
-    await refreshReport(user._id);
+    // Reserve BEFORE the primary write -- a crash before confirm() still
+    // leaves durable Tier-2 evidence for repairIfPending() to find.
+    const { budgetReservations } = await syncRecoveryService.reserve({
+      userId: user._id,
+      budgetDates: [now],
+    });
 
-    // Send success response
-    res.status(200).json({ message: 'Budget set successfully', success: true });
+    // Set or update the budget cap for the current month (upsert).
+    await BudgetModel.findOneAndUpdate(
+      { userId: user._id, month },
+      { $set: { budget: budgetAmount } },
+      { upsert: true, runValidators: true }
+    );
+
+    // Cache clearing is a pure optimization (utils/expenseCache.js's own
+    // functions already self-catch every Redis error) -- matches the
+    // expense-mutation controllers' convention.
+    await clearUserExpenseCache(user._id);
+
+    // Recompute spent (fenced) and refresh the report -- synchronizeAfterMutation
+    // already calls refreshReport internally, so no separate call is made here.
+    const derivedData = await syncRecoveryService.synchronizeAfterMutation({
+      userId: user._id,
+      budgetDates: [now],
+      budgetTokens: budgetReservations.map((r) => r.token),
+    });
+
+    // Send success response -- existing fields (`message`, `success`)
+    // unchanged; `derivedData` is new and purely additive.
+    res.status(200).json({ message: 'Budget set successfully', success: true, derivedData });
 
   } catch (err) {
     // Catch unexpected server or database errors
