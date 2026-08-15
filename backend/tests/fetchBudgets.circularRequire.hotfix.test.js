@@ -1,47 +1,35 @@
-// BALENISA URGENT PRODUCTION HOTFIX -- circular-require regression coverage.
+// BALENISA URGENT PRODUCTION HOTFIX -- corrected.
 //
-// Confirmed production failure:
-//   TypeError: syncRecoveryService.repairIfPending is not a function
-//   Warning: Accessing non-existent property 'repairIfPending' of module
-//   exports inside circular dependency
+// Timeline:
+// 1. Original defect: fetchBudgets.js had a top-level
+//    `require('../../Services/syncRecoveryService')`, closing a real
+//    CommonJS cycle: syncRecoveryService -> reportService -> reportGenerator
+//    -> analyticsContext -> dataProvider -> fetchBudgets -> syncRecoveryService.
+//    When syncRecoveryService loaded first, fetchBudgets.js captured its
+//    still-under-construction module.exports, causing
+//    "TypeError: syncRecoveryService.repairIfPending is not a function".
+// 2. First hotfix pass: made the require lazy (inside fetchBudgets()).
+//    This fixed the crash but NOT the architecture -- fetchBudgets() is
+//    called from WITHIN report generation itself, so calling
+//    repairIfPending() there re-entered the sync recovery machinery
+//    mid-generation (reportService already repairs once, up front, before
+//    generation starts), which was the actual cause of the slow/stuck
+//    budget response.
+// 3. This correction: fetchBudgets.js no longer references
+//    syncRecoveryService AT ALL -- it is a pure BudgetModel read/sort
+//    helper. This doesn't just defer the require, it removes the cycle's
+//    closing edge entirely (dataProvider -> fetchBudgets still exists, but
+//    fetchBudgets -> syncRecoveryService no longer does), so there is no
+//    cycle left to trigger the original crash class in the first place.
 //
-// Exact cycle (verified by reading every require() in the chain):
-//   Services/syncRecoveryService.js
-//     -> require("./reportService")                              (line 8)
-//   Services/reportService.js
-//     -> require("../analytics/reportGenerator")                 (line 2)
-//   analytics/reportGenerator.js
-//     -> require("./analyticsContext")                           (line 1)
-//   analytics/analyticsContext.js
-//     -> require("./dataProvider")                                (line 1)
-//   analytics/dataProvider.js
-//     -> require('../Controllers/BudgetControllers/fetchBudgets') (line 7)
-//   Controllers/BudgetControllers/fetchBudgets.js
-//     -> (used to) require('../../Services/syncRecoveryService')  <- CLOSES THE CYCLE
-//
-// fetchBudgets.js's former top-level `require('../../Services/syncRecoveryService')`
-// closed this cycle. Node's CommonJS loader returns the REQUIRING module's
-// (syncRecoveryService's) *partially built* module.exports object when a
-// cycle is hit mid-load -- so fetchBudgets.js could capture a reference to
-// syncRecoveryService.exports before `repairIfPending` (or any of its other
-// exports) had been assigned yet, depending on the exact require order the
-// first module resolved happened to trigger.
-//
-// The fix (see Controllers/BudgetControllers/fetchBudgets.js) resolves
-// syncRecoveryService LAZILY -- inside fetchBudgets(), immediately before
-// calling repairIfPending -- so the require happens long after both modules
-// have finished their initial synchronous load pass, regardless of which
-// module started the load.
-//
-// This test reproduces the EXACT production require order: it requires
-// syncRecoveryService FIRST (as server.js's dependency graph effectively
-// does before any controller runs), letting Node walk the real chain
+// This test proves both properties hold in the exact production require
+// order: it requires syncRecoveryService FIRST (as server.js's dependency
+// graph effectively does), letting the real, unmocked chain
 // syncRecoveryService -> reportService -> reportGenerator ->
-// analyticsContext -> dataProvider -> fetchBudgets for real (none of these
-// six modules are mocked). Only true leaf DB/cache dependencies are mocked
-// (config/Schemas, models/PendingSync, models/Report, cache/reportCache,
-// Services/RecurringServices/recurringStateService) so no MongoDB/Redis
-// connection is required.
+// analyticsContext -> dataProvider -> fetchBudgets load, then proves (a) no
+// circular-dependency warning is ever logged, and (b) fetchBudgets()
+// completes correctly WITHOUT calling repairIfPending or otherwise
+// re-entering sync recovery.
 "use strict";
 
 const SCHEMAS_PATH = "../config/Schemas";
@@ -59,7 +47,7 @@ afterEach(() => {
 });
 
 describe("Production require-order regression: syncRecoveryService <-> fetchBudgets cycle", () => {
-  it("loading syncRecoveryService FIRST (which transitively requires fetchBudgets via reportService -> reportGenerator -> analyticsContext -> dataProvider) still yields a fully-initialized module with repairIfPending as a callable function, and fetchBudgets can call it without a TypeError or circular-export warning", async () => {
+  it("loading syncRecoveryService FIRST loads the whole production chain (reportService -> reportGenerator -> analyticsContext -> dataProvider -> fetchBudgets) without a circular-dependency warning, and fetchBudgets never re-enters sync recovery", async () => {
     jest.resetModules();
 
     const budgetFindMock = jest.fn(() => ({
@@ -73,10 +61,6 @@ describe("Production require-order regression: syncRecoveryService <-> fetchBudg
       IncomeModel: {},
     }));
 
-    // Leaf-level mongoose model: only the read paths repairIfPending's
-    // fast no-pending-work branch actually exercises need a safe stub --
-    // every PendingSync method resolves to "nothing pending" so
-    // repairIfPending takes its normal, common-case, no-op-repair path.
     const pendingSyncFindOneMock = jest.fn(() => ({ lean: jest.fn().mockResolvedValue(null) }));
     const pendingSyncFindOneAndUpdateMock = jest.fn().mockResolvedValue(null);
     const pendingSyncUpdateOneMock = jest.fn().mockResolvedValue({});
@@ -106,36 +90,41 @@ describe("Production require-order regression: syncRecoveryService <-> fetchBudg
     // Step 1: require syncRecoveryService FIRST -- exactly the production
     // order. This transitively pulls in reportService -> reportGenerator
     // -> analyticsContext -> dataProvider -> fetchBudgets, all for real
-    // (unmocked), reconstructing the exact cycle from the incident report.
+    // (unmocked).
     let syncRecoveryService;
     expect(() => {
       syncRecoveryService = require(SYNC_RECOVERY_SERVICE_PATH);
     }).not.toThrow();
 
-    // Prove the module actually finished initializing -- not a partial/
-    // in-progress circular-require object missing its exports.
     expect(typeof syncRecoveryService.repairIfPending).toBe("function");
     expect(typeof syncRecoveryService.reserve).toBe("function");
     expect(typeof syncRecoveryService.synchronizeAfterMutation).toBe("function");
+
+    // Spy on the real repairIfPending AFTER the module has fully loaded, so
+    // we can prove fetchBudgets() never calls it -- the whole point of the
+    // architectural correction.
+    const repairIfPendingSpy = jest.spyOn(syncRecoveryService, "repairIfPending");
 
     // Step 2: require fetchBudgets (already loaded via the chain above --
     // Node returns the same cached module, exactly as in production).
     const { fetchBudgets } = require(FETCH_BUDGETS_PATH);
     expect(typeof fetchBudgets).toBe("function");
 
-    // Step 3: invoke fetchBudgets with the mocked DB dependencies in
-    // place. This must resolve `syncRecoveryService.repairIfPending` as a
-    // real function and call it -- proving the lazy require inside
-    // fetchBudgets() works even though syncRecoveryService was the module
-    // that originally triggered the whole chain.
+    // Step 3: invoke fetchBudgets. It must complete correctly using only
+    // BudgetModel, WITHOUT ever calling repairIfPending -- report
+    // generation must consume already-repaired data, not trigger a new
+    // repair mid-generation.
     const result = await fetchBudgets("user-1");
 
-    expect(pendingSyncFindOneMock).toHaveBeenCalledWith({ user: "user-1" });
     expect(budgetFindMock).toHaveBeenCalledTimes(1);
     expect(result).toEqual([{ month: "Aug 2026", budget: 500, spent: 100 }]);
+    expect(repairIfPendingSpy).not.toHaveBeenCalled();
+    expect(pendingSyncFindOneMock).not.toHaveBeenCalled();
 
     // No "repairIfPending is not a function" TypeError anywhere, and no
-    // Node circular-dependency warning was ever logged to console.
+    // Node circular-dependency warning was ever logged to console --
+    // proving the cycle's closing edge (fetchBudgets -> syncRecoveryService)
+    // is genuinely gone, not just deferred.
     const allLoggedText = [...warnSpy.mock.calls, ...errorSpy.mock.calls]
       .flat()
       .map((arg) => (arg && arg.stack) || String(arg))
