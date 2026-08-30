@@ -3,7 +3,7 @@
 // semantic-routing EXPLAIN/FORECAST/COMPARE answer path.
 "use strict";
 
-const { validateCitedAnswer } = require("../sia/responseValidator");
+const { validateCitedAnswer, MAX_ANSWER_LENGTH } = require("../sia/responseValidator");
 
 function factSet(facts) {
   return { facts };
@@ -34,6 +34,17 @@ const forecastFact = {
 };
 
 describe("backend/sia/responseValidator -- validateCitedAnswer", () => {
+  it("rejects an oversized cited answer before claim parsing", () => {
+    const result = validateCitedAnswer({
+      answer: "x".repeat(MAX_ANSWER_LENGTH + 1),
+      citedFactIds: [],
+      factSet: factSet([expenseTotalFact]),
+      plan: { operation: "LOOKUP", metrics: ["EXPENSE_TOTAL"] },
+    });
+
+    expect(result).toEqual({ valid: false, reasonCode: "ANSWER_TOO_LONG" });
+  });
+
   it("accepts a valid citation whose claimed amount matches the cited fact's value", () => {
     const result = validateCitedAnswer({
       answer: "You spent ₹4250 this month.",
@@ -72,6 +83,19 @@ describe("backend/sia/responseValidator -- validateCitedAnswer", () => {
       citedFactIds: ["fact-1"],
       factSet: factSet([expenseTotalFact]),
       plan: { operation: "COMPARE", metrics: ["PERIOD_COMPARISON"] },
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts a comparison claim from a v2 query plan only when a query genuinely is COMPARE", () => {
+    const result = validateCitedAnswer({
+      answer: "You spent ₹4250 this month, which is the same as last month.",
+      citedFactIds: ["fact-1"],
+      factSet: factSet([expenseTotalFact]),
+      plan: {
+        version: 2,
+        queries: [{ metric: "EXPENSE_TOTAL", operation: "COMPARE" }],
+      },
     });
     expect(result.valid).toBe(true);
   });

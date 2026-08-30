@@ -61,4 +61,29 @@ function mlOperationsHeaders() {
   return { [OPERATIONS_TOKEN_HEADER]: token };
 }
 
-module.exports = { buildMlServiceUrl, mlOperationsHeaders, OPERATIONS_TOKEN_HEADER };
+const axios = require('axios');
+
+/**
+ * Request ML spending forecast prediction.
+ * @param {Object} features - Feature payload matching the model input.
+ * @param {Object} [options] - Optional settings.
+ * @param {number} [options.timeoutMs=3000] - Request timeout in ms.
+ * @returns {Promise<Object>} - { success:true, data } or { success:false, fallback:true, reason }.
+ */
+async function requestSpendingForecast(features, { timeoutMs = 3000 } = {}) {
+  const url = buildMlServiceUrl('/predict-spending-forecast');
+  try {
+    const resp = await axios.post(url, features, {
+      timeout: timeoutMs,
+      headers: mlOperationsHeaders(),
+    });
+    return { success: true, data: resp.data };
+  } catch (err) {
+    const reason = err.code === 'ECONNABORTED' ? 'ML service timeout'
+      : err.response?.data?.message || err.message;
+    return { success: false, fallback: true, reason };
+  }
+}
+
+module.exports = { buildMlServiceUrl, mlOperationsHeaders, OPERATIONS_TOKEN_HEADER, requestSpendingForecast };
+

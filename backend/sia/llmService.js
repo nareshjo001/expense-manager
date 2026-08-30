@@ -19,6 +19,8 @@ const GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v
 // choices[0].message.content returned) before this adapter was written;
 // no real request is made by anything in this file or its tests.
 const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MAX_STRUCTURED_OUTPUT_NAME_LENGTH = 64;
+const STRUCTURED_OUTPUT_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 // Stable, provider-neutral failure contract -- a caller relies on `.name`/`.code`/`.provider`/`.message` without knowing which provider was involved, and without ever seeing a raw provider exception, secret, or prompt/context/question content. Deliberately does not invent an HTTP status code -- that mapping belongs to a future route.
 class LlmProviderError extends Error {
@@ -46,6 +48,67 @@ function isMissingProvider(provider) {
 
 function isBlank(value) {
   return typeof value !== "string" || value.trim() === "";
+}
+
+// Structured output is opt-in. Text callers keep their existing request and
+// response shapes; router/synthesis callers can request provider-enforced
+// JSON and receive the locally parsed value as `structuredOutput`.
+function normalizeStructuredOutputRequest(value, provider) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new LlmProviderError("SIA received an invalid structured-output request.", {
+      code: "STRUCTURED_OUTPUT_INVALID_REQUEST",
+      provider,
+    });
+  }
+
+  const name = value.name;
+  const schema = value.schema;
+  if (
+    typeof name !== "string" ||
+    name.length === 0 ||
+    name.length > MAX_STRUCTURED_OUTPUT_NAME_LENGTH ||
+    !STRUCTURED_OUTPUT_NAME_PATTERN.test(name) ||
+    !schema ||
+    typeof schema !== "object" ||
+    Array.isArray(schema)
+  ) {
+    throw new LlmProviderError("SIA received an invalid structured-output request.", {
+      code: "STRUCTURED_OUTPUT_INVALID_REQUEST",
+      provider,
+    });
+  }
+
+  try {
+    JSON.stringify(schema);
+  } catch (_err) {
+    throw new LlmProviderError("SIA received an invalid structured-output request.", {
+      code: "STRUCTURED_OUTPUT_INVALID_REQUEST",
+      provider,
+    });
+  }
+
+  return { name, schema };
+}
+
+function parseStructuredOutput(answer, provider) {
+  try {
+    return JSON.parse(answer);
+  } catch (_err) {
+    throw new LlmProviderError("The LLM provider returned malformed structured output.", {
+      code: "PROVIDER_MALFORMED_STRUCTURED_OUTPUT",
+      provider,
+    });
+  }
+}
+
+function buildLlmResult({ answer, structuredOutput, provider, latencyMs }) {
+  return {
+    answer,
+    ...(structuredOutput ? { structuredOutput: parseStructuredOutput(answer, provider) } : {}),
+    model: config.model,
+    latencyMs,
+  };
 }
 
 // Serializes the structured analytics context and question into the single user-input string sent to OpenAI -- deterministic (JSON.stringify preserves key insertion order), never mutates the received context or request.
@@ -184,7 +247,7 @@ function normalizeAxiosError(err, provider) {
 }
 
 // Real OpenAI provider adapter, only reached once the provider is confirmed normalized "openai". Reads OPENAI_API_KEY directly from process.env, never through the shared config object, and never includes the key, auth header, financial context, question, or raw provider response in a thrown error.
-async function askOpenAi({ systemPrompt, context, question, history }) {
+async function askOpenAi({ systemPrompt, context, question, history, structuredOutput }) {
   if (isBlank(config.model)) {
     throw new LlmProviderError(
       "SIA has no LLM model configured. Set SIA_LLM_MODEL to use the OpenAI provider.",
@@ -200,6 +263,8 @@ async function askOpenAi({ systemPrompt, context, question, history }) {
     );
   }
 
+  const normalizedStructuredOutput = normalizeStructuredOutputRequest(structuredOutput, "openai");
+
   const requestBody = {
     model: config.model,
     instructions: systemPrompt,
@@ -211,6 +276,18 @@ async function askOpenAi({ systemPrompt, context, question, history }) {
       },
     ],
     store: false,
+    ...(normalizedStructuredOutput
+      ? {
+          text: {
+            format: {
+              type: "json_schema",
+              name: normalizedStructuredOutput.name,
+              strict: true,
+              schema: normalizedStructuredOutput.schema,
+            },
+          },
+        }
+      : {}),
   };
 
   const startedAt = Date.now();
@@ -251,7 +328,12 @@ async function askOpenAi({ systemPrompt, context, question, history }) {
     });
   }
 
-  return { answer, model: config.model, latencyMs };
+  return buildLlmResult({
+    answer,
+    structuredOutput: normalizedStructuredOutput,
+    provider: "openai",
+    latencyMs,
+  });
 }
 
 // Real Gemini provider adapter, only reached once the provider is confirmed
@@ -265,7 +347,7 @@ async function askOpenAi({ systemPrompt, context, question, history }) {
 // (LlmProviderError codes, `{ answer, model, latencyMs }` success shape)
 // is identical to askOpenAi's -- callers (ask.js, responseValidator.js)
 // never need to know which provider actually answered.
-async function askGemini({ systemPrompt, context, question, history }) {
+async function askGemini({ systemPrompt, context, question, history, structuredOutput }) {
   if (isBlank(config.model)) {
     throw new LlmProviderError(
       "SIA has no LLM model configured. Set SIA_LLM_MODEL to use the Gemini provider.",
@@ -280,6 +362,8 @@ async function askGemini({ systemPrompt, context, question, history }) {
       { code: "PROVIDER_API_KEY_NOT_CONFIGURED", provider: "gemini" }
     );
   }
+
+  const normalizedStructuredOutput = normalizeStructuredOutputRequest(structuredOutput, "gemini");
 
   // Chat Completions message array: system prompt first (authoritative
   // instructions, exactly like `instructions` in the OpenAI adapter),
@@ -298,6 +382,18 @@ async function askGemini({ systemPrompt, context, question, history }) {
         content: buildUserInputContent(context, question),
       },
     ],
+    ...(normalizedStructuredOutput
+      ? {
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: normalizedStructuredOutput.name,
+              strict: true,
+              schema: normalizedStructuredOutput.schema,
+            },
+          },
+        }
+      : {}),
   };
 
   const startedAt = Date.now();
@@ -331,7 +427,12 @@ async function askGemini({ systemPrompt, context, question, history }) {
     });
   }
 
-  return { answer, model: config.model, latencyMs };
+  return buildLlmResult({
+    answer,
+    structuredOutput: normalizedStructuredOutput,
+    provider: "gemini",
+    latencyMs,
+  });
 }
 
 // Real Groq provider adapter, only reached once the provider is confirmed
@@ -344,7 +445,7 @@ async function askGemini({ systemPrompt, context, question, history }) {
 // in the server-side Authorization header. Request/failure contract is
 // identical to the other two adapters' -- callers never need to know
 // which provider actually answered.
-async function askGroq({ systemPrompt, context, question, history }) {
+async function askGroq({ systemPrompt, context, question, history, structuredOutput }) {
   if (isBlank(config.model)) {
     throw new LlmProviderError(
       "SIA has no LLM model configured. Set SIA_LLM_MODEL to use the Groq provider.",
@@ -360,6 +461,8 @@ async function askGroq({ systemPrompt, context, question, history }) {
     );
   }
 
+  const normalizedStructuredOutput = normalizeStructuredOutputRequest(structuredOutput, "groq");
+
   // SAME message construction as askGemini: system prompt first, then the
   // SAME bounded history framing (ordinary user/assistant roles only), then
   // the current question + structured context as the final user turn, via
@@ -374,6 +477,18 @@ async function askGroq({ systemPrompt, context, question, history }) {
         content: buildUserInputContent(context, question),
       },
     ],
+    ...(normalizedStructuredOutput
+      ? {
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: normalizedStructuredOutput.name,
+              strict: true,
+              schema: normalizedStructuredOutput.schema,
+            },
+          },
+        }
+      : {}),
   };
 
   const startedAt = Date.now();
@@ -407,11 +522,16 @@ async function askGroq({ systemPrompt, context, question, history }) {
     });
   }
 
-  return { answer, model: config.model, latencyMs };
+  return buildLlmResult({
+    answer,
+    structuredOutput: normalizedStructuredOutput,
+    provider: "groq",
+    latencyMs,
+  });
 }
 
 // Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
-async function askLlm({ systemPrompt, context, question, history } = {}) {
+async function askLlm({ systemPrompt, context, question, history, structuredOutput } = {}) {
   const provider = config.provider;
 
   if (isMissingProvider(provider)) {
@@ -425,15 +545,15 @@ async function askLlm({ systemPrompt, context, question, history } = {}) {
   const normalizedProvider = typeof provider === "string" ? provider.trim() : provider;
 
   if (normalizedProvider === "openai") {
-    return askOpenAi({ systemPrompt, context, question, history });
+    return askOpenAi({ systemPrompt, context, question, history, structuredOutput });
   }
 
   if (normalizedProvider === "gemini") {
-    return askGemini({ systemPrompt, context, question, history });
+    return askGemini({ systemPrompt, context, question, history, structuredOutput });
   }
 
   if (normalizedProvider === "groq") {
-    return askGroq({ systemPrompt, context, question, history });
+    return askGroq({ systemPrompt, context, question, history, structuredOutput });
   }
 
   throw new LlmProviderError(
@@ -445,6 +565,7 @@ async function askLlm({ systemPrompt, context, question, history } = {}) {
 module.exports = {
   askLlm,
   LlmProviderError,
+  normalizeStructuredOutputRequest,
   // Exposed for direct, isolated unit testing of the history-framing contract itself -- not used by any other production module.
   buildHistoryMessages,
 };

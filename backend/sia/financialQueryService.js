@@ -254,6 +254,63 @@ async function getBudgetSnapshot(userId, { year, month }) {
   };
 }
 
+// V2-query execution boundary. This deliberately composes the existing
+// aggregate-only helpers above instead of accepting database fields,
+// pipelines, or transaction selectors from a caller. The semantic pipeline
+// resolves the approved QueryPlan period first; this service only receives
+// that resolved range plus, for budget metrics, its already-derived month.
+async function executeFinancialQuery({ userId, query, period, budgetYearMonth } = {}) {
+  if (!query || typeof query !== "object" || Array.isArray(query) || typeof query.metric !== "string") {
+    return { hasData: false, reasonCode: "INVALID_QUERY" };
+  }
+
+  let result;
+  switch (query.metric) {
+    case "EXPENSE_TOTAL":
+      result = await getExpenseTotal(userId, period);
+      break;
+    case "EXPENSE_COUNT":
+      result = await getExpenseCount(userId, period);
+      break;
+    case "DAILY_SPENDING_AVERAGE":
+      result = await getDailySpendingAverage(userId, period);
+      break;
+    case "CATEGORY_TOTAL":
+      if (typeof query.categoryFilter !== "string") return { hasData: false, reasonCode: "MISSING_CATEGORY_FILTER" };
+      result = await getCategoryTotal(userId, period, query.categoryFilter);
+      break;
+    case "CATEGORY_BREAKDOWN":
+      result = await getCategoryBreakdown(userId, period);
+      break;
+    case "TOP_CATEGORY":
+      result = await getTopCategory(userId, period);
+      break;
+    case "INCOME_TOTAL":
+      result = await getIncomeTotal(userId, period);
+      break;
+    case "INCOME_COUNT":
+      result = await getIncomeCount(userId, period);
+      break;
+    case "NET_CASH_FLOW":
+      result = await getNetCashFlow(userId, period);
+      break;
+    case "BUDGET_AMOUNT":
+    case "BUDGET_SPENT":
+    case "BUDGET_REMAINING":
+    case "BUDGET_UTILIZATION":
+    case "BUDGET_STATUS":
+      if (!budgetYearMonth || typeof budgetYearMonth !== "object") {
+        return { hasData: false, reasonCode: "PERIOD_NOT_SINGLE_MONTH" };
+      }
+      result = await getBudgetSnapshot(userId, budgetYearMonth);
+      break;
+    default:
+      return { hasData: false, reasonCode: "UNSUPPORTED_METRIC" };
+  }
+
+  return { ...result, metric: query.metric };
+}
+
 module.exports = {
   MAX_CATEGORY_RESULTS,
   MAX_PERIOD_SPAN_DAYS,
@@ -267,5 +324,6 @@ module.exports = {
   getIncomeCount,
   getNetCashFlow,
   getBudgetSnapshot,
+  executeFinancialQuery,
   monthKeyFromZonedYearMonth,
 };

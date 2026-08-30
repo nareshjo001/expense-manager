@@ -425,6 +425,23 @@ function formatSemanticNoDataResponse() {
   };
 }
 
+// Router/model/grounding/query-execution failures are service failures, not
+// user mistakes. Keep the public payload indistinguishable from every other
+// SIA availability failure; only genuine unsupported/prohibited requests
+// receive the semantic 422 response below.
+function isSemanticUnavailableReason(reasonCode) {
+  if (typeof reasonCode !== "string") return false;
+  return [
+    "ROUTER_CALL_FAILED",
+    "MALFORMED_ROUTER_RESPONSE",
+    "INVALID_RESUME_PLAN",
+    "QUERY_EXECUTOR_UNAVAILABLE",
+    "FINANCIAL_QUERY_FAILED",
+    "PROVIDER_FAILED",
+    "MALFORMED_ANSWER_RESPONSE",
+  ].includes(reasonCode) || reasonCode.startsWith("PLAN_REJECTED:") || reasonCode.startsWith("GROUNDING_");
+}
+
 // Workstream 1 -- the pipeline ask.js falls back to ONLY after
 // classifyIntent() has already returned null. Tries, in order: (1) a
 // deterministic prohibited-phrase rejection (0 provider calls); (2) the
@@ -477,6 +494,9 @@ async function handleSemanticFallback({ req, res, reservation, activeSession, re
           requestId: reservation.record._id,
           ownerToken: reservation.ownerToken,
         });
+      }
+      if (isSemanticUnavailableReason(pipelineResult.reasonCode)) {
+        return res.status(503).json(UNAVAILABLE_RESPONSE);
       }
       return res.status(422).json({
         success: false,

@@ -77,6 +77,17 @@ const VALID_REQUEST = {
   question: "Why did my spending change?",
 };
 
+const STRUCTURED_OUTPUT = {
+  name: "sia_query_plan",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: { plan: { type: "object" } },
+    required: ["plan"],
+  },
+};
+const STRUCTURED_VALUE = { plan: { version: 2, outcome: "unsupported" } };
+
 describe("backend/sia/llmService -- Gemini provider adapter", () => {
   describe("request shape", () => {
     it("posts to the exact Gemini OpenAI-compatible chat/completions endpoint", async () => {
@@ -225,6 +236,37 @@ describe("backend/sia/llmService -- Gemini provider adapter", () => {
 
       expect(result.answer).toBe("First answer.");
       expect(result.answer).not.toContain("Second, unused");
+    });
+
+    it("uses OpenAI-compatible json_schema mode only when structured output is requested, then returns the parsed value", async () => {
+      const serialized = JSON.stringify(STRUCTURED_VALUE);
+      const postMock = jest.fn().mockResolvedValue(chatCompletionResponse(serialized));
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.GEMINI_API_KEY = "gm-test-key";
+
+      const result = await askLlm({ ...VALID_REQUEST, structuredOutput: STRUCTURED_OUTPUT });
+
+      expect(postMock.mock.calls[0][1].response_format).toEqual({
+        type: "json_schema",
+        json_schema: {
+          name: "sia_query_plan",
+          strict: true,
+          schema: STRUCTURED_OUTPUT.schema,
+        },
+      });
+      expect(result.answer).toBe(serialized);
+      expect(result.structuredOutput).toEqual(STRUCTURED_VALUE);
+    });
+
+    it("rejects non-JSON output in structured mode without treating it as a text answer", async () => {
+      const postMock = jest.fn().mockResolvedValue(chatCompletionResponse("not-json"));
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.GEMINI_API_KEY = "gm-test-key";
+
+      await expect(askLlm({ ...VALID_REQUEST, structuredOutput: STRUCTURED_OUTPUT })).rejects.toMatchObject({
+        code: "PROVIDER_MALFORMED_STRUCTURED_OUTPUT",
+        provider: "gemini",
+      });
     });
   });
 

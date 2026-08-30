@@ -11,6 +11,11 @@ const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 // Additive only.
 const CURRENT_SPENDING_SUMMARY = "CURRENT_SPENDING_SUMMARY";
 
+// Matches the persisted assistant-message/request ceiling. Enforcing the
+// bound before a response leaves SIA prevents an oversized provider output
+// from reaching the client when persistence is unavailable or best-effort.
+const MAX_ANSWER_LENGTH = 4000;
+
 // All eight SIA-supported intents receive the shared generic checks (leaked identifiers, raw field tokens, echoed JSON, unsupported currency figures); the intent-specific checks below (fraud/certainty/advice/comparison/category/forecast/transaction-detail language) stay scoped to only the intents they've always applied to -- deliberately not extended further, since broad keyword matching risks rejecting valid explanations.
 const VALIDATED_INTENTS = new Set([
   HEALTH_EXPLANATION,
@@ -166,6 +171,9 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
   if (typeof answer !== "string" || answer.trim() === "") {
     return { valid: false, reasonCode: "EMPTY_OR_MALFORMED_ANSWER" };
   }
+  if (answer.length > MAX_ANSWER_LENGTH) {
+    return { valid: false, reasonCode: "ANSWER_TOO_LONG" };
+  }
 
   if (MONGO_ID_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "LEAKED_IDENTIFIER" };
@@ -315,7 +323,7 @@ function extractCurrencyAmountsFromAnswer(text) {
  * @param {string} input.answer
  * @param {string[]} input.citedFactIds
  * @param {{facts: object[]}} input.factSet
- * @param {{operation?: string, metrics?: string[]}} [input.plan] - the
+ * @param {{operation?: string, metrics?: string[], queries?: object[]}} [input.plan] - the
  *   QueryPlan this answer was generated for, used only to decide whether
  *   comparison/forecast framing is supportable.
  * @returns {{ valid: true } | { valid: false, reasonCode: string }}
@@ -323,6 +331,9 @@ function extractCurrencyAmountsFromAnswer(text) {
 function validateCitedAnswer({ answer, citedFactIds, factSet, plan }) {
   if (typeof answer !== "string" || answer.trim() === "") {
     return { valid: false, reasonCode: "EMPTY_OR_MALFORMED_ANSWER" };
+  }
+  if (answer.length > MAX_ANSWER_LENGTH) {
+    return { valid: false, reasonCode: "ANSWER_TOO_LONG" };
   }
 
   if (MONGO_ID_PATTERN.test(answer)) {
@@ -382,15 +393,17 @@ function validateCitedAnswer({ answer, citedFactIds, factSet, plan }) {
     percentMatch = PERCENT_PATTERN.exec(answer);
   }
 
+  const v2Queries = plan && plan.version === 2 && Array.isArray(plan.queries) ? plan.queries : null;
   const operation = plan && typeof plan.operation === "string" ? plan.operation : null;
-  const metrics = plan && Array.isArray(plan.metrics) ? plan.metrics : [];
+  const metrics = v2Queries ? v2Queries.map((query) => query && query.metric).filter(Boolean) : plan && Array.isArray(plan.metrics) ? plan.metrics : [];
+  const operations = v2Queries ? v2Queries.map((query) => query && query.operation).filter(Boolean) : operation ? [operation] : [];
 
-  const isComparisonSupported = operation === "COMPARE" || metrics.includes("PERIOD_COMPARISON");
+  const isComparisonSupported = operations.includes("COMPARE") || metrics.includes("PERIOD_COMPARISON");
   if (!isComparisonSupported && COMPARISON_CLAIM_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "UNSUPPORTED_COMPARISON_CLAIM" };
   }
 
-  const isForecastSupported = operation === "FORECAST" || metrics.includes("SPENDING_FORECAST_EXPLANATION");
+  const isForecastSupported = operations.includes("FORECAST") || metrics.includes("SPENDING_FORECAST_EXPLANATION");
   if (!isForecastSupported && FORECAST_CLAIM_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "UNSUPPORTED_FORECAST_CLAIM" };
   }
@@ -434,5 +447,6 @@ module.exports = {
   FRAUD_LANGUAGE_PATTERN,
   ADVICE_LANGUAGE_PATTERN,
   CERTAINTY_LANGUAGE_PATTERN,
+  MAX_ANSWER_LENGTH,
   extractCurrencyAmounts: extractCurrencyAmountsFromAnswer,
 };

@@ -455,6 +455,24 @@ describe("SiaPanel -- interpretation trust label", () => {
 
     expect(container.querySelector(".sia-interpretation")).toBeNull();
   });
+
+  it("renders a compact multi-period label for a grounded v2 answer without exposing plan metrics", () => {
+    const conversation = makeConversation({
+      messages: [
+        {
+          id: "m2",
+          role: "assistant",
+          kind: "answer",
+          content: "Your spending increased compared with the previous month.",
+          interpretation: { periodLabels: ["this month", "last month"], metrics: ["EXPENSE_TOTAL"] },
+        },
+      ],
+    });
+    renderPanel(conversation);
+
+    expect(screen.getByText("Using multiple periods")).toBeInTheDocument();
+    expect(screen.queryByText(/EXPENSE_TOTAL/)).not.toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------

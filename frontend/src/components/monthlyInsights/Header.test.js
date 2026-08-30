@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import Header from "./Header";
 
 jest.mock("../../hooks/queries/useBudgetSummary", () => ({
@@ -34,5 +34,13 @@ describe("monthlyInsights/Header -- compact budget summary", () => {
     render(<Header summary={{ comparePastMonth: 15, totalSpent: 900 }} />);
 
     expect(screen.getByText(/15% higher than last month/i)).toBeInTheDocument();
+  });
+
+  it("opens the budget editor from the header edit button", () => {
+    render(<Header summary={{ comparePastMonth: 12, totalSpent: 1200 }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit budget" }));
+
+    expect(screen.getByRole("heading", { name: "Edit Budget" })).toBeInTheDocument();
   });
 });

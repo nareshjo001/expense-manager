@@ -57,9 +57,55 @@ function fakeFinancialQueryService(overrides = {}) {
     getIncomeCount: jest.fn(async () => ({ hasData: true, value: 1 })),
     getNetCashFlow: jest.fn(async () => ({ hasData: true, value: 5750, incomeTotal: 10000, expenseTotal: 4250 })),
     getBudgetSnapshot: jest.fn(async () => ({ hasData: true, budget: 10000, spent: 4250, remaining: 5750, utilization: 42.5, status: "within_budget" })),
+    executeFinancialQuery: jest.fn(async ({ query }) => {
+      const resultByMetric = {
+        EXPENSE_TOTAL: { hasData: true, value: 4250, count: 3 },
+        INCOME_TOTAL: { hasData: true, value: 10000, count: 1 },
+        NET_CASH_FLOW: { hasData: true, value: 5750, incomeTotal: 10000, expenseTotal: 4250 },
+        CATEGORY_TOTAL: { hasData: true, value: 500, count: 2 },
+      };
+      return { ...(resultByMetric[query.metric] || { hasData: false, reasonCode: "UNSUPPORTED_METRIC" }), metric: query.metric };
+    }),
     ...overrides,
   };
 }
+
+const multiLookupV2Plan = {
+  version: 2,
+  outcome: "supported",
+  queries: [
+    {
+      metric: "CATEGORY_TOTAL",
+      operation: "LOOKUP",
+      period: { type: "CURRENT_MONTH" },
+      grouping: "NONE",
+      categoryFilter: "Food",
+      responseMode: "DETERMINISTIC",
+    },
+    {
+      metric: "INCOME_TOTAL",
+      operation: "LOOKUP",
+      period: { type: "CURRENT_MONTH" },
+      grouping: "NONE",
+      responseMode: "DETERMINISTIC",
+    },
+  ],
+};
+
+const v2ComparisonPlan = {
+  version: 2,
+  outcome: "supported",
+  queries: [
+    {
+      metric: "EXPENSE_TOTAL",
+      operation: "COMPARE",
+      period: { type: "CURRENT_MONTH" },
+      comparisonPeriod: { type: "PREVIOUS_MONTH" },
+      grouping: "NONE",
+      responseMode: "PROSE",
+    },
+  ],
+};
 
 describe("backend/sia/semanticPipeline -- provider-call budgets", () => {
   it("scenario: semantic direct lookup = 1 router call + 0 answer calls (deterministic answer)", async () => {
@@ -240,6 +286,113 @@ describe("backend/sia/semanticPipeline -- provider-call budgets", () => {
 });
 
 describe("backend/sia/semanticPipeline -- correctness beyond budgets", () => {
+  it("executes a valid v2 multi-query plan through the allowlisted executor with no answer-model call", async () => {
+    const routerCall = jsonRouterCall(multiLookupV2Plan);
+    const askLlmFn = jest.fn();
+    const financialQueryService = fakeFinancialQueryService();
+
+    const result = await runSemanticPipeline({
+      question: "How much did I spend on food and earn this month?",
+      userId: "user-1",
+      now: NOW,
+      routerCall,
+      askLlmFn,
+      financialQueryService,
+    });
+
+    expect(result.kind).toBe("answer");
+    expect(result.answer).toContain("Food");
+    expect(result.answer).toContain("₹500");
+    expect(result.answer).toContain("₹10,000");
+    expect(result.providerCallsUsed).toEqual({ router: 1, answer: 0 });
+    expect(result.planSummary).toEqual({
+      metrics: ["CATEGORY_TOTAL", "INCOME_TOTAL"],
+      operation: "MULTI_QUERY",
+      periodLabel: expect.any(String),
+      grouping: "NONE",
+      categoryFilter: "Food",
+    });
+    expect(financialQueryService.executeFinancialQuery).toHaveBeenCalledTimes(2);
+    expect(askLlmFn).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when a v2 query cannot be executed, without an answer-model call", async () => {
+    const financialQueryService = fakeFinancialQueryService({
+      executeFinancialQuery: jest.fn(async () => ({ hasData: false, reasonCode: "INVALID_USER_ID" })),
+    });
+
+    const result = await runSemanticPipeline({
+      question: "How much did I spend on food and earn this month?",
+      userId: "user-1",
+      now: NOW,
+      routerCall: jsonRouterCall(multiLookupV2Plan),
+      askLlmFn: jest.fn(),
+      financialQueryService,
+    });
+
+    expect(result).toMatchObject({ kind: "no_data", reasonCode: "INVALID_USER_ID", providerCallsUsed: { router: 1, answer: 0 } });
+  });
+
+  it("uses one structured, cited answer call for a v2 comparison after both periods are factually executed", async () => {
+    const askLlmFn = jest.fn(async () => ({
+      structuredOutput: {
+        answer: "Your spending was ₹4,250 this month, the same as last month.",
+        citedFactIds: ["fact-1", "fact-2"],
+      },
+    }));
+    const financialQueryService = fakeFinancialQueryService();
+
+    const result = await runSemanticPipeline({
+      question: "Compare my spending this month with last month",
+      userId: "user-1",
+      now: NOW,
+      routerCall: jsonRouterCall(v2ComparisonPlan),
+      askLlmFn,
+      financialQueryService,
+    });
+
+    expect(result.kind).toBe("answer");
+    expect(result.providerCallsUsed).toEqual({ router: 1, answer: 1 });
+    expect(financialQueryService.executeFinancialQuery).toHaveBeenCalledTimes(2);
+    expect(askLlmFn).toHaveBeenCalledWith(expect.objectContaining({ structuredOutput: expect.any(Object) }));
+  });
+
+  it("rejects a v2 prose answer whose amount is not present in its cited facts", async () => {
+    const askLlmFn = jest.fn(async () => ({
+      structuredOutput: { answer: "Your spending was ₹9,999 this month.", citedFactIds: ["fact-1", "fact-2"] },
+    }));
+
+    const result = await runSemanticPipeline({
+      question: "Compare my spending this month with last month",
+      userId: "user-1",
+      now: NOW,
+      routerCall: jsonRouterCall(v2ComparisonPlan),
+      askLlmFn,
+      financialQueryService: fakeFinancialQueryService(),
+    });
+
+    expect(result).toMatchObject({ kind: "unsupported", reasonCode: "GROUNDING_UNSUPPORTED_MONETARY_FIGURE" });
+  });
+
+  it("resumes a v2 checkpoint without another router call", async () => {
+    const routerCall = jest.fn();
+    const financialQueryService = fakeFinancialQueryService();
+
+    const result = await runSemanticPipeline({
+      question: "How much did I spend on food and earn this month?",
+      userId: "user-1",
+      now: NOW,
+      routerCall,
+      askLlmFn: jest.fn(),
+      financialQueryService,
+      resumePlan: multiLookupV2Plan,
+    });
+
+    expect(result.kind).toBe("answer");
+    expect(result.providerCallsUsed).toEqual({ router: 0, answer: 0 });
+    expect(routerCall).not.toHaveBeenCalled();
+  });
+
   it("rejects a semantic-explanation answer whose citations don't validate, without a second provider call", async () => {
     const routerCall = jsonRouterCall(explainPlan);
     const askLlmFn = jest.fn(async () => ({

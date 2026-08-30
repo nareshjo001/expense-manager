@@ -300,6 +300,55 @@ describe("POST /sia/ask -- CURRENT_SPENDING_SUMMARY", () => {
     expect(buildContextMock).not.toHaveBeenCalled();
   });
 
+  // Regression baseline for the reported category-total defect. These
+  // questions must not use CURRENT_SPENDING_SUMMARY because that context
+  // contains only the overall total. The expected route is the existing
+  // semantic lookup path, which can request CATEGORY_TOTAL for Food.
+  // This test is intentionally red until Module 1 tightens the classifier
+  // boundary.
+  it.each([
+    "Can you my current month total spending on food?",
+    "How much did I spend on Food this month?",
+  ])(
+    "routes the category-total question %j through semantic CATEGORY_TOTAL lookup",
+    async (question) => {
+      const { formatInr } = require("../sia/semanticPipeline");
+      const { app, buildContextMock, askLlmMock, routeQuestionMock, financialQueryServiceMock } = loadApp({
+        configOverrides: { enabled: true },
+        routeQuestionImpl: async () => ({
+          ok: true,
+          plan: {
+            version: 1,
+            outcome: "supported",
+            metrics: ["CATEGORY_TOTAL"],
+            operation: "LOOKUP",
+            period: { type: "CURRENT_MONTH" },
+            grouping: "NONE",
+            categoryFilter: "Food",
+            responseMode: "DETERMINISTIC",
+          },
+        }),
+        financialQueryServiceImpl: {
+          getCategoryTotal: async () => ({ hasData: true, value: 765.43, count: 4 }),
+        },
+      });
+      const token = signToken("user-css-category-total");
+
+      const res = await request(app)
+        .post("/sia/ask")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ question });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.answer).toBe(`You spent ${formatInr(765.43)} on Food this month.`);
+      expect(routeQuestionMock).toHaveBeenCalledTimes(1);
+      expect(financialQueryServiceMock.getCategoryTotal).toHaveBeenCalledTimes(1);
+      expect(buildContextMock).not.toHaveBeenCalled();
+      expect(askLlmMock).not.toHaveBeenCalled();
+    }
+  );
+
   it("returns a bounded clarification for a named-month-without-year question (1 router call, 0 answer calls)", async () => {
     const clarificationPlan = {
       version: 1,

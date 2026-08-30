@@ -169,13 +169,24 @@
 
 .category-label {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 .ml-confidence {
-    font-size: 0.93rem;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
+    min-width: 0;
+    margin-left: auto;
+    font-size: clamp(0.72rem, 3.3vw, 0.93rem);
     opacity: 0.9;
+    white-space: nowrap;
+}
+
+.ml-confidence strong {
+    font-weight: 700;
 }
 
 .category-input-wrapper {

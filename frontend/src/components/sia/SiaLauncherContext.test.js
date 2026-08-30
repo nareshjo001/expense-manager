@@ -12,6 +12,12 @@ import {
 } from "../../api/siaSessionsApi";
 import { askSia } from "../../api/siaApi";
 
+// This project’s CRA Jest resolver cannot load react-router-dom directly;
+// the provider needs only the current pathname, so keep routing mocked at
+// this boundary just as other frontend route-dependent tests do.
+jest.mock("react-router-dom", () => ({ useLocation: jest.fn() }), { virtual: true });
+const { useLocation } = require("react-router-dom");
+
 // Batch 3G: the shared contextual launcher's end-to-end contract.
 //
 // Renders the REAL SiaLauncherProvider -> SiaEntryPoint -> SiaPanel ->
@@ -68,6 +74,7 @@ function setFlag(value) {
 
 beforeEach(() => {
   setFlag("true");
+  useLocation.mockReturnValue({ pathname: "/" });
   getSiaStatus.mockResolvedValue({ success: true, available: true });
   getSiaSessions.mockResolvedValue({ success: true, sessions: [] });
   getSiaSessionMessages.mockResolvedValue({ success: true, sessionId: "s1", messages: [] });
@@ -94,7 +101,8 @@ function RawLauncherButton({ suggestionId }) {
   );
 }
 
-function renderProvider(children) {
+function renderProvider(children, { route = "/" } = {}) {
+  useLocation.mockReturnValue({ pathname: route });
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: 0 } },
   });
@@ -126,6 +134,12 @@ async function settleAvailability() {
 }
 
 describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
+  it("hides only the base launcher on the Add Expense route", () => {
+    renderProvider(<span>add page</span>, { route: "/add" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
   it("an unknown/malformed suggestion id fails closed: no panel, no crash, no state mutation", async () => {
     renderProvider(<RawLauncherButton suggestionId="not-a-real-suggestion" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());

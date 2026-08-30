@@ -7,7 +7,7 @@ const verifyToken = require("../Middlewares/Auth");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
 // header attachment (ml-service's /predict-category now requires the same
 // shared-secret token /ml-status has always required).
-const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
+const { buildMlServiceUrl, mlOperationsHeaders, requestSpendingForecast } = require("../utils/mlServiceClient");
 
 // Bounded timeout for the ML service call -- previously unset, meaning a
 // hung ML service could block this request indefinitely (found during the
@@ -95,6 +95,21 @@ router.post("/predict-category", verifyToken, async (req, res) => {
             message: "Prediction service unavailable"
         });
     }
+});
+
+// New endpoint to proxy spending forecast requests
+router.post('/predict-spending-forecast', async (req, res) => {
+  try {
+    const result = await requestSpendingForecast(req.body);
+    if (result.success) {
+      return res.json({ success: true, data: result.data });
+    }
+    // Forward any error from the ML service
+    return res.status(502).json({ success: false, reason: result.reason || 'ML service error' });
+  } catch (err) {
+    console.error('Spending forecast proxy error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;

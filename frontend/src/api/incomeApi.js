@@ -2,8 +2,11 @@ import api from "./axios";
 
 // Thin wrappers over the /income routes, routed through the shared axios instance for centralized auth/error handling.
 
-export const getIncome = async (signal) => {
-  const { data } = await api.get("/income/get", { signal });
+export const getIncome = async (period, signal) => {
+  const { data } = await api.get("/income/get", {
+    params: period ? { period } : undefined,
+    signal,
+  });
   return data;
 };
 

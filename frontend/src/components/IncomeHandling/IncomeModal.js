@@ -8,9 +8,9 @@ import { useUpdateIncomeMutation } from "../../hooks/mutations/useUpdateIncomeMu
 import { useDeleteIncomeMutation } from "../../hooks/mutations/useDeleteIncomeMutation";
 
 // Modal for viewing, editing, and deleting income records.
-export default function IncomeModal({ isOpen, onClose }) {
+export default function IncomeModal({ isOpen, onClose, period }) {
 
-  const listQuery = useIncomeListQuery(isOpen);
+  const listQuery = useIncomeListQuery(period, isOpen);
   const updateMutation = useUpdateIncomeMutation();
   const deleteMutation = useDeleteIncomeMutation();
 

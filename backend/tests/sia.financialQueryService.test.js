@@ -275,6 +275,54 @@ describe("backend/sia/financialQueryService", () => {
     });
   });
 
+  describe("v2 allowlisted query execution", () => {
+    it("executes a category total only through the exact, user-scoped aggregate helper", async () => {
+      const service = loadServiceWithFixtures({
+        expenses: [
+          expense(userA, "Food", 125, "2026-08-05T00:00:00.000Z"),
+          expense(userA, "Travel", 900, "2026-08-06T00:00:00.000Z"),
+          expense(userB, "Food", 99999, "2026-08-05T00:00:00.000Z"),
+        ],
+      });
+
+      const result = await service.executeFinancialQuery({
+        userId: userA,
+        query: { metric: "CATEGORY_TOTAL", categoryFilter: "food" },
+        period: AUG_2026,
+      });
+
+      expect(result).toMatchObject({ hasData: true, metric: "CATEGORY_TOTAL", value: 125, count: 1 });
+    });
+
+    it("rejects unsupported metrics and missing category filters without attempting a broad query", async () => {
+      const service = loadServiceWithFixtures({ expenses: [expense(userA, "Food", 125, "2026-08-05T00:00:00.000Z")] });
+
+      await expect(
+        service.executeFinancialQuery({ userId: userA, query: { metric: "RAW_TRANSACTIONS" }, period: AUG_2026 })
+      ).resolves.toEqual({ hasData: false, reasonCode: "UNSUPPORTED_METRIC" });
+      await expect(
+        service.executeFinancialQuery({ userId: userA, query: { metric: "CATEGORY_TOTAL" }, period: AUG_2026 })
+      ).resolves.toEqual({ hasData: false, reasonCode: "MISSING_CATEGORY_FILTER" });
+    });
+
+    it("requires a single derived month before it can execute a budget metric", async () => {
+      const service = loadServiceWithFixtures({ budgets: [{ userId: userA, month: "Aug 2026", budget: 1000, spent: 250 }] });
+
+      await expect(
+        service.executeFinancialQuery({ userId: userA, query: { metric: "BUDGET_REMAINING" }, period: AUG_2026 })
+      ).resolves.toEqual({ hasData: false, reasonCode: "PERIOD_NOT_SINGLE_MONTH" });
+
+      await expect(
+        service.executeFinancialQuery({
+          userId: userA,
+          query: { metric: "BUDGET_REMAINING" },
+          period: AUG_2026,
+          budgetYearMonth: { year: 2026, month: 8 },
+        })
+      ).resolves.toMatchObject({ hasData: true, metric: "BUDGET_REMAINING", remaining: 750 });
+    });
+  });
+
   describe("history cap", () => {
     it("rejects a period spanning more than 366 days", async () => {
       const service = loadServiceWithFixtures({});

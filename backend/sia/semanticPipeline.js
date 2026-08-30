@@ -79,6 +79,19 @@ const SEMANTIC_EXPLANATION_SYSTEM_PROMPT =
   "raw identifier, JSON key, or any fact not in the supplied set. Respond with JSON only, no " +
   "prose, no markdown.";
 
+const SEMANTIC_ANSWER_STRUCTURED_OUTPUT = Object.freeze({
+  name: "sia_grounded_answer",
+  schema: Object.freeze({
+    type: "object",
+    properties: {
+      answer: { type: "string" },
+      citedFactIds: { type: "array", items: { type: "string" } },
+    },
+    required: ["answer", "citedFactIds"],
+    additionalProperties: false,
+  }),
+});
+
 function safeParseJson(text) {
   if (typeof text !== "string") return null;
   try {
@@ -254,6 +267,195 @@ function buildPlanSummary(plan, period) {
   };
 }
 
+// The persisted session summary stays in the existing bounded schema. It
+// deliberately records only high-level, server-derived topic continuity --
+// never the full v2 plan, query periods, provider output, or financial facts.
+function buildV2PlanSummary(plan, factSet) {
+  const queries = Array.isArray(plan.queries) ? plan.queries : [];
+  const unique = (values) => [...new Set(values.filter(Boolean))];
+  const metrics = unique(queries.map((query) => query.metric)).slice(0, 5);
+  const groupings = unique(queries.map((query) => query.grouping));
+  const categoryFilters = unique(queries.map((query) => query.categoryFilter));
+  const periodLabels = unique((factSet && factSet.facts ? factSet.facts : []).map((fact) => fact.periodLabel));
+
+  return {
+    metrics,
+    operation: "MULTI_QUERY",
+    periodLabel: periodLabels.length === 1 ? periodLabels[0] : "multiple periods",
+    grouping: groupings.length === 1 ? groupings[0] : "MIXED",
+    categoryFilter: categoryFilters.length === 1 ? categoryFilters[0] : null,
+  };
+}
+
+function normalizeSemanticAnswer(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  return safeParseJson(value);
+}
+
+function deriveYearMonthForBudgetQuery(query, period, timeZone) {
+  return deriveYearMonthForBudget({ period: query.period }, period, timeZone);
+}
+
+function isV2DeterministicQuery(query) {
+  return (
+    DETERMINISTIC_METRICS.has(query.metric) &&
+    ["LOOKUP", "BREAKDOWN", "EXPLAIN", "COMPARE"].includes(query.operation)
+  );
+}
+
+function addV2ResultFacts({ builder, query, period, result }) {
+  const common = { periodStart: period.start, periodEnd: period.end, periodLabel: period.label };
+  const metric = query.metric;
+
+  if (metric === "CATEGORY_BREAKDOWN") {
+    if (!Array.isArray(result.categories) || result.categories.length === 0) {
+      return { ok: false, reasonCode: "NO_EXPENSES_IN_PERIOD" };
+    }
+    for (const category of result.categories) {
+      const added = builder.add({
+        ...common,
+        metric,
+        value: category.total,
+        unit: "INR",
+        source: "EXPENSE",
+        groupKey: category.category,
+      });
+      if (!added.ok) return { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
+    }
+    return { ok: true };
+  }
+
+  if (metric === "TOP_CATEGORY") {
+    if (!result.category) return { ok: false, reasonCode: "NO_EXPENSES_IN_PERIOD" };
+    const added = builder.add({
+      ...common,
+      metric,
+      value: result.category.total,
+      unit: "INR",
+      source: "EXPENSE",
+      groupKey: result.category.category,
+    });
+    return added.ok ? { ok: true } : { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
+  }
+
+  const metadataByMetric = {
+    EXPENSE_TOTAL: { value: result.value, unit: "INR", source: "EXPENSE" },
+    EXPENSE_COUNT: { value: result.value, unit: "COUNT", source: "EXPENSE" },
+    DAILY_SPENDING_AVERAGE: { value: result.value, unit: "INR", source: "DERIVED" },
+    CATEGORY_TOTAL: { value: result.value, unit: "INR", source: "EXPENSE", groupKey: query.categoryFilter },
+    INCOME_TOTAL: { value: result.value, unit: "INR", source: "INCOME" },
+    INCOME_COUNT: { value: result.value, unit: "COUNT", source: "INCOME" },
+    NET_CASH_FLOW: { value: result.value, unit: "INR", source: "DERIVED" },
+    BUDGET_AMOUNT: { value: result.budget, unit: "INR", source: "BUDGET" },
+    BUDGET_SPENT: { value: result.spent, unit: "INR", source: "BUDGET" },
+    BUDGET_REMAINING: { value: result.remaining, unit: "INR", source: "BUDGET" },
+    BUDGET_UTILIZATION: { value: result.utilization, unit: "PERCENT", source: "BUDGET" },
+    BUDGET_STATUS: { value: result.spent, unit: "INR", source: "BUDGET", reasonCode: result.status },
+  };
+
+  const metadata = metadataByMetric[metric];
+  if (!metadata) return { ok: false, reasonCode: "UNSUPPORTED_METRIC" };
+  const added = builder.add({ ...common, metric, ...metadata });
+  return added.ok ? { ok: true } : { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
+}
+
+async function executeV2PlanToFactSet({ userId, plan, financialQueryService, now, timeZone }) {
+  if (!financialQueryService || typeof financialQueryService.executeFinancialQuery !== "function") {
+    return { ok: false, reasonCode: "QUERY_EXECUTOR_UNAVAILABLE" };
+  }
+
+  const builder = createFactSetBuilder();
+  for (const query of plan.queries) {
+    if (!isV2DeterministicQuery(query)) {
+      return { ok: false, reasonCode: "V2_PROSE_NOT_AVAILABLE" };
+    }
+
+    const period = resolvePeriod(query.period, { now, timeZone });
+    if (!period.ok) return { ok: false, reasonCode: `PERIOD_${period.reason}` };
+
+    const periods = [period];
+    if (query.operation === "COMPARE") {
+      const comparisonPeriod = resolvePeriod(query.comparisonPeriod, { now, timeZone });
+      if (!comparisonPeriod.ok) return { ok: false, reasonCode: `COMPARISON_PERIOD_${comparisonPeriod.reason}` };
+      periods.push(comparisonPeriod);
+    }
+
+    for (const queryPeriod of periods) {
+      let result;
+      try {
+        result = await financialQueryService.executeFinancialQuery({
+          userId,
+          query,
+          period: queryPeriod,
+          budgetYearMonth: deriveYearMonthForBudgetQuery(query, queryPeriod, timeZone),
+        });
+      } catch (_err) {
+        return { ok: false, reasonCode: "FINANCIAL_QUERY_FAILED" };
+      }
+
+      if (!result || !result.hasData) return { ok: false, reasonCode: (result && result.reasonCode) || "NO_DATA" };
+      const added = addV2ResultFacts({ builder, query, period: queryPeriod, result });
+      if (!added.ok) return added;
+    }
+  }
+
+  const factSet = builder.build();
+  return factSet.facts.length > 0 ? { ok: true, factSet } : { ok: false, reasonCode: "NO_DATA" };
+}
+
+function renderV2DeterministicAnswer(factSet) {
+  const sentences = [];
+  for (const fact of factSet.facts) {
+    switch (fact.metric) {
+      case "EXPENSE_TOTAL":
+        sentences.push(`You spent ${formatInr(fact.value)} ${fact.periodLabel}.`);
+        break;
+      case "EXPENSE_COUNT":
+        sentences.push(`You logged ${fact.value} expense${fact.value === 1 ? "" : "s"} ${fact.periodLabel}.`);
+        break;
+      case "DAILY_SPENDING_AVERAGE":
+        sentences.push(`Your average daily spending ${fact.periodLabel} was ${formatInr(fact.value)}.`);
+        break;
+      case "CATEGORY_TOTAL":
+        sentences.push(`You spent ${formatInr(fact.value)} on ${fact.groupKey} ${fact.periodLabel}.`);
+        break;
+      case "CATEGORY_BREAKDOWN":
+        sentences.push(`${fact.groupKey}: ${formatInr(fact.value)} ${fact.periodLabel}.`);
+        break;
+      case "TOP_CATEGORY":
+        sentences.push(`Your top spending category ${fact.periodLabel} was ${fact.groupKey} at ${formatInr(fact.value)}.`);
+        break;
+      case "INCOME_TOTAL":
+        sentences.push(`Your total income ${fact.periodLabel} was ${formatInr(fact.value)}.`);
+        break;
+      case "INCOME_COUNT":
+        sentences.push(`You logged ${fact.value} income entr${fact.value === 1 ? "y" : "ies"} ${fact.periodLabel}.`);
+        break;
+      case "NET_CASH_FLOW":
+        sentences.push(`Your net cash flow ${fact.periodLabel} was ${formatInr(fact.value)}.`);
+        break;
+      case "BUDGET_AMOUNT":
+        sentences.push(`Your configured budget ${fact.periodLabel} is ${formatInr(fact.value)}.`);
+        break;
+      case "BUDGET_SPENT":
+        sentences.push(`You have spent ${formatInr(fact.value)} against your budget ${fact.periodLabel}.`);
+        break;
+      case "BUDGET_REMAINING":
+        sentences.push(`You have ${formatInr(fact.value)} remaining in your budget ${fact.periodLabel}.`);
+        break;
+      case "BUDGET_UTILIZATION":
+        sentences.push(`You have used ${fact.value}% of your budget ${fact.periodLabel}.`);
+        break;
+      case "BUDGET_STATUS":
+        sentences.push(`Your budget status ${fact.periodLabel} is ${fact.reasonCode === "over_budget" ? "over budget" : "within budget"}.`);
+        break;
+      default:
+        return "";
+    }
+  }
+  return sentences.join(" ");
+}
+
 /**
  * @param {object} args
  * @param {string} args.question
@@ -355,6 +557,60 @@ async function runSemanticPipeline({
     }
   }
 
+  // V2 allows up to five independently validated queries. It is ready for
+  // deterministic multi-fact answers now; prose synthesis is deliberately
+  // added in the next module so a v2 plan never causes an uncited LLM answer.
+  if (plan.version === 2) {
+    const v2Result = await executeV2PlanToFactSet({ userId, plan, financialQueryService, now, timeZone });
+    if (!v2Result.ok) {
+      return { kind: "no_data", reasonCode: v2Result.reasonCode, providerCallsUsed: { router: routerCallsUsed, answer: 0 } };
+    }
+
+    const needsProse = plan.queries.some(
+      (query) => query.responseMode === "PROSE" || query.operation === "EXPLAIN" || query.operation === "COMPARE"
+    );
+    if (needsProse) {
+      let llmResult;
+      try {
+        llmResult = await askLlmFn({
+          systemPrompt: SEMANTIC_EXPLANATION_SYSTEM_PROMPT,
+          context: { factSet: v2Result.factSet },
+          question,
+          history: [],
+          structuredOutput: SEMANTIC_ANSWER_STRUCTURED_OUTPUT,
+        });
+      } catch (_err) {
+        return { kind: "unsupported", reasonCode: "PROVIDER_FAILED", providerCallsUsed: { router: routerCallsUsed, answer: 1 } };
+      }
+
+      const parsed = normalizeSemanticAnswer(llmResult && (llmResult.structuredOutput || llmResult.answer));
+      if (!parsed || typeof parsed.answer !== "string") {
+        return { kind: "unsupported", reasonCode: "MALFORMED_ANSWER_RESPONSE", providerCallsUsed: { router: routerCallsUsed, answer: 1 } };
+      }
+      const validation = validateCitedAnswer({ answer: parsed.answer, citedFactIds: parsed.citedFactIds, factSet: v2Result.factSet, plan });
+      if (!validation.valid) {
+        return { kind: "unsupported", reasonCode: `GROUNDING_${validation.reasonCode}`, providerCallsUsed: { router: routerCallsUsed, answer: 1 } };
+      }
+      return {
+        kind: "answer",
+        answer: parsed.answer,
+        grounding: buildDeterministicGrounding(),
+        interpretation: { periodLabels: [...new Set(v2Result.factSet.facts.map((fact) => fact.periodLabel))], metrics: plan.queries.map((query) => query.metric) },
+        planSummary: buildV2PlanSummary(plan, v2Result.factSet),
+        providerCallsUsed: { router: routerCallsUsed, answer: 1 },
+      };
+    }
+
+    return {
+      kind: "answer",
+      answer: renderV2DeterministicAnswer(v2Result.factSet),
+      grounding: buildDeterministicGrounding(),
+      interpretation: { periodLabels: [...new Set(v2Result.factSet.facts.map((fact) => fact.periodLabel))], metrics: plan.queries.map((query) => query.metric) },
+      planSummary: buildV2PlanSummary(plan, v2Result.factSet),
+      providerCallsUsed: { router: routerCallsUsed, answer: 0 },
+    };
+  }
+
   const period = resolvePeriod(plan.period, { now, timeZone });
   if (!period.ok) {
     return { kind: "unsupported", reasonCode: `PERIOD_${period.reason}`, providerCallsUsed: { router: routerCallsUsed, answer: 0 } };
@@ -417,12 +673,13 @@ async function runSemanticPipeline({
       context: { factSet: factSetResult.factSet },
       question,
       history: [],
+      structuredOutput: SEMANTIC_ANSWER_STRUCTURED_OUTPUT,
     });
   } catch (_err) {
     return { kind: "unsupported", reasonCode: "PROVIDER_FAILED", providerCallsUsed: { router: routerCallsUsed, answer: 1 } };
   }
 
-  const parsed = safeParseJson(llmResult && llmResult.answer);
+  const parsed = normalizeSemanticAnswer(llmResult && (llmResult.structuredOutput || llmResult.answer));
   if (!parsed || typeof parsed.answer !== "string") {
     return { kind: "unsupported", reasonCode: "MALFORMED_ANSWER_RESPONSE", providerCallsUsed: { router: routerCallsUsed, answer: 1 } };
   }
@@ -451,6 +708,10 @@ module.exports = {
   runSemanticPipeline,
   executeMetricToFactSet,
   renderDeterministicAnswer,
+  executeV2PlanToFactSet,
+  renderV2DeterministicAnswer,
+  buildV2PlanSummary,
+  SEMANTIC_ANSWER_STRUCTURED_OUTPUT,
   formatInr,
   DETERMINISTIC_METRICS,
   EXPLANATION_INTENT_METRICS,

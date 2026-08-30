@@ -86,6 +86,17 @@ const VALID_REQUEST = {
   question: "Why did my spending change?",
 };
 
+const STRUCTURED_OUTPUT = {
+  name: "sia_query_plan",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: { plan: { type: "object" } },
+    required: ["plan"],
+  },
+};
+const STRUCTURED_VALUE = { plan: { version: 2, outcome: "unsupported" } };
+
 describe("backend/sia/llmService -- OpenAI provider adapter", () => {
   describe("request shape", () => {
     it("posts to the exact /v1/responses endpoint", async () => {
@@ -208,9 +219,70 @@ describe("backend/sia/llmService -- OpenAI provider adapter", () => {
       expect(result.answer).toBe("Part one. Part two.");
       expect(result.answer).not.toContain("internal reasoning");
     });
+
+    it("uses Responses API json_schema mode only when structured output is requested, then returns the parsed value", async () => {
+      const serialized = JSON.stringify(STRUCTURED_VALUE);
+      const postMock = jest.fn().mockResolvedValue(
+        completedResponse([
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: serialized }],
+          },
+        ])
+      );
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      const result = await askLlm({ ...VALID_REQUEST, structuredOutput: STRUCTURED_OUTPUT });
+
+      expect(postMock.mock.calls[0][1].text).toEqual({
+        format: {
+          type: "json_schema",
+          name: "sia_query_plan",
+          strict: true,
+          schema: STRUCTURED_OUTPUT.schema,
+        },
+      });
+      expect(result.answer).toBe(serialized);
+      expect(result.structuredOutput).toEqual(STRUCTURED_VALUE);
+    });
+
+    it("rejects non-JSON output in structured mode without treating it as a text answer", async () => {
+      const postMock = jest.fn().mockResolvedValue(
+        completedResponse([
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "not-json" }],
+          },
+        ])
+      );
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await expect(askLlm({ ...VALID_REQUEST, structuredOutput: STRUCTURED_OUTPUT })).rejects.toMatchObject({
+        code: "PROVIDER_MALFORMED_STRUCTURED_OUTPUT",
+        provider: "openai",
+      });
+    });
   });
 
   describe("pre-request validation failures", () => {
+    it("rejects an invalid structured-output request before calling the provider", async () => {
+      const postMock = jest.fn();
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await expect(
+        askLlm({ ...VALID_REQUEST, structuredOutput: { name: "invalid name", schema: {} } })
+      ).rejects.toMatchObject({
+        code: "STRUCTURED_OUTPUT_INVALID_REQUEST",
+        provider: "openai",
+      });
+      expect(postMock).not.toHaveBeenCalled();
+    });
+
     it("rejects with MODEL_NOT_CONFIGURED when config.model is missing, and never calls axios", async () => {
       const postMock = jest.fn();
       const { askLlm, LlmProviderError } = loadLlmServiceWithMockedAxios({

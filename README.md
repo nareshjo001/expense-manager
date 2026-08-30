@@ -159,6 +159,41 @@ Each service owns its own test suite and its own runner — there is no reposito
 
 The backend SIA suites cover configuration, intent classification, context building, provider adapter behavior, safe logging, and the full HTTP contract of `POST /sia/ask`. All automated tests mock the LLM provider — no test contacts a real external service. ML-service integration tests refuse to run unless pointed at an isolated database whose name contains `test`.
 
+## API Endpoints
+
+### POST `/ml/predict-spending-forecast`
+- **Purpose**: Returns a spending forecast based on the supplied feature payload.
+- **Headers**:
+  - `Content-Type: application/json`
+  - `X-ML-Operations-Token: <your-token>` (shared secret for ML service).
+- **Request Body (JSON)**:
+```json
+{
+  "spentSoFar": number,
+  "forecastableSpentSoFar": number,
+  "elapsedDay": number,
+  "daysInMonth": number
+}
+```
+- **Response (JSON)**:
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "predictedRemaining": number,
+    "predictedTotal": number,
+    "range": { "lower": number, "upper": number },
+    "confidenceScore": number,
+    "modelVersion": "...",
+    "isFallback": false
+  }
+}
+```
+- **Notes**:
+  - The route does **not** require JWT authentication; only the `X-ML-Operations-Token` header is validated.
+  - Errors from the downstream ML service are forwarded as a `502` response.
+
 ## Implemented versus planned
 
 | Capability | Status |

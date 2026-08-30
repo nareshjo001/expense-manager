@@ -150,6 +150,12 @@ export default function SpendingForecast({ report }) {
             <span>Spent so far</span>
             <strong>{formatMoney(currentMonth.spentSoFar)}</strong>
           </div>
+          {typeof currentMonth.forecastableSpentSoFar === 'number' && (
+            <div className="forecast-summary-item">
+              <span>Forecastable so far</span>
+              <strong>{formatMoney(currentMonth.forecastableSpentSoFar)}</strong>
+            </div>
+          )}
           <div className="forecast-summary-item">
             <span>Expected remaining</span>
             <strong>{formatMoney(currentMonth.expectedRemaining)}</strong>

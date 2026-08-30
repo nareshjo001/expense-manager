@@ -1,11 +1,17 @@
 // Unit tests for backend/sia/semanticRouter.js -- the provider-neutral
-// routing boundary. Every test injects its own `routerCall` mock; NO test
-// in this file ever calls a live LLM provider (semanticRouter.js's own
-// default production call, which wraps askLlm(), is never exercised
-// here).
+// routing boundary. The LLM adapter is mocked, so no test in this file
+// can call a live provider.
 "use strict";
 
-const { routeQuestion, CAPABILITY_CATALOG } = require("../sia/semanticRouter");
+jest.mock("../sia/llmService", () => ({ askLlm: jest.fn() }));
+
+const { askLlm } = require("../sia/llmService");
+const {
+  routeQuestion,
+  CAPABILITY_CATALOG,
+  ROUTER_STRUCTURED_OUTPUT,
+  ROUTER_OUTCOMES,
+} = require("../sia/semanticRouter");
 
 const NOW = new Date("2026-08-16T10:00:00.000Z");
 
@@ -30,8 +36,50 @@ describe("backend/sia/semanticRouter -- routeQuestion", () => {
 
     const result = await routeQuestion({ question: "How much did I spend this month?", now: NOW, routerCall });
     expect(result.ok).toBe(true);
+    expect(result.outcome).toBe(ROUTER_OUTCOMES.PLANNED);
     expect(result.plan.outcome).toBe("supported");
     expect(result.plan.metrics).toEqual(["EXPENSE_TOTAL"]);
+  });
+
+  it("uses provider-enforced structured output in the default router call", async () => {
+    askLlm.mockResolvedValueOnce({
+      structuredOutput: {
+        plan: {
+          version: 2,
+          outcome: "supported",
+          queries: [
+            {
+              metric: "EXPENSE_TOTAL",
+              operation: "LOOKUP",
+              period: { type: "CURRENT_MONTH" },
+              grouping: "NONE",
+              responseMode: "DETERMINISTIC",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await routeQuestion({ question: "How much did I spend this month?", now: NOW });
+
+    expect(result).toMatchObject({ ok: true, outcome: ROUTER_OUTCOMES.PLANNED });
+    expect(result.plan.version).toBe(2);
+    expect(askLlm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: "How much did I spend this month?",
+        history: [],
+        structuredOutput: ROUTER_STRUCTURED_OUTPUT,
+      })
+    );
+    expect(askLlm.mock.calls[0][0].systemPrompt).toContain("version 2");
+  });
+
+  it("accepts an already-parsed structured router response from an injected caller", async () => {
+    const routerCall = jest.fn(async () => ({ plan: { version: 1, outcome: "unsupported" } }));
+
+    const result = await routeQuestion({ question: "Give me investment advice", now: NOW, routerCall });
+
+    expect(result).toMatchObject({ ok: true, outcome: ROUTER_OUTCOMES.UNSUPPORTED });
   });
 
   it("sends the router ONLY question, capabilityCatalog, previousPlanSummary, calendarContext -- never financial data/DB/schema content", async () => {
@@ -59,6 +107,34 @@ describe("backend/sia/semanticRouter -- routeQuestion", () => {
     for (const forbidden of ["expenses", "incomes", "financialreport", "userid", "_id", "mongodb", "aggregate"]) {
       expect(serialized).not.toContain(forbidden);
     }
+  });
+
+  it("keeps up to five safe v2 summary metrics for follow-up topic context", async () => {
+    let capturedPayload = null;
+    const routerCall = jest.fn(async (payload) => {
+      capturedPayload = payload;
+      return JSON.stringify({ plan: { version: 2, outcome: "unsupported" } });
+    });
+
+    await routeQuestion({
+      question: "What about last month?",
+      now: NOW,
+      routerCall,
+      previousPlanSummary: {
+        metrics: ["EXPENSE_TOTAL", "INCOME_TOTAL", "NET_CASH_FLOW", "BUDGET_SPENT", "CATEGORY_TOTAL", "TOP_CATEGORY"],
+        operation: "MULTI_QUERY",
+        periodLabel: "August 2026",
+        grouping: "MIXED",
+      },
+    });
+
+    expect(capturedPayload.previousPlanSummary.metrics).toEqual([
+      "EXPENSE_TOTAL",
+      "INCOME_TOTAL",
+      "NET_CASH_FLOW",
+      "BUDGET_SPENT",
+      "CATEGORY_TOTAL",
+    ]);
   });
 
   it("confidence is logged/ignored, never used to change the routing outcome", async () => {
@@ -100,6 +176,7 @@ describe("backend/sia/semanticRouter -- routeQuestion", () => {
     });
     const result = await routeQuestion({ question: "How much did I spend?", now: NOW, routerCall });
     expect(result.ok).toBe(false);
+    expect(result.outcome).toBe(ROUTER_OUTCOMES.PROVIDER_FAILED);
     expect(result.reason).toBe("ROUTER_CALL_FAILED");
   });
 
@@ -107,6 +184,7 @@ describe("backend/sia/semanticRouter -- routeQuestion", () => {
     const routerCall = jest.fn(async () => "not json at all { garbage");
     const result = await routeQuestion({ question: "How much did I spend?", now: NOW, routerCall });
     expect(result.ok).toBe(false);
+    expect(result.outcome).toBe(ROUTER_OUTCOMES.MALFORMED_OUTPUT);
     expect(result.reason).toBe("MALFORMED_ROUTER_RESPONSE");
   });
 
@@ -243,6 +321,7 @@ describe("backend/sia/semanticRouter -- routeQuestion", () => {
     const routerCall = jest.fn(async () => "{}");
     await expect(routeQuestion({ question: "", now: NOW, routerCall })).resolves.toEqual({
       ok: false,
+      outcome: ROUTER_OUTCOMES.INVALID_REQUEST,
       reason: "INVALID_QUESTION",
     });
     expect(routerCall).not.toHaveBeenCalled();

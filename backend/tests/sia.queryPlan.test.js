@@ -2,7 +2,13 @@
 // and its pure, fail-closed validator.
 "use strict";
 
-const { validateQueryPlan, QUERY_PLAN_VERSION } = require("../sia/queryPlan");
+const {
+  validateQueryPlan,
+  normalizeQueryPlan,
+  QUERY_PLAN_VERSION,
+  QUERY_PLAN_V2_VERSION,
+  MAX_QUERIES_PER_PLAN,
+} = require("../sia/queryPlan");
 
 const validLookupPlan = () => ({
   version: QUERY_PLAN_VERSION,
@@ -12,6 +18,20 @@ const validLookupPlan = () => ({
   period: { type: "CURRENT_MONTH" },
   grouping: "NONE",
   responseMode: "DETERMINISTIC",
+});
+
+const validV2LookupPlan = () => ({
+  version: QUERY_PLAN_V2_VERSION,
+  outcome: "supported",
+  queries: [
+    {
+      metric: "EXPENSE_TOTAL",
+      operation: "LOOKUP",
+      period: { type: "CURRENT_MONTH" },
+      grouping: "NONE",
+      responseMode: "DETERMINISTIC",
+    },
+  ],
 });
 
 describe("backend/sia/queryPlan -- validateQueryPlan", () => {
@@ -215,5 +235,142 @@ describe("backend/sia/queryPlan -- validateQueryPlan", () => {
       const plan = { ...validLookupPlan(), metrics: ["TOP_CATEGORY"], operation: "LOOKUP" };
       expect(validateQueryPlan(plan).valid).toBe(true);
     });
+  });
+});
+
+describe("backend/sia/queryPlan -- v2 multi-query contract", () => {
+  it("accepts up to five bounded, independently validated queries", () => {
+    const plan = validV2LookupPlan();
+    plan.queries.push(
+      {
+        metric: "INCOME_TOTAL",
+        operation: "LOOKUP",
+        period: { type: "CURRENT_MONTH" },
+        grouping: "NONE",
+        responseMode: "DETERMINISTIC",
+      },
+      {
+        metric: "CATEGORY_TOTAL",
+        operation: "LOOKUP",
+        period: { type: "CURRENT_MONTH" },
+        grouping: "NONE",
+        categoryFilter: "Food",
+        responseMode: "DETERMINISTIC",
+      }
+    );
+
+    const result = validateQueryPlan(plan);
+    expect(result.valid).toBe(true);
+    expect(result.plan).toEqual({
+      version: QUERY_PLAN_V2_VERSION,
+      outcome: "supported",
+      queries: plan.queries,
+    });
+  });
+
+  it("accepts v2 clarification and unsupported outcomes without execution fields", () => {
+    const clarification = validateQueryPlan({
+      version: QUERY_PLAN_V2_VERSION,
+      outcome: "clarification",
+      clarification: {
+        reason: "AMBIGUOUS_MONTH",
+        prompt: "Which year did you mean for March?",
+        options: [{ id: "2026-03", label: "March 2026" }],
+      },
+    });
+    const unsupported = validateQueryPlan({ version: QUERY_PLAN_V2_VERSION, outcome: "unsupported" });
+
+    expect(clarification.valid).toBe(true);
+    expect(clarification.plan.version).toBe(QUERY_PLAN_V2_VERSION);
+    expect(unsupported).toEqual({
+      valid: true,
+      plan: { version: QUERY_PLAN_V2_VERSION, outcome: "unsupported" },
+    });
+  });
+
+  it("normalizes an accepted v1 checkpoint into one v2 query without changing v1 validation output", () => {
+    const v1 = validLookupPlan();
+
+    expect(validateQueryPlan(v1)).toEqual({ valid: true, plan: v1 });
+    expect(normalizeQueryPlan(v1)).toEqual({
+      valid: true,
+      plan: {
+        version: QUERY_PLAN_V2_VERSION,
+        outcome: "supported",
+        queries: [
+          {
+            metric: "EXPENSE_TOTAL",
+            operation: "LOOKUP",
+            period: { type: "CURRENT_MONTH" },
+            grouping: "NONE",
+            responseMode: "DETERMINISTIC",
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns an accepted v2 plan unchanged from the normalizer", () => {
+    const v2 = validV2LookupPlan();
+    expect(normalizeQueryPlan(v2)).toEqual({ valid: true, plan: v2 });
+  });
+
+  it("rejects plans above the five-query execution cap", () => {
+    const plan = validV2LookupPlan();
+    plan.queries = Array.from({ length: MAX_QUERIES_PER_PLAN + 1 }, (_, index) => ({
+      metric: "EXPENSE_TOTAL",
+      operation: "LOOKUP",
+      period: { type: "EXPLICIT_MONTH", month: index + 1, year: 2026 },
+      grouping: "NONE",
+      responseMode: "DETERMINISTIC",
+    }));
+
+    expect(validateQueryPlan(plan)).toEqual({ valid: false, reason: "TOO_MANY_QUERIES" });
+  });
+
+  it("rejects duplicate queries after canonical category-filter normalization", () => {
+    const plan = validV2LookupPlan();
+    plan.queries = [
+      {
+        metric: "CATEGORY_TOTAL",
+        operation: "LOOKUP",
+        period: { type: "CURRENT_MONTH" },
+        grouping: "NONE",
+        categoryFilter: " Food ",
+        responseMode: "DETERMINISTIC",
+      },
+      {
+        metric: "CATEGORY_TOTAL",
+        operation: "LOOKUP",
+        period: { type: "CURRENT_MONTH" },
+        grouping: "NONE",
+        categoryFilter: "Food",
+        responseMode: "DETERMINISTIC",
+      },
+    ];
+
+    expect(validateQueryPlan(plan)).toEqual({ valid: false, reason: "DUPLICATE_QUERIES" });
+  });
+
+  it("rejects unknown query keys and comparison periods outside comparison queries", () => {
+    const withUnknownKey = validV2LookupPlan();
+    withUnknownKey.queries[0].metrics = ["EXPENSE_TOTAL"];
+    const withUnexpectedComparison = validV2LookupPlan();
+    withUnexpectedComparison.queries[0].comparisonPeriod = { type: "PREVIOUS_MONTH" };
+
+    expect(validateQueryPlan(withUnknownKey).valid).toBe(false);
+    expect(validateQueryPlan(withUnexpectedComparison).valid).toBe(false);
+  });
+
+  it("rejects unsafe filters and non-forecast metrics proposed for a v2 forecast", () => {
+    const unsafeFilter = validV2LookupPlan();
+    unsafeFilter.queries[0].metric = "CATEGORY_TOTAL";
+    unsafeFilter.queries[0].categoryFilter = "$where";
+    const unsupportedForecast = validV2LookupPlan();
+    unsupportedForecast.queries[0].operation = "FORECAST";
+    unsupportedForecast.queries[0].responseMode = "PROSE";
+
+    expect(validateQueryPlan(unsafeFilter).valid).toBe(false);
+    expect(validateQueryPlan(unsupportedForecast).valid).toBe(false);
   });
 });

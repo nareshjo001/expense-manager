@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { motion } from 'framer-motion';
 
 import { ExpenseItem, SetBudget, formatDateRange } from '../imports/expensesImport';
 
@@ -7,6 +7,9 @@ import { useExpensesQuery } from '../../hooks/queries/useExpensesQuery';
 
 import { useExpenseInsights } from '../contexts/ai-contexts/ExpenseInsightsContext';
 import InlineExpenseInsight from '../insights/InlineExpenseInsight'
+
+const INITIAL_VISIBLE_EXPENSES = 30;
+const EXPENSE_RENDER_BATCH_SIZE = 25;
 
 // Displays the user's expenses with filter/date-range controls and cancellable, race-safe data fetching.
 const ExpensesPage = ({ onDelete, setIsEdit }) => {
@@ -26,6 +29,8 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   const expensesQuery = useExpensesQuery(filter, period, startDate, endDate);
   const backendExpenses = expensesQuery.data?.success ? expensesQuery.data.data : [];
   const loading = expensesQuery.isLoading;
+  const loadMoreRef = useRef(null);
+  const [visibleExpenseCount, setVisibleExpenseCount] = useState(INITIAL_VISIBLE_EXPENSES);
 
   // useQuery no longer supports an onSuccess callback, so insight notifications run here instead, once per new successful fetch.
   useEffect(() => {
@@ -65,6 +70,56 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
       total = backendExpenses.reduce((sum, exp) => sum + exp.expenseAmount, 0);
     }
   }
+
+  const totalExpenseCount = Object.values(groupedExpenses).reduce(
+    (count, groupList) => count + (Array.isArray(groupList) ? groupList.length : 0),
+    0
+  );
+  const hasMoreExpenses = visibleExpenseCount < totalExpenseCount;
+
+  // Preserve the existing filter/API behavior while keeping the DOM small.
+  // A new result or filter starts from the first batch rather than rendering
+  // every matching card at once.
+  useEffect(() => {
+    setVisibleExpenseCount(INITIAL_VISIBLE_EXPENSES);
+  }, [filter, period, startDate, endDate, expensesQuery.dataUpdatedAt]);
+
+  const revealMoreExpenses = useCallback(() => {
+    setVisibleExpenseCount((current) => Math.min(current + EXPENSE_RENDER_BATCH_SIZE, totalExpenseCount));
+  }, [totalExpenseCount]);
+
+  useEffect(() => {
+    if (!hasMoreExpenses) return undefined;
+
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      setVisibleExpenseCount(totalExpenseCount);
+      return undefined;
+    }
+
+    const target = loadMoreRef.current;
+    if (!target) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) revealMoreExpenses();
+      },
+      { rootMargin: '900px 0px' }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreExpenses, revealMoreExpenses, totalExpenseCount]);
+
+  let remainingVisibleExpenses = visibleExpenseCount;
+  const visibleGroups = Object.entries(groupedExpenses)
+    .map(([category, groupList]) => {
+      const visibleItems = Array.isArray(groupList)
+        ? groupList.slice(0, Math.max(remainingVisibleExpenses, 0))
+        : [];
+      remainingVisibleExpenses -= visibleItems.length;
+      return [category, visibleItems];
+    })
+    .filter(([, groupList]) => groupList.length > 0);
 
   return (
     <div className="expenses-page-container">
@@ -117,25 +172,16 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
           No Expenses
         </motion.p>
       ) : (
-        <AnimatePresence>
-          {Object.entries(groupedExpenses).map(([category, groupList]) => (
+        <>
+          {visibleGroups.map(([category, groupList]) => (
             <div key={category} className="expense-category">
               <h3>{category}</h3>
-              <motion.div layout>
+              <div>
                 {Array.isArray(groupList) &&
                   groupList.map((exp) => (
-                    <motion.div
-                      key={exp._id || exp.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.97 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.97 }}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
-                    >
-                      <ExpenseItem key={exp._id} expense={exp} onDelete={onDelete} setIsEdit={setIsEdit} />
-                    </motion.div>
+                    <ExpenseItem key={exp._id || exp.id} expense={exp} onDelete={onDelete} setIsEdit={setIsEdit} />
                   ))}
-              </motion.div>
+              </div>
 
               {filter === 'bycategory' && categoryTotals[category] !== undefined && (
                 <div className="total-section">Total ₹{categoryTotals[category].toFixed(2)}</div>
@@ -145,7 +191,12 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
               )}
             </div>
           ))}
-        </AnimatePresence>
+          {hasMoreExpenses && (
+            <div ref={loadMoreRef} className="expense-load-more" role="status" aria-live="polite">
+              Loading more expenses…
+            </div>
+          )}
+        </>
       )}
 
       {filter === 'custom' && (!startDate || !endDate) && (

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import SiaEntryPoint from "./SiaEntryPoint";
 import { SIA_SUGGESTIONS } from "./siaSuggestions";
 
@@ -35,6 +36,7 @@ export function useSiaLauncher() {
 
 export const SiaLauncherProvider = ({ children }) => {
   const entryPointRef = useRef(null);
+  const location = useLocation();
 
   // A stable callback (empty dependency array): identity never changes
   // across composer keystrokes, message updates, availability refetches,
@@ -64,7 +66,7 @@ export const SiaLauncherProvider = ({ children }) => {
   return (
     <SiaLauncherContext.Provider value={contextValue}>
       {children}
-      <SiaEntryPoint ref={entryPointRef} />
+      <SiaEntryPoint ref={entryPointRef} hideLauncher={location.pathname === "/add"} />
     </SiaLauncherContext.Provider>
   );
 };

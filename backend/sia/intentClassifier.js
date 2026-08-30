@@ -214,6 +214,18 @@ const SUMMARY_LOOKUP_EXCLUSION_PATTERN =
 const SUMMARY_HISTORICAL_EXCLUSION_PATTERN =
   /\b(last month|previous month|prior month|january|february|march|april|may|june|july|august|september|october|november|december)\b/;
 
+// A preposition after a spending topic names a spending area (for example,
+// "spent on Food" or "spending for Travel"). The current-summary context
+// only has the overall total, so this shape must reach semantic routing,
+// where the existing CATEGORY_TOTAL lookup can be planned. Time and overall
+// modifiers stay excluded, preserving ordinary totals such as "spending for
+// this month" on the deterministic current-summary path.
+const SUMMARY_NAMED_CATEGORY_PREPOSITION_PATTERN = new RegExp(
+  "\\b(?:spend|spent|spending|expense|expenses|expenditure|expenditures)\\s+" +
+    "(?:on|for|in)\\s+(?:(?:the|my)\\s+)?" +
+    `(?!(?:${OVERALL_MODIFIERS})\\b)[a-z][a-z'-]*`
+);
+
 function isCurrentSpendingSummaryQuestion(normalized) {
   const s = normalizeForCurrentPeriod(normalized);
 
@@ -254,6 +266,7 @@ function isCurrentSpendingSummaryQuestion(normalized) {
   if (SUMMARY_ADVICE_EXCLUSION_PATTERN.test(s)) return false;
   if (SUMMARY_LOOKUP_EXCLUSION_PATTERN.test(s)) return false;
   if (SUMMARY_HISTORICAL_EXCLUSION_PATTERN.test(s)) return false;
+  if (SUMMARY_NAMED_CATEGORY_PREPOSITION_PATTERN.test(s)) return false;
 
   return true;
 }

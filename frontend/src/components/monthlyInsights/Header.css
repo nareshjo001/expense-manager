@@ -92,11 +92,13 @@
 }
 
 .edit-budget-icon {
+  border: none;
   font-size:15px;
   opacity:0.9;
   position: absolute;
   top: 9px;
   right: 9px;
+  z-index: 1;
   border-radius: 50%;
   background: var(--card-icon-bg);
   padding: 8px;
@@ -104,18 +106,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.edit-budget-icon button {
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   color: inherit;
-  font-size: inherit;
   cursor: pointer;
 }
 
@@ -527,5 +518,72 @@
     font-size: 12px;
     border-radius: 10px;
     flex-shrink: 0;
+  }
+
+  /* Income header only: keep the compact mobile grid within its container. */
+  .income-insights-header {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .income-insights-header .monthly-insights-header-left,
+  .income-insights-header .monthly-insights-body-cards,
+  .income-insights-header .monthly-insights-card {
+    min-width: 0;
+  }
+
+  .income-insights-header-description {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .income-insights-header-description .income-insights-overview {
+    font-size: 11px;
+  }
+
+  .income-insights-header-description .period-selector {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .income-insights-header-description .period-selector select {
+    font-size: 11px;
+    padding: 3px 18px 3px 5px;
+  }
+
+  .income-insights-header .recorded-income-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .income-insights-header .recorded-income-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .income-insights-header .income-view-btn {
+    flex: 0 0 auto;
+  }
+
+  /* Budget header only: prevent card content from widening either grid column. */
+  .budget-insights-header {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .budget-insights-header .monthly-insights-header-budget,
+  .budget-insights-header .monthly-insights-body-cards,
+  .budget-insights-header .monthly-insights-card {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  .budget-insights-header .monthly-insights-body-cards {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

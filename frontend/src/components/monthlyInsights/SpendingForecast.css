@@ -405,6 +405,17 @@
 }
 
 @media (max-width: 768px) {
+  .forecast-container,
+  .forecast-card {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  .forecast-container {
+    width: calc(100% - 20px);
+    margin: 0 auto;
+  }
+
   .forecast-card {
     padding: 18px;
   }

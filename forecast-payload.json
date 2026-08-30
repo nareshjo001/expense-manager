@@ -1,0 +1,22 @@
+﻿{
+  "spentSoFar": 1234,
+  "forecastableSpentSoFar": 200,
+  "elapsedDay": 10,
+  "daysInMonth": 30,
+  "recurringCommittedTotal": 150,
+  "recurringSpentSoFar": 80,
+  "recurringPending": 120,
+  "mtdTransactionCount": 22,
+  "dailyTransactionFrequency": 2.2,
+  "dailySpendVelocity": 115.5,
+  "trailing3MonthAverage": 1100,
+  "trailing6MonthMedian": 1050,
+  "historicalTheilSenSlope": 5.1,
+  "residualMad": 30,
+  "topCategoryShare": 0.27,
+  "categoryEntropy": 1.85,
+  "cat_Groceries": 0,
+  "cat_Transportation": 1,
+  "cat_Utilities": 0,
+  "cat_Entertainment": 0
+}

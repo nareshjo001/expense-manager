@@ -1622,6 +1622,24 @@ describe("POST /sia/ask", () => {
     expect(askLlmMock).not.toHaveBeenCalled();
   });
 
+  it("returns the generic 503 when the semantic router fails, rather than blaming the question", async () => {
+    const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({
+      configOverrides: { enabled: true },
+      routeQuestionImpl: async () => ({ ok: false, reason: "ROUTER_CALL_FAILED" }),
+    });
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${signToken("semantic-router-failure-user")}`)
+      .send({ question: "How much did I spend on food this month?" });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+    expect(routeQuestionMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
   it("returns 422 for a category-forecast request the QueryPlan capability contract rejects (1 router call, 0 answer calls)", async () => {
     // Simulates what the REAL semanticRouter.routeQuestion() would itself
     // return if a provider mistakenly proposed a TOP_CATEGORY+FORECAST

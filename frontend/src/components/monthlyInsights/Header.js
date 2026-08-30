@@ -57,7 +57,7 @@ export default function Header({ summary }) {
   };
 
   return (
-    <div className="monthly-insights">
+    <div className="monthly-insights budget-insights-header">
 
       <div className="monthly-insights-header">
 
@@ -73,11 +73,15 @@ export default function Header({ summary }) {
           </div>
 
           <div className="monthly-insights-header-budget">
-              <div className="edit-budget-icon" title="Edit Budget" onClick={() => setEditBudget(true)}>
-                <button >
-                  <FaPen />
-                </button>
-              </div>
+              <button
+                type="button"
+                className="edit-budget-icon"
+                aria-label="Edit budget"
+                title="Edit Budget"
+                onClick={() => setEditBudget(true)}
+              >
+                <FaPen />
+              </button>
               <p>Total Budget</p>
               <h1>₹ {totalBudget}</h1>
               <span>Spent: ₹ {summary.totalSpent}</span>

@@ -52,7 +52,7 @@ function isSiaEnabled() {
 // `<SiaEntryPoint onOpen={...} />` with no ref keeps working completely
 // unchanged -- this component's own state ownership and visible behavior
 // (the flag gate, the open/close wiring, the onOpen callback) are untouched.
-const SiaEntryPoint = forwardRef(({ onOpen }, ref) => {
+const SiaEntryPoint = forwardRef(({ onOpen, hideLauncher = false }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const themeContext = useContext(ThemeContext) || {};
   const theme = themeContext.theme || "light-theme";
@@ -189,7 +189,7 @@ const SiaEntryPoint = forwardRef(({ onOpen }, ref) => {
           // treated above (voice controls simply don't render yet).
           voiceCapabilities={statusQuery.data?.capabilities?.voiceInput}
         />
-      ) : (
+      ) : !hideLauncher ? (
         <button
           type="button"
           className="sia-entry-point"
@@ -199,7 +199,7 @@ const SiaEntryPoint = forwardRef(({ onOpen }, ref) => {
           <HiSparkles aria-hidden="true" />
           <span>Ask SIA</span>
         </button>
-      )}
+      ) : null}
     </div>
   );
 });

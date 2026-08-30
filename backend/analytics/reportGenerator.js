@@ -89,11 +89,12 @@ const generateReport = async (userId) => {
     activeDays: analyticsContext.forecastActiveDays,
     targetMonthBudget: analyticsContext.forecastTargetMonthBudget,
   });
-  const currentMonthForecast = currentMonthForecastAnalyzer.analyze({
+  const currentMonthForecast = await currentMonthForecastAnalyzer.analyze({
     input: analyticsContext.currentMonthForecastInput,
     currentMonthStart: analyticsContext.currentMonthStart,
     currentMonthBudget: analyticsContext.forecastCurrentMonthBudget,
   });
+
   // Backward compatible: every existing horizon remains byte-for-byte under
   // its original key. The redesigned UI reads only this added field.
   const forecastReport = {

@@ -1513,10 +1513,28 @@
    never sits taller than the actually-visible viewport. */
 @media screen and (max-width: 600px) {
   .sia-entry-point {
-    bottom: 130px;
-    right: 15px;
-    padding: 10px 16px;
-    font-size: 0.95rem;
+    /* Reserve space for both the fixed bottom navigation and its nearby
+       Scroll-to-top control, without leaving a large pill over card content. */
+    bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    min-width: 44px;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 14px;
+    gap: 6px;
+    font-size: 0.86rem;
+    font-weight: 700;
+    border-color: rgba(255, 255, 255, 0.48);
+    box-shadow: 0 8px 20px rgba(190, 40, 111, 0.26), 0 2px 6px rgba(62, 32, 48, 0.16);
+  }
+
+  .sia-entry-point svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .sia-entry-point:active {
+    transform: scale(0.97);
   }
 
   .sia-panel {

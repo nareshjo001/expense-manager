@@ -31,6 +31,22 @@ const VOICE_ACTIVE_STATES = new Set([
   SIA_RECORDER_STATE.TOO_LONG,
 ]);
 
+// The legacy semantic path returns one `periodLabel`; the grounded v2 path
+// returns `periodLabels` because a single answer may compare periods. Keep
+// the UI label deliberately compact and never expose metrics or plan details.
+function getInterpretationLabel(interpretation) {
+  if (!interpretation || typeof interpretation !== "object") return null;
+
+  if (typeof interpretation.periodLabel === "string" && interpretation.periodLabel.trim() !== "") {
+    return interpretation.periodLabel.trim();
+  }
+
+  if (!Array.isArray(interpretation.periodLabels)) return null;
+  const labels = [...new Set(interpretation.periodLabels.filter((label) => typeof label === "string" && label.trim() !== ""))];
+  if (labels.length === 1) return labels[0].trim();
+  return labels.length > 1 ? "multiple periods" : null;
+}
+
 // Presentation only. Every piece of conversation state lives in
 // SiaEntryPoint's useSiaConversation() hook, so unmounting this component
 // on close never loses the transcript, the active session, or an in-flight
@@ -498,6 +514,7 @@ const SiaPanel = ({
             {messages.map((message, index) => {
               const isClarification = message.role === "assistant" && message.kind === "clarification";
               const isLastMessage = index === messages.length - 1;
+              const interpretationLabel = getInterpretationLabel(message.interpretation);
               return (
               <div
                 key={message.id}
@@ -510,17 +527,11 @@ const SiaPanel = ({
                 </span>
                 <p className="sia-message-text">{message.content}</p>
 
-                {/* Workstream 3, part D: a small, human-readable trust
-                    label derived ONLY from interpretation.periodLabel
-                    (already plain text, e.g. "this month" -- see
-                    backend/sia/periodResolver.js) -- metrics/internal ids
-                    are never rendered here or anywhere else. */}
+                {/* A small, human-readable trust label from server-derived
+                    period metadata. Metrics/internal ids are never rendered. */}
                 {message.role === "assistant" &&
                   !isClarification &&
-                  typeof message.interpretation?.periodLabel === "string" &&
-                  message.interpretation.periodLabel.trim() !== "" && (
-                    <p className="sia-interpretation">Using {message.interpretation.periodLabel}</p>
-                  )}
+                  interpretationLabel && <p className="sia-interpretation">Using {interpretationLabel}</p>}
 
                 {/* Workstream 3, part D: each clarification option is its
                     own accessible button. Clicking one re-submits through

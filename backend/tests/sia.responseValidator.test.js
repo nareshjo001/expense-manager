@@ -4,7 +4,7 @@
 // in, plain verdicts out.
 "use strict";
 
-const { validateGroundedAnswer } = require("../sia/responseValidator");
+const { validateGroundedAnswer, MAX_ANSWER_LENGTH } = require("../sia/responseValidator");
 
 const forecastContext = {
   forecast: {
@@ -98,6 +98,18 @@ const categoryContext = {
     ],
   },
 };
+
+describe("sia/responseValidator -- answer size boundary", () => {
+  it("rejects an oversized standard grounded answer before it can reach the client or persistence", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "x".repeat(MAX_ANSWER_LENGTH + 1),
+      contextFields: { summary: { totalSpent: 0 } },
+    });
+
+    expect(result).toEqual({ valid: false, reasonCode: "ANSWER_TOO_LONG" });
+  });
+});
 
 // Batch 3D: table-driven proof that all four newly-covered intents are now
 // really validated (not the old blanket `{valid:true}` bypass), against

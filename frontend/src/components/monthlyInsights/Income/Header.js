@@ -55,7 +55,7 @@ export default function Header({ period, setPeriod }) {
   }
 
   return (
-    <div className="monthly-insights">
+    <div className="monthly-insights income-insights-header">
       <div className="monthly-insights-header">
           <div className="monthly-insights-header-left">
               <h1 className="monthly-insights-header-title">
@@ -63,8 +63,9 @@ export default function Header({ period, setPeriod }) {
                   Income Insights
               </h1>
 
-              <p className="monthly-insights-header-description">
-                  Intelligent financial overview •{" "} 
+              <p className="monthly-insights-header-description income-insights-header-description">
+                  <span className="income-insights-overview">Intelligent financial overview</span>
+                  <span aria-hidden="true">•</span>
                   <span className="period-selector">
                     <select value={period} onChange={(e) => setPeriod(e.target.value)}>
                       <option value="financial_year">
@@ -130,14 +131,26 @@ export default function Header({ period, setPeriod }) {
                 </>
               ) : (
                 <div className="recorded-income-row">
-                  <p className="recorded-income-count">
-                    {cardData.totalIncomes}
-                    <span>Sources</span>
-                  </p>
-
-                  <button className="income-view-btn" onClick={() => setShowIncomeModal(true)}>
-                    View ↗
-                  </button>
+                  {isMobile ? (
+                    <>
+                      <div className="recorded-income-actions">
+                        <p className="recorded-income-count">{cardData.totalIncomes}</p>
+                        <button className="income-view-btn" onClick={() => setShowIncomeModal(true)}>
+                          View ↗
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="recorded-income-count">
+                        {cardData.totalIncomes}
+                        <span>Sources</span>
+                      </p>
+                      <button className="income-view-btn" onClick={() => setShowIncomeModal(true)}>
+                        View ↗
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
           </div>
@@ -164,6 +177,7 @@ export default function Header({ period, setPeriod }) {
       <IncomeModal
         isOpen={showIncomeModal}
         onClose={() => setShowIncomeModal(false)}
+        period={period}
       />
     </div>
   );

@@ -21,7 +21,7 @@ export const queryKeys = {
 
   income: {
     all: ["income"],
-    list: () => [...queryKeys.income.all, "list"],
+    list: (period) => [...queryKeys.income.all, "list", period ?? "all"],
     summary: (period) => [
       ...queryKeys.income.all,
       "summary",

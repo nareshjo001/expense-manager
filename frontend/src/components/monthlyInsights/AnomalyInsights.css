@@ -196,6 +196,17 @@
 }
 
 @media (max-width: 768px) {
+  .anomaly-container,
+  .anomaly-panel {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  .anomaly-container {
+    width: calc(100% - 20px);
+    margin: 0 auto;
+  }
+
   .anomaly-panel {
     padding: 18px;
   }

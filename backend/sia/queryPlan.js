@@ -9,7 +9,12 @@
 // for wildly malformed input (null, a string, a circular object, etc.).
 "use strict";
 
+// Version 1 remains the active wire format until semanticRouter.js and
+// semanticPipeline.js move together in later modules. Keeping it accepted
+// here protects existing router output and persisted idempotency checkpoints.
 const QUERY_PLAN_VERSION = 1;
+const QUERY_PLAN_V2_VERSION = 2;
+const SUPPORTED_QUERY_PLAN_VERSIONS = Object.freeze([QUERY_PLAN_VERSION, QUERY_PLAN_V2_VERSION]);
 
 const OUTCOMES = Object.freeze(["supported", "unsupported", "clarification"]);
 
@@ -73,6 +78,7 @@ const FORECAST_CAPABLE_METRICS = Object.freeze(["SPENDING_FORECAST_EXPLANATION"]
 const RESPONSE_MODES = Object.freeze(["DETERMINISTIC", "PROSE"]);
 
 const MAX_METRICS_PER_PLAN = 3;
+const MAX_QUERIES_PER_PLAN = 5;
 const MAX_LAST_N_MONTHS = 12;
 const MAX_CATEGORY_FILTER_LENGTH = 60;
 const MAX_CLARIFICATION_OPTIONS = 5;
@@ -252,7 +258,7 @@ const TOP_LEVEL_ALLOWED_KEYS = new Set([
  *
  * @returns {{ valid: true, plan: object } | { valid: false, reason: string }}
  */
-function validateQueryPlan(candidate) {
+function validateV1QueryPlan(candidate) {
   try {
     if (!isPlainObject(candidate)) return fail("PLAN_NOT_OBJECT");
 
@@ -382,8 +388,214 @@ function validateQueryPlan(candidate) {
   }
 }
 
+const V2_TOP_LEVEL_ALLOWED_KEYS = new Set(["version", "outcome", "queries", "clarification", "safeInterpretation"]);
+const V2_QUERY_ALLOWED_KEYS = new Set([
+  "metric",
+  "operation",
+  "period",
+  "grouping",
+  "categoryFilter",
+  "comparisonPeriod",
+  "responseMode",
+]);
+
+function validateV2Query(candidate, index) {
+  const prefix = `QUERY_${index}`;
+  if (!isPlainObject(candidate)) return fail(`${prefix}_NOT_OBJECT`);
+
+  for (const key of Object.keys(candidate)) {
+    if (!V2_QUERY_ALLOWED_KEYS.has(key)) return fail(`${prefix}_UNKNOWN_KEY:${key}`);
+  }
+
+  if (!METRICS.includes(candidate.metric)) return fail(`${prefix}_INVALID_METRIC`);
+  if (!OPERATIONS.includes(candidate.operation)) return fail(`${prefix}_INVALID_OPERATION`);
+  if (!GROUPINGS.includes(candidate.grouping)) return fail(`${prefix}_INVALID_GROUPING`);
+  if (!RESPONSE_MODES.includes(candidate.responseMode)) return fail(`${prefix}_INVALID_RESPONSE_MODE`);
+
+  if (!("period" in candidate)) return fail(`${prefix}_MISSING_PERIOD`);
+  const periodResult = validatePeriodObject(candidate.period, { fieldName: `${prefix}_PERIOD` });
+  if (!periodResult.valid) return periodResult;
+
+  if (candidate.operation === "FORECAST" && !FORECAST_CAPABLE_METRICS.includes(candidate.metric)) {
+    return fail(`${prefix}_UNSUPPORTED_FORECAST_METRIC_COMBINATION`);
+  }
+
+  if ("categoryFilter" in candidate && candidate.categoryFilter !== null) {
+    if (!isValidCategoryFilter(candidate.categoryFilter)) return fail(`${prefix}_INVALID_CATEGORY_FILTER`);
+  }
+
+  const needsComparisonPeriod = candidate.operation === "COMPARE" || candidate.metric === "PERIOD_COMPARISON";
+  if (needsComparisonPeriod) {
+    if (!("comparisonPeriod" in candidate)) return fail(`${prefix}_MISSING_COMPARISON_PERIOD`);
+    const comparisonResult = validatePeriodObject(candidate.comparisonPeriod, {
+      fieldName: `${prefix}_COMPARISON_PERIOD`,
+    });
+    if (!comparisonResult.valid) return comparisonResult;
+  } else if ("comparisonPeriod" in candidate) {
+    return fail(`${prefix}_UNEXPECTED_COMPARISON_PERIOD`);
+  }
+
+  const query = {
+    metric: candidate.metric,
+    operation: candidate.operation,
+    period: { ...candidate.period },
+    grouping: candidate.grouping,
+    responseMode: candidate.responseMode,
+  };
+  if ("categoryFilter" in candidate && candidate.categoryFilter !== null) {
+    query.categoryFilter = candidate.categoryFilter.trim();
+  }
+  if ("comparisonPeriod" in candidate) {
+    query.comparisonPeriod = { ...candidate.comparisonPeriod };
+  }
+
+  return { valid: true, query };
+}
+
+function validateV2QueryPlan(candidate) {
+  try {
+    if (!isPlainObject(candidate)) return fail("PLAN_NOT_OBJECT");
+
+    for (const key of Object.keys(candidate)) {
+      if (!V2_TOP_LEVEL_ALLOWED_KEYS.has(key)) return fail(`UNKNOWN_KEY:${key}`);
+    }
+
+    if (candidate.version !== QUERY_PLAN_V2_VERSION) return fail("INVALID_VERSION");
+    if (!OUTCOMES.includes(candidate.outcome)) return fail("INVALID_OUTCOME");
+
+    if (candidate.outcome === "clarification") {
+      for (const key of ["queries"]) {
+        if (key in candidate) return fail(`UNEXPECTED_FIELD_FOR_CLARIFICATION:${key}`);
+      }
+      if (!("clarification" in candidate)) return fail("MISSING_CLARIFICATION");
+      const clarificationResult = validateClarification(candidate.clarification);
+      if (!clarificationResult.valid) return clarificationResult;
+      if ("safeInterpretation" in candidate) {
+        const safeInterpretationResult = validateSafeInterpretation(candidate.safeInterpretation);
+        if (!safeInterpretationResult.valid) return safeInterpretationResult;
+      }
+      return {
+        valid: true,
+        plan: {
+          version: QUERY_PLAN_V2_VERSION,
+          outcome: "clarification",
+          clarification: candidate.clarification,
+          ...(candidate.safeInterpretation ? { safeInterpretation: candidate.safeInterpretation } : {}),
+        },
+      };
+    }
+
+    if (candidate.outcome === "unsupported") {
+      for (const key of ["queries", "clarification", "safeInterpretation"]) {
+        if (key in candidate) return fail(`UNEXPECTED_FIELD_FOR_UNSUPPORTED:${key}`);
+      }
+      return { valid: true, plan: { version: QUERY_PLAN_V2_VERSION, outcome: "unsupported" } };
+    }
+
+    if (!Array.isArray(candidate.queries) || candidate.queries.length === 0) {
+      return fail("INVALID_QUERIES");
+    }
+    if (candidate.queries.length > MAX_QUERIES_PER_PLAN) return fail("TOO_MANY_QUERIES");
+    if ("clarification" in candidate) return fail("UNEXPECTED_FIELD_FOR_SUPPORTED:clarification");
+
+    const queries = [];
+    const seenQueries = new Set();
+    for (let index = 0; index < candidate.queries.length; index += 1) {
+      const queryResult = validateV2Query(candidate.queries[index], index);
+      if (!queryResult.valid) return queryResult;
+      const fingerprint = JSON.stringify(queryResult.query);
+      if (seenQueries.has(fingerprint)) return fail("DUPLICATE_QUERIES");
+      seenQueries.add(fingerprint);
+      queries.push(queryResult.query);
+    }
+
+    if ("safeInterpretation" in candidate) {
+      const safeInterpretationResult = validateSafeInterpretation(candidate.safeInterpretation);
+      if (!safeInterpretationResult.valid) return safeInterpretationResult;
+    }
+
+    return {
+      valid: true,
+      plan: {
+        version: QUERY_PLAN_V2_VERSION,
+        outcome: "supported",
+        queries,
+        ...(candidate.safeInterpretation ? { safeInterpretation: { ...candidate.safeInterpretation } } : {}),
+      },
+    };
+  } catch (_err) {
+    return fail("INTERNAL_VALIDATION_ERROR");
+  }
+}
+
+/**
+ * Accepts persisted v1 plans and new v2 plans. The returned plan preserves
+ * its source version so existing v1 callers remain unchanged until the v2
+ * executor is introduced.
+ */
+function validateQueryPlan(candidate) {
+  try {
+    if (!isPlainObject(candidate)) return fail("PLAN_NOT_OBJECT");
+    if (candidate.version === QUERY_PLAN_VERSION) return validateV1QueryPlan(candidate);
+    if (candidate.version === QUERY_PLAN_V2_VERSION) return validateV2QueryPlan(candidate);
+    return fail("INVALID_VERSION");
+  } catch (_err) {
+    return fail("INTERNAL_VALIDATION_ERROR");
+  }
+}
+
+/**
+ * Converts either accepted plan version to the v2 execution shape without
+ * changing the existing v1 validator result used by current callers.
+ */
+function normalizeQueryPlan(candidate) {
+  const validation = validateQueryPlan(candidate);
+  if (!validation.valid) return validation;
+
+  const plan = validation.plan;
+  if (plan.version === QUERY_PLAN_V2_VERSION) return validation;
+
+  if (plan.outcome === "unsupported") {
+    return { valid: true, plan: { version: QUERY_PLAN_V2_VERSION, outcome: "unsupported" } };
+  }
+  if (plan.outcome === "clarification") {
+    return {
+      valid: true,
+      plan: {
+        version: QUERY_PLAN_V2_VERSION,
+        outcome: "clarification",
+        clarification: plan.clarification,
+        ...(plan.safeInterpretation ? { safeInterpretation: plan.safeInterpretation } : {}),
+      },
+    };
+  }
+
+  return {
+    valid: true,
+    plan: {
+      version: QUERY_PLAN_V2_VERSION,
+      outcome: "supported",
+      queries: plan.metrics.map((metric) => {
+        const query = {
+          metric,
+          operation: plan.operation,
+          period: { ...plan.period },
+          grouping: plan.grouping,
+          responseMode: plan.responseMode,
+        };
+        if (plan.categoryFilter) query.categoryFilter = plan.categoryFilter;
+        if (plan.comparisonPeriod) query.comparisonPeriod = { ...plan.comparisonPeriod };
+        return query;
+      }),
+      ...(plan.safeInterpretation ? { safeInterpretation: { ...plan.safeInterpretation } } : {}),
+    },
+  };
+}
+
 module.exports = {
   QUERY_PLAN_VERSION,
+  QUERY_PLAN_V2_VERSION,
+  SUPPORTED_QUERY_PLAN_VERSIONS,
   OUTCOMES,
   METRICS,
   OPERATIONS,
@@ -391,11 +603,13 @@ module.exports = {
   GROUPINGS,
   RESPONSE_MODES,
   MAX_METRICS_PER_PLAN,
+  MAX_QUERIES_PER_PLAN,
   MAX_LAST_N_MONTHS,
   MAX_CATEGORY_FILTER_LENGTH,
   MAX_CLARIFICATION_OPTIONS,
   MAX_CUSTOM_RANGE_DAYS,
   FORECAST_CAPABLE_METRICS,
   validateQueryPlan,
+  normalizeQueryPlan,
   isValidCategoryFilter,
 };

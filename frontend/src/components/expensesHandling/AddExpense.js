@@ -337,8 +337,9 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
                         {
                             mlConfidence && (
-                                <span className="ml-confidence">
-                                    ML Confidence Score : {mlConfidence}%
+                                <span className="ml-confidence" aria-label={`ML confidence score: ${mlConfidence}%`}>
+                                    <span>ML confidence</span>
+                                    <strong>· {mlConfidence}%</strong>
                                 </span>
                             )
                         }

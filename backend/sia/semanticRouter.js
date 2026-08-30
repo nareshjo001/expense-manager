@@ -83,7 +83,7 @@ const CAPABILITY_CATALOG = Object.freeze({
 function sanitizePreviousPlanSummary(summary) {
   if (!summary || typeof summary !== "object") return null;
   const out = {};
-  if (Array.isArray(summary.metrics)) out.metrics = summary.metrics.filter((m) => typeof m === "string").slice(0, 3);
+  if (Array.isArray(summary.metrics)) out.metrics = summary.metrics.filter((m) => typeof m === "string").slice(0, 5);
   if (typeof summary.operation === "string") out.operation = summary.operation;
   if (typeof summary.periodLabel === "string") out.periodLabel = summary.periodLabel.slice(0, 60);
   if (typeof summary.grouping === "string") out.grouping = summary.grouping;
@@ -110,14 +110,47 @@ const ROUTER_SYSTEM_PROMPT =
   "You are SIA's semantic router. Given a user's financial question, a fixed capability " +
   "catalog, optional prior-turn plan context, and today's calendar context, respond with " +
   "ONLY a single JSON object of the exact shape " +
-  '{"plan": <QueryPlan>, "confidence": <0..1 number>}. The QueryPlan must use only the ' +
+  '{"plan": <QueryPlan>}. For direct read-only financial questions, use QueryPlan version 2: ' +
+  '{"version":2,"outcome":"supported","queries":[<one to five Query objects>]}. Each Query has ' +
+  "exactly one metric and its operation, period, grouping, responseMode, and only the optional " +
+  "categoryFilter/comparisonPeriod fields allowed by the QueryPlan schema. Use DETERMINISTIC for " +
+  "direct lookups or breakdowns, and PROSE for supported explanations or comparisons. For the four " +
+  "existing analytics explanation metrics (health, anomaly, spending forecast, financial risk), " +
+  "use the legacy version 1 plan so their established handler remains authoritative. The QueryPlan must use only the " +
   "metrics/operations/periods/groupings listed in the capability catalog. If the question " +
   "requests a mutation, financial/investment/legal advice, raw transaction-level detail, or " +
   "anything outside the capability catalog, respond with " +
-  '{"plan": {"version": 1, "outcome": "unsupported"}, "confidence": <number>}. If the ' +
+  '{"plan": {"version": 2, "outcome": "unsupported"}}. If the ' +
   "question is genuinely ambiguous (for example a bare month name with no year), respond " +
   "with a clarification-outcome plan offering at most 5 server-safe options. Never include " +
   "any field not in the QueryPlan schema. Respond with JSON only, no prose, no markdown.";
+
+// This schema enforces a JSON object wrapper at the provider boundary. The
+// QueryPlan itself deliberately remains validated by queryPlan.js below: it
+// has cross-field rules (for example, operation/period combinations) that
+// must stay centralized and are also required for legacy text providers and
+// injected test callers. Keeping the schema narrow avoids duplicating those
+// rules and cannot make a provider response executable by itself.
+const ROUTER_STRUCTURED_OUTPUT = Object.freeze({
+  name: "sia_router_response",
+  schema: Object.freeze({
+    type: "object",
+    properties: {
+      plan: {},
+    },
+    required: ["plan"],
+    additionalProperties: false,
+  }),
+});
+
+const ROUTER_OUTCOMES = Object.freeze({
+  PLANNED: "planned",
+  CLARIFICATION: "clarification",
+  UNSUPPORTED: "unsupported",
+  PROVIDER_FAILED: "provider_failed",
+  MALFORMED_OUTPUT: "malformed_output",
+  INVALID_REQUEST: "invalid_request",
+});
 
 // Default production router call -- a thin, narrow wrapper around the
 // EXISTING multi-provider askLlm() adapter (sia/llmService.js), reusing
@@ -130,18 +163,29 @@ async function defaultRouterCall(payload) {
     context: payload,
     question: payload.question,
     history: [],
+    structuredOutput: ROUTER_STRUCTURED_OUTPUT,
   });
-  return result.answer;
+  return result.structuredOutput;
 }
 
-function safeParseJson(text) {
-  if (typeof text !== "string") return null;
+function normalizeRouterResponse(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value !== "string") return null;
   try {
-    const parsed = JSON.parse(text);
-    return parsed;
+    return JSON.parse(value);
   } catch (_err) {
     return null;
   }
+}
+
+function routeFailure(outcome, reason) {
+  return { ok: false, outcome, reason };
+}
+
+function routePlanOutcome(planOutcome) {
+  if (planOutcome === "clarification") return ROUTER_OUTCOMES.CLARIFICATION;
+  if (planOutcome === "unsupported") return ROUTER_OUTCOMES.UNSUPPORTED;
+  return ROUTER_OUTCOMES.PLANNED;
 }
 
 // Confidence is read ONLY to be logged as a diagnostic value -- it is
@@ -156,9 +200,9 @@ function extractDiagnosticConfidence(rawResponse) {
 
 /**
  * Routes one question through the semantic router. Returns
- * `{ ok: true, plan }` when a well-formed, schema-valid QueryPlan was
+ * `{ ok: true, outcome, plan }` when a well-formed, schema-valid QueryPlan was
  * produced (including `outcome: "unsupported"`/`"clarification"` plans),
- * or `{ ok: false, reason }` for any parse/validation/call failure --
+ * or `{ ok: false, outcome, reason }` for any parse/validation/call failure --
  * NEVER throws, regardless of what the injected `routerCall` does.
  *
  * @param {object} args
@@ -166,11 +210,11 @@ function extractDiagnosticConfidence(rawResponse) {
  * @param {object} [args.previousPlanSummary] - bounded prior-plan summary only.
  * @param {Date} [args.now]
  * @param {string} [args.timeZone]
- * @param {(payload: object) => Promise<string>} [args.routerCall] - injectable for tests.
+ * @param {(payload: object) => Promise<string|object>} [args.routerCall] - injectable for tests.
  */
 async function routeQuestion({ question, previousPlanSummary, now, timeZone, routerCall } = {}) {
   if (typeof question !== "string" || question.trim() === "") {
-    return { ok: false, reason: "INVALID_QUESTION" };
+    return routeFailure(ROUTER_OUTCOMES.INVALID_REQUEST, "INVALID_QUESTION");
   }
 
   const payload = Object.freeze({
@@ -188,12 +232,12 @@ async function routeQuestion({ question, previousPlanSummary, now, timeZone, rou
   } catch (_err) {
     // Any provider/network/config failure fails closed -- never surfaces
     // provider internals, never throws out of this function.
-    return { ok: false, reason: "ROUTER_CALL_FAILED" };
+    return routeFailure(ROUTER_OUTCOMES.PROVIDER_FAILED, "ROUTER_CALL_FAILED");
   }
 
-  const parsed = safeParseJson(rawText);
+  const parsed = normalizeRouterResponse(rawText);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return { ok: false, reason: "MALFORMED_ROUTER_RESPONSE" };
+    return routeFailure(ROUTER_OUTCOMES.MALFORMED_OUTPUT, "MALFORMED_ROUTER_RESPONSE");
   }
 
   // Diagnostic-only -- logged, never branched on.
@@ -213,15 +257,22 @@ async function routeQuestion({ question, previousPlanSummary, now, timeZone, rou
   const candidatePlan = parsed.plan;
   const validation = validateQueryPlan(candidatePlan);
   if (!validation.valid) {
-    return { ok: false, reason: `PLAN_REJECTED:${validation.reason}` };
+    return routeFailure(ROUTER_OUTCOMES.MALFORMED_OUTPUT, `PLAN_REJECTED:${validation.reason}`);
   }
 
-  return { ok: true, plan: validation.plan, payloadSent: payload };
+  return {
+    ok: true,
+    outcome: routePlanOutcome(validation.plan.outcome),
+    plan: validation.plan,
+    payloadSent: payload,
+  };
 }
 
 module.exports = {
   CAPABILITY_CATALOG,
   ROUTER_SYSTEM_PROMPT,
+  ROUTER_STRUCTURED_OUTPUT,
+  ROUTER_OUTCOMES,
   buildCalendarContext,
   sanitizePreviousPlanSummary,
   routeQuestion,
