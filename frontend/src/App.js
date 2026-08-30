@@ -20,6 +20,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useWebPush } from "./components/hooks/useWebPush";
 import { useNativePush } from "./components/hooks/useMobilePush";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { SiaLauncherProvider } from "./components/sia/SiaLauncherContext";
 
 // Root app shell: gates the splash screen, authentication state, and global providers/routing.
 function App() {
@@ -177,7 +178,9 @@ function App() {
           <ErrorBoundary>
             <ExpenseInsightsProvider>
               <ChartInsightsProvider>
-                <LandingPage setIsSpinnerLoad={setIsSpinnerLoad} setIsLogout={setIsLogout} setIsLoggedIn={setIsLoggedIn} />
+                <SiaLauncherProvider>
+                  <LandingPage setIsSpinnerLoad={setIsSpinnerLoad} setIsLogout={setIsLogout} setIsLoggedIn={setIsLoggedIn} />
+                </SiaLauncherProvider>
               </ChartInsightsProvider>
             </ExpenseInsightsProvider>
           </ErrorBoundary>

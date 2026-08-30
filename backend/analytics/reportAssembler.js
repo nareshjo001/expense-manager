@@ -11,7 +11,6 @@ const assembleReport = ({
   financialHealth,
   forecast = {},
   anomalies = {},
-  risk = {},
 }) => {
   return {
     metadata,
@@ -39,8 +38,6 @@ const assembleReport = ({
     forecast,
 
     anomalies,
-
-    risk,
   };
 };
 

@@ -9,14 +9,17 @@ const habitAnalyzer = require("./analyzers/habitAnalyzer");
 const healthAnalyzer = require("./analyzers/healthAnalyzer");
 const expenseAnomalyAnalyzer = require("./analyzers/expenseAnomalyAnalyzer");
 const forecastAnalyzer = require("./analyzers/forecastAnalyzer");
-const riskAnalyzer = require("./analyzers/riskAnalyzer");
+const currentMonthForecastAnalyzer = require("./analyzers/currentMonthForecastAnalyzer");
 const habitRules = require("./analyzers/scores/habitRules");
 const { CURRENT_REPORT_VERSION } = require("./reportContractVersion");
 
 const { generateBudgetInsights } = require('../Services/BudgetServices/budgetInsight.service');
 
 const generateReport = async (userId) => {
-  const analyticsContext = await createAnalyticsContext(userId);
+  // One immutable timestamp keeps every date-dependent report section in
+  // the same calendar month, even when generation crosses midnight.
+  const analysisDate = new Date();
+  const analyticsContext = await createAnalyticsContext(userId, { analysisDate });
 
   const spendingReport = spendingAnalyzer.analyze(analyticsContext.currentMonthExpenses);
 
@@ -24,6 +27,7 @@ const generateReport = async (userId) => {
     history: analyticsContext.budgetHistory,
     spending: spendingReport,
     daysInMonth: analyticsContext.daysInMonth,
+    asOfDate: analysisDate,
   });
 
   const budgetInsights = generateBudgetInsights(budgetReport);
@@ -62,6 +66,7 @@ const generateReport = async (userId) => {
     currentMonthExpenses: analyticsContext.currentMonthExpenses,
     recentExpensePool: analyticsContext.recentExpensePool,
     currentMonthStart: analyticsContext.currentMonthStart,
+    monthlyReferenceAmount: budgetReport.hasBudget === true ? budgetReport.budget : null,
   });
 
   // Forecasting V2: pure, deterministic, explicitly-statistical analyzer.
@@ -76,7 +81,7 @@ const generateReport = async (userId) => {
   // data-quality summary and the forecast-vs-target-month budget risk --
   // all fed from the SAME aggregate-only boundary, still with no new
   // database query and still no raw expense record reaching the analyzer.
-  const forecastReport = forecastAnalyzer.analyze({
+  const retainedForecastReport = forecastAnalyzer.analyze({
     monthlySeries: analyticsContext.forecastMonthlySeries,
     currentPartialMonthTotal: analyticsContext.forecastCurrentPartialMonthTotal,
     currentMonthStart: analyticsContext.currentMonthStart,
@@ -84,30 +89,27 @@ const generateReport = async (userId) => {
     activeDays: analyticsContext.forecastActiveDays,
     targetMonthBudget: analyticsContext.forecastTargetMonthBudget,
   });
-
-  // Risk Intelligence V1: pure, deterministic analyzer consuming only
-  // already-computed report sections (never raw collections, never the
-  // LLM). A forecast that is unavailable/insufficient does not invalidate
-  // the rest of risk -- riskAnalyzer.js simply skips the one
-  // forecast-dependent signal in that case.
-  const riskReport = riskAnalyzer.analyze({
-    spending: spendingReport,
-    budgets: budgetReport,
-    trends: trendReport,
-    financialHealth: healthReport,
-    anomalies: anomalyReport,
-    forecast: forecastReport,
+  const currentMonthForecast = currentMonthForecastAnalyzer.analyze({
+    input: analyticsContext.currentMonthForecastInput,
+    currentMonthStart: analyticsContext.currentMonthStart,
+    currentMonthBudget: analyticsContext.forecastCurrentMonthBudget,
   });
+  // Backward compatible: every existing horizon remains byte-for-byte under
+  // its original key. The redesigned UI reads only this added field.
+  const forecastReport = {
+    ...retainedForecastReport,
+    currentMonthForecast,
+  };
 
   const metadata = {
     // Stamped from the single shared constant so reportService.js's
     // isCurrentReport() check and this generator can never drift apart.
     version: CURRENT_REPORT_VERSION,
-    generatedAt: new Date().toISOString(),
+    generatedAt: analysisDate.toISOString(),
 
     reportPeriod: {
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
+      month: analysisDate.getMonth() + 1,
+      year: analysisDate.getFullYear(),
     },
 
     lastExpenseUpdate: analyticsContext.lastExpenseUpdate ?? null,
@@ -153,8 +155,6 @@ const generateReport = async (userId) => {
     forecast: forecastReport,
 
     anomalies: anomalyReport,
-
-    risk: riskReport,
 
   });
 };

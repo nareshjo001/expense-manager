@@ -60,11 +60,6 @@ const financialReportSchema = new mongoose.Schema(
       default: {},
     },
 
-    risk: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {},
-    },
-
     // Phase C.2 -- atomic write-fencing generation stamp. Set to the
     // PendingSync.revision value that was authoritative at the moment this
     // exact document content was computed. The write that persists this

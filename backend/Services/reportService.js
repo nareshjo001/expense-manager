@@ -72,7 +72,10 @@ const persistAndCache = async (userId, generatedReport, options = {}) => {
   if (isFenced) {
     setFields.syncRevision = fenceRevision;
   }
-  const update = { $set: setFields };
+  // Remove the retired report branch from already-persisted documents as
+  // part of the same atomic refresh. Without this, `$set` would preserve a
+  // legacy `risk` field even though new reports no longer generate one.
+  const update = { $set: setFields, $unset: { risk: "" } };
 
   // Phase C.2 correction -- this conditional write is NEVER allowed to
   // upsert. `user` carries a unique index (see models/Report.js), and
@@ -109,7 +112,11 @@ const persistAndCache = async (userId, generatedReport, options = {}) => {
   // on the fenced-out path.
   const existing = await FinancialReport.findOne({ user: userId }).lean();
   if (existing) {
-    return { skipped: true, reason: 'superseded' };
+    const skipped = { skipped: true, reason: 'superseded' };
+    if (Number.isFinite(existing.syncRevision)) {
+      skipped.currentRevision = existing.syncRevision;
+    }
+    return skipped;
   }
 
   // Genuinely the first report ever generated for this user. See
@@ -192,7 +199,7 @@ async function createFirstReport(userId, setFields, fenceRevision, isFenced) {
   try {
     const created = await FinancialReport.findOneAndUpdate(
       filter,
-      { $set: setFields },
+      { $set: setFields, $unset: { risk: "" } },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     ).lean();
     await reportCache.set(userId, created, isFenced ? fenceRevision : null);
@@ -215,7 +222,7 @@ async function createFirstReport(userId, setFields, fenceRevision, isFenced) {
     // this user, and it was just resolved by the E11000 above.
     const retried = await FinancialReport.findOneAndUpdate(
       filter,
-      { $set: setFields },
+      { $set: setFields, $unset: { risk: "" } },
       { new: true, upsert: false, runValidators: true }
     ).lean();
 
