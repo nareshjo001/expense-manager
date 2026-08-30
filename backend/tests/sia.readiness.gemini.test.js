@@ -56,11 +56,30 @@ function signToken(userId) {
   return jwt.sign({ email: "sia-readiness-gemini-test@example.test", _id: userId }, TEST_JWT_SECRET);
 }
 
+// Workstream 2 -- voice-input config defaults (see
+// tests/sia.readiness.test.js's identical constant for the full rationale).
+// This whole file is about the TEXT (isSiaReady) surface; voice readiness
+// is covered separately by tests/sia.readiness.voice.test.js.
+const VOICE_CONFIG_DEFAULTS = {
+  voiceEnabled: false,
+  sttProvider: "groq",
+  sttModel: "whisper-large-v3-turbo",
+  sttTimeoutMs: 30000,
+  sttMaxBytes: 5242880,
+  sttMaxDurationSeconds: 45,
+};
+
 // Loads a fresh readiness module against an explicit config shape, without
 // touching the real process.env-derived config object.
 function loadReadiness({ enabled, provider, model, openaiCredential, geminiCredential }) {
   jest.resetModules();
-  jest.doMock("../sia/config", () => ({ enabled, provider, model, timeoutMs: 8000 }));
+  jest.doMock("../sia/config", () => ({
+    enabled,
+    provider,
+    model,
+    timeoutMs: 8000,
+    ...VOICE_CONFIG_DEFAULTS,
+  }));
   setEnvCredentials({ openai: openaiCredential, gemini: geminiCredential });
   return require("../sia/readiness");
 }
@@ -224,7 +243,13 @@ describe("sia/readiness -- OpenAI readiness remains unchanged after the Gemini a
 describe("GET /sia/status -- never leaks provider/model/credential for either provider", () => {
   function loadApp({ enabled, provider, model, openaiCredential, geminiCredential }) {
     jest.resetModules();
-    jest.doMock("../sia/config", () => ({ enabled, provider, model, timeoutMs: 8000 }));
+    jest.doMock("../sia/config", () => ({
+      enabled,
+      provider,
+      model,
+      timeoutMs: 8000,
+      ...VOICE_CONFIG_DEFAULTS,
+    }));
     setEnvCredentials({ openai: openaiCredential, gemini: geminiCredential });
 
     const askLlmMock = jest.fn(async () => {
@@ -242,60 +267,88 @@ describe("GET /sia/status -- never leaks provider/model/credential for either pr
     return { app };
   }
 
-  it("returns exactly { success: true, available: true } when ready with provider=gemini", async () => {
-    const { app } = loadApp({
-      enabled: true,
-      provider: "gemini",
-      model: "gemini-3.6-flash",
-      geminiCredential: FAKE_GEMINI_CREDENTIAL,
-    });
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-gemini-status-1")}`);
+  // Workstream 2 -- the additive capabilities.voiceInput block every
+  // GET /sia/status response now carries; voiceEnabled is unset/false
+  // throughout this file, so voiceInput.available is always false here.
+  const EXPECTED_VOICE_CAPABILITIES = {
+    voiceInput: {
+      available: false,
+      maxDurationSeconds: 45,
+      maxBytes: 5242880,
+      acceptedMimeTypes: ["audio/webm", "audio/mp4", "audio/ogg", "audio/wav"],
+    },
+  };
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, available: true });
-  });
-
-  it("returns exactly { success: true, available: false } when provider=gemini has no GEMINI_API_KEY", async () => {
-    const { app } = loadApp({
-      enabled: true,
-      provider: "gemini",
-      model: "gemini-3.6-flash",
-      geminiCredential: undefined,
-    });
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-gemini-status-2")}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, available: false });
-  });
-
-  it("never leaks the word \"gemini\", the model id, the credential, or GEMINI_API_KEY in the response body", async () => {
-    for (const overrides of [
-      { geminiCredential: FAKE_GEMINI_CREDENTIAL },
-      { geminiCredential: undefined },
-    ]) {
+  // NOTE on the explicit 60000ms third argument below (Workstream 2): see
+  // the identical note in tests/sia.readiness.groq.test.js's sibling block
+  // -- this sandbox pays a large one-time-per-call cost for
+  // jest.resetModules() + require("../app"), observed up to ~55s.
+  it(
+    "returns exactly { success: true, available: true, capabilities } when ready with provider=gemini",
+    async () => {
       const { app } = loadApp({
         enabled: true,
         provider: "gemini",
         model: "gemini-3.6-flash",
-        ...overrides,
+        geminiCredential: FAKE_GEMINI_CREDENTIAL,
       });
       const res = await request(app)
         .get("/sia/status")
-        .set("Authorization", `Bearer ${signToken("user-gemini-status-3")}`);
+        .set("Authorization", `Bearer ${signToken("user-gemini-status-1")}`);
 
-      const raw = JSON.stringify(res.body);
-      expect(raw).not.toContain("gemini");
-      expect(raw).not.toContain("gemini-3.6-flash");
-      expect(raw).not.toContain(FAKE_GEMINI_CREDENTIAL);
-      expect(raw).not.toContain("GEMINI_API_KEY");
-      expect(raw).not.toContain("SIA_LLM_PROVIDER");
-      expect(raw).not.toContain("SIA_LLM_MODEL");
-      expect(Object.keys(res.body).sort()).toEqual(["available", "success"]);
-      jest.resetModules();
-    }
-  });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, available: true, capabilities: EXPECTED_VOICE_CAPABILITIES });
+    },
+    60000
+  );
+
+  it(
+    "returns exactly { success: true, available: false, capabilities } when provider=gemini has no GEMINI_API_KEY",
+    async () => {
+      const { app } = loadApp({
+        enabled: true,
+        provider: "gemini",
+        model: "gemini-3.6-flash",
+        geminiCredential: undefined,
+      });
+      const res = await request(app)
+        .get("/sia/status")
+        .set("Authorization", `Bearer ${signToken("user-gemini-status-2")}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, available: false, capabilities: EXPECTED_VOICE_CAPABILITIES });
+    },
+    60000
+  );
+
+  it(
+    "never leaks the word \"gemini\", the model id, the credential, or GEMINI_API_KEY in the response body",
+    async () => {
+      for (const overrides of [
+        { geminiCredential: FAKE_GEMINI_CREDENTIAL },
+        { geminiCredential: undefined },
+      ]) {
+        const { app } = loadApp({
+          enabled: true,
+          provider: "gemini",
+          model: "gemini-3.6-flash",
+          ...overrides,
+        });
+        const res = await request(app)
+          .get("/sia/status")
+          .set("Authorization", `Bearer ${signToken("user-gemini-status-3")}`);
+
+        const raw = JSON.stringify(res.body);
+        expect(raw).not.toContain("gemini");
+        expect(raw).not.toContain("gemini-3.6-flash");
+        expect(raw).not.toContain(FAKE_GEMINI_CREDENTIAL);
+        expect(raw).not.toContain("GEMINI_API_KEY");
+        expect(raw).not.toContain("SIA_LLM_PROVIDER");
+        expect(raw).not.toContain("SIA_LLM_MODEL");
+        expect(Object.keys(res.body).sort()).toEqual(["available", "capabilities", "success"]);
+        jest.resetModules();
+      }
+    },
+    60000
+  );
 });

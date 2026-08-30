@@ -56,10 +56,6 @@ jest.mock("../../query/queryClient", () => ({
   queryClient: { clear: jest.fn() },
 }));
 
-jest.mock("../sia/SiaLauncherContext", () => ({
-  SiaLauncherProvider: ({ children }) => <>{children}</>,
-}));
-
 jest.mock("../imports/Imports", () => {
   const React = require("react");
   return {

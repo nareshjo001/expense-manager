@@ -81,7 +81,32 @@ function signToken(userId) {
 // Loads a fresh Express app with backend/sia/config, intentClassifier,
 // contextBuilder, and llmService mocked. Mirrors the module-reset isolation
 // style used by tests/sia.contextBuilder.test.js and tests/sia.llmService.test.js.
-function loadApp({ configOverrides = {}, classifyIntentImpl, buildContextImpl, askLlmImpl } = {}) {
+//
+// Workstream-1-fix addition: `routeQuestionImpl`/`financialQueryServiceImpl`
+// mock the semantic-router/financial-query boundaries DIRECTLY (via
+// jest.doMock on ../sia/semanticRouter and ../sia/financialQueryService)
+// instead of relying on askLlmMock to stand in for the router's internal
+// provider call too. This is what lets a test assert "1 router call, 0
+// answer calls" and "0 router calls, 0 answer calls" as genuinely separate
+// facts rather than both landing on the same askLlmMock counter -- without
+// this split, any question that reaches the (previously real,
+// un-mocked) semantic router would silently invoke askLlmMock via
+// semanticRouter.js's defaultRouterCall, polluting "askLlm never called"
+// assertions for questions that were never meant to reach askLlm at all.
+// routeQuestionMock's default implementation deliberately does NOT throw
+// when called unconfigured -- it fails closed with `{ ok: false, ... }`,
+// the same shape routeQuestion() itself would return for a real failure,
+// so an accidentally-uncovered call surfaces as a normal unsupported/422
+// result (visible via routeQuestionMock's own call-count assertions)
+// rather than an unrelated crash.
+function loadApp({
+  configOverrides = {},
+  classifyIntentImpl,
+  buildContextImpl,
+  askLlmImpl,
+  routeQuestionImpl,
+  financialQueryServiceImpl = {},
+} = {}) {
   jest.resetModules();
 
   // Batch 3E: `provider` and `model` are part of the baseline mock because
@@ -128,12 +153,43 @@ function loadApp({ configOverrides = {}, classifyIntentImpl, buildContextImpl, a
   );
   jest.doMock("../sia/llmService", () => ({ askLlm: askLlmMock, LlmProviderError: RealLlmProviderError }));
 
+  // The semantic-router BOUNDARY, mocked directly -- distinct from
+  // askLlmMock (answer-generation calls only). Default: fails closed
+  // without throwing, so an unconfigured/unexpected router call is a
+  // clearly visible, safely-handled "not ok" result, not a crash.
+  const routeQuestionMock = jest.fn(
+    routeQuestionImpl || (async () => ({ ok: false, reason: "TEST_ROUTER_NOT_CONFIGURED" }))
+  );
+  jest.doMock("../sia/semanticRouter", () => {
+    const actual = jest.requireActual("../sia/semanticRouter");
+    return { ...actual, routeQuestion: routeQuestionMock };
+  });
+
+  // financialQueryService.js -- the only allowlisted direct-read layer the
+  // semantic pipeline's deterministic-lookup path uses. Mocked per-method
+  // (spread over the real module's shape) so a test only needs to
+  // override the one method its scenario actually exercises; every
+  // unconfigured method fails closed with `{ hasData: false }` rather than
+  // attempting a real Mongo call (which would hang/error in this
+  // unconnected test environment).
+  const realFinancialQueryService = jest.requireActual("../sia/financialQueryService");
+  const financialQueryServiceMock = {};
+  for (const key of Object.keys(realFinancialQueryService)) {
+    financialQueryServiceMock[key] =
+      typeof realFinancialQueryService[key] === "function"
+        ? jest.fn(financialQueryServiceImpl[key] || (async () => ({ hasData: false, reasonCode: "TEST_NOT_CONFIGURED" })))
+        : realFinancialQueryService[key];
+  }
+  jest.doMock("../sia/financialQueryService", () => financialQueryServiceMock);
+
   const app = require("../app");
   return {
     app,
     classifyIntentMock,
     buildContextMock,
     askLlmMock,
+    routeQuestionMock,
+    financialQueryServiceMock,
     LlmProviderError: RealLlmProviderError,
   };
 }
@@ -335,8 +391,30 @@ describe("POST /sia/ask", () => {
     expect(res.body).toEqual({ success: false, message: "question is required" });
   });
 
-  it("returns 422 for an unrecognized question and calls neither buildContext nor askLlm", async () => {
-    const { app, buildContextMock, askLlmMock } = loadApp({ configOverrides: { enabled: true } });
+  // Workstream-1-fix: "How much did I spend?" has no period at all, so it
+  // is no longer the old flat generic-unsupported case (that was pre-
+  // semantic-router behavior) -- it now reaches the semantic router, which
+  // (per its own system prompt) returns a bounded clarification for the
+  // missing period. This test proves the WIRING (router asked once,
+  // clarification surfaced, zero answer-generation calls), not an LLM's
+  // judgment -- the router itself is mocked.
+  it("returns a bounded clarification for a period-less spending question (1 router call, 0 answer calls)", async () => {
+    const clarificationPlan = {
+      version: 1,
+      outcome: "clarification",
+      clarification: {
+        reason: "MISSING_PERIOD",
+        prompt: "Which period would you like your total spending for?",
+        options: [
+          { id: "CURRENT_MONTH", label: "This month" },
+          { id: "PREVIOUS_MONTH", label: "Last month" },
+        ],
+      },
+    };
+    const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({
+      configOverrides: { enabled: true },
+      routeQuestionImpl: async () => ({ ok: true, plan: clarificationPlan }),
+    });
     const token = signToken("user-4");
 
     const res = await request(app)
@@ -344,11 +422,40 @@ describe("POST /sia/ask", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ question: "How much did I spend?" });
 
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      clarification: {
+        prompt: "Which period would you like your total spending for?",
+        options: [
+          { id: "CURRENT_MONTH", label: "This month" },
+          { id: "PREVIOUS_MONTH", label: "Last month" },
+        ],
+      },
+    });
+    expect(routeQuestionMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  // A genuinely off-topic/prohibited question, by contrast, never reaches
+  // the router at all -- zero provider calls of ANY kind, proven against
+  // both mocks independently.
+  it("returns 422 for a clearly non-financial question and calls neither the router nor askLlm", async () => {
+    const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({ configOverrides: { enabled: true } });
+    const token = signToken("user-4b");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "What's the weather today?" });
+
     expect(res.status).toBe(422);
     expect(res.body).toEqual({
       success: false,
       message: "Question not recognized for the intents SIA currently supports.",
     });
+    expect(routeQuestionMock).not.toHaveBeenCalled();
     expect(buildContextMock).not.toHaveBeenCalled();
     expect(askLlmMock).not.toHaveBeenCalled();
   });
@@ -1453,16 +1560,21 @@ describe("POST /sia/ask", () => {
   // 5000ms budget and could exceed it, even though each individual reload
   // is the same cost every other single-loadApp() test in this file already
   // pays under the default timeout.
+  //
+  // Workstream-1-fix: this block used to assert a FLAT 422 + zero calls for
+  // all five questions. Under the semantic-router architecture that is only
+  // still correct for the two genuinely clearly-prohibited ones
+  // (recommendation-request / mutation-request shapes, caught pre-router by
+  // prohibitedPhrases.js). The other three legitimately reach the semantic
+  // router and must fail closed there instead -- each is proven with its
+  // own mocked router response rather than being lumped into a flat list.
   it.each([
     "Which category should I cut to stay under budget?",
-    "Which category is hurting my financial health?",
-    "Predict my highest spending category next month.",
-    "Show my categories.",
     "Create a category.",
   ])(
-    "returns 422 for the ambiguous cross-domain category question %j and calls neither buildContext nor askLlm",
+    "returns 422 for the clearly prohibited category question %j pre-router (0 router calls, 0 answer calls)",
     async (question) => {
-      const { app, buildContextMock, askLlmMock } = loadApp({
+      const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({
         configOverrides: { enabled: true },
       });
 
@@ -1478,10 +1590,110 @@ describe("POST /sia/ask", () => {
         success: false,
         message: "Question not recognized for the intents SIA currently supports.",
       });
+      expect(routeQuestionMock).not.toHaveBeenCalled();
       expect(buildContextMock).not.toHaveBeenCalled();
       expect(askLlmMock).not.toHaveBeenCalled();
     }
   );
+
+  it("returns 422 for a cross-domain causal category/health question that the router correctly marks unsupported (1 router call, 0 answer calls)", async () => {
+    const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({
+      configOverrides: { enabled: true },
+      // No metric represents "which category caused my health score" --
+      // the router's own system prompt instructs it to respond unsupported
+      // for anything outside the capability catalog. Mocked here rather
+      // than exercised against a real provider.
+      routeQuestionImpl: async () => ({ ok: true, plan: { version: 1, outcome: "unsupported" } }),
+    });
+    const token = signToken("user-cat-6a");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Which category is hurting my financial health?" });
+
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({
+      success: false,
+      message: "Question not recognized for the intents SIA currently supports.",
+    });
+    expect(routeQuestionMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 for a category-forecast request the QueryPlan capability contract rejects (1 router call, 0 answer calls)", async () => {
+    // Simulates what the REAL semanticRouter.routeQuestion() would itself
+    // return if a provider mistakenly proposed a TOP_CATEGORY+FORECAST
+    // plan: routeQuestion() runs every candidate plan through
+    // queryPlan.js's validateQueryPlan() internally and returns
+    // `{ ok: false, reason: "PLAN_REJECTED:<reason>" }` for anything that
+    // fails -- see tests/sia.queryPlan.test.js's own
+    // "FORECAST metric x operation capability contract" describe block for
+    // the direct proof that UNSUPPORTED_FORECAST_METRIC_COMBINATION is the
+    // exact reason produced for this exact metric/operation combination.
+    // This controller test only needs to prove ask.js/semanticPipeline.js
+    // correctly turns THAT rejection into a 422 with zero answer calls --
+    // the schema-level rejection itself is proven separately.
+    const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({
+      configOverrides: { enabled: true },
+      routeQuestionImpl: async () => ({
+        ok: false,
+        reason: "PLAN_REJECTED:UNSUPPORTED_FORECAST_METRIC_COMBINATION",
+      }),
+    });
+    const token = signToken("user-cat-6b");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Predict my highest spending category next month." });
+
+    expect(res.status).toBe(422);
+    expect(routeQuestionMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a bounded clarification for a period-less category-breakdown request (1 router call, 0 answer calls)", async () => {
+    const clarificationPlan = {
+      version: 1,
+      outcome: "clarification",
+      clarification: {
+        reason: "MISSING_PERIOD",
+        prompt: "Which period would you like your category breakdown for?",
+        options: [
+          { id: "CURRENT_MONTH", label: "This month" },
+          { id: "PREVIOUS_MONTH", label: "Last month" },
+        ],
+      },
+    };
+    const { app, buildContextMock, askLlmMock, routeQuestionMock } = loadApp({
+      configOverrides: { enabled: true },
+      routeQuestionImpl: async () => ({ ok: true, plan: clarificationPlan }),
+    });
+    const token = signToken("user-cat-7");
+
+    const res = await request(app)
+      .post("/sia/ask")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ question: "Show my categories." });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      clarification: {
+        prompt: "Which period would you like your category breakdown for?",
+        options: [
+          { id: "CURRENT_MONTH", label: "This month" },
+          { id: "PREVIOUS_MONTH", label: "Last month" },
+        ],
+      },
+    });
+    expect(routeQuestionMock).toHaveBeenCalledTimes(1);
+    expect(buildContextMock).not.toHaveBeenCalled();
+    expect(askLlmMock).not.toHaveBeenCalled();
+  });
 
   it("returns a generic 503 for category when askLlm rejects with LlmProviderError", async () => {
     const { app, LlmProviderError } = loadApp({
@@ -1506,30 +1718,41 @@ describe("POST /sia/ask", () => {
     expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
   });
 
-  it("returns a generic 503 for category when askLlm resolves with a blank, missing, or non-string answer", async () => {
-    for (const badResult of [
-      { answer: "   ", model: "test", latencyMs: 1 },
-      { model: "test", latencyMs: 1 },
-      { answer: 42, model: "test", latencyMs: 1 },
-      null,
-    ]) {
-      const { app } = loadApp({
-        configOverrides: { enabled: true },
-        buildContextImpl: async () => fakeCategoryContext(),
-        askLlmImpl: async () => badResult,
-      });
+  // Scoped explicit timeout (not a global Jest timeout change): this test
+  // deliberately cold-reloads the app FOUR times in a row (one per bad
+  // askLlm result), and this sandbox's filesystem makes a single
+  // require("../app") reload take 25-50s -- four sequential reloads can
+  // exceed the 5000ms default even though no assertion is wrong. No
+  // assertion was removed or weakened; this only gives the same
+  // already-correct behavior enough wall-clock room to finish.
+  it(
+    "returns a generic 503 for category when askLlm resolves with a blank, missing, or non-string answer",
+    async () => {
+      for (const badResult of [
+        { answer: "   ", model: "test", latencyMs: 1 },
+        { model: "test", latencyMs: 1 },
+        { answer: 42, model: "test", latencyMs: 1 },
+        null,
+      ]) {
+        const { app } = loadApp({
+          configOverrides: { enabled: true },
+          buildContextImpl: async () => fakeCategoryContext(),
+          askLlmImpl: async () => badResult,
+        });
 
-      const token = signToken("user-cat-7");
+        const token = signToken("user-cat-7");
 
-      const res = await request(app)
-        .post("/sia/ask")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ question: CATEGORY_QUESTION });
+        const res = await request(app)
+          .post("/sia/ask")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ question: CATEGORY_QUESTION });
 
-      expect(res.status).toBe(503);
-      expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
-    }
-  });
+        expect(res.status).toBe(503);
+        expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
+      }
+    },
+    60000
+  );
 
   it("returns a generic 503 for category when buildContext unexpectedly rejects", async () => {
     const { app, askLlmMock } = loadApp({
@@ -2118,7 +2341,14 @@ describe("POST /sia/ask -- M3-3 safe structured logging", () => {
     expect(res.body).toEqual({ success: false, message: "SIA is temporarily unavailable." });
   });
 
-  it("does not log any SIA event for a disabled-feature (503), invalid-input (400), or unsupported-intent (422) request", async () => {
+  // Scoped explicit timeout (not a global Jest timeout change): this test
+  // cold-reloads the app THREE times (disabled/invalid/unsupported), each
+  // reload costing 25-50s in this sandbox -- the same "no assertion is
+  // wrong, wall-clock alone exceeds the 5000ms default" situation as the
+  // category-answer test above. No assertion removed or weakened.
+  it(
+    "does not log any SIA event for a disabled-feature (503), invalid-input (400), or unsupported-intent (422) request",
+    async () => {
     const { app: disabledApp } = loadApp({ configOverrides: { enabled: false } });
     const disabledRes = await request(disabledApp)
       .post("/sia/ask")
@@ -2133,15 +2363,25 @@ describe("POST /sia/ask -- M3-3 safe structured logging", () => {
       .send({ question: "   " });
     expect(invalidRes.status).toBe(400);
 
+    // Workstream-1-fix: "How much did I spend?" is no longer a
+    // zero-provider-call unsupported case (it now reaches the semantic
+    // router for a clarification -- see the dedicated test above, and
+    // routeQuestion() itself logs a PROVIDER_REQUEST_COMPLETED event on a
+    // successful router call). "What's the weather today?" is used here
+    // instead: it is still caught pre-router by prohibitedPhrases.js, so
+    // it remains a genuine zero-provider-call, zero-log 422 case, which is
+    // what this test is actually verifying.
     const { app: unsupportedApp } = loadApp({ configOverrides: { enabled: true } });
     const unsupportedRes = await request(unsupportedApp)
       .post("/sia/ask")
       .set("Authorization", `Bearer ${signToken("m3-3-unsupported")}`)
-      .send({ question: "How much did I spend?" });
+      .send({ question: "What's the weather today?" });
     expect(unsupportedRes.status).toBe(422);
 
     expect(loggedRecords()).toHaveLength(0);
-  });
+    },
+    60000
+  );
 
   it("does not log any SIA event for a no-data (200) response", async () => {
     // Reuses the exact mock arrangement and expected response contract from

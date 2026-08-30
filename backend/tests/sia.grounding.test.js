@@ -72,6 +72,17 @@ describe("sia/groundingService -- buildGroundingSnapshot()", () => {
     expect(result.sources).toEqual([{ key: "risk", label: "Financial risk signals" }]);
   });
 
+  it("CURRENT_SPENDING_SUMMARY's bounded context produces exactly the summary source and nothing else", () => {
+    const result = buildGroundingSnapshot({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      fields: { summary: { totalSpent: 1234.56 } },
+      sourceReportGeneratedAt: "2026-08-01T00:00:00.000Z",
+    });
+    expect(result).toEqual({ sources: [{ key: "summary", label: "Financial summary" }] });
+    // No raw transaction/category/trend/budget/anomaly/forecast/risk source.
+    expect(result.sources).toHaveLength(1);
+  });
+
   it("deduplicates -- the allowlist itself has no duplicate keys, and each field is visited at most once", () => {
     const keys = GROUNDING_SOURCE_ALLOWLIST.map((e) => e.key);
     expect(new Set(keys).size).toBe(keys.length);

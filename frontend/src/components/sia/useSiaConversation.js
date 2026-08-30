@@ -87,12 +87,20 @@ export function siaConversationReducer(state, action) {
       const assistantMessage = {
         id: nextMessageId(),
         role: "assistant",
+        kind: "answer",
         content: action.answer,
         // Batch 3F: the server-computed grounding snapshot, passed through
         // exactly as received (SiaGroundingDisclosure.js is the single
         // validation gate at render time -- a missing/malformed value here
         // simply renders nothing, never a crash).
         grounding: action.grounding,
+        // Workstream 3: the server's period/metric interpretation summary
+        // (see backend/sia/semanticPipeline.js's `interpretation` field),
+        // passed through exactly as received -- SiaPanel.js's trust-label
+        // rendering is the single validation gate at render time, so a
+        // missing/malformed value here simply renders no label, never a
+        // crash.
+        interpretation: action.interpretation,
       };
       return {
         ...state,
@@ -100,6 +108,32 @@ export function siaConversationReducer(state, action) {
         // Adopt the server's session id so every later turn continues the
         // same conversation. An absent id (session store unavailable)
         // leaves the previous value untouched.
+        activeSessionId: action.sessionId || state.activeSessionId,
+        pending: null,
+        failed: null,
+      };
+    }
+
+    // Workstream 3: a `clarification`-kind response from POST /sia/ask
+    // (see backend/Controllers/SiaControllers/ask.js's
+    // formatClarificationResponse -- `{ clarification: { prompt, options:
+    // [{id, label}] } }`). Rendered as its own assistant turn whose
+    // `options` SiaPanel.js renders as accessible buttons; picking one
+    // re-enters this SAME reducer/mutation path via
+    // submitClarificationOption below, exactly like a typed follow-up
+    // question -- never a special one-off fetch.
+    case "CLARIFICATION": {
+      if (!state.pending) return state;
+      const assistantMessage = {
+        id: nextMessageId(),
+        role: "assistant",
+        kind: "clarification",
+        content: action.prompt,
+        options: Array.isArray(action.options) ? action.options : [],
+      };
+      return {
+        ...state,
+        messages: [...state.messages, assistantMessage],
         activeSessionId: action.sessionId || state.activeSessionId,
         pending: null,
         failed: null,
@@ -196,6 +230,33 @@ export function normalizeServerMessages(messages) {
 
 export const MAX_QUESTION_LENGTH = 500;
 
+// Workstream 3: routes a resolved POST /sia/ask response to the correct
+// reducer action based on its actual shape, rather than assuming every
+// success is a plain answer. A `clarification` response (see
+// backend/Controllers/SiaControllers/ask.js's formatClarificationResponse)
+// carries a `clarification` object and no `answer`; anything else is
+// treated as the existing answer contract, unchanged. Shared by both the
+// first-submission and retry success handlers below so the two paths can
+// never drift apart.
+function dispatchAskSuccess(dispatch, data) {
+  if (data && data.clarification && typeof data.clarification === "object") {
+    dispatch({
+      type: "CLARIFICATION",
+      prompt: data.clarification.prompt,
+      options: data.clarification.options,
+      sessionId: data.sessionId,
+    });
+    return;
+  }
+  dispatch({
+    type: "SUCCESS",
+    answer: data?.answer ?? "",
+    sessionId: data?.sessionId,
+    grounding: data?.grounding,
+    interpretation: data?.interpretation,
+  });
+}
+
 export function useSiaConversation() {
   const [state, dispatch] = useReducer(siaConversationReducer, initialState);
   const mutation = useSiaAskMutation();
@@ -214,12 +275,7 @@ export function useSiaConversation() {
         },
         {
           onSuccess: (data) => {
-            dispatch({
-              type: "SUCCESS",
-              answer: data?.answer ?? "",
-              sessionId: data?.sessionId,
-              grounding: data?.grounding,
-            });
+            dispatchAskSuccess(dispatch, data);
             // The session list's ordering and timestamps just changed.
             queryClient.invalidateQueries({ queryKey: queryKeys.sia.sessions.list() });
           },
@@ -249,6 +305,25 @@ export function useSiaConversation() {
     });
   }, [state.input, state.activeSessionId, state.failed, isBusy, send]);
 
+  // Workstream 3: a clarification option click re-submits through this
+  // EXACT SAME path submitQuestion/send uses -- a fresh clientMessageId, a
+  // real user turn rendered in the transcript, the same ask mutation. The
+  // only difference from typing is where the question text comes from
+  // (the option's server-authored `label`, never option.id or free text).
+  const submitClarificationOption = useCallback(
+    (option) => {
+      if (!option || typeof option.label !== "string" || option.label.trim() === "") return;
+      if (isBusy || state.failed) return;
+
+      send({
+        question: option.label,
+        clientMessageId: createClientMessageId(),
+        sessionId: state.activeSessionId,
+      });
+    },
+    [isBusy, state.failed, state.activeSessionId, send]
+  );
+
   const retry = useCallback(() => {
     if (!state.failed || isBusy) return;
     const { question, clientMessageId, sessionId, messageId } = state.failed;
@@ -260,12 +335,7 @@ export function useSiaConversation() {
       { question, sessionId, clientMessageId },
       {
         onSuccess: (data) => {
-          dispatch({
-            type: "SUCCESS",
-            answer: data?.answer ?? "",
-            sessionId: data?.sessionId,
-            grounding: data?.grounding,
-          });
+          dispatchAskSuccess(dispatch, data);
           queryClient.invalidateQueries({ queryKey: queryKeys.sia.sessions.list() });
         },
         onError: (error) => {
@@ -304,6 +374,7 @@ export function useSiaConversation() {
         !state.failed,
       setInput,
       submitQuestion,
+      submitClarificationOption,
       retry,
       dismissFailed,
       newChat,
@@ -317,6 +388,7 @@ export function useSiaConversation() {
       isBusy,
       setInput,
       submitQuestion,
+      submitClarificationOption,
       retry,
       dismissFailed,
       newChat,

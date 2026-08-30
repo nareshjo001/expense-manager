@@ -199,6 +199,29 @@ async function markCompleted({ requestId, ownerToken, responseStatus, responsePa
   );
 }
 
+// Workstream 1 -- persists a semantic-routing plan CHECKPOINT for an
+// OWNED reservation that is still `processing` (never on a completed/
+// answer_ready request) -- called by sia/semanticPipeline.js's
+// `onPlanResolved` hook immediately after a successful router call,
+// BEFORE any financialQueryService execution or answer-generation call
+// is attempted. Renews the processing lease (same CAS discipline as
+// takeOverRequest()) so this write can never itself extend a reservation
+// past its owner's actual right to hold it. Best-effort by design (the
+// caller swallows any rejection) -- a failed checkpoint write only means
+// a subsequent retry re-pays the router cost, never a correctness issue.
+async function saveRoutingCheckpoint({ requestId, ownerToken, planCheckpoint }) {
+  return SiaRequest.findOneAndUpdate(
+    { _id: requestId, ownerToken, status: REQUEST_STATUS.PROCESSING },
+    {
+      $set: {
+        planCheckpoint: planCheckpoint || null,
+        processingExpiresAt: leaseExpiryFromNow(),
+      },
+    },
+    { new: true }
+  );
+}
+
 // Releases a reservation after a failure that produced no usable answer. Deleting rather than marking failed leaves the key immediately, cleanly retryable; the ownerToken CAS means a caller can only release a reservation it actually owns.
 async function releaseRequest({ requestId, ownerToken }) {
   return SiaRequest.deleteOne({ _id: requestId, ownerToken });
@@ -235,6 +258,7 @@ module.exports = {
   markCompleted,
   releaseRequest,
   awaitCompletedResponse,
+  saveRoutingCheckpoint,
   normalizeQuestion,
   fingerprintQuestion,
   OUTCOME,

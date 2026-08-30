@@ -9,7 +9,7 @@
 // configuration once, at load time.
 "use strict";
 
-const ENV_KEYS = ["SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_TIMEOUT_MS", "SIA_LLM_MODEL"];
+const ENV_KEYS = ["SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_TIMEOUT_MS", "SIA_LLM_MODEL", "APP_TIME_ZONE"];
 
 let originalEnv;
 
@@ -45,11 +45,19 @@ function loadConfig() {
 }
 
 describe("backend/sia/config", () => {
-  it("returns all four safe defaults when the SIA variables are absent", () => {
+  it("returns all five safe defaults when the SIA/APP_TIME_ZONE variables are absent", () => {
     delete process.env.SIA_ENABLED;
     delete process.env.SIA_LLM_PROVIDER;
     delete process.env.SIA_LLM_TIMEOUT_MS;
     delete process.env.SIA_LLM_MODEL;
+    delete process.env.APP_TIME_ZONE;
+    // Workstream 2 -- voice input variables, additive.
+    delete process.env.SIA_VOICE_ENABLED;
+    delete process.env.SIA_STT_PROVIDER;
+    delete process.env.SIA_STT_MODEL;
+    delete process.env.SIA_STT_TIMEOUT_MS;
+    delete process.env.SIA_STT_MAX_BYTES;
+    delete process.env.SIA_STT_MAX_DURATION_SECONDS;
 
     const config = loadConfig();
 
@@ -58,6 +66,44 @@ describe("backend/sia/config", () => {
       provider: null,
       timeoutMs: 8000,
       model: null,
+      appTimeZone: "Asia/Kolkata",
+      // Workstream 2 -- voice input defaults, additive.
+      voiceEnabled: false,
+      sttProvider: "groq",
+      sttModel: "whisper-large-v3-turbo",
+      sttTimeoutMs: 30000,
+      sttMaxBytes: 5242880,
+      sttMaxDurationSeconds: 45,
+    });
+  });
+
+  // Workstream 1 -- APP_TIME_ZONE, sia/periodResolver.js's timezone
+  // source, added additively following this module's existing
+  // safe-default/fail-closed pattern.
+  describe("appTimeZone", () => {
+    it("defaults to Asia/Kolkata when APP_TIME_ZONE is absent", () => {
+      delete process.env.APP_TIME_ZONE;
+      expect(loadConfig().appTimeZone).toBe("Asia/Kolkata");
+    });
+
+    it("returns a valid configured IANA time zone unchanged", () => {
+      process.env.APP_TIME_ZONE = "America/New_York";
+      expect(loadConfig().appTimeZone).toBe("America/New_York");
+    });
+
+    it("trims a configured time zone", () => {
+      process.env.APP_TIME_ZONE = "  UTC  ";
+      expect(loadConfig().appTimeZone).toBe("UTC");
+    });
+
+    it("falls back to the default for a blank value", () => {
+      process.env.APP_TIME_ZONE = "   ";
+      expect(loadConfig().appTimeZone).toBe("Asia/Kolkata");
+    });
+
+    it("falls back to the default for an invalid/unrecognized IANA zone name", () => {
+      process.env.APP_TIME_ZONE = "Not/A_Real_Zone";
+      expect(loadConfig().appTimeZone).toBe("Asia/Kolkata");
     });
   });
 

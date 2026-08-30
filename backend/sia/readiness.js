@@ -67,7 +67,77 @@ function isSiaReady() {
   return true;
 }
 
+// ---------------------------------------------------------------------
+// Voice input (Workstream 2) -- a SEPARATE readiness check for SIA's
+// speech-to-text capability, deliberately independent of isSiaReady()
+// above: voice can be unavailable while text Q&A keeps working (and vice
+// versa), so neither check reads the other's config fields, and neither
+// call can affect the other's result. Same shape and same
+// synchronous/side-effect-free/no-network contract as isSiaReady().
+// ---------------------------------------------------------------------
+
+// Providers this codebase implements an STT adapter for -- kept in sync
+// with transcriptionService.js's transcribeAudio() dispatch (which throws
+// PROVIDER_NOT_IMPLEMENTED for anything else), the same relationship
+// IMPLEMENTED_PROVIDERS has with llmService.js above.
+const IMPLEMENTED_STT_PROVIDERS = Object.freeze(["groq"]);
+
+// Which environment variable holds the credential for each implemented STT
+// provider -- kept in sync with transcriptionService.js's own per-adapter
+// process.env read (the Groq STT adapter reads GROQ_API_KEY, the SAME
+// variable the Groq TEXT adapter in llmService.js already reads; this is
+// deliberate -- both are the same Groq account/credential -- but the two
+// readiness checks below still evaluate this independently, never sharing
+// a boolean result, so a text-only or voice-only deployment reports
+// correctly either way). A provider present in IMPLEMENTED_STT_PROVIDERS
+// but absent from this map would be readiness-checked with no credential
+// requirement at all, so every entry above must have a matching entry
+// here.
+const STT_CREDENTIAL_ENV_VAR_BY_PROVIDER = Object.freeze({
+  groq: "GROQ_API_KEY",
+});
+
+function normalizedSttProvider() {
+  const provider = config.sttProvider;
+  return typeof provider === "string" ? provider.trim() : provider;
+}
+
+/**
+ * Evaluates local SIA voice-input (speech-to-text) configuration
+ * readiness. Deterministic and side-effect free, identical contract to
+ * isSiaReady(): no network, no database, no provider call, no logging, no
+ * mutation of process.env or config.
+ *
+ * @returns {boolean} true only when every locally verifiable requirement
+ *   below is satisfied:
+ *     1. Voice input is enabled  (config.voiceEnabled === true, from SIA_VOICE_ENABLED)
+ *     2. An STT provider is configured AND this codebase implements an
+ *        adapter for it            (SIA_STT_PROVIDER, currently only "groq";
+ *                                    config.js already defaults this to "groq")
+ *     3. A non-blank API credential exists for the configured STT provider
+ *        (GROQ_API_KEY for "groq" -- read for presence only, never exposed)
+ */
+function isVoiceReady() {
+  // 1. Feature flag -- independent of SIA_ENABLED/config.enabled.
+  if (config.voiceEnabled !== true) return false;
+
+  // 2. Provider must be configured and implemented here.
+  const provider = normalizedSttProvider();
+  if (isBlank(provider)) return false;
+  if (!IMPLEMENTED_STT_PROVIDERS.includes(provider)) return false;
+
+  // 3. Credential presence only, read directly from process.env, never the
+  // shared config object -- same rationale as isSiaReady()'s credential
+  // check above.
+  const credentialEnvVar = STT_CREDENTIAL_ENV_VAR_BY_PROVIDER[provider];
+  if (credentialEnvVar && isBlank(process.env[credentialEnvVar])) return false;
+
+  return true;
+}
+
 module.exports = {
   isSiaReady,
   IMPLEMENTED_PROVIDERS,
+  isVoiceReady,
+  IMPLEMENTED_STT_PROVIDERS,
 };

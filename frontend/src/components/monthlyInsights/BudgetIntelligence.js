@@ -1,5 +1,4 @@
 import { FaLightbulb, FaExclamationTriangle, FaExclamationCircle, FaMagic, FaFireAlt, FaBullseye } from "react-icons/fa";
-import SiaAskButton from "../sia/SiaAskButton";
 import "./BudgetIntelligence.css";
 
 // Falls back to a generic "no insights yet" message when no budget insight data is available.
@@ -85,8 +84,6 @@ export default function BudgetIntelligence({ data }) {
           </div>
           <p>{insights.tip ?? DEFAULT_INSIGHT.tip}</p>
         </div>
-
-        <SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" tone="light-surface" />
       </div>
     </div>
   );

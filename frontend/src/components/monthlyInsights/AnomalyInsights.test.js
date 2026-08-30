@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, cleanup, within } from "@testing-library/react";
 import AnomalyInsights from "./AnomalyInsights";
 
-// Anomaly Detection Layer V1 -- Unusual Spending section.
+// Material, history-based spending-review section.
 //
 // Renders the REAL component against report shapes the backend genuinely
 // produces (see backend/analytics/analyzers/expenseAnomalyAnalyzer.js) --
@@ -21,7 +21,13 @@ const flaggedRecord = (overrides = {}) => ({
   expenseDate: "2026-08-15T00:00:00.000Z",
   severity: "high",
   reasonCode: "CATEGORY_AMOUNT_SPIKE",
-  baseline: { scope: "category", sampleCount: 18, medianAmount: 500 },
+  baseline: { scope: "category", sampleCount: 18, monthCount: 6, medianAmount: 500 },
+  impact: {
+    excessAmount: 3000,
+    monthlyReferenceAmount: 15000,
+    monthlyReferenceSource: "current_budget",
+    percentage: 20,
+  },
   detection: {
     method: "MODIFIED_Z",
     score: 12.6,
@@ -37,9 +43,12 @@ const availableAnomalies = (overrides = {}) => ({
   reasonCode: null,
   baselineWindow: { months: 12, start: "2025-08-01T00:00:00.000Z", endExclusive: "2026-08-01T00:00:00.000Z" },
   evaluatedExpenseCount: 10,
+  comparedExpenseCount: 8,
+  uncomparableExpenseCount: 2,
   eligibleCategoryCount: 2,
   insufficientHistoryCategoryCount: 0,
   flaggedCount: 1,
+  displayedCount: 1,
   anomalies: [flaggedRecord()],
   ...overrides,
 });
@@ -70,12 +79,13 @@ describe("AnomalyInsights -- contract path", () => {
 });
 
 describe("AnomalyInsights -- flagged-expense explanation", () => {
-  it("renders a complete explanation built from amountRatio, medianAmount, category and sampleCount", () => {
+  it("explains the usual amount, evidence coverage, and monthly impact without statistical jargon", () => {
     renderWith(availableAnomalies());
 
-    expect(
-      screen.getByText("₹3,500 was 7× your typical Food expense of ₹500, based on 18 previous expenses.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("7× usual")).toBeInTheDocument();
+    expect(screen.getByText("₹3,500 was ₹3,000 above your usual ₹500 Food purchase.")).toBeInTheDocument();
+    expect(screen.getByText("Compared with 18 previous Food purchases across 6 months.")).toBeInTheDocument();
+    expect(screen.getByText("The extra amount equals about 20% of this month's budget.")).toBeInTheDocument();
   });
 
   it("formats INR amounts using en-IN grouping regardless of runtime locale", () => {
@@ -84,7 +94,13 @@ describe("AnomalyInsights -- flagged-expense explanation", () => {
         flaggedRecord({
           expenseId: "exp-2",
           amount: 150000,
-          baseline: { scope: "category", sampleCount: 12, medianAmount: 20000 },
+          baseline: { scope: "category", sampleCount: 12, monthCount: 5, medianAmount: 20000 },
+          impact: {
+            excessAmount: 130000,
+            monthlyReferenceAmount: 500000,
+            monthlyReferenceSource: "historical_monthly_spending",
+            percentage: 26,
+          },
           detection: { method: "MODIFIED_Z", score: 5, threshold: 3.5, thresholdMultiple: 1.4, amountRatio: 7.5 },
         }),
       ],
@@ -97,17 +113,18 @@ describe("AnomalyInsights -- flagged-expense explanation", () => {
     expect(screen.getByText(/₹20,000/)).toBeInTheDocument();
   });
 
-  it("singularizes the sample count when exactly one previous expense exists", () => {
+  it("uses a matching expense name when a name-specific baseline was selected", () => {
     const anomalies = availableAnomalies({
       anomalies: [
         flaggedRecord({
-          baseline: { scope: "category", sampleCount: 1, medianAmount: 500 },
+          baseline: { scope: "expense_name", sampleCount: 4, monthCount: 3, medianAmount: 500 },
         }),
       ],
     });
     renderWith(anomalies);
 
-    expect(screen.getByText(/based on 1 previous expense\./)).toBeInTheDocument();
+    expect(screen.getByText(/usual ₹500 Dinner purchase/)).toBeInTheDocument();
+    expect(screen.getByText("Compared with 4 previous Dinner purchases across 3 months.")).toBeInTheDocument();
   });
 
   it("falls back to a concise, still-honest explanation when baseline/detection numbers are missing", () => {
@@ -116,7 +133,7 @@ describe("AnomalyInsights -- flagged-expense explanation", () => {
     });
     renderWith(anomalies);
 
-    expect(screen.getByText("₹3,500 is unusual compared with your recent Food spending.")).toBeInTheDocument();
+    expect(screen.getByText("₹3,500 was meaningfully higher than your usual Food purchase.")).toBeInTheDocument();
   });
 
   it("shows the expense date in the project's established DD Mon YYYY style", () => {
@@ -125,36 +142,25 @@ describe("AnomalyInsights -- flagged-expense explanation", () => {
     expect(screen.getByText(/15 Aug 2026/)).toBeInTheDocument();
   });
 
-  it("never uses the words fraud, suspicious, or dangerous anywhere in the section", () => {
+  it("never labels a purchase as suspicious or dangerous", () => {
     const { container } = renderWith(availableAnomalies());
 
-    expect(container.textContent).not.toMatch(/fraud|suspicious|dangerous/i);
+    expect(container.textContent).not.toMatch(/suspicious|dangerous/i);
   });
 
-  it("includes the calm clarification that unusual does not mean incorrect", () => {
+  it("clearly says this is a pattern comparison rather than an error or fraud alert", () => {
     renderWith(availableAnomalies());
 
-    expect(
-      screen.getByText(/Unusual does not necessarily mean incorrect.*only differs from your recent spending pattern/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/pattern comparisons, not error or fraud alerts/i)).toBeInTheDocument();
   });
 });
 
-describe("AnomalyInsights -- severity labels", () => {
-  it.each([
-    ["moderate", "Moderate"],
-    ["high", "High"],
-    ["very_high", "Very high"],
-  ])("renders the %s severity as %s", (severity, label) => {
-    renderWith(availableAnomalies({ anomalies: [flaggedRecord({ severity })] }));
+describe("AnomalyInsights -- useful labels", () => {
+  it("does not expose the legacy severity classification", () => {
+    renderWith(availableAnomalies({ anomalies: [flaggedRecord({ severity: "very_high" })] }));
 
-    expect(screen.getByText(label)).toBeInTheDocument();
-  });
-
-  it("omits the severity badge rather than showing a raw/unknown code", () => {
-    renderWith(availableAnomalies({ anomalies: [flaggedRecord({ severity: "totally-unknown" })] }));
-
-    expect(screen.queryByText("totally-unknown")).not.toBeInTheDocument();
+    expect(screen.queryByText(/very high/i)).not.toBeInTheDocument();
+    expect(screen.getByText("7× usual")).toBeInTheDocument();
   });
 });
 
@@ -170,36 +176,45 @@ describe("AnomalyInsights -- no-data / empty states", () => {
     renderWith({ hasData: false, reasonCode: "NO_BASELINE_YET", anomalies: [] });
 
     expect(screen.getByText(/Still building your spending history/i)).toBeInTheDocument();
-    expect(screen.getByText(/at least 10 earlier expenses in the same category/i)).toBeInTheDocument();
+    expect(screen.getByText(/More matching purchase history is needed/i)).toBeInTheDocument();
   });
 
   it("shows a positive, factual message for a valid zero-anomaly result", () => {
-    renderWith({ hasData: true, reasonCode: null, flaggedCount: 0, anomalies: [] });
+    renderWith({
+      hasData: true,
+      reasonCode: null,
+      evaluatedExpenseCount: 5,
+      comparedExpenseCount: 3,
+      uncomparableExpenseCount: 2,
+      flaggedCount: 0,
+      anomalies: [],
+    });
 
-    expect(screen.getByText("No unusual expenses were detected this month.")).toBeInTheDocument();
+    expect(screen.getByText("No material spending changes found among 3 comparable expenses.")).toBeInTheDocument();
+    expect(screen.getByText(/2 expenses did not yet have enough matching history/i)).toBeInTheDocument();
   });
 
   it("treats a missing anomalies block as unavailable, never as 'no anomalies found'", () => {
     render(<AnomalyInsights report={{}} />);
 
-    expect(screen.getByText(/Unusual-spending insights are unavailable right now/i)).toBeInTheDocument();
-    expect(screen.queryByText(/No unusual expenses were detected/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Spending review is unavailable right now/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No material spending changes found/i)).not.toBeInTheDocument();
   });
 
   it("does not crash when the whole report is missing", () => {
     expect(() => render(<AnomalyInsights report={undefined} />)).not.toThrow();
-    expect(screen.getByText(/Unusual-spending insights are unavailable right now/i)).toBeInTheDocument();
+    expect(screen.getByText(/Spending review is unavailable right now/i)).toBeInTheDocument();
   });
 
   it("does not crash on a malformed anomalies section and does not claim normal spending", () => {
     expect(() => render(<AnomalyInsights report={{ anomalies: "nonsense" }} />)).not.toThrow();
-    expect(screen.getByText(/Unusual-spending insights are unavailable right now/i)).toBeInTheDocument();
+    expect(screen.getByText(/Spending review is unavailable right now/i)).toBeInTheDocument();
   });
 
   it("treats an unrecognised hasData:false reason code as unavailable, not as normal spending", () => {
     renderWith({ hasData: false, reasonCode: "SOME_FUTURE_REASON", anomalies: [] });
 
-    expect(screen.getByText(/Unusual-spending insights are unavailable right now/i)).toBeInTheDocument();
+    expect(screen.getByText(/Spending review is unavailable right now/i)).toBeInTheDocument();
   });
 });
 
@@ -217,7 +232,7 @@ describe("AnomalyInsights -- malformed individual records", () => {
     expect(container.textContent).not.toMatch(/NaN|undefined/);
     // Only the one genuinely renderable record is counted in the summary,
     // even though the backend's own flaggedCount says 2.
-    expect(screen.getByText(/^1 unusual expense found this month/)).toBeInTheDocument();
+    expect(screen.getByText(/^1 material spending change found/)).toBeInTheDocument();
   });
 
   it("never renders the literal string 'Invalid Date' for a malformed expenseDate", () => {
@@ -293,9 +308,9 @@ describe("AnomalyInsights -- accessibility and structure", () => {
   it("exposes the section with an accessible heading", () => {
     renderWith(availableAnomalies());
 
-    const section = screen.getByRole("region", { name: "Unusual Spending" });
+    const section = screen.getByRole("region", { name: "Spending Worth Reviewing" });
     expect(section).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Unusual Spending" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Spending Worth Reviewing" })).toBeInTheDocument();
   });
 
   it("contains no focusable controls, so it introduces no keyboard traps", () => {

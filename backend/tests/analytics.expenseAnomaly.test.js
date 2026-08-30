@@ -247,6 +247,101 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
     });
   });
 
+  describe("matching-purchase baseline, materiality, and coverage", () => {
+    const namedFoodHistory = [
+      ...[480, 500, 500, 520].map((amount, index) => ({
+        _id: `dinner-${index}`,
+        expenseCategory: "Food",
+        expenseAmount: amount,
+        expenseDate: new Date(2026, index + 1, 10),
+        expenseName: "Dinner",
+      })),
+      ...[45, 50, 50, 55, 60, 65].map((amount, index) => ({
+        _id: `snack-${index}`,
+        expenseCategory: "Food",
+        expenseAmount: amount,
+        expenseDate: new Date(2025, 8 + index, 12),
+        expenseName: "Snack",
+      })),
+    ];
+
+    it("prefers enough matching-name history so a broad category does not create a false positive", () => {
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseName: "  DINNER ", expenseAmount: 900 })],
+        recentExpensePool: namedFoodHistory,
+        currentMonthStart: CURRENT_MONTH_START,
+        monthlyReferenceAmount: 10000,
+      });
+
+      expect(result.hasData).toBe(true);
+      expect(result.comparedExpenseCount).toBe(1);
+      expect(result.flaggedCount).toBe(0);
+    });
+
+    it("reports the matching-name scope and its distinct-month evidence when the purchase is material", () => {
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseName: "Dinner", expenseAmount: 1200 })],
+        recentExpensePool: namedFoodHistory,
+        currentMonthStart: CURRENT_MONTH_START,
+        monthlyReferenceAmount: 10000,
+      });
+
+      expect(result.flaggedCount).toBe(1);
+      expect(result.anomalies[0].baseline).toMatchObject({
+        scope: "expense_name",
+        sampleCount: 4,
+        monthCount: 4,
+        medianAmount: 500,
+      });
+    });
+
+    it("can compare a well-established matching purchase before the broad category reaches ten records", () => {
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseName: "Dinner", expenseAmount: 1200 })],
+        recentExpensePool: namedFoodHistory.slice(0, 4),
+        currentMonthStart: CURRENT_MONTH_START,
+        monthlyReferenceAmount: 10000,
+      });
+
+      expect(result.hasData).toBe(true);
+      expect(result.eligibleCategoryCount).toBe(1);
+      expect(result.insufficientHistoryCategoryCount).toBe(0);
+      expect(result.comparedExpenseCount).toBe(1);
+      expect(result.anomalies[0].baseline.scope).toBe("expense_name");
+    });
+
+    it("excludes a statistical spike when only its excess is below 5% of the monthly reference", () => {
+      const result = analyze({
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 1000 })],
+        recentExpensePool: makeBaselineRecords("Rent", MAD_ZERO_BASELINE_AMOUNTS),
+        currentMonthStart: CURRENT_MONTH_START,
+        monthlyReferenceAmount: 20000,
+      });
+
+      expect(result.comparedExpenseCount).toBe(1);
+      expect(result.flaggedCount).toBe(0);
+      expect(result.anomalies).toEqual([]);
+    });
+
+    it("reports how many current expenses could and could not be compared", () => {
+      const result = analyze({
+        currentMonthExpenses: [
+          makeCandidate({ _id: "food", expenseCategory: "Food", expenseAmount: 600 }),
+          makeCandidate({ _id: "travel", expenseCategory: "Travel", expenseAmount: 300 }),
+        ],
+        recentExpensePool: [
+          ...makeBaselineRecords("Food", MODIFIED_Z_BASELINE_AMOUNTS),
+          ...makeBaselineRecords("Travel", [100, 110, 120]),
+        ],
+        currentMonthStart: CURRENT_MONTH_START,
+      });
+
+      expect(result.evaluatedExpenseCount).toBe(2);
+      expect(result.comparedExpenseCount).toBe(1);
+      expect(result.uncomparableExpenseCount).toBe(1);
+    });
+  });
+
   describe("12-complete-month baseline window", () => {
     it("includes a baseline record dated exactly at the window start (inclusive lower bound)", () => {
       const nineInWindow = makeBaselineRecords(
@@ -504,9 +599,9 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
   describe("MAD == 0 fallback (MEDIAN_RATIO method)", () => {
     const recentExpensePool = makeBaselineRecords("Rent", MAD_ZERO_BASELINE_AMOUNTS); // median=500, MAD=0
 
-    it("does not flag just below amountRatio 4.0", () => {
+    it("does not flag just below the consistent amountRatio 2.0 floor", () => {
       const result = analyze({
-        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 1999.99 })],
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 999.99 })],
         recentExpensePool,
         currentMonthStart: CURRENT_MONTH_START,
       });
@@ -514,23 +609,23 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       expect(result.flaggedCount).toBe(0);
     });
 
-    it("flags exactly at amountRatio 4.0 using MEDIAN_RATIO", () => {
+    it("flags exactly at amountRatio 2.0 using MEDIAN_RATIO", () => {
       const result = analyze({
-        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 2000 })],
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 1000 })],
         recentExpensePool,
         currentMonthStart: CURRENT_MONTH_START,
       });
 
       expect(result.flaggedCount).toBe(1);
       expect(result.anomalies[0].detection.method).toBe("MEDIAN_RATIO");
-      expect(result.anomalies[0].detection.amountRatio).toBe(4);
-      expect(result.anomalies[0].detection.score).toBe(4);
-      expect(result.anomalies[0].detection.threshold).toBe(4);
+      expect(result.anomalies[0].detection.amountRatio).toBe(2);
+      expect(result.anomalies[0].detection.score).toBe(2);
+      expect(result.anomalies[0].detection.threshold).toBe(2);
     });
 
-    it("flags just above amountRatio 4.0", () => {
+    it("flags just above amountRatio 2.0", () => {
       const result = analyze({
-        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 2000.01 })],
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "Rent", expenseAmount: 1000.01 })],
         recentExpensePool,
         currentMonthStart: CURRENT_MONTH_START,
       });
@@ -543,11 +638,11 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
     const recentExpensePool = makeBaselineRecords("Rent", MAD_ZERO_BASELINE_AMOUNTS); // median=500, MAD=0
 
     it.each([
-      [2000, "moderate"], // ratio=4.0 -> thresholdMultiple=1.0
-      [2995, "moderate"], // ratio=5.99 -> thresholdMultiple=1.4975
-      [3000, "high"], // ratio=6.0 -> thresholdMultiple=1.5
-      [4995, "high"], // ratio=9.99 -> thresholdMultiple=2.4975
-      [5000, "very_high"], // ratio=10.0 -> thresholdMultiple=2.5
+      [1000, "moderate"], // ratio=2.0 -> thresholdMultiple=1.0
+      [1495, "moderate"], // ratio=2.99 -> thresholdMultiple=1.495
+      [1500, "high"], // ratio=3.0 -> thresholdMultiple=1.5
+      [2495, "high"], // ratio=4.99 -> thresholdMultiple=2.495
+      [2500, "very_high"], // ratio=5.0 -> thresholdMultiple=2.5
       [10000, "very_high"], // ratio=20.0 -> thresholdMultiple=5.0
     ])("amount %d produces severity %s", (amount, expectedSeverity) => {
       const result = analyze({
@@ -602,11 +697,15 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
           "reasonCode",
           "baseline",
           "detection",
+          "impact",
         ].sort()
       );
-      expect(Object.keys(anomaly.baseline).sort()).toEqual(["scope", "sampleCount", "medianAmount"].sort());
+      expect(Object.keys(anomaly.baseline).sort()).toEqual(["scope", "sampleCount", "monthCount", "medianAmount"].sort());
       expect(Object.keys(anomaly.detection).sort()).toEqual(
         ["method", "score", "threshold", "thresholdMultiple", "amountRatio"].sort()
+      );
+      expect(Object.keys(anomaly.impact).sort()).toEqual(
+        ["excessAmount", "monthlyReferenceAmount", "monthlyReferenceSource", "percentage"].sort()
       );
 
       // Explicitly forbidden by the frozen contract.
@@ -704,7 +803,8 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
         currentMonthStart: CURRENT_MONTH_START,
       });
 
-      expect(result.flaggedCount).toBe(10);
+      expect(result.flaggedCount).toBe(12);
+      expect(result.displayedCount).toBe(10);
       expect(result.anomalies).toHaveLength(10);
 
       // The two lowest-ratio candidates (flagged-0, flagged-1) must be
@@ -1097,8 +1197,8 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
 
       expect(result.flaggedCount).toBe(2);
       // Both display the same rounded public thresholdMultiple...
-      expect(result.anomalies[0].detection.thresholdMultiple).toBe(2);
-      expect(result.anomalies[1].detection.thresholdMultiple).toBe(2);
+      expect(result.anomalies[0].detection.thresholdMultiple).toBe(4);
+      expect(result.anomalies[1].detection.thresholdMultiple).toBe(4);
       // ...but B (the true higher raw multiple) must be ranked first, ahead
       // of A, and specifically not in raw-amount order (A's raw amount is
       // larger).
@@ -1358,16 +1458,16 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       const recentExpensePool = makeBaselineRecords("rent", MAD_ZERO_BASELINE_AMOUNTS);
 
       const atThreshold = analyze({
-        currentMonthExpenses: [makeCandidate({ expenseCategory: "RENT", expenseAmount: 2000 })],
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "RENT", expenseAmount: 1000 })],
         recentExpensePool,
         currentMonthStart: CURRENT_MONTH_START,
       });
       expect(atThreshold.anomalies[0].detection.method).toBe("MEDIAN_RATIO");
-      expect(atThreshold.anomalies[0].detection.amountRatio).toBe(4);
+      expect(atThreshold.anomalies[0].detection.amountRatio).toBe(2);
       expect(atThreshold.anomalies[0].severity).toBe("moderate");
 
       const belowThreshold = analyze({
-        currentMonthExpenses: [makeCandidate({ expenseCategory: "RENT", expenseAmount: 1999.99 })],
+        currentMonthExpenses: [makeCandidate({ expenseCategory: "RENT", expenseAmount: 999.99 })],
         recentExpensePool,
         currentMonthStart: CURRENT_MONTH_START,
       });

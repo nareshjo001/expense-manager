@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { FiArrowUpRight, FiClock, FiPlus, FiSend, FiX } from "react-icons/fi";
+import { HiSparkles } from "react-icons/hi2";
 import SiaSessionList from "./SiaSessionList";
 import SiaGroundingDisclosure from "./SiaGroundingDisclosure";
+import SiaVoiceRecorderControls from "./SiaVoiceRecorderControls";
+import SiaSpeakButton from "./SiaSpeakButton";
+import { useSiaVoiceRecorder, SIA_RECORDER_STATE } from "./useSiaVoiceRecorder";
+import { insertTranscriptIntoComposer } from "./siaTranscriptInsertion";
 import { SIA_SUGGESTIONS } from "./siaSuggestions";
 import { useSiaSessionMessagesQuery } from "../../hooks/queries/useSiaSessionMessagesQuery";
 import { queryKeys } from "../../query/queryKeys";
@@ -12,6 +18,18 @@ import {
   normalizeServerMessages,
 } from "./useSiaConversation";
 import "./SiaPanel.css";
+
+// Workstream 3, part A: recorder states in which a recording or an
+// in-flight transcription upload is actually active -- used both to gate
+// Escape's cancel-first precedence and to decide whether New chat/history
+// navigation/close should cancel the recorder before proceeding.
+const VOICE_ACTIVE_STATES = new Set([
+  SIA_RECORDER_STATE.REQUESTING_PERMISSION,
+  SIA_RECORDER_STATE.RECORDING,
+  SIA_RECORDER_STATE.STOPPING,
+  SIA_RECORDER_STATE.TRANSCRIBING,
+  SIA_RECORDER_STATE.TOO_LONG,
+]);
 
 // Presentation only. Every piece of conversation state lives in
 // SiaEntryPoint's useSiaConversation() hook, so unmounting this component
@@ -37,6 +55,14 @@ const SiaPanel = ({
   onRetryAvailability,
   focusRequestVersion,
   lastHandledFocusRequestVersionRef,
+  // Workstream 3: GET /sia/status's additive `capabilities.voiceInput`
+  // block (see backend/Controllers/SiaControllers/status.js), passed
+  // through unchanged from whatever already reads SIA status
+  // (SiaEntryPoint's useSiaStatusQuery). Optional -- every existing caller
+  // that renders SiaPanel without it (including this file's own tests)
+  // simply never shows voice controls, exactly like the unsupported-browser
+  // case.
+  voiceCapabilities,
 }) => {
   const {
     messages,
@@ -50,6 +76,7 @@ const SiaPanel = ({
     isBusy,
     setInput,
     submitQuestion,
+    submitClarificationOption,
     retry,
     dismissFailed,
     newChat,
@@ -63,6 +90,18 @@ const SiaPanel = ({
   const transcriptEndRef = useRef(null);
   const closeButtonRef = useRef(null);
   const retryButtonRef = useRef(null);
+  const firstClarificationOptionRef = useRef(null);
+  const lastFocusedClarificationMessageIdRef = useRef(null);
+  const [voiceInsertError, setVoiceInsertError] = useState(null);
+
+  // Workstream 3, part A/C: fail-closed exactly like the text-availability
+  // gate above -- voice controls render only once the backend has
+  // confirmed voice input is actually ready, never optimistically while
+  // capabilities are still loading or absent.
+  const voiceAvailable = voiceCapabilities?.available === true;
+  const voiceRecorder = useSiaVoiceRecorder({
+    maxDurationSeconds: voiceCapabilities?.maxDurationSeconds,
+  });
   // Batch 3G remediation: fallback acknowledgement store for callers that
   // render SiaPanel directly without the owner-supplied ref (e.g. older
   // tests) -- SiaPanel itself still unmounts/remounts in that case, so this
@@ -114,6 +153,57 @@ const SiaPanel = ({
     }
   }, [messages.length, pending]);
 
+  // Workstream 3, part C: the SINGLE place a voice transcript is ever
+  // inserted into the composer -- fires exactly once per completed
+  // recording, because `voiceRecorder.reset()` immediately flips
+  // `voiceRecorder.state` away from REVIEW_READY again, which is this
+  // effect's own dependency, so a re-render can never re-run it for the
+  // same transcript. Never auto-submits: only setInput/focus, never
+  // submitQuestion.
+  useEffect(() => {
+    if (voiceRecorder.state !== SIA_RECORDER_STATE.REVIEW_READY) return;
+
+    const result = insertTranscriptIntoComposer(input, voiceRecorder.transcript);
+    if (result.ok) {
+      setVoiceInsertError(null);
+      setInput(result.value);
+    } else {
+      // The composer's existing draft is left completely untouched -- only
+      // an inline, accessible notice is shown so the user can decide what
+      // to do next.
+      setVoiceInsertError(result.error);
+    }
+    voiceRecorder.reset();
+    if (composerRef.current) composerRef.current.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceRecorder.state]);
+
+  // A fresh recording attempt (mic pressed again) clears any previous
+  // insert-rejected notice so it never lingers describing a now-irrelevant
+  // attempt.
+  useEffect(() => {
+    if (voiceRecorder.state === SIA_RECORDER_STATE.RECORDING) {
+      setVoiceInsertError(null);
+    }
+  }, [voiceRecorder.state]);
+
+  // Workstream 3, part E: focuses the first clarification option as soon
+  // as one is rendered -- guarded by message id so this never re-steals
+  // focus on an unrelated re-render of the same transcript.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const isNewClarification =
+      last &&
+      last.role === "assistant" &&
+      last.kind === "clarification" &&
+      lastFocusedClarificationMessageIdRef.current !== last.id;
+
+    if (isNewClarification && firstClarificationOptionRef.current) {
+      lastFocusedClarificationMessageIdRef.current = last.id;
+      firstClarificationOptionRef.current.focus();
+    }
+  }, [messages]);
+
   // Batch 3E: the single fail-closed gate every submission route consults.
   // Explicit `=== true` rather than truthiness, and an undefined prop (an
   // older caller, or a test rendering the panel bare) therefore reads as
@@ -133,7 +223,26 @@ const SiaPanel = ({
   };
 
   const handleClose = () => {
+    // Workstream 3, part A: a close (including via Escape's fallback path
+    // below) must never leave a recording running or an upload in flight.
+    voiceRecorder.cancel();
     if (typeof onClose === "function") onClose();
+  };
+
+  // Workstream 3, part E: Escape closes the panel UNLESS a recording is
+  // actively in progress, in which case Escape cancels the recording FIRST
+  // and leaves the panel open -- a second Escape press (nothing active
+  // anymore) then closes it normally. stopPropagation prevents any outer
+  // modal/router-level Escape handler from also firing on the same
+  // keypress.
+  const handlePanelKeyDown = (event) => {
+    if (event.key !== "Escape") return;
+    if (VOICE_ACTIVE_STATES.has(voiceRecorder.state)) {
+      event.stopPropagation();
+      voiceRecorder.cancel();
+      return;
+    }
+    handleClose();
   };
 
   const handleSubmit = (event) => {
@@ -245,41 +354,66 @@ const SiaPanel = ({
     ? "SIA is temporarily unavailable. You can still view previous conversations."
     : null;
 
+  // Workstream 3, part A: New chat and switching to History both leave the
+  // panel mounted (unlike Close), so an active recording/upload would
+  // otherwise keep running silently behind the now-reset/hidden composer.
+  const handleNewChat = () => {
+    voiceRecorder.cancel();
+    newChat();
+  };
+  const handleToggleHistory = () => {
+    voiceRecorder.cancel();
+    setMode(mode === PANEL_MODE.HISTORY ? PANEL_MODE.CONVERSATION : PANEL_MODE.HISTORY);
+  };
+
   return (
-    <div className="sia-panel" role="dialog" aria-modal="false" aria-labelledby="sia-panel-heading">
+    <div
+      className="sia-panel"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="sia-panel-heading"
+      onKeyDown={handlePanelKeyDown}
+    >
       <div className="sia-panel-header">
-        <h2 id="sia-panel-heading" className="sia-panel-heading">
-          Ask SIA
-        </h2>
+        <div className="sia-panel-brand">
+          <span className="sia-brand-mark" aria-hidden="true">
+            <HiSparkles />
+          </span>
+          <h2 id="sia-panel-heading" className="sia-panel-heading">
+            Ask SIA
+          </h2>
+        </div>
         <div className="sia-header-actions">
           <button
             type="button"
             className="sia-header-btn"
-            onClick={newChat}
+            onClick={handleNewChat}
             disabled={isBusy}
             aria-label="Start a new conversation"
+            title="New chat"
           >
-            New chat
+            <FiPlus aria-hidden="true" />
           </button>
           <button
             type="button"
-            className="sia-header-btn"
-            onClick={() =>
-              setMode(mode === PANEL_MODE.HISTORY ? PANEL_MODE.CONVERSATION : PANEL_MODE.HISTORY)
-            }
+            className={`sia-header-btn ${mode === PANEL_MODE.HISTORY ? "sia-header-btn-active" : ""}`}
+            onClick={handleToggleHistory}
             disabled={isBusy}
             aria-label="Conversation history"
+            aria-pressed={mode === PANEL_MODE.HISTORY}
+            title="History"
           >
-            History
+            <FiClock aria-hidden="true" />
           </button>
           <button
             type="button"
             className="sia-panel-close"
             aria-label="Close SIA"
+            title="Close"
             onClick={handleClose}
             ref={closeButtonRef}
           >
-            &times;
+            <FiX aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -331,7 +465,18 @@ const SiaPanel = ({
                 relative to real conversation content. */}
             {showSuggestions && (
               <div className="sia-suggestions">
-                <p className="sia-suggestions-label">Try asking:</p>
+                <div className="sia-welcome">
+                  <span className="sia-welcome-icon" aria-hidden="true">
+                    <HiSparkles />
+                  </span>
+                  <div>
+                    <h3 className="sia-welcome-title">Make sense of your money</h3>
+                    <p className="sia-welcome-copy">
+                      Ask about your spending, budget, forecasts, or financial risks.
+                    </p>
+                  </div>
+                </div>
+                <p className="sia-suggestions-label">Popular questions</p>
                 <ul className="sia-suggestion-list">
                   {SIA_SUGGESTIONS.map((suggestion) => (
                     <li key={suggestion.id}>
@@ -341,7 +486,8 @@ const SiaPanel = ({
                         onClick={() => handleSuggestion(suggestion.text)}
                         disabled={blockedByAvailability}
                       >
-                        {suggestion.text}
+                        <span>{suggestion.text}</span>
+                        <FiArrowUpRight aria-hidden="true" />
                       </button>
                     </li>
                   ))}
@@ -349,7 +495,10 @@ const SiaPanel = ({
               </div>
             )}
 
-            {messages.map((message) => (
+            {messages.map((message, index) => {
+              const isClarification = message.role === "assistant" && message.kind === "clarification";
+              const isLastMessage = index === messages.length - 1;
+              return (
               <div
                 key={message.id}
                 className={
@@ -361,12 +510,65 @@ const SiaPanel = ({
                 </span>
                 <p className="sia-message-text">{message.content}</p>
 
+                {/* Workstream 3, part D: a small, human-readable trust
+                    label derived ONLY from interpretation.periodLabel
+                    (already plain text, e.g. "this month" -- see
+                    backend/sia/periodResolver.js) -- metrics/internal ids
+                    are never rendered here or anywhere else. */}
+                {message.role === "assistant" &&
+                  !isClarification &&
+                  typeof message.interpretation?.periodLabel === "string" &&
+                  message.interpretation.periodLabel.trim() !== "" && (
+                    <p className="sia-interpretation">Using {message.interpretation.periodLabel}</p>
+                  )}
+
+                {/* Workstream 3, part D: each clarification option is its
+                    own accessible button. Clicking one re-submits through
+                    conversation.submitClarificationOption -- the EXACT
+                    same ask-mutation path a typed follow-up uses, never a
+                    one-off fetch. */}
+                {isClarification && (
+                  <div className="sia-clarification-options" role="group" aria-label="Clarification options">
+                    <ul className="sia-clarification-option-list">
+                      {message.options.map((option, optionIndex) => (
+                        <li key={option.id ?? option.label}>
+                          <button
+                            type="button"
+                            className="sia-suggestion sia-clarification-option"
+                            onClick={() => {
+                              if (blockedByAvailability) return;
+                              submitClarificationOption(option);
+                            }}
+                            disabled={blockedByAvailability || isBusy}
+                            ref={isLastMessage && optionIndex === 0 ? firstClarificationOptionRef : undefined}
+                          >
+                            {option.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Batch 3F: only ever considered for an assistant turn --
                     a user message's `grounding` is never set in the first
                     place, but the role check here is an explicit second
                     guard, matching this file's existing defence-in-depth
                     style (see blockedByAvailability above). */}
                 {message.role === "assistant" && <SiaGroundingDisclosure grounding={message.grounding} />}
+
+                {/* Workstream 3, part F: speaks ONLY this message's own
+                    rendered answer text -- never grounding internals,
+                    interpretation metadata, or (for a clarification) the
+                    option list as a batch. Renders nothing when
+                    speechSynthesis is unsupported. `stopSignal` changes
+                    whenever the active conversation identity changes (a
+                    new pending question, a mode switch, or the whole panel
+                    unmounting via onClose), which is this component's one
+                    cleanup trigger for every "stop speaking" case. */}
+                {message.role === "assistant" && !isClarification && (
+                  <SiaSpeakButton text={message.content} stopSignal={`${activeSessionId || ""}:${pending ? "pending" : "idle"}:${mode}`} />
+                )}
 
                 {failed && failed.messageId === message.id && (
                   <div className="sia-error-block">
@@ -391,11 +593,20 @@ const SiaPanel = ({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {pending && (
               <p className="sia-pending" role="status">
-                SIA is thinking&hellip;
+                <span className="sia-thinking-mark" aria-hidden="true">
+                  <HiSparkles />
+                </span>
+                <span>SIA is thinking</span>
+                <span className="sia-thinking-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
               </p>
             )}
 
@@ -403,32 +614,55 @@ const SiaPanel = ({
           </div>
 
           <form className="sia-composer" onSubmit={handleSubmit}>
-            <label htmlFor="sia-question-input" className="sia-panel-label">
+            <label htmlFor="sia-question-input" className="sia-visually-hidden">
               Your question
             </label>
-            <textarea
-              id="sia-question-input"
-              className="sia-panel-input"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={composerDisabled}
-              rows={2}
-              ref={composerRef}
-            />
-            <div className="sia-composer-footer">
-              {/* Only surfaces near the limit rather than counting from
-                  zero, so it is information when it matters and noise
-                  never. */}
-              {trimmedLength > MAX_QUESTION_LENGTH - 100 && (
-                <span className={isOverLimit ? "sia-counter sia-counter-over" : "sia-counter"} role="status">
-                  {trimmedLength} / {MAX_QUESTION_LENGTH}
-                </span>
-              )}
-              <button type="submit" className="sia-panel-submit" disabled={submitDisabled}>
-                Ask
-              </button>
+            <div className="sia-composer-box">
+              <textarea
+                id="sia-question-input"
+                className="sia-panel-input"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={composerDisabled}
+                rows={1}
+                placeholder="Ask about your spending, budget, or trends…"
+                ref={composerRef}
+              />
+
+              <div className="sia-composer-footer">
+                {/* Only surfaces near the limit rather than counting from
+                    zero, so it is information when it matters and noise
+                    never. */}
+                <div className="sia-composer-meta">
+                  {trimmedLength > MAX_QUESTION_LENGTH - 100 && (
+                    <span className={isOverLimit ? "sia-counter sia-counter-over" : "sia-counter"} role="status">
+                      {trimmedLength} / {MAX_QUESTION_LENGTH}
+                    </span>
+                  )}
+                </div>
+
+                <div className="sia-composer-actions">
+                  {/* Workstream 3, part C: renders nothing at all when the
+                      browser can't record (SIA_RECORDER_STATE.UNSUPPORTED
+                      path) or when the backend has not confirmed voice input. */}
+                  {voiceAvailable && (
+                    <SiaVoiceRecorderControls recorder={voiceRecorder} disabled={composerDisabled} />
+                  )}
+                  <button type="submit" className="sia-panel-submit" disabled={submitDisabled}>
+                    <span>Ask</span>
+                    <FiSend aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {voiceInsertError && (
+              <p className="sia-error sia-voice-insert-error" role="alert">
+                {voiceInsertError}
+              </p>
+            )}
+
           </form>
         </>
       )}

@@ -1,4 +1,5 @@
 import React, { forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { HiSparkles } from "react-icons/hi2";
 import { ThemeContext } from "../contexts/ThemeContext";
 import SiaPanel from "./SiaPanel";
 import { useSiaConversation, PANEL_MODE } from "./useSiaConversation";
@@ -180,6 +181,13 @@ const SiaEntryPoint = forwardRef(({ onOpen }, ref) => {
           onRetryAvailability={statusQuery.refetch}
           focusRequestVersion={focusRequestVersion}
           lastHandledFocusRequestVersionRef={lastHandledFocusRequestVersionRef}
+          // Workstream 3: GET /sia/status's additive
+          // capabilities.voiceInput block, read from the SAME status query
+          // this component already owns -- no second request. Undefined
+          // until a successful response arrives, which SiaPanel treats the
+          // same fail-closed way isAvailable/isCheckingAvailability are
+          // treated above (voice controls simply don't render yet).
+          voiceCapabilities={statusQuery.data?.capabilities?.voiceInput}
         />
       ) : (
         <button
@@ -188,7 +196,8 @@ const SiaEntryPoint = forwardRef(({ onOpen }, ref) => {
           onClick={handleOpen}
           ref={launcherRef}
         >
-          Ask SIA
+          <HiSparkles aria-hidden="true" />
+          <span>Ask SIA</span>
         </button>
       )}
     </div>

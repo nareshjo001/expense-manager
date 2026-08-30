@@ -54,11 +54,33 @@ function signToken(userId) {
   return jwt.sign({ email: "sia-readiness-test@example.test", _id: userId }, TEST_JWT_SECRET);
 }
 
+// Workstream 2 -- voice-input config defaults, added to every config mock
+// in this file so GET /sia/status's additive capabilities.voiceInput block
+// always has real maxBytes/maxDurationSeconds values (matching the real
+// config.js defaults) rather than `undefined`. voiceEnabled is
+// deliberately left false/unset everywhere in this file -- this suite is
+// about the TEXT (isSiaReady) surface only; voice readiness is covered by
+// tests/sia.readiness.voice.test.js.
+const VOICE_CONFIG_DEFAULTS = {
+  voiceEnabled: false,
+  sttProvider: "groq",
+  sttModel: "whisper-large-v3-turbo",
+  sttTimeoutMs: 30000,
+  sttMaxBytes: 5242880,
+  sttMaxDurationSeconds: 45,
+};
+
 // Loads a fresh readiness module against an explicit config shape, without
 // touching the real process.env-derived config object.
 function loadReadiness({ enabled, provider, model, credential }) {
   jest.resetModules();
-  jest.doMock("../sia/config", () => ({ enabled, provider, model, timeoutMs: 8000 }));
+  jest.doMock("../sia/config", () => ({
+    enabled,
+    provider,
+    model,
+    timeoutMs: 8000,
+    ...VOICE_CONFIG_DEFAULTS,
+  }));
   setCredential(credential);
   return require("../sia/readiness");
 }
@@ -152,7 +174,13 @@ describe("GET /sia/status", () => {
   // an immediate, visible test failure rather than a silent slowdown.
   function loadApp({ enabled, provider, model, credential }) {
     jest.resetModules();
-    jest.doMock("../sia/config", () => ({ enabled, provider, model, timeoutMs: 8000 }));
+    jest.doMock("../sia/config", () => ({
+      enabled,
+      provider,
+      model,
+      timeoutMs: 8000,
+      ...VOICE_CONFIG_DEFAULTS,
+    }));
     setCredential(credential);
 
     const askLlmMock = jest.fn(async () => {
@@ -201,37 +229,78 @@ describe("GET /sia/status", () => {
 
   const READY = { enabled: true, provider: "openai", model: "gpt-test", credential: FAKE_CREDENTIAL };
 
-  it("returns exactly { success: true, available: true } for a ready, authenticated request", async () => {
-    const { app } = loadApp(READY);
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-status-1")}`);
+  // Workstream 2 -- the additive capabilities.voiceInput block every
+  // GET /sia/status response now carries. voiceEnabled is unset/false
+  // throughout this whole file (this suite is about the TEXT surface),
+  // so voiceInput.available is always false here -- the size/duration
+  // ceilings mirror VOICE_CONFIG_DEFAULTS above.
+  const EXPECTED_VOICE_CAPABILITIES = {
+    voiceInput: {
+      available: false,
+      maxDurationSeconds: 45,
+      maxBytes: 5242880,
+      acceptedMimeTypes: ["audio/webm", "audio/mp4", "audio/ogg", "audio/wav"],
+    },
+  };
 
-    expect(res.status).toBe(200);
-    // toEqual on the WHOLE body: any extra field (provider, model, reason,
-    // env-var name) would fail this assertion.
-    expect(res.body).toEqual({ success: true, available: true });
-  });
+  // NOTE on the explicit timeout third arguments below (Workstream 2): this
+  // sandbox pays a large one-time-per-call cost for jest.resetModules() +
+  // require("../app") -- each call here has been observed taking up to
+  // ~55s in this environment, well past Jest's default 5000ms per-test
+  // timeout, even though the request itself resolves correctly. This
+  // mirrors the documented, narrowly-scoped fix already used for the very
+  // first test in tests/sia.ask.test.js (a per-test timeout, not a
+  // suite-wide jest.setTimeout()) rather than masking a real hang.
+  it(
+    "returns exactly { success: true, available: true, capabilities } for a ready, authenticated request",
+    async () => {
+      const { app } = loadApp(READY);
+      const res = await request(app)
+        .get("/sia/status")
+        .set("Authorization", `Bearer ${signToken("user-status-1")}`);
+
+      expect(res.status).toBe(200);
+      // toEqual on the WHOLE body: any extra field (provider, model, reason,
+      // env-var name) would fail this assertion.
+      expect(res.body).toEqual({ success: true, available: true, capabilities: EXPECTED_VOICE_CAPABILITIES });
+    },
+    60000
+  );
 
   it.each([
     ["SIA disabled", { enabled: false }],
     ["missing credential", { credential: undefined }],
     ["blank model", { model: "  " }],
     ["unsupported provider", { provider: "anthropic" }],
-  ])("returns exactly { success: true, available: false } when %s", async (_label, overrides) => {
-    const { app } = loadApp({ ...READY, ...overrides });
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-status-2")}`);
+  ])(
+    "returns exactly { success: true, available: false, capabilities } when %s",
+    async (_label, overrides) => {
+      const { app } = loadApp({ ...READY, ...overrides });
+      const res = await request(app)
+        .get("/sia/status")
+        .set("Authorization", `Bearer ${signToken("user-status-2")}`);
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, available: false });
-  });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, available: false, capabilities: EXPECTED_VOICE_CAPABILITIES });
+    },
+    60000
+  );
 
-  it("never leaks provider, model, credential, env-var names, or an internal reason", async () => {
-    // Run BOTH an available and an unavailable case -- a leak could hide in
-    // either branch.
-    for (const overrides of [{}, { enabled: false }, { credential: undefined }, { provider: "anthropic" }]) {
+  // Split into one `it()` per override case (rather than one test looping
+  // over all four) so each is independently addressable/timeoutable --
+  // this sandbox's per-call budget makes four sequential
+  // jest.resetModules()+require("../app") cold loads inside a SINGLE test
+  // (as this originally read) exceed even a generous per-test timeout, even
+  // though each individual case resolves correctly on its own. Same
+  // assertions as before, just no longer bundled into one test.
+  it.each([
+    ["a ready/available case", {}],
+    ["SIA disabled", { enabled: false }],
+    ["missing credential", { credential: undefined }],
+    ["unsupported provider", { provider: "anthropic" }],
+  ])(
+    "never leaks provider, model, credential, env-var names, or an internal reason (%s)",
+    async (_label, overrides) => {
       const { app } = loadApp({ ...READY, ...overrides });
       const res = await request(app)
         .get("/sia/status")
@@ -248,44 +317,53 @@ describe("GET /sia/status", () => {
       expect(raw).not.toContain("SIA_LLM_MODEL");
       expect(raw).not.toContain("reason");
       expect(raw).not.toContain("stack");
-      // Exactly two keys, always.
-      expect(Object.keys(res.body).sort()).toEqual(["available", "success"]);
-      jest.resetModules();
-    }
-  });
+      // Exactly three top-level keys, always -- success/available plus the
+      // additive capabilities block.
+      expect(Object.keys(res.body).sort()).toEqual(["available", "capabilities", "success"]);
+    },
+    100000
+  );
 
-  it("requires authentication, using the same boundary as every other SIA route", async () => {
-    const { app } = loadApp(READY);
+  it(
+    "requires authentication, using the same boundary as every other SIA route",
+    async () => {
+      const { app } = loadApp(READY);
 
-    const noHeader = await request(app).get("/sia/status");
-    expect(noHeader.status).toBe(401);
-    expect(noHeader.body.success).toBe(false);
+      const noHeader = await request(app).get("/sia/status");
+      expect(noHeader.status).toBe(401);
+      expect(noHeader.body.success).toBe(false);
 
-    const badToken = await request(app).get("/sia/status").set("Authorization", "Bearer not-a-valid-token");
-    expect(badToken.status).toBe(401);
-    expect(badToken.body.success).toBe(false);
+      const badToken = await request(app).get("/sia/status").set("Authorization", "Bearer not-a-valid-token");
+      expect(badToken.status).toBe(401);
+      expect(badToken.body.success).toBe(false);
 
-    // An unauthenticated caller learns nothing about availability.
-    expect(noHeader.body).not.toHaveProperty("available");
-    expect(badToken.body).not.toHaveProperty("available");
-  });
+      // An unauthenticated caller learns nothing about availability.
+      expect(noHeader.body).not.toHaveProperty("available");
+      expect(badToken.body).not.toHaveProperty("available");
+    },
+    60000
+  );
 
-  it("invokes no LLM, analytics/report, classifier, session, or idempotency service", async () => {
-    const { app, askLlmMock, buildContextMock, classifyIntentMock, sessionMocks, idempotencyMocks } =
-      loadApp(READY);
+  it(
+    "invokes no LLM, analytics/report, classifier, session, or idempotency service",
+    async () => {
+      const { app, askLlmMock, buildContextMock, classifyIntentMock, sessionMocks, idempotencyMocks } =
+        loadApp(READY);
 
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-status-4")}`);
+      const res = await request(app)
+        .get("/sia/status")
+        .set("Authorization", `Bearer ${signToken("user-status-4")}`);
 
-    expect(res.status).toBe(200);
-    expect(askLlmMock).not.toHaveBeenCalled();
-    expect(buildContextMock).not.toHaveBeenCalled();
-    expect(classifyIntentMock).not.toHaveBeenCalled();
-    for (const fn of Object.values(sessionMocks)) expect(fn).not.toHaveBeenCalled();
-    for (const [name, fn] of Object.entries(idempotencyMocks)) {
-      if (typeof fn === "function") expect(fn).not.toHaveBeenCalled();
-      else expect(name).toBe("OUTCOME");
-    }
-  });
+      expect(res.status).toBe(200);
+      expect(askLlmMock).not.toHaveBeenCalled();
+      expect(buildContextMock).not.toHaveBeenCalled();
+      expect(classifyIntentMock).not.toHaveBeenCalled();
+      for (const fn of Object.values(sessionMocks)) expect(fn).not.toHaveBeenCalled();
+      for (const [name, fn] of Object.entries(idempotencyMocks)) {
+        if (typeof fn === "function") expect(fn).not.toHaveBeenCalled();
+        else expect(name).toBe("OUTCOME");
+      }
+    },
+    60000
+  );
 });

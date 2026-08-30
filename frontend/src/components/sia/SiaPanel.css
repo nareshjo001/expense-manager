@@ -13,24 +13,36 @@
 
 .sia-root.light-theme {
   --sia-bg: #ffffff;
-  --sia-surface: #fdf2f8;
-  --sia-text: #111827;
-  --sia-muted-text: #6b7280;
-  --sia-accent-start: #f9a8d4;
-  --sia-accent-end: #f472b6;
-  --sia-border: #f3d4e4;
+  --sia-canvas: #fcf9fb;
+  --sia-surface: #fff7fb;
+  --sia-text: #302832;
+  --sia-muted-text: #796d78;
+  --sia-accent: #c83278;
+  --sia-accent-strong: #a91f61;
+  --sia-accent-soft: #fce7f2;
+  --sia-accent-start: #cc367c;
+  --sia-accent-end: #b7266c;
+  --sia-border: #eadde5;
+  --sia-border-strong: #e7bfd3;
+  --sia-shadow: rgba(88, 51, 72, 0.18);
   --sia-error-bg: #fee2e2;
   --sia-error-text: #991b1b;
 }
 
 .sia-root.dark-theme {
   --sia-bg: #1f2937;
-  --sia-surface: #111827;
+  --sia-canvas: #111827;
+  --sia-surface: #263244;
   --sia-text: #f9fafb;
-  --sia-muted-text: #9ca3af;
+  --sia-muted-text: #cbd5e1;
+  --sia-accent: #60a5fa;
+  --sia-accent-strong: #93c5fd;
+  --sia-accent-soft: #1e3a5f;
   --sia-accent-start: #3b82f6;
   --sia-accent-end: #60a5fa;
-  --sia-border: #374151;
+  --sia-border: #334155;
+  --sia-border-strong: #3b82f6;
+  --sia-shadow: rgba(0, 0, 0, 0.42);
   --sia-error-bg: #451a1a;
   --sia-error-text: #fca5a5;
 }
@@ -87,7 +99,13 @@
   position: fixed;
   bottom: 90px;
   right: 20px;
-  width: 360px;
+  /* Workstream 3, part E: a responsive, clamp()-based desktop width --
+     360px is the pre-existing floor (still comfortable for every existing
+     control), 480px is a sensible ceiling wide enough for clarification
+     option buttons and the voice-recorder row (timer + Stop + Cancel) to
+     never wrap awkwardly, and 32vw lets the panel breathe on wider
+     desktop viewports in between without ever feeling oversized. */
+  width: clamp(360px, 32vw, 480px);
   max-width: calc(100vw - 40px);
   /* Bounded, viewport-safe height rather than an unsafe fixed value: the
      panel is anchored bottom:90px/right:20px, so the available vertical
@@ -406,6 +424,7 @@
 
 .sia-suggestion {
   width: 100%;
+  box-sizing: border-box;
   min-height: var(--sia-btn-height);
   padding: 8px 12px;
   text-align: left;
@@ -515,17 +534,21 @@
 }
 
 .sia-history-row {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .sia-history-open {
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
   min-width: 0;
   min-height: var(--sia-btn-height);
-  padding: 8px 12px;
+  padding: 8px 50px 8px 12px;
+  box-sizing: border-box;
   text-align: left;
   color: var(--sia-text);
   background: var(--sia-surface);
@@ -543,8 +566,11 @@
 }
 
 .sia-history-title {
+  width: min(36ch, 100%);
   font-size: 0.95rem;
   font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
@@ -554,10 +580,20 @@
 }
 
 .sia-confirm {
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.sia-history-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
 }
 
 .sia-confirm-text {
@@ -749,6 +785,722 @@
   background: var(--sia-bg);
 }
 
+/* ===== Workstream 3, part C: voice recorder controls =====
+   Reuses the existing theme tokens exclusively (--sia-*), same as every
+   other block in this file -- no new colour is introduced for either
+   theme, so dark-theme parity is automatic. */
+.sia-voice-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sia-voice-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Explicit 44x44 minimum hit target -- the one control in this panel this
+   milestone requires to meet the WCAG 2.2 AAA size specifically (see the
+   shared --sia-btn-height note above; every OTHER button in this panel
+   intentionally uses the smaller 38px token, but the mic button is
+   deliberately sized to the full 44px floor). */
+.sia-mic-btn {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.2rem;
+  border: 1px solid var(--sia-border);
+  background: var(--sia-surface);
+}
+
+.sia-mic-btn[aria-pressed="true"] {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border-color: transparent;
+}
+
+.sia-mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sia-voice-timer {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--sia-muted-text);
+}
+
+.sia-voice-error {
+  margin: 0;
+}
+
+/* ===== Workstream 3, part D: clarification options ===== */
+.sia-clarification-options {
+  margin-top: 8px;
+  align-self: stretch;
+}
+
+.sia-clarification-option-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sia-clarification-option {
+  width: 100%;
+}
+
+/* ===== Workstream 3, part D: interpretation trust label ===== */
+.sia-interpretation {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--sia-muted-text);
+}
+
+/* ===== Workstream 3, part F: Listen/Stop speech control ===== */
+.sia-speak-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+/* ===== Visual refresh ===== */
+.sia-entry-point {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow: 0 12px 30px rgba(190, 40, 111, 0.28), 0 3px 8px rgba(62, 32, 48, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sia-entry-point:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(190, 40, 111, 0.34), 0 4px 10px rgba(62, 32, 48, 0.2);
+}
+
+.sia-entry-point svg {
+  width: 19px;
+  height: 19px;
+}
+
+.sia-panel {
+  bottom: 24px;
+  right: 24px;
+  width: clamp(380px, 34vw, 460px);
+  height: min(720px, calc(100vh - 48px));
+  height: min(720px, calc(100dvh - 48px));
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  background: var(--sia-canvas);
+  border-color: color-mix(in srgb, var(--sia-border) 84%, transparent);
+  border-radius: 24px;
+  box-shadow: 0 28px 70px var(--sia-shadow), 0 8px 24px rgba(64, 37, 52, 0.12);
+  animation: sia-panel-enter 180ms ease-out;
+}
+
+@keyframes sia-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sia-panel-header {
+  min-height: 64px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--sia-bg) 94%, transparent);
+  border-bottom: 1px solid var(--sia-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+
+.sia-panel-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sia-brand-mark,
+.sia-welcome-icon,
+.sia-thinking-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  box-shadow: 0 7px 18px rgba(201, 55, 128, 0.23);
+}
+
+.sia-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  flex: 0 0 auto;
+}
+
+.sia-brand-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sia-brand-copy {
+  min-width: 0;
+}
+
+.sia-panel-heading {
+  color: var(--sia-text);
+  font-size: 1.05rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.sia-panel-subtitle {
+  margin: 3px 0 0;
+  color: var(--sia-muted-text);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.sia-header-actions {
+  gap: 2px;
+  padding: 3px;
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 14px;
+}
+
+.sia-header-btn,
+.sia-panel-close {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  justify-content: center;
+  color: var(--sia-muted-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.sia-header-btn svg,
+.sia-panel-close svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sia-header-btn-text {
+  display: none;
+}
+
+.sia-header-btn:hover:not(:disabled),
+.sia-panel-close:hover,
+.sia-header-btn-active {
+  color: var(--sia-accent-strong);
+  background: var(--sia-accent-soft);
+  border-color: var(--sia-border-strong);
+}
+
+.sia-header-btn:focus-visible,
+.sia-secondary-btn:focus-visible,
+.sia-danger-btn:focus-visible,
+.sia-suggestion:focus-visible,
+.sia-history-open:focus-visible,
+.sia-icon-btn:focus-visible,
+.sia-panel-close:focus-visible,
+.sia-panel-submit:focus-visible,
+.sia-panel-retry:focus-visible,
+.sia-panel-input:focus-visible,
+.sia-grounding-toggle:focus-visible,
+.sia-entry-point:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--sia-accent) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.sia-transcript {
+  padding: 18px;
+  gap: 14px;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--sia-accent-soft) 55%, transparent), transparent 36%),
+    var(--sia-canvas);
+  scrollbar-color: var(--sia-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.sia-transcript::-webkit-scrollbar,
+.sia-history-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sia-transcript::-webkit-scrollbar-thumb,
+.sia-history-body::-webkit-scrollbar-thumb {
+  background: var(--sia-border-strong);
+  border-radius: 999px;
+}
+
+.sia-message {
+  max-width: 84%;
+  padding: 11px 14px;
+  border-radius: 17px;
+  line-height: 1.55;
+  box-shadow: 0 4px 14px rgba(81, 45, 64, 0.06);
+}
+
+.sia-message-user {
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 7px 20px rgba(199, 55, 126, 0.18);
+}
+
+.sia-message-assistant {
+  background: var(--sia-bg);
+  border-color: var(--sia-border);
+  border-bottom-left-radius: 6px;
+}
+
+.sia-suggestions {
+  padding: 0;
+}
+
+.sia-welcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(145deg, var(--sia-bg), var(--sia-surface));
+  border: 1px solid var(--sia-border);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(87, 50, 70, 0.06);
+}
+
+.sia-welcome-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.sia-welcome-title {
+  margin: 0;
+  color: var(--sia-text);
+  font-size: 1rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.sia-welcome-copy {
+  margin: 5px 0 0;
+  color: var(--sia-muted-text);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.sia-suggestions-label {
+  margin-bottom: 10px;
+  color: var(--sia-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sia-suggestion-list {
+  gap: 6px;
+}
+
+.sia-suggestion {
+  min-height: 44px;
+  padding: 7px 10px 7px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--sia-text);
+  background: var(--sia-bg);
+  border-color: var(--sia-border);
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(78, 42, 62, 0.045);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.sia-suggestion span {
+  line-height: 1.35;
+}
+
+.sia-suggestion svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--sia-accent);
+}
+
+.sia-suggestion:hover:not(:disabled) {
+  background: var(--sia-bg);
+  border-color: var(--sia-border-strong);
+  box-shadow: 0 8px 20px rgba(91, 47, 71, 0.1);
+  transform: translateY(-1px);
+}
+
+.sia-pending {
+  min-height: 42px;
+  padding: 6px 12px 6px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sia-bg);
+  border: 1px solid var(--sia-border);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(81, 45, 64, 0.05);
+}
+
+.sia-thinking-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.sia-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sia-thinking-dots i {
+  width: 4px;
+  height: 4px;
+  background: var(--sia-accent);
+  border-radius: 50%;
+  animation: sia-thinking 1.1s infinite ease-in-out;
+}
+
+.sia-thinking-dots i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.sia-thinking-dots i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+@keyframes sia-thinking {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+.sia-composer {
+  gap: 7px;
+  padding: 10px 14px 14px;
+  background: color-mix(in srgb, var(--sia-bg) 96%, transparent);
+  border-top-color: var(--sia-border);
+  box-shadow: 0 -10px 30px rgba(76, 40, 60, 0.045);
+}
+
+.sia-composer-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 5px;
+  background: var(--sia-canvas);
+  border: 1px solid var(--sia-border);
+  border-radius: 16px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.sia-composer-box:focus-within {
+  background: var(--sia-bg);
+  border-color: var(--sia-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sia-accent) 13%, transparent);
+}
+
+.sia-panel-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 108px;
+  padding: 10px 8px;
+  color: var(--sia-text);
+  background: transparent;
+  border: 0;
+  border-radius: 11px;
+  line-height: 1.45;
+  resize: none;
+  field-sizing: content;
+}
+
+.sia-panel-input::placeholder {
+  color: color-mix(in srgb, var(--sia-muted-text) 78%, transparent);
+}
+
+.sia-panel-input:focus {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.sia-panel-input:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.sia-composer-footer {
+  flex: 0 0 auto;
+  min-height: 42px;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.sia-composer-meta,
+.sia-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Recording adds a timer plus Stop/Cancel actions. Give that transient
+   state its own row so the question field never gets squeezed. */
+.sia-composer-box:has(.sia-voice-stop-btn) {
+  flex-wrap: wrap;
+}
+
+.sia-composer-box:has(.sia-voice-stop-btn) .sia-panel-input,
+.sia-composer-box:has(.sia-voice-stop-btn) .sia-composer-footer {
+  flex-basis: 100%;
+}
+
+.sia-composer-meta:empty {
+  display: none;
+}
+
+.sia-panel-submit {
+  min-width: 78px;
+  min-height: 40px;
+  gap: 7px;
+  padding: 0 15px;
+  background: linear-gradient(135deg, var(--sia-accent-start), var(--sia-accent-end));
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(199, 55, 126, 0.22);
+}
+
+.sia-panel-submit svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sia-panel-submit:hover:not(:disabled) {
+  box-shadow: 0 11px 24px rgba(199, 55, 126, 0.3);
+  transform: translateY(-1px);
+}
+
+.sia-panel-submit:disabled {
+  background: color-mix(in srgb, var(--sia-muted-text) 22%, var(--sia-surface));
+  color: color-mix(in srgb, var(--sia-muted-text) 72%, transparent);
+  opacity: 1;
+}
+
+.sia-voice-controls-row {
+  flex-wrap: nowrap;
+}
+
+.sia-mic-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  color: var(--sia-accent-strong);
+  background: var(--sia-bg);
+  border: 1px solid var(--sia-border);
+  border-radius: 12px;
+}
+
+.sia-mic-btn span {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sia-mic-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.sia-secondary-btn,
+.sia-danger-btn,
+.sia-history-open,
+.sia-grounding-toggle {
+  border-radius: 12px;
+}
+
+.sia-availability-notice {
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 13px;
+}
+
+.sia-history-bar {
+  padding: 14px 16px 0;
+}
+
+.sia-history-bar .sia-secondary-btn {
+  gap: 7px;
+  padding: 0 12px;
+}
+
+.sia-history-body {
+  padding: 14px 16px 18px;
+  scrollbar-color: var(--sia-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.sia-history-open {
+  padding: 11px 52px 11px 13px;
+  background: var(--sia-bg);
+  box-shadow: 0 3px 12px rgba(78, 42, 62, 0.045);
+}
+
+.sia-history-delete {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+
+.sia-history-delete svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sia-history-delete:hover:not(:disabled) {
+  color: var(--sia-error-text);
+  background: var(--sia-error-bg);
+  border-color: color-mix(in srgb, var(--sia-error-text) 25%, transparent);
+}
+
+/* ===== Dark-theme refinements =====
+   The refreshed surfaces need darker elevation and borders rather than
+   the light theme's pale highlights and shadows. These rules stay scoped
+   to SIA so the surrounding application theme remains untouched. */
+.sia-root.dark-theme .sia-panel {
+  background: #111827;
+  border-color: #334155;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.56), 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+.sia-root.dark-theme .sia-panel-header,
+.sia-root.dark-theme .sia-composer {
+  background: #1f2937;
+  border-color: #334155;
+  box-shadow: none;
+}
+
+.sia-root.dark-theme .sia-header-actions {
+  background: #263244;
+  border-color: #3b4b61;
+}
+
+.sia-root.dark-theme .sia-header-btn:hover:not(:disabled),
+.sia-root.dark-theme .sia-panel-close:hover,
+.sia-root.dark-theme .sia-header-btn-active {
+  color: #bfdbfe;
+  background: #1e3a5f;
+  border-color: #3b82f6;
+}
+
+.sia-root.dark-theme .sia-transcript {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.1), transparent 36%),
+    #111827;
+}
+
+.sia-root.dark-theme .sia-welcome {
+  background: linear-gradient(145deg, #263244, #1f2937);
+  border-color: #3b4b61;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.sia-root.dark-theme .sia-message-assistant,
+.sia-root.dark-theme .sia-suggestion,
+.sia-root.dark-theme .sia-history-open {
+  background: #1f2937;
+  border-color: #334155;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+}
+
+.sia-root.dark-theme .sia-suggestion:hover:not(:disabled),
+.sia-root.dark-theme .sia-history-open:hover {
+  background: #26364b;
+  border-color: #3b82f6;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.sia-root.dark-theme .sia-composer-box {
+  background: #111827;
+  border-color: #3b4b61;
+}
+
+.sia-root.dark-theme .sia-composer-box:focus-within {
+  background: #182235;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+}
+
+.sia-root.dark-theme .sia-mic-btn,
+.sia-root.dark-theme .sia-secondary-btn,
+.sia-root.dark-theme .sia-grounding-toggle {
+  color: #bfdbfe;
+  background: #263244;
+  border-color: #3b4b61;
+}
+
+.sia-root.dark-theme .sia-panel-submit:disabled {
+  color: #94a3b8;
+  background: #374151;
+}
+
+.sia-root.dark-theme .sia-transcript,
+.sia-root.dark-theme .sia-history-body {
+  scrollbar-color: #3b82f6 transparent;
+}
+
+.sia-root.dark-theme .sia-transcript::-webkit-scrollbar-thumb,
+.sia-root.dark-theme .sia-history-body::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+}
+
 /* ===== Mobile: full-screen panel treatment =====
    Below the breakpoint the panel converts from the floating bottom-sheet
    to a true full-screen view: `inset: 0` (with explicit longhands for
@@ -789,10 +1541,11 @@
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     box-sizing: border-box;
+    border: none;
   }
 
   .sia-panel-submit {
-    align-self: stretch;
+    align-self: center;
   }
 
   /* Tighter header on narrow widths -- fits "Ask SIA" plus all three
@@ -801,6 +1554,7 @@
      the shared --sia-btn-height token (38px) set globally above; only
      the padding/font/heading around the buttons shrinks further here. */
   .sia-panel-header {
+    min-height: 60px;
     padding: 10px 12px;
   }
 
@@ -809,8 +1563,8 @@
   }
 
   .sia-header-btn {
-    padding: 0 10px;
-    font-size: 0.78rem;
+    width: 38px;
+    padding: 0;
   }
 
   .sia-message {
@@ -818,7 +1572,15 @@
   }
 
   .sia-composer-footer {
-    justify-content: space-between;
+    justify-content: flex-end;
+  }
+
+  .sia-transcript {
+    padding: 14px;
+  }
+
+  .sia-composer {
+    padding: 10px 12px 12px;
   }
 }
 
@@ -826,7 +1588,8 @@
    later without respecting a reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   .sia-entry-point,
-  .sia-panel {
+  .sia-panel,
+  .sia-thinking-dots i {
     transition: none;
     animation: none;
   }

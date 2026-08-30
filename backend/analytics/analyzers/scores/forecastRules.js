@@ -27,6 +27,27 @@ const forecast = {
 
   methodVersion: "ROBUST_TREND_MEDIAN_V2",
 
+  // Current-month nowcast. The point estimate always starts with every
+  // expense already logged this month; these rules only control how much
+  // historical/current spending is allowed to influence the estimate for
+  // the days that remain. An automatically detected one-off is capped at
+  // the robust upper boundary rather than deleted, protecting legitimate
+  // but rare costs from disappearing completely.
+  currentMonth: {
+    methodVersion: "CURRENT_MONTH_ROBUST_NOWCAST_V1",
+    minHistoryMonths: 3,
+    minCategoryBaselineRecords: 5,
+    minOverallBaselineRecords: 8,
+    maxHistoricalMonthsForRareName: 1,
+    minMonthlyMaterialityRatio: 0.15,
+    minPaceWeight: 0.15,
+    maxPaceWeight: 0.85,
+    reasonCodes: {
+      insufficientHistory: "INSUFFICIENT_HISTORY_FOR_CURRENT_MONTH",
+      rareHighValueExpense: "RARE_HIGH_VALUE_EXPENSE",
+    },
+  },
+
   // --- category-level breakdown -------------------
   //
   // Each category is forecast from its OWN monthly history using exactly the same Theil-Sen `fitRobustTrend` function the overall forecast uses (not a second, divergent method), then every category prediction is reconciled so rounded category amounts sum EXACTLY to the already-published overall estimate. Categories are always discovered dynamically from the user's own data.

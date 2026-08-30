@@ -25,6 +25,9 @@ const round2 = (value) => Number(Number(value).toFixed(2));
 
 const isNonBlankString = (value) => typeof value === "string" && value.trim() !== "";
 
+const normalizeExpenseName = (value) =>
+  isNonBlankString(value) ? value.trim().replace(/\s+/g, " ").toLowerCase() : null;
+
 // The single, safe identifier-serialization helper -- coerces `_id` to a string exactly once; a missing/blank/uncoercible value is rejected without crashing analyze(). The original `_id` is never retained or exposed, only this serialized string.
 const serializeId = (value) => {
   if (value === undefined || value === null) return null;
@@ -51,6 +54,19 @@ const median = (numbers) => {
 const medianAbsoluteDeviation = (numbers, numbersMedian) => {
   const deviations = numbers.map((n) => Math.abs(n - numbersMedian));
   return median(deviations);
+};
+
+const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+const buildStats = (records) => {
+  const amounts = records.map((record) => record.amount);
+  const amountMedian = median(amounts);
+  return {
+    sampleCount: amounts.length,
+    monthCount: new Set(records.map((record) => monthKey(record.date))).size,
+    median: amountMedian,
+    mad: medianAbsoluteDeviation(amounts, amountMedian),
+  };
 };
 
 // Builds one candidate record from a raw expense, or null if it fails any
@@ -82,24 +98,43 @@ const toCandidate = (expense, monthStart, monthEndExclusive) => {
     // alias to its canonical name or display-cases a genuinely new
     // category, exactly like forecastInputAggregator.js's own grouping key.
     category: normalizeCategoryForGrouping(expense.expenseCategory),
+    normalizedName: normalizeExpenseName(expense.expenseName),
     amount,
     date,
   };
 };
 
 // True when a baseline record is a valid, in-window, same-category, positive-amount historical data point -- normalizes the baseline record's raw category through the same shared utility before comparing, so historical-side variants converge on the same baseline as the candidate side.
-const isValidBaselineRecord = (expense, category, baselineStart, baselineEndExclusive) => {
-  if (!expense || typeof expense !== "object") return false;
-  if (normalizeCategoryForGrouping(expense.expenseCategory) !== category) return false;
+const toBaselineRecord = (expense, category, baselineStart, baselineEndExclusive) => {
+  if (!expense || typeof expense !== "object") return null;
+  if (normalizeCategoryForGrouping(expense.expenseCategory) !== category) return null;
 
   const amount = toFiniteAmount(expense.expenseAmount);
-  if (amount === null || amount <= 0) return false;
+  if (amount === null || amount <= 0) return null;
 
   const date = parseDate(expense.expenseDate);
-  if (!date) return false;
-  if (date < baselineStart || date >= baselineEndExclusive) return false;
+  if (!date) return null;
+  if (date < baselineStart || date >= baselineEndExclusive) return null;
 
-  return true;
+  return {
+    amount,
+    date,
+    normalizedName: normalizeExpenseName(expense.expenseName),
+  };
+};
+
+const buildHistoricalMonthlyReference = (expenses, baselineStart, baselineEndExclusive) => {
+  const totals = new Map();
+  for (const expense of expenses) {
+    if (!expense || typeof expense !== "object") continue;
+    const amount = toFiniteAmount(expense.expenseAmount);
+    const date = parseDate(expense.expenseDate);
+    if (amount === null || amount <= 0 || !date || date < baselineStart || date >= baselineEndExclusive) continue;
+    const key = monthKey(date);
+    totals.set(key, (totals.get(key) || 0) + amount);
+  }
+  const activeMonthTotals = [...totals.values()].filter((amount) => amount > 0);
+  return activeMonthTotals.length > 0 ? median(activeMonthTotals) : null;
 };
 
 const severityForMultiple = (thresholdMultiple) => {
@@ -127,7 +162,12 @@ const compareAnomalies = (a, b) => {
  * @param {Date} input.currentMonthStart - explicit, injectable anchor date (first instant of
  *   the analysis month). This function never calls `new Date()` to discover "now".
  */
-const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMonthStart } = {}) => {
+const analyze = ({
+  currentMonthExpenses = [],
+  recentExpensePool = [],
+  currentMonthStart,
+  monthlyReferenceAmount,
+} = {}) => {
   const monthStart = currentMonthStart instanceof Date ? currentMonthStart : parseDate(currentMonthStart);
 
   const emptyResult = (reasonCode, extra = {}) => ({
@@ -174,48 +214,53 @@ const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMon
   }
 
   const baselineSource = Array.isArray(recentExpensePool) ? recentExpensePool : [];
+  const suppliedReference = toFiniteAmount(monthlyReferenceAmount);
+  const historicalReference = buildHistoricalMonthlyReference(baselineSource, baselineStart, monthStart);
+  const monthlyReference = suppliedReference !== null && suppliedReference > 0
+    ? suppliedReference
+    : historicalReference;
+  const monthlyReferenceSource = suppliedReference !== null && suppliedReference > 0
+    ? "current_budget"
+    : "historical_monthly_spending";
 
   // Only compute baselines for categories at least one candidate needs -- matches how eligibleCategoryCount/insufficientHistoryCategoryCount are defined and avoids wasted work.
   const candidateCategories = [...new Set(candidates.map((c) => c.category))];
 
+  const categoryRecords = new Map();
   const categoryStats = new Map();
-  let eligibleCategoryCount = 0;
-  let insufficientHistoryCategoryCount = 0;
 
   for (const category of candidateCategories) {
-    const baselineAmounts = baselineSource
-      .filter((expense) => isValidBaselineRecord(expense, category, baselineStart, monthStart))
-      .map((expense) => toFiniteAmount(expense.expenseAmount));
+    const baselineRecords = baselineSource
+      .map((expense) => toBaselineRecord(expense, category, baselineStart, monthStart))
+      .filter(Boolean);
+    categoryRecords.set(category, baselineRecords);
 
-    if (baselineAmounts.length < RULES.minBaselineSampleSize) {
-      insufficientHistoryCategoryCount += 1;
-      continue;
+    if (baselineRecords.length >= RULES.minBaselineSampleSize) {
+      categoryStats.set(category, {
+        records: baselineRecords,
+        ...buildStats(baselineRecords),
+      });
     }
-
-    const categoryMedian = median(baselineAmounts);
-    const categoryMad = medianAbsoluteDeviation(baselineAmounts, categoryMedian);
-
-    categoryStats.set(category, {
-      sampleCount: baselineAmounts.length,
-      median: categoryMedian,
-      mad: categoryMad,
-    });
-    eligibleCategoryCount += 1;
-  }
-
-  if (eligibleCategoryCount === 0) {
-    return emptyResult("NO_BASELINE_YET", {
-      baselineWindow,
-      evaluatedExpenseCount: candidates.length,
-      insufficientHistoryCategoryCount,
-    });
   }
 
   const flagged = [];
+  let comparedExpenseCount = 0;
+  const comparedCategories = new Set();
 
   for (const candidate of candidates) {
-    const stats = categoryStats.get(candidate.category);
-    if (!stats) continue; // ineligible category -- not evaluated, not counted as flagged
+    const categoryBaseline = categoryStats.get(candidate.category);
+    const allCategoryRecords = categoryRecords.get(candidate.category) || [];
+    const matchingNameRecords = candidate.normalizedName
+      ? allCategoryRecords.filter((record) => record.normalizedName === candidate.normalizedName)
+      : [];
+    const usesNameBaseline = matchingNameRecords.length >= RULES.minNameBaselineSampleSize;
+    const stats = usesNameBaseline
+      ? buildStats(matchingNameRecords)
+      : categoryBaseline;
+    if (!stats) continue;
+
+    comparedExpenseCount += 1;
+    comparedCategories.add(candidate.category);
 
     if (stats.median <= 0) continue; // defensive: cannot happen given positive baseline amounts
 
@@ -242,6 +287,12 @@ const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMon
 
     if (!isFlagged) continue;
 
+    const excessAmount = candidate.amount - stats.median;
+    const impactRatio = monthlyReference && monthlyReference > 0
+      ? excessAmount / monthlyReference
+      : 0;
+    if (impactRatio < RULES.materiality.minExcessToMonthlyReferenceRatio) continue;
+
     const thresholdMultiple = methodScore / methodThreshold;
 
     flagged.push({
@@ -253,9 +304,16 @@ const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMon
       severity: severityForMultiple(thresholdMultiple),
       reasonCode: RULES.reasonCode,
       baseline: {
-        scope: "category",
+        scope: usesNameBaseline ? "expense_name" : "category",
         sampleCount: stats.sampleCount,
+        monthCount: stats.monthCount,
         medianAmount: round2(stats.median),
+      },
+      impact: {
+        excessAmount: round2(excessAmount),
+        monthlyReferenceAmount: round2(monthlyReference),
+        monthlyReferenceSource,
+        percentage: round2(impactRatio * 100),
       },
       detection: {
         method,
@@ -273,6 +331,17 @@ const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMon
 
   flagged.sort(compareAnomalies);
 
+  const eligibleCategoryCount = comparedCategories.size;
+  const insufficientHistoryCategoryCount = candidateCategories.length - eligibleCategoryCount;
+
+  if (comparedExpenseCount === 0) {
+    return emptyResult("NO_BASELINE_YET", {
+      baselineWindow,
+      evaluatedExpenseCount: candidates.length,
+      insufficientHistoryCategoryCount,
+    });
+  }
+
   const anomalies = flagged
     .slice(0, RULES.maxAnomalies)
     .map(({ _sortMultiple, _sortAmount, _sortDate, ...anomalyRecord }) => anomalyRecord);
@@ -282,9 +351,16 @@ const analyze = ({ currentMonthExpenses = [], recentExpensePool = [], currentMon
     reasonCode: null,
     baselineWindow,
     evaluatedExpenseCount: candidates.length,
+    comparedExpenseCount,
+    uncomparableExpenseCount: candidates.length - comparedExpenseCount,
     eligibleCategoryCount,
     insufficientHistoryCategoryCount,
-    flaggedCount: anomalies.length,
+    flaggedCount: flagged.length,
+    displayedCount: anomalies.length,
+    monthlyReference: {
+      amount: monthlyReference === null ? null : round2(monthlyReference),
+      source: monthlyReferenceSource,
+    },
     anomalies,
   };
 };

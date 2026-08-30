@@ -37,6 +37,17 @@ describe("models/SiaMessage -- exact stored field allowlist", () => {
       "grounding.sources.key",
       "grounding.sources.label",
       "grounding.sources.period",
+      // Workstream 1 -- the bounded QueryPlan summary (see
+      // models/SiaMessage.js's siaPlanSummarySchema): metrics/operation/
+      // periodLabel/grouping/categoryFilter only, never a raw prompt,
+      // full financial context, or provider response body. Explicitly
+      // added here, not a gap in this allowlist.
+      "planSummary",
+      "planSummary.metrics",
+      "planSummary.operation",
+      "planSummary.periodLabel",
+      "planSummary.grouping",
+      "planSummary.categoryFilter",
       "createdAt",
       "updatedAt",
       "__v",
@@ -204,6 +215,11 @@ describe("models/SiaMessage + models/SiaRequest -- grounding exact-shape persist
       "grounding.sources.key",
       "grounding.sources.label",
       "grounding.sources.period",
+      // Workstream 1 -- the semantic-routing plan CHECKPOINT (see
+      // models/SiaRequest.js's field comment): a validated, closed-schema
+      // QueryPlan (sia/queryPlan.js), never the raw prompt/context/
+      // provider response. Explicitly added here, not a gap.
+      "planCheckpoint",
       "responseStatus",
       "responsePayload",
       "createdAt",

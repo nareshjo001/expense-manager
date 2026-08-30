@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
 import { useUpdateBudgetMutation } from "../../hooks/mutations/useUpdateBudgetMutation";
-import SiaAskButton from "../sia/SiaAskButton";
 import "./Header.css";
 
 // Monthly budget insights header: summary cards plus an inline budget-edit modal.
@@ -114,7 +113,6 @@ export default function Header({ summary }) {
                   </span>
                 )}
               </p>
-              <SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />
           </div>
 
           <div className="monthly-insights-card">

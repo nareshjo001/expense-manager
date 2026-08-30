@@ -19,7 +19,6 @@ import { signUpSuccessToast } from '../alertsEffects/toastMessages';
 import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
-import { SiaLauncherProvider } from '../sia/SiaLauncherContext';
 
 // Main authenticated app shell: header/nav, mobile menus, routed pages, and expense-delete confirmation flow.
 const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
@@ -175,17 +174,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
     return (
         <>
-            {/* Batch 3G: SiaLauncherProvider wraps the entire authenticated shell
-                (routed page content below, plus the single global SIA entry point
-                it mounts internally -- see components/sia/SiaLauncherContext.js).
-                This preserves the SIA entry point's exact original DOM position
-                (a sibling of .app-container, not nested inside it) while still
-                letting a contextual "Ask SIA" button anywhere inside the routed
-                pages (e.g. monthlyInsights/Header.js, BudgetIntelligence.js) reach
-                that same entry point through context, without either component
-                needing to know about the other directly. */}
-            <SiaLauncherProvider>
-                <div className={`app-container ${theme} ${confirmDeleteId ? 'blur-background' : ''}`}>
+            <div className={`app-container ${theme} ${confirmDeleteId ? 'blur-background' : ''}`}>
 
                     <header className="app-header">
                         <div className="desktop-header">
@@ -320,16 +309,15 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             {renderMobileSettings()}
                         </>
                     }
-                </div>
+            </div>
 
-                {confirmDeleteId && (
-                    <DeleteAlert
-                        confirmDeleteId={confirmDeleteId}
-                        confirmDeleteHandler={confirmDeleteHandler}
-                        cancelDeleteHandler={cancelDeleteHandler}
-                    />
-                )}
-            </SiaLauncherProvider>
+            {confirmDeleteId && (
+                <DeleteAlert
+                    confirmDeleteId={confirmDeleteId}
+                    confirmDeleteHandler={confirmDeleteHandler}
+                    cancelDeleteHandler={cancelDeleteHandler}
+                />
+            )}
         </>
     );
 };

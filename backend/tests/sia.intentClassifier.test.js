@@ -112,8 +112,15 @@ describe("backend/sia/intentClassifier", () => {
     );
   });
 
-  it("rejects a plain spending/expense lookup with no explanation or change concept", () => {
-    expect(classifyIntent("How much did I spend this month?")).toBeNull();
+  // CURRENT_SPENDING_SUMMARY intentional contract change (see the
+  // dedicated describe block below): "How much did I spend this month?" is
+  // a genuine current-month total lookup -- spending topic + current-period
+  // phrase + "how much" lookup -- and now correctly resolves to the new
+  // CURRENT_SPENDING_SUMMARY intent instead of remaining unsupported,
+  // exactly the gap this batch was written to close. A lookup with no
+  // current-period phrase and no lookup word ("Show my expenses.",
+  // "List my spending.") stays null -- unaffected, still no intent claims it.
+  it("rejects a plain spending/expense lookup with no explanation, change, or current-period-total concept", () => {
     expect(classifyIntent("Show my expenses.")).toBeNull();
     expect(classifyIntent("List my spending.")).toBeNull();
   });
@@ -687,5 +694,152 @@ describe("backend/sia/intentClassifier -- Batch 2 new intents", () => {
       const q = "Do I currently have any financial risks?";
       expect(classifyIntent(q)).toBe(classifyIntent(q));
     });
+  });
+});
+
+// -- CURRENT_SPENDING_SUMMARY -------------------------------------------
+// Grounded exclusively in backend/sia/contextBuilder.js's bounded
+// summary.totalSpent context -- a bare "what's my current-month total?"
+// lookup, distinct from every explanation/comparison/forecast/advice
+// question the other seven intents already own. Checked strictly LAST in
+// the classifier, so every test in this block also proves the seven
+// existing intents keep first claim on any overlapping wording.
+describe("backend/sia/intentClassifier -- CURRENT_SPENDING_SUMMARY", () => {
+  it("recognizes the exact production question", () => {
+    expect(classifyIntent("What is my current month's total spent ?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+  });
+
+  it("recognizes every accepted current-period phrasing", () => {
+    expect(classifyIntent("How much have I spent this month?")).toBe("CURRENT_SPENDING_SUMMARY");
+    expect(classifyIntent("What is my current month spending total?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("What is my month-to-date total spent?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("What is my month to date total spending?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("How much have I spent so far this month?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("Tell me my total expenses this month.")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("What is the total amount I've spent this month?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+  });
+
+  it("handles a curly apostrophe, punctuation, case, and extra/leading/trailing whitespace", () => {
+    expect(classifyIntent("What is my current month’s total spent?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("WHAT IS MY CURRENT MONTH'S TOTAL SPENT?")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+    expect(classifyIntent("   \n  what   is   my   current   month's   total   spent?   \t  ")).toBe(
+      "CURRENT_SPENDING_SUMMARY"
+    );
+  });
+
+  it("treats 'month-to-date' and 'month to date' identically", () => {
+    expect(classifyIntent("What is my month-to-date spend?")).toBe("CURRENT_SPENDING_SUMMARY");
+    expect(classifyIntent("What is my month to date spend?")).toBe("CURRENT_SPENDING_SUMMARY");
+  });
+
+  it("does not disturb the existing budget-status and spending-change examples", () => {
+    expect(classifyIntent("What is my current budget utilization?")).toBe(
+      "BUDGET_STATUS_EXPLANATION"
+    );
+    expect(classifyIntent("Why did my spending change this month?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+  });
+
+  it("does not steal a change/comparison question that also names the current month", () => {
+    expect(classifyIntent("How much more did I spend this month?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+    expect(classifyIntent("What is my total spending increase this month?")).toBe(
+      "SPENDING_CHANGE_EXPLANATION"
+    );
+  });
+
+  it("does not steal a budget question that also carries a total/lookup word", () => {
+    expect(classifyIntent("What is my total budget remaining this month?")).toBe(
+      "BUDGET_STATUS_EXPLANATION"
+    );
+  });
+
+  it("does not steal a category question that also names the current month and a total", () => {
+    expect(classifyIntent("What is my total spending by category this month?")).toBeNull();
+    expect(classifyIntent("How much is my grocery spending this month?")).toBeNull();
+  });
+
+  it("does not steal a forecast question", () => {
+    expect(classifyIntent("What is my total projected spending next month?")).toBe(
+      "SPENDING_FORECAST_EXPLANATION"
+    );
+  });
+
+  it("rejects advice/permission-shaped questions ('should i spend' / 'can i spend')", () => {
+    expect(classifyIntent("How much should I spend this month?")).toBeNull();
+    expect(classifyIntent("How much can I spend this month?")).toBeNull();
+    expect(classifyIntent("How much could I spend this month?")).toBeNull();
+  });
+
+  it("rejects transaction/list/detail lookup requests", () => {
+    expect(classifyIntent("Show me the total for this month.")).toBeNull();
+    expect(classifyIntent("List my total transactions this month.")).toBeNull();
+    expect(classifyIntent("Give me a list of my total spending this month.")).toBeNull();
+  });
+
+  it("rejects a past/named-month total lookup -- only the current period is supported", () => {
+    expect(classifyIntent("How much did I spend last month?")).toBeNull();
+    expect(classifyIntent("What was my total spending in August?")).toBeNull();
+    expect(classifyIntent("What was my total spending last month?")).toBeNull();
+  });
+
+  it("rejects a bare topic/period mention with no lookup word, and a bare lookup with no current-period phrase", () => {
+    expect(classifyIntent("My spending this month.")).toBeNull();
+    expect(classifyIntent("How much did I spend?")).toBeNull();
+    expect(classifyIntent("What is my total?")).toBeNull();
+  });
+
+  it("rejects ambiguous, empty, and non-string input", () => {
+    expect(classifyIntent("")).toBeNull();
+    expect(classifyIntent("   ")).toBeNull();
+    expect(classifyIntent(null)).toBeNull();
+    expect(classifyIntent(undefined)).toBeNull();
+    expect(classifyIntent(42)).toBeNull();
+    expect(classifyIntent({})).toBeNull();
+    expect(classifyIntent(["What is my current month's total spent?"])).toBeNull();
+  });
+
+  it("remains deterministic across repeated calls with the same input", () => {
+    const q = "What is my current month's total spent?";
+    expect(classifyIntent(q)).toBe(classifyIntent(q));
+  });
+});
+
+// -- All eight suggested-question examples from
+// frontend/src/components/sia/siaSuggestions.js still match their
+// documented intent (read-only reference -- that file is not edited by
+// this batch). CURRENT_SPENDING_SUMMARY has no frontend suggestion yet,
+// so only the existing seven are asserted here.
+describe("backend/sia/intentClassifier -- frontend SIA_SUGGESTIONS stay correctly classified", () => {
+  it.each([
+    ["Why is my financial health score what it is?", "HEALTH_EXPLANATION"],
+    ["Why did my overall spending change this month?", "SPENDING_CHANGE_EXPLANATION"],
+    ["Explain my current budget status and utilization.", "BUDGET_STATUS_EXPLANATION"],
+    ["Which category accounts for the most of my spending?", "CATEGORY_SPENDING_EXPLANATION"],
+    ["Why were some of my expenses flagged as unusual?", "ANOMALY_EXPLANATION"],
+    ["What is my spending forecast for next month?", "SPENDING_FORECAST_EXPLANATION"],
+    ["Do I have any risks I should know about right now?", "FINANCIAL_RISK_EXPLANATION"],
+  ])("%s -> %s", (question, expected) => {
+    expect(classifyIntent(question)).toBe(expected);
   });
 });

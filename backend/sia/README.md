@@ -109,6 +109,77 @@ change, and a format guess would reject valid keys.
 Only variable **names** are documented here. No value belongs in this file,
 and Batch 3E neither adds nor modifies any `.env` file.
 
+### Voice input (speech-to-text) readiness
+
+Separate, additive capability -- speech-to-text only, never the answer
+pipeline. All of `APP_TIME_ZONE`, `SIA_VOICE_ENABLED`, `SIA_STT_PROVIDER`,
+`SIA_STT_MODEL`, `SIA_STT_TIMEOUT_MS`, `SIA_STT_MAX_BYTES`, and
+`SIA_STT_MAX_DURATION_SECONDS` are **backend-only** variables, read by
+`sia/config.js`; none of them is ever read by, sent to, or permitted to
+exist in the frontend as a `REACT_APP_*` variable.
+
+`sia/readiness.js`'s `isVoiceReady()` is the single authoritative evaluator,
+used by both `GET /sia/status`'s `capabilities.voiceInput.available` and
+`POST /sia/transcriptions`, exactly mirroring `isSiaReady()`'s role for text
+-- but it is a **separate** check: voice can be unavailable while text Q&A
+keeps working, and vice versa, and neither check reads the other's config
+fields. Voice is ready only when **all** of the following hold:
+
+1. Voice input is enabled -- `SIA_VOICE_ENABLED` is exactly the string
+   `"true"`. **Disabled by default** -- any other value or unset means
+   voice is off, regardless of whether an STT provider/model/credential is
+   otherwise configured.
+2. An STT provider is configured **and** this codebase implements an
+   adapter for it. Currently `groq` (`sia/transcriptionService.js`) is the
+   **only** implemented STT provider; any other value is treated as not
+   ready, never silently accepted -- config.js already defaults
+   `SIA_STT_PROVIDER` to `groq`.
+3. A non-blank `GROQ_API_KEY` exists. This is the **same** environment
+   variable the text Groq adapter in `sia/llmService.js` already reads (both
+   are the same Groq account/credential), but the two readiness checks
+   evaluate it independently -- a text-only or voice-only deployment reports
+   correctly either way.
+
+`GROQ_API_KEY` is read directly from `process.env` inside
+`sia/transcriptionService.js`, the same server-only pattern
+`sia/llmService.js`'s adapters use -- never through `sia/config.js`, never
+logged, returned, or included in an error.
+
+`SIA_STT_MODEL` (default `whisper-large-v3-turbo`) is passed to the Groq
+adapter as-is; it has no separate implemented/not-implemented check the way
+`SIA_STT_PROVIDER` does.
+
+Audio uploads to `POST /sia/transcriptions` are bounded by `SIA_STT_MAX_BYTES`
+(default 5 MiB, enforced by `Middlewares/audioUpload.js` before any
+container-signature check or provider call -- note the effective usable
+maximum is one byte less than this value, since the underlying upload
+library rejects a file of exactly this size the same as a larger one, a
+deliberately fail-closed rounding) and `SIA_STT_MAX_DURATION_SECONDS`
+(default 45 seconds). The provider request itself is bounded by
+`SIA_STT_TIMEOUT_MS` (default 30000 ms), the same "one attempt, no retry"
+contract `SIA_LLM_TIMEOUT_MS` gives the text path.
+
+`APP_TIME_ZONE` (default `Asia/Kolkata`, validated with
+`Intl.DateTimeFormat`) is not itself a voice-specific variable -- it governs
+calendar/period resolution (`sia/periodResolver.js`) for both the text and
+voice paths equally.
+
+There is no separate feature flag gating the semantic-routing fallback layer
+(`sia/semanticRouter.js`, `sia/semanticPipeline.js`, both introduced
+alongside this section). It activates automatically for any question
+`sia/intentClassifier.js` returns `null` for, under the same
+`SIA_ENABLED`/`SIA_LLM_PROVIDER`/`SIA_LLM_MODEL`/credential readiness path
+`isSiaReady()` already evaluates above -- no additional environment
+variable turns it on or off.
+
+Capturing microphone audio on the frontend
+(`navigator.mediaDevices.getUserMedia`, used by `useSiaVoiceRecorder.js`)
+requires a secure browsing context in production -- HTTPS, or `localhost`
+for local development. On an insecure origin the browser does not expose
+`navigator.mediaDevices` at all, so the recorder's own support check fails
+closed and voice controls simply do not render; this is a browser-platform
+constraint, not something this module enables or disables.
+
 ### What readiness does *not* prove
 
 This is a **local configuration check only**. It performs **no network
@@ -160,7 +231,15 @@ All are optional. If unset, `config.js` returns the listed default.
 |---|---|---|
 | `SIA_ENABLED` | `false` | Only the exact (trimmed) string `"true"` enables it. |
 | `SIA_LLM_PROVIDER` | `null` | Trimmed; blank becomes `null`. |
+| `SIA_LLM_MODEL` | `null` | Trimmed; blank becomes `null`. No default model is assumed. |
 | `SIA_LLM_TIMEOUT_MS` | `8000` | Must be a finite, positive number; anything else falls back to the default. |
+| `APP_TIME_ZONE` | `Asia/Kolkata` | Backend-only. The IANA time zone `sia/periodResolver.js` uses for calendar/period resolution. Validated with `Intl.DateTimeFormat`; unset, blank, or an unrecognized zone name falls back to the default. |
+| `SIA_VOICE_ENABLED` | `false` | Backend-only (see "Voice input (speech-to-text) readiness" below). Only the exact (trimmed) string `"true"` enables it, same rule as `SIA_ENABLED`, and independent of it. |
+| `SIA_STT_PROVIDER` | `groq` | Backend-only. Trimmed; blank falls back to `groq`. Currently the only implemented STT adapter -- see below. |
+| `SIA_STT_MODEL` | `whisper-large-v3-turbo` | Backend-only. Trimmed; blank falls back to the default. |
+| `SIA_STT_TIMEOUT_MS` | `30000` | Backend-only. Must be a finite, positive number; anything else falls back to the default. |
+| `SIA_STT_MAX_BYTES` | `5242880` (5 MiB) | Backend-only. Must be a finite, positive number; anything else falls back to the default. Enforced by `Middlewares/audioUpload.js`. |
+| `SIA_STT_MAX_DURATION_SECONDS` | `45` | Backend-only. Must be a finite, positive number; anything else falls back to the default. |
 
 ## Non-goals (as of M1-1)
 

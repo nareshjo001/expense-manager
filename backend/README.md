@@ -255,7 +255,14 @@ Values below are placeholders. No real secret is included here or in any tracked
 | `SIA_LLM_TIMEOUT_MS` | No | Per-request provider timeout in ms, shared by all adapters (default `8000`) |
 | `OPENAI_API_KEY` | Only if `SIA_LLM_PROVIDER=openai` | OpenAI adapter's API key, read only inside that provider adapter |
 | `GEMINI_API_KEY` | Only if `SIA_LLM_PROVIDER=gemini` | Gemini adapter's API key, read only inside that provider adapter, sent only in the request's `Authorization` header |
-| `GROQ_API_KEY` | Only if `SIA_LLM_PROVIDER=groq` | Groq adapter's API key, read only inside that provider adapter, sent only in the request's `Authorization` header |
+| `GROQ_API_KEY` | Only if `SIA_LLM_PROVIDER=groq` | Groq adapter's API key, read only inside that provider adapter, sent only in the request's `Authorization` header, and also the credential SIA's voice/STT Groq adapter reads (see below) |
+| `APP_TIME_ZONE` | No | Backend-only. The canonical IANA time zone `sia/periodResolver.js` uses to resolve calendar periods ("this month", "last month", etc.) -- deliberately never the server process's own host/local time zone. Validated with `Intl.DateTimeFormat`; an unset, blank, or unrecognized zone name falls back to the default. Default: `Asia/Kolkata`. |
+| `SIA_VOICE_ENABLED` | No | Backend-only. `true` enables SIA's voice input (speech-to-text) capability; any other value or unset **disables** it. Independent of `SIA_ENABLED` -- text Q&A and voice input can each be up or down on their own. Default: disabled. |
+| `SIA_STT_PROVIDER` | Only if voice input is used | Backend-only. STT provider identifier; currently only `groq` has an implemented adapter (`sia/transcriptionService.js`) -- any other value is treated as not ready, never silently accepted. Default: `groq`. |
+| `SIA_STT_MODEL` | Only if voice input is used | Backend-only. Model identifier passed to the configured STT provider. Default: `whisper-large-v3-turbo`. |
+| `SIA_STT_TIMEOUT_MS` | No | Backend-only. Per-request STT provider timeout in ms. Default: `30000`. |
+| `SIA_STT_MAX_BYTES` | No | Backend-only. Maximum accepted audio upload size in bytes, enforced by `Middlewares/audioUpload.js` before any container-signature check or provider call. Default: `5242880` (5 MiB). Note: the underlying upload middleware rejects a file of exactly this many bytes the same as a larger one, so the true usable maximum is one byte less than this value -- a deliberately fail-closed rounding, not a bug. |
+| `SIA_STT_MAX_DURATION_SECONDS` | No | Backend-only. Maximum accepted audio clip length in seconds, enforced after transcription. Default: `45`. |
 | `FIREBASE_SERVICE_ACCOUNT` | No (optional -- see below) | Firebase service-account credentials, used only for push notifications |
 
 ### SIA provider configuration (OpenAI, Gemini, or Groq)
@@ -313,6 +320,66 @@ readiness contract (`sia/readiness.js` requires the credential matching
 whichever provider is configured, and reports only `available: true|false`
 -- never the provider name, model, or credential presence -- from
 `GET /sia/status`).
+
+### SIA voice input (speech-to-text) configuration
+
+`APP_TIME_ZONE`, `SIA_VOICE_ENABLED`, `SIA_STT_PROVIDER`, `SIA_STT_MODEL`,
+`SIA_STT_TIMEOUT_MS`, `SIA_STT_MAX_BYTES`, and `SIA_STT_MAX_DURATION_SECONDS`
+are all read by `sia/config.js` and are **backend-only** environment
+variables -- none of them, and no API key or STT credential of any kind, is
+ever read from, sent to, or permitted to exist as a `REACT_APP_*` frontend
+variable. `GROQ_API_KEY` (the STT credential) is read directly from
+`process.env` inside `sia/transcriptionService.js`, the same server-only
+pattern `sia/llmService.js`'s adapters already use for the text providers,
+and is never exposed through `sia/config.js`, a response, or a log line.
+
+Voice input is **disabled by default**. Set `SIA_VOICE_ENABLED=true` to turn
+it on; any other value, or leaving it unset, keeps it off regardless of
+whether `SIA_STT_PROVIDER`/`SIA_STT_MODEL`/`GROQ_API_KEY` are configured.
+`sia/readiness.js`'s `isVoiceReady()` is the single authoritative evaluator
+(used by both `GET /sia/status`'s `capabilities.voiceInput.available` and
+`POST /sia/transcriptions`), independent of `isSiaReady()` -- voice can be
+unavailable while text Q&A keeps working, and vice versa.
+
+Only an **implemented** STT provider may actually serve a request: currently
+`groq` is the only adapter (`sia/transcriptionService.js`); any other
+`SIA_STT_PROVIDER` value normalizes to not-ready rather than being silently
+accepted, the same guarantee `SIA_LLM_PROVIDER` already has for text.
+`SIA_STT_MODEL` has no readiness check of its own beyond `config.js`'s
+default -- it is passed to the provider as-is.
+
+```
+SIA_VOICE_ENABLED=true
+SIA_STT_PROVIDER=groq
+SIA_STT_MODEL=whisper-large-v3-turbo
+SIA_STT_TIMEOUT_MS=30000
+SIA_STT_MAX_BYTES=5242880
+SIA_STT_MAX_DURATION_SECONDS=45
+GROQ_API_KEY=<server-only secret>
+```
+
+`APP_TIME_ZONE` is unrelated to voice input specifically -- it is the
+IANA time zone `sia/periodResolver.js` uses for calendar/period resolution
+(e.g. "this month") across both the text and voice paths, validated with
+`Intl.DateTimeFormat` and defaulting to `Asia/Kolkata` when unset, blank, or
+unrecognized.
+
+There is no separate feature flag that gates the semantic-routing fallback
+layer (`sia/semanticRouter.js`, `sia/semanticPipeline.js`): it activates
+automatically, for any question the deterministic intent classifier
+(`sia/intentClassifier.js`) returns `null` for, under the same
+`SIA_ENABLED`/`SIA_LLM_PROVIDER`/`SIA_LLM_MODEL`/credential readiness path
+already documented above -- no additional environment variable enables or
+disables it.
+
+On the frontend, capturing microphone audio (`navigator.mediaDevices.getUserMedia`,
+used by `useSiaVoiceRecorder.js`) requires a
+[secure browsing context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts)
+in production -- HTTPS, or `localhost` for local development. On an insecure
+origin, `navigator.mediaDevices` is not exposed by the browser at all, so the
+recorder's own support check fails closed and the voice controls simply do
+not render; this is a browser-platform constraint, not something SIA's own
+code enables or disables.
 
 ### Firebase / push notifications (optional)
 

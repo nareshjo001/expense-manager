@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { FiArrowLeft, FiTrash2 } from "react-icons/fi";
 import { useSiaSessionsQuery } from "../../hooks/queries/useSiaSessionsQuery";
 import { useSiaDeleteSessionMutation } from "../../hooks/mutations/useSiaDeleteSessionMutation";
 
@@ -54,6 +55,7 @@ const SiaSessionList = ({ isOpen, onSelect, onBack, activeSessionId, onActiveSes
     <div className="sia-history">
       <div className="sia-history-bar">
         <button type="button" className="sia-secondary-btn" onClick={onBack}>
+          <FiArrowLeft aria-hidden="true" />
           Back to conversation
         </button>
       </div>
@@ -131,11 +133,12 @@ const SiaSessionList = ({ isOpen, onSelect, onBack, activeSessionId, onActiveSes
                   ) : (
                     <button
                       type="button"
-                      className="sia-icon-btn"
+                      className="sia-icon-btn sia-history-delete"
                       aria-label={`Delete ${label}`}
+                      title="Delete conversation"
                       onClick={() => setConfirmingId(session.sessionId)}
                     >
-                      &times;
+                      <FiTrash2 aria-hidden="true" />
                     </button>
                   )}
                 </li>

@@ -1,4 +1,4 @@
-/* Anomaly Detection Layer V1 -- Unusual Spending section.
+/* Material spending-review section.
    Follows the same theming convention as the sibling Monthly Insights
    sections (SpendingForecast.css / BudgetIntelligence.css): theme
    variables are declared per file under .light-theme/.dark-theme, and the
@@ -115,10 +115,9 @@
   min-width: 0;
 }
 
-/* SEVERITY BADGE -- never colour-only: the text label always carries the
-   meaning; colour (all within the amber/orange family, deliberately never
-   red) is only ever a reinforcement, staying calm rather than alarming. */
-.anomaly-severity-badge {
+/* Direct comparison badge: states the observable ratio, never a financial
+   severity or risk judgement. */
+.anomaly-ratio-badge {
   display: inline-flex;
   align-items: center;
   font-size: 12px;
@@ -129,21 +128,8 @@
   border: 1px solid currentColor;
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-.anomaly-severity-badge.moderate {
   color: #b45309;
   background: #fef3c7;
-}
-
-.anomaly-severity-badge.high {
-  color: #c2410c;
-  background: #ffedd5;
-}
-
-.anomaly-severity-badge.very_high {
-  color: #9a3412;
-  background: #fed7aa;
 }
 
 .anomaly-item-meta {
@@ -168,6 +154,20 @@
   margin: 6px 0 0 0;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.anomaly-item-evidence,
+.anomaly-item-impact {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.anomaly-item-impact {
+  color: #92400e;
+  font-weight: 600;
 }
 
 /* EMPTY / UNAVAILABLE / NO-ANOMALY STATES */

@@ -862,3 +862,102 @@ describe("sia/responseValidator -- valid grounded paraphrases pass", () => {
     expect(result).toEqual({ valid: true });
   });
 });
+
+// CURRENT_SPENDING_SUMMARY -- a bare current-month total lookup. Its real
+// contextBuilder.js context is exactly `{ summary: { totalSpent } }` (see
+// sia/contextBuilder.js's CURRENT_SPENDING_SUMMARY branch), so this fixture
+// mirrors the exact production shape, matching the pattern the other
+// per-intent fixtures at the top of this file already use.
+const currentSpendingSummaryContext = {
+  summary: { totalSpent: 4321.55 },
+};
+
+describe("sia/responseValidator -- CURRENT_SPENDING_SUMMARY", () => {
+  it("accepts an answer containing exactly the grounded total", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "So far this month, you've spent a total of $4321.55.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("rejects an invented amount not present in the real context", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "So far this month, you've spent a total of $9999.99.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: false, reasonCode: "UNSUPPORTED_MONETARY_FIGURE" });
+  });
+
+  it("rejects a comparison/increase claim -- this context has no prior-month figure to compare against", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "You've spent $4321.55 this month, which is higher than last month.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: false, reasonCode: "UNSUPPORTED_COMPARISON_CLAIM" });
+  });
+
+  it("rejects a forecast/future claim -- this context has no forecast data", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "You've spent $4321.55 this month, and you are projected to spend more next month.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: false, reasonCode: "UNSUPPORTED_FORECAST_CLAIM" });
+  });
+
+  it("rejects a category-breakdown claim -- this context has no category data", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "You've spent $4321.55 this month, mostly in the Groceries category.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: false, reasonCode: "UNSUPPORTED_CATEGORY_CLAIM" });
+  });
+
+  it("rejects raw-field leakage: a transaction ID or merchant-detail mention", () => {
+    const byMerchant = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "You've spent $4321.55 this month, mostly at one merchant.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(byMerchant).toEqual({ valid: false, reasonCode: "UNSUPPORTED_TRANSACTION_DETAIL" });
+
+    const byMongoId = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "Expense 64f1a2b3c4d5e6f7a8b9c0d1 makes up most of your $4321.55 total.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(byMongoId).toEqual({ valid: false, reasonCode: "LEAKED_IDENTIFIER" });
+  });
+
+  it("rejects advice/recommendation language", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "You've spent $4321.55 this month. You should cut back on spending.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: false, reasonCode: "OUT_OF_SCOPE_ADVICE" });
+  });
+
+  it("passes a plain, faithful restatement of the total with no extra claims", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "Your total spending so far this month is $4321.55.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("rejects the shared generic leakage checks the same way every other intent does", () => {
+    const result = validateGroundedAnswer({
+      intent: "CURRENT_SPENDING_SUMMARY",
+      answer: "Internally this used the userId field to compute $4321.55.",
+      contextFields: currentSpendingSummaryContext,
+    });
+    expect(result).toEqual({ valid: false, reasonCode: "RAW_FIELD_LEAKAGE" });
+  });
+});

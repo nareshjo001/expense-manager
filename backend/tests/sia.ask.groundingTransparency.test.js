@@ -447,91 +447,127 @@ describe("grounding shape is strictly identical across fresh / resume / replay /
     return require("../app");
   }
 
-  it("no source on any of the four paths carries a period property, and all four are strictly equal", async () => {
-    // --- Path 1: fresh /sia/ask -------------------------------------
-    const { app: freshApp } = loadApp();
-    const freshRes = await post(freshApp, signToken("shape-1"), { question: QUESTION });
-    expect(freshRes.status).toBe(200);
-    const freshBody = freshRes.body.grounding;
-
-    // --- Path 2: RESUME_ANSWER_READY, fed model-serialized data -----
-    const { app: resumeApp } = loadApp({
-      idempotencyOverrides: {
-        reserveRequest: async () => ({
-          outcome: "RESUME_ANSWER_READY",
-          record: {
-            _id: "req-shape-1",
-            answer: "Your health score is fine.",
-            intent: "HEALTH_EXPLANATION",
-            session: null,
-            grounding: MODEL_SERIALIZED_VIA_REQUEST,
-          },
-          ownerToken: "owner-shape-1",
-        }),
-      },
-    });
-    const resumeRes = await post(resumeApp, signToken("shape-2"), {
-      question: QUESTION,
-      clientMessageId: "shape-resume-key",
-    });
-    expect(resumeRes.status).toBe(200);
-    const resumeBody = resumeRes.body.grounding;
-
-    // --- Path 3: REPLAY_COMPLETED, payload built from the fresh -----
-    // response body a real completed attempt would have stored verbatim.
-    const { app: replayApp } = loadApp({
-      idempotencyOverrides: {
-        reserveRequest: async () => ({
-          outcome: "REPLAY_COMPLETED",
-          record: { responseStatus: 200, responsePayload: { ...freshRes.body } },
-        }),
-      },
-    });
-    const replayRes = await post(replayApp, signToken("shape-3"), {
-      question: QUESTION,
-      clientMessageId: "shape-replay-key",
-    });
-    expect(replayRes.status).toBe(200);
-    const replayBody = replayRes.body.grounding;
-
-    // --- Path 4: session history, fed model-serialized data ---------
-    const historyApp = loadSessionsAppFor([
-      {
-        role: "assistant",
-        content: "Your health score is fine.",
-        intent: "HEALTH_EXPLANATION",
-        createdAt: new Date(),
-        grounding: MODEL_SERIALIZED_VIA_MESSAGE,
-      },
-    ]);
-    const historyRes = await request(historyApp)
-      .get(`/sia/sessions/${EXISTING_SESSION_ID}/messages`)
-      .set("Authorization", `Bearer ${signToken("shape-4")}`);
-    expect(historyRes.status).toBe(200);
-    const historyBody = historyRes.body.messages[0].grounding;
-
-    // --- Strict equivalence across every path -----------------------
-    for (const [label, body] of [
-      ["fresh", freshBody],
-      ["resume", resumeBody],
-      ["replay", replayBody],
-      ["history", historyBody],
-    ]) {
-      // `label` names the path under test so a failure identifies which
-      // of the four regressed.
-      expect({ path: label, defined: body !== undefined }).toEqual({ path: label, defined: true });
-      expect(body.sources.length).toBeGreaterThan(0);
-      for (const source of body.sources) {
-        expect(source).not.toHaveProperty("period");
-        expect(Object.keys(source).sort()).toEqual(["key", "label"]);
-      }
+  // Split into four single-app-load tests (was one test cold-reloading the
+  // app FOUR times) -- each reload costs 25-50s in this sandbox (this
+  // file's loadApp() additionally pulls in the real, unmocked
+  // financialQueryService.js -> real Mongoose models via ask.js's
+  // unconditional semanticPipeline.js require, which is measurably slower
+  // to first-load than sia.ask.test.js's fully-mocked equivalent), so four
+  // sequential reloads in one test could exceed even a generous scoped
+  // timeout, and in this sandbox reliably exceeds what a single command
+  // invocation can observe complete. Splitting -- rather than just raising
+  // the timeout further -- keeps each test's wall-clock bounded to ONE
+  // reload. No assertion was removed: every path still proves (a) no
+  // `period` property on any source, (b) the exact `{key,label}` key set,
+  // and (c) strict equality with the SAME authoritative expected shape
+  // every path was compared against before (previously via a live
+  // "fresh" response; here via FRESH_GROUNDING itself, the identical pure
+  // computation the live fresh path would also have produced -- proven by
+  // the dedicated "fresh /sia/ask" test below, which still hits the real
+  // route end-to-end exactly as before).
+  function expectNoPeriodAndMatchesFreshShape(body) {
+    expect(body).toBeDefined();
+    expect(body.sources.length).toBeGreaterThan(0);
+    for (const source of body.sources) {
+      expect(source).not.toHaveProperty("period");
+      expect(Object.keys(source).sort()).toEqual(["key", "label"]);
     }
+    expect(body).toStrictEqual(FRESH_GROUNDING);
+    expect(JSON.stringify(body)).toBe(JSON.stringify(FRESH_GROUNDING));
+  }
 
-    expect(resumeBody).toStrictEqual(freshBody);
-    expect(replayBody).toStrictEqual(freshBody);
-    expect(historyBody).toStrictEqual(freshBody);
-    expect(JSON.stringify(historyBody)).toBe(JSON.stringify(freshBody));
-  });
+  it(
+    "fresh /sia/ask carries no period property and matches the pure buildGroundingSnapshot output",
+    async () => {
+      const { app: freshApp } = loadApp();
+      const freshRes = await post(freshApp, signToken("shape-1"), { question: QUESTION });
+      expect(freshRes.status).toBe(200);
+      expectNoPeriodAndMatchesFreshShape(freshRes.body.grounding);
+    },
+    60000
+  );
+
+  it(
+    "RESUME_ANSWER_READY (fed model-serialized data) carries no period property and matches",
+    async () => {
+      const { app: resumeApp } = loadApp({
+        idempotencyOverrides: {
+          reserveRequest: async () => ({
+            outcome: "RESUME_ANSWER_READY",
+            record: {
+              _id: "req-shape-1",
+              answer: "Your health score is fine.",
+              intent: "HEALTH_EXPLANATION",
+              session: null,
+              grounding: MODEL_SERIALIZED_VIA_REQUEST,
+            },
+            ownerToken: "owner-shape-1",
+          }),
+        },
+      });
+      const resumeRes = await post(resumeApp, signToken("shape-2"), {
+        question: QUESTION,
+        clientMessageId: "shape-resume-key",
+      });
+      expect(resumeRes.status).toBe(200);
+      expectNoPeriodAndMatchesFreshShape(resumeRes.body.grounding);
+    },
+    60000
+  );
+
+  it(
+    "REPLAY_COMPLETED (payload a real completed attempt would have stored verbatim) carries no period property and matches",
+    async () => {
+      // Built directly, not from a live "fresh" response, so this test
+      // needs only ONE app load -- the exact shape a real completed first
+      // attempt would have persisted (success/answer/intent/basedOn/
+      // grounding), using the SAME FRESH_GROUNDING constant path 1
+      // independently proves the real route also produces.
+      const storedFreshPayload = {
+        success: true,
+        answer: "Your health score is fine.",
+        intent: "HEALTH_EXPLANATION",
+        basedOn: ["financialHealth", "financialHealth.overall", "financialHealth.risk.label"],
+        grounding: FRESH_GROUNDING,
+      };
+      const { app: replayApp } = loadApp({
+        idempotencyOverrides: {
+          reserveRequest: async () => ({
+            outcome: "REPLAY_COMPLETED",
+            record: { responseStatus: 200, responsePayload: { ...storedFreshPayload } },
+          }),
+        },
+      });
+      const replayRes = await post(replayApp, signToken("shape-3"), {
+        question: QUESTION,
+        clientMessageId: "shape-replay-key",
+      });
+      expect(replayRes.status).toBe(200);
+      expectNoPeriodAndMatchesFreshShape(replayRes.body.grounding);
+    },
+    60000
+  );
+
+  it(
+    "session history (fed model-serialized data) carries no period property and matches",
+    async () => {
+      const historyApp = loadSessionsAppFor([
+        {
+          role: "assistant",
+          content: "Your health score is fine.",
+          intent: "HEALTH_EXPLANATION",
+          createdAt: new Date(),
+          grounding: MODEL_SERIALIZED_VIA_MESSAGE,
+        },
+      ]);
+      const historyRes = await request(historyApp)
+        .get(`/sia/sessions/${EXISTING_SESSION_ID}/messages`)
+        .set("Authorization", `Bearer ${signToken("shape-4")}`);
+      expect(historyRes.status).toBe(200);
+      expectNoPeriodAndMatchesFreshShape(historyRes.body.messages[0].grounding);
+    },
+    60000
+  );
 
   it("an explicitly supplied valid period survives the resume and history paths unchanged", async () => {
     const withPeriod = { sources: [{ key: "budget", label: "Budget status", period: "2026-08" }] };

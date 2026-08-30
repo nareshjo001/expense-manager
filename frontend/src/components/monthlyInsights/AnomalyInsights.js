@@ -1,7 +1,7 @@
 import { FaExclamationTriangle } from "react-icons/fa";
 import "./AnomalyInsights.css";
 
-// Anomaly Detection Layer V1 -- product surfacing only.
+// Material spending-review surfacing only.
 //
 // This component is a pure, read-only renderer over `report.anomalies`,
 // which backend/analytics/analyzers/expenseAnomalyAnalyzer.js already
@@ -18,23 +18,20 @@ import "./AnomalyInsights.css";
 // Contract read here (see backend/analytics/analyzers/expenseAnomalyAnalyzer.js
 // and backend/analytics/analyzers/scores/expenseAnomalyRules.js):
 //   report.anomalies = {
-//     hasData, reasonCode, flaggedCount, insufficientHistoryCategoryCount, ...
+//     hasData, reasonCode, flaggedCount, comparedExpenseCount,
+//     uncomparableExpenseCount, ...
 //     anomalies: [{
 //       expenseId, expenseName, category, amount, expenseDate, severity,
 //       reasonCode,
-//       baseline: { scope, sampleCount, medianAmount },
+//       baseline: { scope, sampleCount, monthCount, medianAmount },
+//       impact: { excessAmount, monthlyReferenceAmount,
+//                 monthlyReferenceSource, percentage },
 //       detection: { method, score, threshold, thresholdMultiple, amountRatio },
 //     }]
 //   }
 // The flagged list lives at report.anomalies.anomalies -- NOT
 // report.anomalies.records (that key only exists inside SIA's own bounded
 // context copy, never on the stored report itself).
-
-const SEVERITY_LABELS = {
-  moderate: "Moderate",
-  high: "High",
-  very_high: "Very high",
-};
 
 const isPlainObject = (value) =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -83,12 +80,9 @@ function toDisplayRecord(raw, index) {
 
   const name = isNonBlankString(raw.expenseName) ? raw.expenseName : null;
   const dateLabel = formatExpenseDate(raw.expenseDate);
-  const severityKey = isNonBlankString(raw.severity) && SEVERITY_LABELS[raw.severity]
-    ? raw.severity
-    : null;
-
   const baseline = isPlainObject(raw.baseline) ? raw.baseline : null;
   const detection = isPlainObject(raw.detection) ? raw.detection : null;
+  const impact = isPlainObject(raw.impact) ? raw.impact : null;
   const medianAmount =
     baseline && isFiniteNumber(baseline.medianAmount) && baseline.medianAmount > 0
       ? baseline.medianAmount
@@ -97,20 +91,41 @@ function toDisplayRecord(raw, index) {
     baseline && isFiniteNumber(baseline.sampleCount) && baseline.sampleCount >= 0
       ? baseline.sampleCount
       : null;
+  const monthCount =
+    baseline && isFiniteNumber(baseline.monthCount) && baseline.monthCount > 0
+      ? baseline.monthCount
+      : null;
   const amountRatio =
     detection && isFiniteNumber(detection.amountRatio) && detection.amountRatio > 0
       ? detection.amountRatio
       : null;
+  const excessAmount =
+    impact && isFiniteNumber(impact.excessAmount) && impact.excessAmount > 0
+      ? impact.excessAmount
+      : null;
+  const impactPercentage =
+    impact && isFiniteNumber(impact.percentage) && impact.percentage > 0
+      ? impact.percentage
+      : null;
+  const referenceSource = isNonBlankString(impact?.monthlyReferenceSource)
+    ? impact.monthlyReferenceSource
+    : null;
+  const comparisonLabel = baseline?.scope === "expense_name" && name ? name : category;
 
   // The full, specific explanation is only ever built from real numbers
   // already on the contract -- no jargon (method/score/threshold) is ever
   // surfaced here. When any one of the three supporting numbers is missing
   // or malformed, a concise, still-honest fallback is shown instead of a
   // broken or partially-numeric sentence.
-  const explanation =
-    medianAmount !== null && sampleCount !== null && amountRatio !== null
-      ? `${formatMoney(amount)} was ${formatMultiple(amountRatio)}× your typical ${category} expense of ${formatMoney(medianAmount)}, based on ${sampleCount} previous ${sampleCount === 1 ? "expense" : "expenses"}.`
-      : `${formatMoney(amount)} is unusual compared with your recent ${category} spending.`;
+  const explanation = medianAmount !== null && excessAmount !== null
+    ? `${formatMoney(amount)} was ${formatMoney(excessAmount)} above your usual ${formatMoney(medianAmount)} ${comparisonLabel} purchase.`
+    : `${formatMoney(amount)} was meaningfully higher than your usual ${comparisonLabel} purchase.`;
+  const evidence = sampleCount !== null
+    ? `Compared with ${sampleCount} previous ${comparisonLabel} ${sampleCount === 1 ? "purchase" : "purchases"}${monthCount !== null ? ` across ${monthCount} ${monthCount === 1 ? "month" : "months"}` : ""}.`
+    : null;
+  const impactText = impactPercentage !== null
+    ? `The extra amount equals about ${formatMultiple(impactPercentage)}% of ${referenceSource === "current_budget" ? "this month's budget" : "your usual monthly spending"}.`
+    : null;
 
   return {
     key: isNonBlankString(raw.expenseId) ? raw.expenseId : `anomaly-${index}`,
@@ -118,8 +133,10 @@ function toDisplayRecord(raw, index) {
     category,
     amountLabel: formatMoney(amount),
     dateLabel,
-    severityKey,
+    ratioLabel: amountRatio !== null ? `${formatMultiple(amountRatio)}× usual` : null,
     explanation,
+    evidence,
+    impactText,
   };
 }
 
@@ -131,7 +148,7 @@ function AnomalyShell({ children }) {
           <FaExclamationTriangle size={16} color="#FFFFFF" />
         </div>
         <h1 id="anomaly-heading" className="anomaly-h-text">
-          Unusual Spending
+          Spending Worth Reviewing
         </h1>
       </div>
       <div className="anomaly-panel">{children}</div>
@@ -160,7 +177,7 @@ export default function AnomalyInsights({ report }) {
     return (
       <AnomalyShell>
         <EmptyState
-          title="Unusual-spending insights are unavailable right now."
+          title="Spending review is unavailable right now."
           text="We could not check this month's expenses against your history just now. Your expenses and budgets are unaffected — please try again shortly."
         />
       </AnomalyShell>
@@ -186,7 +203,7 @@ export default function AnomalyInsights({ report }) {
         <AnomalyShell>
           <EmptyState
             title="Still building your spending history"
-            text="BALENISA needs at least 10 earlier expenses in the same category before it can make a reliable comparison."
+            text="More matching purchase history is needed before this month's expenses can be compared reliably."
           />
         </AnomalyShell>
       );
@@ -198,7 +215,7 @@ export default function AnomalyInsights({ report }) {
     return (
       <AnomalyShell>
         <EmptyState
-          title="Unusual-spending insights are unavailable right now."
+          title="Spending review is unavailable right now."
           text="We could not check this month's expenses against your history just now. Your expenses and budgets are unaffected — please try again shortly."
         />
       </AnomalyShell>
@@ -210,13 +227,28 @@ export default function AnomalyInsights({ report }) {
   // backend's own ranking and without mutating the source array.
   const rawList = Array.isArray(anomalies.anomalies) ? anomalies.anomalies : [];
   const records = rawList.map(toDisplayRecord).filter(Boolean);
+  const candidateCount = isFiniteNumber(anomalies.evaluatedExpenseCount)
+    ? anomalies.evaluatedExpenseCount
+    : null;
+  const comparedCount = isFiniteNumber(anomalies.comparedExpenseCount)
+    ? anomalies.comparedExpenseCount
+    : null;
+  const uncomparableCount = isFiniteNumber(anomalies.uncomparableExpenseCount)
+    ? anomalies.uncomparableExpenseCount
+    : candidateCount !== null && comparedCount !== null
+      ? Math.max(0, candidateCount - comparedCount)
+      : null;
 
   if (records.length === 0) {
     return (
       <AnomalyShell>
         <EmptyState
-          title="No unusual expenses were detected this month."
-          text="Unusual does not necessarily mean incorrect—it only differs from your recent spending pattern."
+          title={comparedCount !== null
+            ? `No material spending changes found among ${comparedCount} comparable ${comparedCount === 1 ? "expense" : "expenses"}.`
+            : "No material spending changes found this month."}
+          text={uncomparableCount > 0
+            ? `${uncomparableCount} ${uncomparableCount === 1 ? "expense did" : "expenses did"} not yet have enough matching history for comparison.`
+            : "Only purchases that are both unusual for you and meaningful to the month are shown here."}
         />
       </AnomalyShell>
     );
@@ -225,20 +257,22 @@ export default function AnomalyInsights({ report }) {
   return (
     <AnomalyShell>
       <p className="anomaly-summary-line">
-        {records.length} unusual {records.length === 1 ? "expense" : "expenses"} found this
-        month, based on your own spending history.
+        {records.length} material spending {records.length === 1 ? "change" : "changes"} found
+        {comparedCount !== null && candidateCount !== null
+          ? ` after comparing ${comparedCount} of ${candidateCount} ${candidateCount === 1 ? "expense" : "expenses"}`
+          : " from your own spending history"}.
       </p>
       <p className="anomaly-clarification">
-        Unusual does not necessarily mean incorrect—it only differs from your recent spending pattern.
+        These are pattern comparisons, not error or fraud alerts. Small statistical differences are excluded.
       </p>
       <ul className="anomaly-list">
         {records.map((record) => (
           <li className="anomaly-item" key={record.key}>
             <div className="anomaly-item-head">
               <span className="anomaly-item-name">{record.name ?? record.category}</span>
-              {record.severityKey && (
-                <span className={`anomaly-severity-badge ${record.severityKey}`}>
-                  {SEVERITY_LABELS[record.severityKey]}
+              {record.ratioLabel && (
+                <span className="anomaly-ratio-badge">
+                  {record.ratioLabel}
                 </span>
               )}
             </div>
@@ -248,6 +282,8 @@ export default function AnomalyInsights({ report }) {
             </p>
             <p className="anomaly-item-amount">{record.amountLabel}</p>
             <p className="anomaly-item-explanation">{record.explanation}</p>
+            {record.evidence && <p className="anomaly-item-evidence">{record.evidence}</p>}
+            {record.impactText && <p className="anomaly-item-impact">{record.impactText}</p>}
           </li>
         ))}
       </ul>

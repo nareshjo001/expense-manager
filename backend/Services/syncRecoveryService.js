@@ -44,6 +44,20 @@ function dedupeMonthAnchors(dates) {
   return [...seen.values()];
 }
 
+// PendingSync has existed across server timezone changes. Preserve the exact
+// stored timestamps when clearing a repair result, otherwise normalizing an
+// older UTC month anchor to the current local timezone can leave the original
+// array entry behind forever even though that logical month was repaired.
+function dedupeExactDates(dates) {
+  const seen = new Map();
+  for (const date of dates || []) {
+    const parsed = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(parsed.getTime())) continue;
+    seen.set(parsed.getTime(), parsed);
+  }
+  return [...seen.values()];
+}
+
 // Records new pending derived-data work outside the confirm()/reserve() flow (e.g. repair-failure bookkeeping); purely additive so concurrent callers never lose each other's updates.
 async function markPending({ userId, budgetDates = [], reportPending = false, error } = {}) {
   const monthAnchors = dedupeMonthAnchors(budgetDates);
@@ -194,8 +208,17 @@ async function getPendingSync(userId) {
 }
 
 // CAS clear: only removes the specific repaired budget months and only clears reportPending if the marker's revision still matches the caller's captured value -- a newer mutation's revision bump makes this a no-op. Guards the MARKER only; the derived-data write itself is separately guarded by `fenceRevision` on recalculateBudget/refreshReport.
-async function clearIfRevisionMatches({ userId, revision, repairedBudgetMonths = [], reportCleared = false } = {}) {
-  const monthAnchors = dedupeMonthAnchors(repairedBudgetMonths);
+async function clearIfRevisionMatches({
+  userId,
+  revision,
+  repairedBudgetMonths = [],
+  repairedStoredBudgetMonthAnchors = [],
+  reportCleared = false,
+} = {}) {
+  const monthAnchors = dedupeExactDates([
+    ...dedupeMonthAnchors(repairedBudgetMonths),
+    ...dedupeExactDates(repairedStoredBudgetMonthAnchors),
+  ]);
 
   const update = {};
   if (monthAnchors.length > 0) {
@@ -319,6 +342,7 @@ async function repairIfPending(userId, options = {}) {
       let budgetError = null;
       let reportCleared = false;
       let reportError = null;
+      let highestSupersedingRevision = null;
 
       for (const anchor of before.pendingBudgetMonths) {
         try {
@@ -326,6 +350,12 @@ async function repairIfPending(userId, options = {}) {
           if (result && result.skipped) {
             // Superseded by newer recorded work -- not treated as repaired; the newer work's own attempt (or a later repair) persists it.
             budgetError = budgetError || new Error("Superseded by newer pending work");
+            if (Number.isFinite(result.currentRevision)) {
+              highestSupersedingRevision = Math.max(
+                highestSupersedingRevision || 0,
+                result.currentRevision
+              );
+            }
           } else {
             repairedMonths.push(anchor);
           }
@@ -339,6 +369,12 @@ async function repairIfPending(userId, options = {}) {
           const result = await refreshReport(userId, { fenceRevision: revision });
           if (result && result.skipped) {
             reportError = reportError || new Error("Superseded by newer pending work");
+            if (Number.isFinite(result.currentRevision)) {
+              highestSupersedingRevision = Math.max(
+                highestSupersedingRevision || 0,
+                result.currentRevision
+              );
+            }
           } else {
             reportCleared = true;
           }
@@ -351,6 +387,10 @@ async function repairIfPending(userId, options = {}) {
         userId,
         revision,
         repairedBudgetMonths: repairedMonths,
+        // These values came directly from PendingSync. Pull their exact
+        // timestamps as well as their locally-normalized month anchors so
+        // markers written under an older server timezone are retired too.
+        repairedStoredBudgetMonthAnchors: repairedMonths,
         reportCleared,
       });
       revisionMatchedOnClear = clearResult.matched;
@@ -366,6 +406,25 @@ async function repairIfPending(userId, options = {}) {
           );
         } catch (_bookkeepingErr) {
           // Intentionally swallowed -- see outer catch's rationale.
+        }
+      }
+
+      // A derived document can legitimately reject an older concurrent
+      // repair. Its writer will also have advanced PendingSync, so that is
+      // not retried here. The exceptional case is a recreated/reset marker:
+      // the stored document's revision is then ahead of the marker itself,
+      // making every future repair lose forever. Raise only that broken
+      // floor and retry once; $max never lowers a concurrent writer's value.
+      if (highestSupersedingRevision !== null && !options.revisionFloorRetry) {
+        const markerAfterSkip = await getPendingSync(userId);
+        const markerRevision = Number(markerAfterSkip && markerAfterSkip.revision);
+        if (Number.isFinite(markerRevision) && highestSupersedingRevision > markerRevision) {
+          await PendingSync.findOneAndUpdate(
+            { user: userId },
+            { $max: { revision: highestSupersedingRevision } },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+          return repairIfPending(userId, { ...options, revisionFloorRetry: true });
         }
       }
     }
@@ -393,7 +452,6 @@ async function repairIfPending(userId, options = {}) {
       : current
       ? current.revision
       : undefined;
-
     for (const r of staleBudgetReservations) {
       try {
         await recalculateBudget(userId, r.month, { fenceRevision: tier2Revision });

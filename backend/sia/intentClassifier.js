@@ -9,6 +9,9 @@ const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
 const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
 const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
+// Added strictly ADDITIVELY, checked strictly LAST (see placement note at
+// its check site) -- every existing identifier/branch above is unchanged.
+const CURRENT_SPENDING_SUMMARY = "CURRENT_SPENDING_SUMMARY";
 
 // Must ask for an explanation/meaning/reason (not just mention the topic) AND mention "financial health"/"financial risk" specifically -- not bare "health" (medical-health false match) or bare "risk".
 const EXPLANATION_VERB_PATTERN = /\b(why|explain|what does .* mean|meaning of|reason for)\b/;
@@ -142,6 +145,119 @@ const RISK_TOPIC_PATTERN = /\b(financial risks?|risks?|risky)\b/;
 // Deliberately narrow to genuine question/explanation shapes -- a bare topic+adjective mention must NOT match, mirroring HEALTH_EXPLANATION's conservatism.
 const RISK_VERB_PATTERN = /\b(why|explain|do i have|have any|is there|risk status|current risk|financial risk status)\b/;
 
+// -- CURRENT_SPENDING_SUMMARY -----------------------------------------
+//
+// A bare "what's my current-month total?" lookup question -- NOT an
+// explanation, comparison, forecast, category breakdown, or advice
+// request. Checked strictly LAST, after all seven existing intents above
+// have already had a chance to claim the question, so it can never steal
+// a genuine health/spending-change/budget/category/anomaly/forecast/risk
+// question that merely happens to also mention "spend"/"this month"/
+// "how much" -- those intents all return before this point is reached.
+//
+// Requires THREE independent signal groups to ALL be true (not one
+// sentence-shaped regex): (1) a spending topic word, (2) an explicit
+// CURRENT-period phrase (never a bare "this"/implicit period, and never a
+// past/named month -- that is what actually distinguishes this from the
+// existing, deliberately-null "How much did I spend?" case), and (3) a
+// total/amount lookup word. Every concept maps to exactly the one field
+// contextBuilder.js's CURRENT_SPENDING_SUMMARY context will supply --
+// summary.totalSpent -- so classification is never broader than what the
+// context can ground.
+const SPENDING_SUMMARY_TOPIC_PATTERN =
+  /\b(spend|spent|spending|expense|expenses|expenditure|expenditures)\b/;
+
+// Curly apostrophes normalized to straight ones and hyphens normalized to
+// spaces before this is tested (see normalizeForCurrentPeriod below), so
+// "current month's" and "month-to-date"/"month to date" are all covered
+// by these plain-space phrases without needing separate hyphen-tolerant
+// alternatives.
+const CURRENT_PERIOD_PATTERN =
+  /\b(this month|current month|month to date|so far this month)\b/;
+
+const TOTAL_LOOKUP_PATTERN = /\b(how much|total|amount|what is|tell me)\b/;
+
+// Curly-apostrophe collapse + hyphen-to-space + whitespace collapse,
+// scoped ONLY to the CURRENT_SPENDING_SUMMARY check below -- every other
+// intent's patterns above continue to run against the plain
+// trim()+toLowerCase() `normalized` string exactly as before, unchanged.
+function normalizeForCurrentPeriod(normalized) {
+  return normalized
+    .replace(/[‘’]/g, "'")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Excludes any question already recognizable as a change/comparison
+// question (reuses SPENDING_CHANGE_VERB_PATTERN verbatim -- "why did my
+// spending increase this month" must never be double-claimed), a budget
+// question (reuses CATEGORY_WORD_PATTERN/NAMED_AREA_SPENDING_PATTERN/
+// ACCOUNTS_FOR_PATTERN/CATEGORY_SHARE_OF_SPENDING_PATTERN -- the exact same
+// "names a category" shapes evaluateCategoryQuestion() uses -- as a
+// defensive backstop; a genuine CATEGORY_MATCH/CATEGORY_AMBIGUOUS question
+// already returned above before this function is ever reached, but a
+// category-NAMED, verb-less question such as "How much is my grocery
+// spending this month?" reaches CATEGORY_NOT_APPLICABLE and falls through
+// to here, so it must still be excluded rather than answered from a
+// total-only context that has no category breakdown), a forecast question
+// (reuses the three existing forecast patterns verbatim), advice/
+// recommendation language ("should i spend" / "can i spend" must never be
+// read as a total lookup), a raw transaction/list/detail request (a list
+// of transactions is not a single total), or historical/named-month
+// wording (a bare "last month" or a named month is explicitly NOT a
+// current-period phrase, and is excluded again here defensively).
+const SUMMARY_ADVICE_EXCLUSION_PATTERN =
+  /\b(should|can|could|advice|advise|recommend|recommendation)\b/;
+const SUMMARY_LOOKUP_EXCLUSION_PATTERN =
+  /\b(list|show|display|transactions?|give me a list)\b/;
+const SUMMARY_HISTORICAL_EXCLUSION_PATTERN =
+  /\b(last month|previous month|prior month|january|february|march|april|may|june|july|august|september|october|november|december)\b/;
+
+function isCurrentSpendingSummaryQuestion(normalized) {
+  const s = normalizeForCurrentPeriod(normalized);
+
+  const hasTopic = SPENDING_SUMMARY_TOPIC_PATTERN.test(s);
+  const hasCurrentPeriod = CURRENT_PERIOD_PATTERN.test(s);
+  const hasLookup = TOTAL_LOOKUP_PATTERN.test(s);
+
+  if (!hasTopic || !hasCurrentPeriod || !hasLookup) {
+    return false;
+  }
+
+  if (SPENDING_CHANGE_VERB_PATTERN.test(s)) return false;
+  if (BUDGET_TOPIC_PATTERN.test(s)) return false;
+  // NAMED_AREA_SPENDING_PATTERN is tested against the current-period phrase
+  // STRIPPED OUT of `s` -- "month to date"/"month-to-date" itself ends in a
+  // word ("date") immediately followed by "spend" ("...month to date
+  // spend?"), which would otherwise be misread as a category named "date".
+  // Stripping the matched period phrase first removes that false trigger
+  // while leaving a genuine category mention ("grocery spending this
+  // month") completely unaffected, since the period phrase there is a
+  // separate trailing word group, not adjacent to the topic word.
+  const withoutCurrentPeriodPhrase = s.replace(CURRENT_PERIOD_PATTERN, " ");
+  if (
+    CATEGORY_WORD_PATTERN.test(s) ||
+    NAMED_AREA_SPENDING_PATTERN.test(withoutCurrentPeriodPhrase) ||
+    ACCOUNTS_FOR_PATTERN.test(s) ||
+    CATEGORY_SHARE_OF_SPENDING_PATTERN.test(s)
+  ) {
+    return false;
+  }
+  if (
+    FORECAST_KEYWORD_PATTERN.test(s) ||
+    FORECAST_TIME_HORIZON_PATTERN.test(s) ||
+    FORECAST_FUTURE_SPEND_PATTERN.test(s)
+  ) {
+    return false;
+  }
+  if (SUMMARY_ADVICE_EXCLUSION_PATTERN.test(s)) return false;
+  if (SUMMARY_LOOKUP_EXCLUSION_PATTERN.test(s)) return false;
+  if (SUMMARY_HISTORICAL_EXCLUSION_PATTERN.test(s)) return false;
+
+  return true;
+}
+
 function classifyIntent(question) {
   if (typeof question !== "string") {
     return null;
@@ -196,6 +312,14 @@ function classifyIntent(question) {
     return FINANCIAL_RISK_EXPLANATION;
   }
 
+  // Checked strictly LAST -- every other supported intent above has
+  // already had a chance to claim the question and return, so this can
+  // only ever catch a genuine bare current-month total lookup that none
+  // of the other six intents' more specific patterns recognized.
+  if (isCurrentSpendingSummaryQuestion(normalized)) {
+    return CURRENT_SPENDING_SUMMARY;
+  }
+
   return null;
 }
 
@@ -204,4 +328,5 @@ module.exports = {
   ANOMALY_EXPLANATION,
   SPENDING_FORECAST_EXPLANATION,
   FINANCIAL_RISK_EXPLANATION,
+  CURRENT_SPENDING_SUMMARY,
 };

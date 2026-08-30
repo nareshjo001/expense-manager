@@ -12,6 +12,9 @@ const SUPPORTED_INTENTS = new Set([
   "ANOMALY_EXPLANATION",
   "SPENDING_FORECAST_EXPLANATION",
   "FINANCIAL_RISK_EXPLANATION",
+  // Additive only -- a bare current-month total lookup, the smallest
+  // possible context of the eight supported intents.
+  "CURRENT_SPENDING_SUMMARY",
 ]);
 
 // -- shared helpers -----------------------------------------------
@@ -188,6 +191,30 @@ async function buildContext(userId, intent) {
         trends,
         summary: {
           comparePastMonth,
+          totalSpent,
+        },
+      },
+      sourceReportGeneratedAt,
+    };
+  }
+
+  // CURRENT_SPENDING_SUMMARY: context foundation only, sourced exclusively from
+  // summary.totalSpent -- the same authoritative current-month total
+  // SPENDING_CHANGE_EXPLANATION and FINANCIAL_RISK_EXPLANATION already carry. This
+  // is the smallest bounded context of any supported intent: no trends, no
+  // category breakdown, no forecast, no risk signals -- a bare total lookup
+  // question can only ever be grounded on the one figure it asked for.
+  if (intent === "CURRENT_SPENDING_SUMMARY") {
+    const totalSpent = summary.totalSpent;
+
+    if (!isPresent(totalSpent)) {
+      return noDataResult(intent);
+    }
+
+    return {
+      intent,
+      fields: {
+        summary: {
           totalSpent,
         },
       },
@@ -474,7 +501,7 @@ async function buildContext(userId, intent) {
     };
   }
 
-  // Unreachable: SUPPORTED_INTENTS only ever admits the seven intents handled above. Kept as an explicit, honest fallback -- if an eighth intent is ever added without a matching branch, this returns the same safe no-data shape instead of silently returning undefined.
+  // Unreachable: SUPPORTED_INTENTS only ever admits the eight intents handled above. Kept as an explicit, honest fallback -- if a ninth intent is ever added without a matching branch, this returns the same safe no-data shape instead of silently returning undefined.
   return noDataResult(intent);
 }
 

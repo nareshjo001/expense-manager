@@ -66,11 +66,30 @@ function signToken(userId) {
   return jwt.sign({ email: "sia-readiness-groq-test@example.test", _id: userId }, TEST_JWT_SECRET);
 }
 
+// Workstream 2 -- voice-input config defaults (see
+// tests/sia.readiness.test.js's identical constant for the full rationale).
+// This whole file is about the TEXT (isSiaReady) surface; voice readiness
+// is covered separately by tests/sia.readiness.voice.test.js.
+const VOICE_CONFIG_DEFAULTS = {
+  voiceEnabled: false,
+  sttProvider: "groq",
+  sttModel: "whisper-large-v3-turbo",
+  sttTimeoutMs: 30000,
+  sttMaxBytes: 5242880,
+  sttMaxDurationSeconds: 45,
+};
+
 // Loads a fresh readiness module against an explicit config shape, without
 // touching the real process.env-derived config object.
 function loadReadiness({ enabled, provider, model, openaiCredential, geminiCredential, groqCredential }) {
   jest.resetModules();
-  jest.doMock("../sia/config", () => ({ enabled, provider, model, timeoutMs: 8000 }));
+  jest.doMock("../sia/config", () => ({
+    enabled,
+    provider,
+    model,
+    timeoutMs: 8000,
+    ...VOICE_CONFIG_DEFAULTS,
+  }));
   setEnvCredentials({ openai: openaiCredential, gemini: geminiCredential, groq: groqCredential });
   return require("../sia/readiness");
 }
@@ -284,7 +303,13 @@ describe("sia/readiness -- OpenAI and Gemini readiness remain unchanged after th
 describe("GET /sia/status -- never leaks provider/model/credential for any of the three providers", () => {
   function loadApp({ enabled, provider, model, openaiCredential, geminiCredential, groqCredential }) {
     jest.resetModules();
-    jest.doMock("../sia/config", () => ({ enabled, provider, model, timeoutMs: 8000 }));
+    jest.doMock("../sia/config", () => ({
+      enabled,
+      provider,
+      model,
+      timeoutMs: 8000,
+      ...VOICE_CONFIG_DEFAULTS,
+    }));
     setEnvCredentials({ openai: openaiCredential, gemini: geminiCredential, groq: groqCredential });
 
     const askLlmMock = jest.fn(async () => {
@@ -302,60 +327,91 @@ describe("GET /sia/status -- never leaks provider/model/credential for any of th
     return { app };
   }
 
-  it("returns exactly { success: true, available: true } when ready with provider=groq", async () => {
-    const { app } = loadApp({
-      enabled: true,
-      provider: "groq",
-      model: "openai/gpt-oss-120b",
-      groqCredential: FAKE_GROQ_CREDENTIAL,
-    });
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-groq-status-1")}`);
+  // Workstream 2 -- the additive capabilities.voiceInput block every
+  // GET /sia/status response now carries; voiceEnabled is unset/false
+  // throughout this file, so voiceInput.available is always false here.
+  const EXPECTED_VOICE_CAPABILITIES = {
+    voiceInput: {
+      available: false,
+      maxDurationSeconds: 45,
+      maxBytes: 5242880,
+      acceptedMimeTypes: ["audio/webm", "audio/mp4", "audio/ogg", "audio/wav"],
+    },
+  };
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, available: true });
-  });
-
-  it("returns exactly { success: true, available: false } when provider=groq has no GROQ_API_KEY", async () => {
-    const { app } = loadApp({
-      enabled: true,
-      provider: "groq",
-      model: "openai/gpt-oss-120b",
-      groqCredential: undefined,
-    });
-    const res = await request(app)
-      .get("/sia/status")
-      .set("Authorization", `Bearer ${signToken("user-groq-status-2")}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, available: false });
-  });
-
-  it("never leaks the word \"groq\", the model id, the credential, or GROQ_API_KEY in the response body", async () => {
-    for (const overrides of [
-      { groqCredential: FAKE_GROQ_CREDENTIAL },
-      { groqCredential: undefined },
-    ]) {
+  // NOTE on the explicit 60000ms third argument below (Workstream 2): this
+  // sandbox pays a large one-time-per-call cost for jest.resetModules() +
+  // require("../app") -- each call here has been observed taking up to
+  // ~55s in this environment, well past Jest's default 5000ms per-test
+  // timeout, even though the request itself resolves correctly. This
+  // mirrors the documented, narrowly-scoped fix in tests/sia.ask.test.js
+  // (a per-test timeout, not a suite-wide jest.setTimeout()).
+  it(
+    "returns exactly { success: true, available: true, capabilities } when ready with provider=groq",
+    async () => {
       const { app } = loadApp({
         enabled: true,
         provider: "groq",
         model: "openai/gpt-oss-120b",
-        ...overrides,
+        groqCredential: FAKE_GROQ_CREDENTIAL,
       });
       const res = await request(app)
         .get("/sia/status")
-        .set("Authorization", `Bearer ${signToken("user-groq-status-3")}`);
+        .set("Authorization", `Bearer ${signToken("user-groq-status-1")}`);
 
-      const raw = JSON.stringify(res.body);
-      expect(raw).not.toContain("groq");
-      expect(raw).not.toContain("openai/gpt-oss-120b");
-      expect(raw).not.toContain(FAKE_GROQ_CREDENTIAL);
-      expect(raw).not.toContain("GROQ_API_KEY");
-      expect(raw).not.toContain("SIA_LLM_PROVIDER");
-      expect(raw).not.toContain("SIA_LLM_MODEL");
-      expect(Object.keys(res.body).sort()).toEqual(["available", "success"]);
-      jest.resetModules();
-    }
-  });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, available: true, capabilities: EXPECTED_VOICE_CAPABILITIES });
+    },
+    60000
+  );
+
+  it(
+    "returns exactly { success: true, available: false, capabilities } when provider=groq has no GROQ_API_KEY",
+    async () => {
+      const { app } = loadApp({
+        enabled: true,
+        provider: "groq",
+        model: "openai/gpt-oss-120b",
+        groqCredential: undefined,
+      });
+      const res = await request(app)
+        .get("/sia/status")
+        .set("Authorization", `Bearer ${signToken("user-groq-status-2")}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, available: false, capabilities: EXPECTED_VOICE_CAPABILITIES });
+    },
+    60000
+  );
+
+  it(
+    "never leaks the word \"groq\", the model id, the credential, or GROQ_API_KEY in the response body",
+    async () => {
+      for (const overrides of [
+        { groqCredential: FAKE_GROQ_CREDENTIAL },
+        { groqCredential: undefined },
+      ]) {
+        const { app } = loadApp({
+          enabled: true,
+          provider: "groq",
+          model: "openai/gpt-oss-120b",
+          ...overrides,
+        });
+        const res = await request(app)
+          .get("/sia/status")
+          .set("Authorization", `Bearer ${signToken("user-groq-status-3")}`);
+
+        const raw = JSON.stringify(res.body);
+        expect(raw).not.toContain("groq");
+        expect(raw).not.toContain("openai/gpt-oss-120b");
+        expect(raw).not.toContain(FAKE_GROQ_CREDENTIAL);
+        expect(raw).not.toContain("GROQ_API_KEY");
+        expect(raw).not.toContain("SIA_LLM_PROVIDER");
+        expect(raw).not.toContain("SIA_LLM_MODEL");
+        expect(Object.keys(res.body).sort()).toEqual(["available", "capabilities", "success"]);
+        jest.resetModules();
+      }
+    },
+    60000
+  );
 });

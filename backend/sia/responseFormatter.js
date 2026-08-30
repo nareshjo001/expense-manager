@@ -9,6 +9,8 @@ const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
 const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
 const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
+// Additive only.
+const CURRENT_SPENDING_SUMMARY = "CURRENT_SPENDING_SUMMARY";
 
 // The real Report/context source paths each answer is grounded in -- fixed, server-owned, allowlisted, never accepted from the client or LLM. Each path is only included because contextBuilder.js actually places that exact field in the intent's `fields` object; no stale blueprint field (e.g. summary.healthScore, summary.riskLevel, or a per-category breakdown SPENDING_CHANGE_EXPLANATION never carries) is referenced.
 // HEALTH_EXPLANATION deliberately excludes summary.healthScore/summary.riskLevel, which are confirmed-broken, always-undefined paths in the real report.
@@ -42,6 +44,11 @@ const FINANCIAL_RISK_EXPLANATION_GROUNDING_PATHS = [
   "summary.budgetStatus",
 ];
 
+// CURRENT_SPENDING_SUMMARY: contextBuilder.js's `fields` carry exactly one
+// leaf, summary.totalSpent -- the same real, populated report field
+// SPENDING_CHANGE_EXPLANATION already grounds part of its answer on.
+const CURRENT_SPENDING_SUMMARY_GROUNDING_PATHS = ["summary.totalSpent"];
+
 const GROUNDING_PATHS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_EXPLANATION_GROUNDING_PATHS,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_EXPLANATION_GROUNDING_PATHS,
@@ -50,6 +57,7 @@ const GROUNDING_PATHS_BY_INTENT = {
   [ANOMALY_EXPLANATION]: ANOMALY_EXPLANATION_GROUNDING_PATHS,
   [SPENDING_FORECAST_EXPLANATION]: SPENDING_FORECAST_EXPLANATION_GROUNDING_PATHS,
   [FINANCIAL_RISK_EXPLANATION]: FINANCIAL_RISK_EXPLANATION_GROUNDING_PATHS,
+  [CURRENT_SPENDING_SUMMARY]: CURRENT_SPENDING_SUMMARY_GROUNDING_PATHS,
 };
 
 // The fixed, truthful no-data answer per intent -- no LLM was called, so each message says exactly that, for the specific thing asked about, nothing more. BUDGET_STATUS_EXPLANATION's message deliberately does not claim "no budget is configured" -- contextBuilder.js's no-data contract is shared by no report, invalid/incomplete budget data, AND hasBudget !== true alike, so only the generic "not enough report data" framing is accurate.
@@ -69,6 +77,8 @@ const NO_DATA_ANSWERS_BY_INTENT = {
     "I do not have enough financial report data yet to provide a spending forecast.",
   [FINANCIAL_RISK_EXPLANATION]:
     "I do not have enough financial report data yet to explain your financial risk.",
+  [CURRENT_SPENDING_SUMMARY]:
+    "I do not have enough financial report data yet to tell you your current month's total spending.",
 };
 
 // M3-4: basedOn explicitly lists "none" when contextBuilder returned no data, rather than omitting the field -- the no-data value is the single-element array ["none"], preserving basedOn's established type (an array of grounding-path strings); "none" is a literal sentinel, not a real Report field path.

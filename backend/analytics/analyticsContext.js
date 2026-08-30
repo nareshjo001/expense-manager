@@ -6,10 +6,13 @@ const {
     buildCompletedMonthCategorySeries,
     countActiveDays,
 } = require("./forecastInputAggregator");
+const { buildCurrentMonthForecastInput } = require("./currentMonthForecastInputAggregator");
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
-const createAnalyticsContext = async (userId) => {
+const createAnalyticsContext = async (userId, { analysisDate } = {}) => {
+    const suppliedDate = analysisDate instanceof Date ? new Date(analysisDate.getTime()) : null;
+    const now = suppliedDate && !Number.isNaN(suppliedDate.getTime()) ? suppliedDate : new Date();
     const [
         currentMonthExpenses,
         previousMonthExpenses,
@@ -17,10 +20,10 @@ const createAnalyticsContext = async (userId) => {
         previousYearExpenses,
         budgetHistory
     ] = await Promise.all([
-        dataProvider.getCurrentMonthExpenses(userId),
-        dataProvider.getPreviousMonthExpenses(userId),
-        dataProvider.getCurrentYearExpenses(userId),
-        dataProvider.getPreviousYearExpenses(userId),
+        dataProvider.getCurrentMonthExpenses(userId, now),
+        dataProvider.getPreviousMonthExpenses(userId, now),
+        dataProvider.getCurrentYearExpenses(userId, now),
+        dataProvider.getPreviousYearExpenses(userId, now),
         dataProvider.getAllBudgets(userId)
     ]);
 
@@ -60,8 +63,6 @@ const createAnalyticsContext = async (userId) => {
     const safeCurrentYear = takeAnnotated(rawCurrentYear);
     const safePreviousYear = takeAnnotated(rawPreviousYear);
 
-    const now = new Date();
-    
     const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const currentMonthKey = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
@@ -176,6 +177,18 @@ const createAnalyticsContext = async (userId) => {
     const forecastTargetMonthBudget =
         safeBudgetHistory.find((entry) => entry?.month === forecastTargetMonthKey) ?? null;
 
+    // Current-month nowcast input. Raw expense records stop at this
+    // aggregation boundary; the analyzer receives only bounded totals,
+    // completion ratios and explainable one-off adjustments. The current
+    // month budget is intentionally separate from the retained next-month
+    // budget field above.
+    const currentMonthForecastInput = buildCurrentMonthForecastInput({
+        recentExpensePool,
+        currentMonthExpenses: safeCurrentMonth,
+        currentMonthStart,
+        asOfDate: now,
+    });
+
     const trendData = {
         today: filterBetween(recentExpensePool, startOfToday, startOfTomorrow),
         yesterday: filterBetween(recentExpensePool, startOfYesterday, startOfToday),
@@ -216,6 +229,8 @@ const createAnalyticsContext = async (userId) => {
         forecastCategorySeries,
         forecastActiveDays,
         forecastTargetMonthBudget,
+        forecastCurrentMonthBudget: currentMonthBudgetDoc ?? null,
+        currentMonthForecastInput,
     };
 
 };

@@ -58,4 +58,30 @@ const siaLimiter = rateLimit({
     legacyHeaders: false
 });
 
-module.exports = { apiLimiter, authLimiter, siaLimiter };
+// SIA voice limiter (Workstream 2) -- a DEDICATED, SEPARATE limiter
+// instance for POST /sia/transcriptions, independent of siaLimiter above.
+// A separate rateLimit() call means a separate internal store/bucket: a
+// caller who exhausts this budget can still use /sia/ask (and vice versa),
+// so heavy voice-upload usage can never starve the text pipeline's quota
+// or trigger its 429, and neither route's usage counts against the
+// other's. Applied AFTER verifyToken (see Routes/sia.routes.js), same
+// convention as siaLimiter -- ipKeyGenerator is a defensive fallback only.
+// Never keys on the audio bytes, transcript, question, or API key.
+const siaVoiceLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+
+    keyGenerator: (req) => {
+        return req.userId || ipKeyGenerator(req.ip);
+    },
+
+    message: {
+        success: false,
+        message: "Too many requests. Please try again later."
+    },
+
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+module.exports = { apiLimiter, authLimiter, siaLimiter, siaVoiceLimiter };

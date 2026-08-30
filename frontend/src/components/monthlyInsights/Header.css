@@ -31,7 +31,7 @@
     var(--insights-header-gradient-end)
   );
   border-radius:20px;
-  padding:25px 30px;
+  padding:20px 24px;
   color:white;
   box-shadow: var(--card-box-shadow);
   position:relative;
@@ -43,7 +43,7 @@
   display:flex;
   justify-content:space-between;
   align-items:center; 
-  margin-bottom:20px;
+  margin-bottom:14px;
 }
 
 /* LEFT HEADER */
@@ -57,13 +57,14 @@
   display:flex;
   align-items:center;
   gap:8px;
-  font-size:30px;
+  margin:0;
+  font-size:27px;
   font-weight:700;
 }
 
 /* DESCRIPTION */
 .monthly-insights-header-description {
-  margin-top: -5px !important;
+  margin:6px 0 0 !important;
   font-size:14px;
   opacity:0.9;
 }
@@ -73,21 +74,21 @@
   position: relative;
   background:var(--card-bg);
   backdrop-filter:blur(10px);
-  padding:14px 18px;
-  border-radius:16px;
+  padding:10px 14px;
+  border-radius:14px;
   border:1px solid var(--card-border);
   text-align:center;
-  min-width:200px;
+  min-width:180px;
 }
 
 .monthly-insights-header-budget p {
-  margin-bottom: 0;
+  margin:0;
   opacity: 0.9;
 }
 
 .monthly-insights-header-budget h1 {
-  font-size:30px;
-  margin: 6px;
+  font-size:27px;
+  margin:4px 0;
 }
 
 .edit-budget-icon {
@@ -273,20 +274,20 @@
 .monthly-insights-body-cards {
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  gap:25px;
-  padding-bottom: 5px;
+  gap:16px;
+  padding-bottom:0;
 }
 
 /* SINGLE CARD */
 .monthly-insights-card {
-  padding:18px;
-  border-radius:16px;
+  padding:14px;
+  border-radius:14px;
   background:var(--card-bg);
   backdrop-filter:blur(10px);
   border:1px solid var(--card-border);
   display:flex;
   flex-direction:column;
-  gap:6px;
+  gap:4px;
   box-shadow:var(--card-box-shadow);
   transition:all 0.25s ease;
   opacity: 0;
@@ -320,22 +321,22 @@
 .monthly-insights-card-header {
   display:flex;
   align-items:center;
-  gap:10px;
-  font-size:16px;
+  gap:8px;
+  font-size:15px;
   font-weight:500;
 }
 
 /* ICON */
 .monthly-insights-card-header i {
   background:var(--card-icon-bg);
-  padding:8px;
+  padding:7px;
   border-radius:8px;
   font-size:16px;
 }
 
 /* CARD VALUE */
 .monthly-insights-card p {
-  font-size:28px;
+  font-size:25px;
   font-weight:500;
   margin:0;
 }

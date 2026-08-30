@@ -101,6 +101,7 @@ const calculateBudgetProjection = (
   { budget = 0, spent = 0 } = {},
   dailyAverage = 0,
   daysInMonth = 30,
+  asOfDate = new Date(),
 ) => {
   const safeBudget = toSafeNumber(budget);
   const safeSpent = toSafeNumber(spent);
@@ -118,7 +119,7 @@ const calculateBudgetProjection = (
     };
   }
 
-  const today = new Date();
+  const today = asOfDate instanceof Date && !Number.isNaN(asOfDate.getTime()) ? asOfDate : new Date();
   const daysElapsed = today.getDate();
 
   const projectedSpent =
@@ -153,9 +154,9 @@ const calculateBudgetProjection = (
   };
 };
 
-const analyze = ({ history = [], spending = {}, daysInMonth = 30 } = {}) => {
+const analyze = ({ history = [], spending = {}, daysInMonth = 30, asOfDate } = {}) => {
 
-  const now = new Date();
+  const now = asOfDate instanceof Date && !Number.isNaN(asOfDate.getTime()) ? asOfDate : new Date();
 
   const currentMonthKey = `${now.toLocaleString("en-US", {
     month: "short",
@@ -172,7 +173,7 @@ const analyze = ({ history = [], spending = {}, daysInMonth = 30 } = {}) => {
     ...calculateBudgetUtilization(currentMonth),
     ...calculateBudgetStatus(currentMonth),
     ...calculateBudgetStreak(history),
-    ...calculateBudgetProjection(currentMonth, spending.dailyAverage, daysInMonth),
+    ...calculateBudgetProjection(currentMonth, spending.dailyAverage, daysInMonth, now),
   };
 };
 

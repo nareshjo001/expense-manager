@@ -102,6 +102,24 @@ const siaRequestSchema = new mongoose.Schema(
       default: undefined,
     },
 
+    // Workstream 1 -- semantic-routing plan CHECKPOINT: the validated
+    // QueryPlan (sia/queryPlan.js) a prior attempt's semantic router call
+    // already resolved, saved BEFORE any answer-generation call is
+    // attempted (see sia/semanticPipeline.js's `onPlanResolved` hook). If
+    // that attempt's answer generation then fails/crashes before
+    // completion, a retry with the SAME clientMessageId reuses this
+    // checkpoint (sia/semanticPipeline.js's `resumePlan`) instead of
+    // paying for a second router call. QueryPlan is itself already a
+    // small, closed, bounded schema (sia/queryPlan.js's validator caps
+    // every array/string it contains), so Mixed is acceptable here the
+    // same way responsePayload already is -- re-validated defensively
+    // on every read, never half-trusted just because it came from
+    // storage.
+    planCheckpoint: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+
     // The exact HTTP status and body already returned to a client -- replay returns these verbatim, never re-classifies, re-builds context, re-invokes the provider, re-validates, or re-appends a turn.
     responseStatus: {
       type: Number,

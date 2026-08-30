@@ -256,13 +256,11 @@ function buildAssembledReport(overrides = {}) {
       risk: { label: "Unknown", color: "gray" },
       signals: [],
     },
-    // Additive: analytics/reportAssembler.js's own `anomalies = {}` / `risk
-    // = {}` default parameters mean omitting these overrides still
-    // produces `{}`, exactly as before either key existed -- no existing
+    // Additive: analytics/reportAssembler.js's own `anomalies = {}` default
+    // parameter means omitting this override still produces `{}` -- no existing
     // call site of buildAssembledReport() is affected.
     ...(overrides.anomalies !== undefined ? { anomalies: overrides.anomalies } : {}),
     ...(overrides.forecast !== undefined ? { forecast: overrides.forecast } : {}),
-    ...(overrides.risk !== undefined ? { risk: overrides.risk } : {}),
   });
 }
 
@@ -945,20 +943,18 @@ describe("GET /report -- anomalies section contract (G)", () => {
   });
 });
 
-describe("GET /report -- forecast and risk sections contract (I, Batch 2)", () => {
-  it("includes both forecast and risk as objects alongside every other stable top-level key", async () => {
+describe("GET /report -- forecast section contract (I, Batch 2)", () => {
+  it("includes forecast alongside every other stable top-level key", async () => {
     const assembledReport = buildAssembledReport();
     const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
 
     const res = await request(app)
       .get("/report")
-      .set("Authorization", `Bearer ${signToken("report-contract-forecast-risk-user")}`);
+      .set("Authorization", `Bearer ${signToken("report-contract-forecast-user")}`);
 
     expect(res.status).toBe(200);
     expect(typeof res.body.forecast).toBe("object");
-    expect(typeof res.body.risk).toBe("object");
-    // Every pre-existing stable key remains present -- adding `risk` did
-    // not rename or remove anything, including Batch 1's `anomalies`.
+    // Every remaining stable key is present, including Batch 1's anomalies.
     expect(typeof res.body.anomalies).toBe("object");
     expect(typeof res.body.metadata).toBe("object");
   });
@@ -988,46 +984,6 @@ describe("GET /report -- forecast and risk sections contract (I, Batch 2)", () =
     expect(serialized.toLowerCase()).not.toMatch(/\btrained\b|\baccuracy\b/);
   });
 
-  it("a populated risk section exposes only bounded, allowlisted evidence with no raw records or user identifiers", async () => {
-    const risk = {
-      hasData: true,
-      reasonCode: null,
-      riskLevel: "high",
-      signalCount: 1,
-      signals: [
-        {
-          reasonCode: "BUDGET_ALREADY_OVERSPENT",
-          severity: "high",
-          evidence: { exceededBy: 200, utilization: 110 },
-        },
-      ],
-    };
-    const assembledReport = buildAssembledReport({ risk });
-    const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
-
-    const res = await request(app)
-      .get("/report")
-      .set("Authorization", `Bearer ${signToken("report-contract-risk-shape-user")}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.risk.riskLevel).toBe("high");
-    const serialized = JSON.stringify(res.body.risk);
-    expect(serialized).not.toContain("userId");
-    expect(serialized.toLowerCase()).not.toMatch(/probability|likely to/);
-  });
-
-  it("a no-data risk section (hasData:false) is a valid response, not an error", async () => {
-    const risk = { hasData: false, reasonCode: "NO_REPORT_DATA", riskLevel: "none", signalCount: 0, signals: [] };
-    const assembledReport = buildAssembledReport({ risk });
-    const { app } = loadAppWithMockedService({ getReportImpl: async () => assembledReport });
-
-    const res = await request(app)
-      .get("/report")
-      .set("Authorization", `Bearer ${signToken("report-contract-risk-nodata-user")}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.risk.hasData).toBe(false);
-  });
 });
 
 describe("GET /report -- controller error contract (F)", () => {

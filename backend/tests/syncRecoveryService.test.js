@@ -122,6 +122,11 @@ function makeStatefulPendingSyncModel(seedDoc) {
     if (update.$inc) {
       for (const [k, v] of Object.entries(update.$inc)) next[k] = (next[k] || 0) + v;
     }
+    if (update.$max) {
+      for (const [k, v] of Object.entries(update.$max)) {
+        if (next[k] === undefined || next[k] < v) next[k] = v;
+      }
+    }
     if (update.$set) {
       for (const [k, v] of Object.entries(update.$set)) next[k] = v;
     }
@@ -579,7 +584,16 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
         reservedBudgetMonths: [],
         reservedReports: [],
       },
-      { recalculateBudgetImpl: async () => ({ skipped: true, reason: "superseded" }) }
+      {
+        // The marker's allocation advances it to the same revision. This is
+        // a normal concurrent supersession, not a reset revision floor, so
+        // repairIfPending must leave it pending without retrying.
+        recalculateBudgetImpl: async () => ({
+          skipped: true,
+          reason: "superseded",
+          currentRevision: 6,
+        }),
+      }
     );
 
     const result = await syncRecoveryService.repairIfPending(USER_ID);
@@ -597,6 +611,56 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
     );
     expect(result.budgetRepairFailed).toBe(true);
     expect(result.stillPending).toBe(true);
+  });
+
+  it("self-heals a reset marker revision and clears exact mixed-timezone month anchors", async () => {
+    const legacyAnchorForSameMonth = new Date(JAN_2026_ANCHOR.getTime() + 60 * 60 * 1000);
+    const { syncRecoveryService, recalculateBudgetMock, findOneAndUpdateMock, getDoc } =
+      loadServiceStateful(
+        {
+          user: USER_ID,
+          revision: 19,
+          pendingBudgetMonths: [JAN_2026_ANCHOR, legacyAnchorForSameMonth],
+          reportPending: false,
+          reservedBudgetMonths: [],
+          reservedReports: [],
+        },
+        {
+          recalculateBudgetImpl: async (_userId, _date, { fenceRevision }) => {
+            if (fenceRevision < 2507) {
+              return {
+                skipped: true,
+                reason: "superseded",
+                currentRevision: 2507,
+              };
+            }
+            return {};
+          },
+        }
+      );
+
+    const result = await syncRecoveryService.repairIfPending(USER_ID);
+
+    expect(recalculateBudgetMock.mock.calls.map((call) => call[2].fenceRevision)).toEqual([
+      20,
+      20,
+      2508,
+      2508,
+    ]);
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { user: USER_ID },
+      { $max: { revision: 2507 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    expect(getDoc().revision).toBe(2508);
+    expect(getDoc().pendingBudgetMonths).toEqual([]);
+    expect(result).toEqual({
+      attempted: true,
+      revisionMatchedOnClear: true,
+      budgetRepairFailed: false,
+      reportRepairFailed: false,
+      stillPending: false,
+    });
   });
 
   it("a failed budget repair leaves that exact month pending (repeated failure never advances lastError-free)", async () => {

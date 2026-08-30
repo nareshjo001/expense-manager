@@ -23,6 +23,15 @@ jest.mock("../../api/siaSessionsApi", () => ({
   getSiaSessionMessages: jest.fn(),
   deleteSiaSession: jest.fn(),
 }));
+// Workstream 3: SiaPanel now transitively renders SiaVoiceRecorderControls
+// -> useSiaVoiceRecorder -> siaVoiceApi.js, which itself imports the shared
+// axios instance -- mocked here for the exact same reason the two mocks
+// above already exist (the real axios package ships as ESM and is never
+// imported through this component tree in tests). No test in this file
+// exercises voice recording (that behaviour has its own dedicated suite in
+// SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js); this mock only
+// keeps this pre-existing file loadable.
+jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 jest.mock("../../hooks/queries/useSiaSessionMessagesQuery", () => ({
   useSiaSessionMessagesQuery: jest.fn(),

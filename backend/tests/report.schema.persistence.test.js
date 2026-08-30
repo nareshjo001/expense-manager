@@ -251,7 +251,6 @@ describe("models/Report.js + reportContractVersion.js: legacy-document staleness
       financialHealth: { overall: 80 },
       forecast: {},
       anomalies: { hasData: false, reasonCode: "NO_ELIGIBLE_CURRENT_EXPENSES", anomalies: [] },
-      risk: { hasData: false, reasonCode: "NO_REPORT_DATA", riskLevel: "none", signals: [] },
     };
 
     const rehydrated = roundTripThroughSchemaAndCache(attrs);
@@ -264,13 +263,11 @@ describe("models/Report.js + reportContractVersion.js: legacy-document staleness
     expect(rehydrated.habits).toEqual(attrs.habits);
     expect(rehydrated.financialHealth).toEqual(attrs.financialHealth);
     expect(rehydrated.forecast).toEqual(attrs.forecast);
-    expect(rehydrated.risk).toEqual(attrs.risk);
   });
 });
 
-describe("models/Report.js: forecast and risk section schema round-trip (Batch 2)", () => {
+describe("models/Report.js: forecast section schema round-trip (Batch 2)", () => {
   const { analyze: analyzeForecast } = require("../analytics/analyzers/forecastAnalyzer");
-  const { analyze: analyzeRisk } = require("../analytics/analyzers/riskAnalyzer");
 
   // Architecture-closure correction: forecastAnalyzer.js's input contract
   // is the aggregate-only { monthKey, totalAmount } series (see
@@ -317,36 +314,6 @@ describe("models/Report.js: forecast and risk section schema round-trip (Batch 2
     expect(rehydrated.forecast).toEqual(forecastReport);
   });
 
-  it("a real risk result with populated signals survives the schema round-trip", () => {
-    const riskReport = analyzeRisk({
-      budgets: { hasData: true, hasBudget: true, isOverspent: true, exceededBy: 100, utilization: 110 },
-    });
-    expect(riskReport.hasData).toBe(true);
-    expect(riskReport.signals.length).toBeGreaterThan(0);
-
-    const rehydrated = roundTripThroughSchemaAndCache({
-      user: new mongoose.Types.ObjectId(),
-      metadata: baseMetadata(),
-      risk: riskReport,
-    });
-
-    expect(rehydrated.risk).toEqual(riskReport);
-  });
-
-  it("a zero-risk result survives the schema round-trip", () => {
-    const riskReport = analyzeRisk({ spending: { hasData: true, totalSpent: 100 } });
-    expect(riskReport.hasData).toBe(true);
-    expect(riskReport.riskLevel).toBe("none");
-
-    const rehydrated = roundTripThroughSchemaAndCache({
-      user: new mongoose.Types.ObjectId(),
-      metadata: baseMetadata(),
-      risk: riskReport,
-    });
-
-    expect(rehydrated.risk).toEqual(riskReport);
-  });
-
   it("a legacy document (version below 3, e.g. the Batch-1 version 2) is recognized as stale under the Batch 2 contract", () => {
     const batch1Doc = new FinancialReport({
       user: new mongoose.Types.ObjectId(),
@@ -361,12 +328,11 @@ describe("models/Report.js: forecast and risk section schema round-trip (Batch 2
     });
     const rehydrated = JSON.parse(JSON.stringify(batch1Doc.toObject({ minimize: false })));
 
-    // A Batch-1 (version 2) document has no forecast/risk sections at all,
+    // A Batch-1 (version 2) document has no forecast section at all,
     // yet Mongoose's own defaults make them read back as `{}` -- exactly
     // the same masking scenario as the Batch-1 anomalies case, now for
-    // forecast/risk. isCurrentReport() is still not fooled.
+    // forecast. isCurrentReport() is still not fooled.
     expect(rehydrated.forecast).toEqual({});
-    expect(rehydrated.risk).toEqual({});
     expect(isCurrentReport(rehydrated)).toBe(false);
     // Prediction Layer V1 bumped the contract from 3 to 4 (the forecast
     // section now always carries the per-category breakdown, dataQuality,
@@ -376,14 +342,13 @@ describe("models/Report.js: forecast and risk section schema round-trip (Batch 2
     expect(isCurrentReport({ metadata: { version: 3 } })).toBe(false);
   });
 
-  it("the Anomaly Detection category-normalization fix bumped the contract from 4 to 5 -- a version-4 document is now stale, version 5 is current", () => {
-    // See analytics/reportContractVersion.js's own comment: the fix changed
-    // report.anomalies's CONTENT (which categories/baseline records are
-    // grouped together), not its shape, so isCurrentReport() -- which only
-    // ever inspects metadata.version -- would otherwise keep serving a
-    // pre-fix version-4 report as current forever.
-    expect(CURRENT_REPORT_VERSION).toBe(5);
+  it("removing Financial Risk Signals bumped the contract to 9 -- version 8 is stale", () => {
+    expect(CURRENT_REPORT_VERSION).toBe(9);
     expect(isCurrentReport({ metadata: { version: 4 } })).toBe(false);
-    expect(isCurrentReport({ metadata: { version: 5 } })).toBe(true);
+    expect(isCurrentReport({ metadata: { version: 5 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 6 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 7 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 8 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 9 } })).toBe(true);
   });
 });

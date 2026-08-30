@@ -22,6 +22,12 @@ jest.mock("../../api/siaSessionsApi", () => ({
   // relaxed to accommodate the new query.
   getSiaStatus: jest.fn(),
 }));
+// Workstream 3: SiaEntryPoint -> SiaPanel now transitively renders
+// SiaVoiceRecorderControls -> useSiaVoiceRecorder -> siaVoiceApi.js, which
+// imports the shared axios instance -- mocked for the same ESM-import
+// reason as the two mocks above. No test in this file exercises voice
+// recording (see SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js).
+jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
 const originalFlag = process.env[ENV_KEY];

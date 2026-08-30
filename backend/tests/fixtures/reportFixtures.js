@@ -79,7 +79,6 @@ function buildFakeCachedReport(marker) {
     financialHealth: { scores: {}, overall: null, dataCompleteness: {}, risk: { label: "Unknown", color: "gray" }, signals: [] },
     forecast: { hasData: false },
     anomalies: { hasData: false, reasonCode: "NO_ELIGIBLE_CURRENT_EXPENSES", anomalies: [] },
-    risk: { hasData: false, reasonCode: "NO_REPORT_DATA", riskLevel: "none", signals: [] },
   };
 }
 

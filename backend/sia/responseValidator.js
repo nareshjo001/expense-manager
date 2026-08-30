@@ -1,4 +1,4 @@
-// Grounded-response validation: since system prompts alone don't enforce anything, this is the deterministic gate ask.js runs every answer through for all seven supported intents before it reaches the user -- a failed check is treated exactly like a failed provider result (503), never partially shown. Only currency-marked monetary figures are cross-checked against the real context (harmless count language like "3 categories" is never flagged); it validates defined invariants only, not every natural-language claim.
+// Grounded-response validation: since system prompts alone don't enforce anything, this is the deterministic gate ask.js runs every answer through for all eight supported intents before it reaches the user -- a failed check is treated exactly like a failed provider result (503), never partially shown. Only currency-marked monetary figures are cross-checked against the real context (harmless count language like "3 categories" is never flagged); it validates defined invariants only, not every natural-language claim.
 "use strict";
 
 const HEALTH_EXPLANATION = "HEALTH_EXPLANATION";
@@ -8,8 +8,10 @@ const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
 const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
 const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
+// Additive only.
+const CURRENT_SPENDING_SUMMARY = "CURRENT_SPENDING_SUMMARY";
 
-// All seven SIA-supported intents receive the shared generic checks (leaked identifiers, raw field tokens, echoed JSON, unsupported currency figures); the three intent-specific checks below (fraud/certainty/advice language) stay scoped to only the intents they've always applied to -- deliberately not extended further, since broad keyword matching risks rejecting valid explanations.
+// All eight SIA-supported intents receive the shared generic checks (leaked identifiers, raw field tokens, echoed JSON, unsupported currency figures); the intent-specific checks below (fraud/certainty/advice/comparison/category/forecast/transaction-detail language) stay scoped to only the intents they've always applied to -- deliberately not extended further, since broad keyword matching risks rejecting valid explanations.
 const VALIDATED_INTENTS = new Set([
   HEALTH_EXPLANATION,
   SPENDING_CHANGE_EXPLANATION,
@@ -18,6 +20,7 @@ const VALIDATED_INTENTS = new Set([
   ANOMALY_EXPLANATION,
   SPENDING_FORECAST_EXPLANATION,
   FINANCIAL_RISK_EXPLANATION,
+  CURRENT_SPENDING_SUMMARY,
 ]);
 
 // A 24-character lowercase hex string is the shape of a Mongo ObjectId --
@@ -71,6 +74,21 @@ const NO_RISK_CLAIM_PATTERNS = [
   /\bnot\s+at\s+(?:any\s+)?financial\s+risk\b/i,
 ];
 
+// CURRENT_SPENDING_SUMMARY's context carries exactly one figure --
+// summary.totalSpent -- and nothing else: no prior-month comparison, no
+// category breakdown, no forecast, no transaction-level detail. Each
+// pattern below is narrow and gated to only this intent, mirroring the
+// existing reason-code-scoped guardrails above.
+const SUMMARY_COMPARISON_CLAIM_PATTERN =
+  /\b(increased|decreased|higher than|lower than|more than last|less than last|compared to|compared with|change[ds]? from|vs\.?\s+last|versus last)\b/i;
+const SUMMARY_CATEGORY_CLAIM_PATTERN = /\bcategor(?:y|ies)\b/i;
+const SUMMARY_FORECAST_CLAIM_PATTERN =
+  /\b(forecast(?:ed|ing)?|predict(?:ed|ion)?|projected|projection|next month|next quarter|next year|will spend|expected to spend|estimate[d]?\s+(?:you'll|you will))\b/i;
+const SUMMARY_TRANSACTION_DETAIL_PATTERN =
+  /\b(transaction id|expense id|merchant|receipt|line item|individual (?:expense|transaction|purchase))\b/i;
+const SUMMARY_ADVICE_CLAIM_PATTERN =
+  /\b(you should|i recommend|i suggest|consider (?:cutting|reducing|saving|spending))\b/i;
+
 // True only when contextFields.risk.signals[] actually contains a matching reasonCode -- never a guess, never derived from the answer text itself.
 function hasRiskSignal(contextFields, reasonCode) {
   const signals = contextFields && contextFields.risk && Array.isArray(contextFields.risk.signals) ? contextFields.risk.signals : [];
@@ -98,7 +116,7 @@ function collectNumericValues(node, out) {
   return out;
 }
 
-// budgetAnalyzer.js's `budget`/`spent` fields pass through unchanged from the stored Budget document with no numeric coercion, unlike every other derived value -- so they're the only two fields in the seven intents' context shapes not type-guaranteed to be a JS number. Handled here by exact field path only (never a general "any numeric string" rule), since contextBuilder.js/budgetAnalyzer.js are out of scope for this fix.
+// budgetAnalyzer.js's `budget`/`spent` fields pass through unchanged from the stored Budget document with no numeric coercion, unlike every other derived value -- so they're the only two fields across the eight intents' context shapes not type-guaranteed to be a JS number. Handled here by exact field path only (never a general "any numeric string" rule), since contextBuilder.js/budgetAnalyzer.js are out of scope for this fix.
 const NUMERIC_STRING_PATTERN = /^-?\d+(\.\d+)?$/;
 
 function coerceKnownStringAmount(value, out) {
@@ -162,6 +180,18 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
     return { valid: false, reasonCode: "RAW_FIELD_LEAKAGE" };
   }
 
+  // Generic across all eight validated intents, not just
+  // CURRENT_SPENDING_SUMMARY: none of contextBuilder.js's per-intent
+  // projections for any intent ever carry merchant/receipt/line-item/
+  // transaction-id detail, so a hallucinated claim of that kind is always
+  // unsupported regardless of which intent produced it. Found via
+  // Workstream 5's adversarial review -- previously only checked for
+  // CURRENT_SPENDING_SUMMARY, leaving the other seven intents without a
+  // deterministic backstop against a fabricated transaction-level claim.
+  if (SUMMARY_TRANSACTION_DETAIL_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "UNSUPPORTED_TRANSACTION_DETAIL" };
+  }
+
   if (intent === ANOMALY_EXPLANATION && FRAUD_LANGUAGE_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "FRAUD_CLAIM" };
   }
@@ -201,6 +231,23 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
     }
   }
 
+  if (intent === CURRENT_SPENDING_SUMMARY) {
+    if (SUMMARY_COMPARISON_CLAIM_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_COMPARISON_CLAIM" };
+    }
+    if (SUMMARY_CATEGORY_CLAIM_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_CATEGORY_CLAIM" };
+    }
+    if (SUMMARY_FORECAST_CLAIM_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_FORECAST_CLAIM" };
+    }
+    // (transaction-detail check now runs generically above for all eight
+    // intents -- see the comment near JSON_KEY_FRAGMENT_PATTERN.)
+    if (SUMMARY_ADVICE_CLAIM_PATTERN.test(answer) || ADVICE_LANGUAGE_PATTERN.test(answer)) {
+      return { valid: false, reasonCode: "OUT_OF_SCOPE_ADVICE" };
+    }
+  }
+
   if (intent === FINANCIAL_RISK_EXPLANATION && isZeroSignalRiskResult(contextFields)) {
     if (NO_RISK_CLAIM_PATTERNS.some((pattern) => pattern.test(answer))) {
       return { valid: false, reasonCode: "UNSUPPORTED_NO_RISK_CLAIM" };
@@ -222,6 +269,170 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
   return { valid: true };
 }
 
+// ---- Workstream 1: FactSet citation/claim validation ---------------------
+//
+// Extends this module (rather than duplicating its patterns) to validate
+// an LLM explanation answer produced from a bounded FactSet
+// (sia/factSet.js) instead of a full contextBuilder.js context -- the
+// semantic-routing EXPLAIN/FORECAST/COMPARE path (ask.js). Reuses every
+// existing pattern constant above that already covers a rule
+// (PERSISTENCE_LANGUAGE_PATTERN, DECLINE_LANGUAGE_PATTERN,
+// FRAUD_LANGUAGE_PATTERN, ADVICE_LANGUAGE_PATTERN, MONGO_ID_PATTERN,
+// RAW_FIELD_TOKENS, JSON_KEY_FRAGMENT_PATTERN) instead of duplicating them.
+
+// A comparison claim ("higher than", "compared to last month", etc.) is
+// only supportable when the plan's operation is genuinely a comparison.
+const COMPARISON_CLAIM_PATTERN =
+  /\b(increased|decreased|higher than|lower than|more than last|less than last|compared to|compared with|change[ds]? from|vs\.?\s+last|versus last)\b/i;
+
+// A forecast/estimate claim is only supportable when the plan's operation
+// is genuinely FORECAST.
+const FORECAST_CLAIM_PATTERN =
+  /\b(forecast(?:ed|ing)?|predict(?:ed|ion)?|projected|projection|next month|next quarter|next year|will spend|expected to spend|estimate[d]?\s+(?:you'll|you will))\b/i;
+
+// Light, generic advice-language guardrail (mirrors
+// SUMMARY_ADVICE_CLAIM_PATTERN's shape) -- applies to every FactSet-cited
+// answer regardless of intent/metric.
+const GENERIC_ADVICE_CLAIM_PATTERN = /\b(you should|i recommend|i suggest|consider (?:cutting|reducing|saving|spending))\b/i;
+
+function round2Cited(value) {
+  return Math.round(value * 100) / 100;
+}
+
+// Extracts currency-marked amounts from an answer -- identical contract to
+// the private extractCurrencyAmounts() above, exported here (additively,
+// non-breaking) so a sibling caller/test can reuse the exact same
+// extraction rule instead of re-implementing it.
+function extractCurrencyAmountsFromAnswer(text) {
+  return extractCurrencyAmounts(text);
+}
+
+/**
+ * Validates an LLM explanation answer generated from a bounded FactSet
+ * (sia/factSet.js) rather than a full contextBuilder.js context.
+ *
+ * @param {object} input
+ * @param {string} input.answer
+ * @param {string[]} input.citedFactIds
+ * @param {{facts: object[]}} input.factSet
+ * @param {{operation?: string, metrics?: string[]}} [input.plan] - the
+ *   QueryPlan this answer was generated for, used only to decide whether
+ *   comparison/forecast framing is supportable.
+ * @returns {{ valid: true } | { valid: false, reasonCode: string }}
+ */
+function validateCitedAnswer({ answer, citedFactIds, factSet, plan }) {
+  if (typeof answer !== "string" || answer.trim() === "") {
+    return { valid: false, reasonCode: "EMPTY_OR_MALFORMED_ANSWER" };
+  }
+
+  if (MONGO_ID_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "LEAKED_IDENTIFIER" };
+  }
+  for (const token of RAW_FIELD_TOKENS) {
+    if (answer.includes(token)) {
+      return { valid: false, reasonCode: "RAW_FIELD_LEAKAGE" };
+    }
+  }
+  if (JSON_KEY_FRAGMENT_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "RAW_FIELD_LEAKAGE" };
+  }
+  // Same generic backstop as validateGroundedAnswer's -- a FactSet never
+  // carries merchant/receipt/line-item/transaction-id detail either, for
+  // any metric.
+  if (SUMMARY_TRANSACTION_DETAIL_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "UNSUPPORTED_TRANSACTION_DETAIL" };
+  }
+
+  const facts = factSet && Array.isArray(factSet.facts) ? factSet.facts : [];
+  const factsById = new Map(facts.map((f) => [f.factId, f]));
+
+  const citedIds = Array.isArray(citedFactIds) ? citedFactIds : [];
+  for (const id of citedIds) {
+    if (typeof id !== "string" || !factsById.has(id)) {
+      return { valid: false, reasonCode: "UNKNOWN_CITED_FACT" };
+    }
+  }
+
+  const citedFacts = citedIds.map((id) => factsById.get(id));
+
+  // Every currency-marked figure in the answer must belong to a fact that
+  // was actually cited -- an invented amount, or a genuine-but-uncited
+  // fact value being quoted, both fail here.
+  const citedCurrencyValues = new Set(
+    citedFacts.filter((f) => f.unit === "INR" && typeof f.value === "number").map((f) => round2Cited(f.value))
+  );
+  const claimedAmounts = extractCurrencyAmountsFromAnswer(answer).map(round2Cited);
+  for (const amount of claimedAmounts) {
+    if (!citedCurrencyValues.has(amount)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_MONETARY_FIGURE" };
+    }
+  }
+
+  // Every claimed percentage must belong to a cited PERCENT-unit fact.
+  const citedPercentValues = new Set(
+    citedFacts.filter((f) => f.unit === "PERCENT" && typeof f.value === "number").map((f) => round2Cited(f.value))
+  );
+  const PERCENT_PATTERN = /(-?\d+(?:\.\d{1,2})?)\s?%/g;
+  let percentMatch = PERCENT_PATTERN.exec(answer);
+  while (percentMatch !== null) {
+    const claimed = round2Cited(Number(percentMatch[1]));
+    if (!citedPercentValues.has(claimed)) {
+      return { valid: false, reasonCode: "UNSUPPORTED_PERCENTAGE_CLAIM" };
+    }
+    percentMatch = PERCENT_PATTERN.exec(answer);
+  }
+
+  const operation = plan && typeof plan.operation === "string" ? plan.operation : null;
+  const metrics = plan && Array.isArray(plan.metrics) ? plan.metrics : [];
+
+  const isComparisonSupported = operation === "COMPARE" || metrics.includes("PERIOD_COMPARISON");
+  if (!isComparisonSupported && COMPARISON_CLAIM_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "UNSUPPORTED_COMPARISON_CLAIM" };
+  }
+
+  const isForecastSupported = operation === "FORECAST" || metrics.includes("SPENDING_FORECAST_EXPLANATION");
+  if (!isForecastSupported && FORECAST_CLAIM_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "UNSUPPORTED_FORECAST_CLAIM" };
+  }
+  if (isForecastSupported && CERTAINTY_LANGUAGE_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "UNSUPPORTED_CERTAINTY_LANGUAGE" };
+  }
+
+  const isAnomalyRelated = metrics.includes("ANOMALY_EXPLANATION");
+  if (isAnomalyRelated && FRAUD_LANGUAGE_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "FRAUD_CLAIM" };
+  }
+
+  if (PERSISTENCE_LANGUAGE_PATTERN.test(answer) && !metrics.includes("SPENDING_FORECAST_EXPLANATION")) {
+    // A single-period-comparison FactSet never supports persistence
+    // language, mirroring SPENDING_CHANGE_EXPLANATION's existing rule.
+    return { valid: false, reasonCode: "UNSUPPORTED_PERSISTENCE_CLAIM" };
+  }
+
+  if (DECLINE_LANGUAGE_PATTERN.test(answer) && metrics.includes("HEALTH_EXPLANATION")) {
+    return { valid: false, reasonCode: "UNSUPPORTED_DECLINE_CLAIM" };
+  }
+
+  if (GENERIC_ADVICE_CLAIM_PATTERN.test(answer) || ADVICE_LANGUAGE_PATTERN.test(answer)) {
+    return { valid: false, reasonCode: "OUT_OF_SCOPE_ADVICE" };
+  }
+
+  return { valid: true };
+}
+
 module.exports = {
   validateGroundedAnswer,
+  validateCitedAnswer,
+  // Additive exports -- reused by validateCitedAnswer above and available
+  // to any future sibling validator so existing rules are never
+  // duplicated.
+  MONGO_ID_PATTERN,
+  RAW_FIELD_TOKENS,
+  JSON_KEY_FRAGMENT_PATTERN,
+  PERSISTENCE_LANGUAGE_PATTERN,
+  DECLINE_LANGUAGE_PATTERN,
+  FRAUD_LANGUAGE_PATTERN,
+  ADVICE_LANGUAGE_PATTERN,
+  CERTAINTY_LANGUAGE_PATTERN,
+  extractCurrencyAmounts: extractCurrencyAmountsFromAnswer,
 };

@@ -148,9 +148,13 @@ const recalculateBudget = async (userId, date, options = {}) => {
     // purely for the caller's reporting; the atomicity guarantee above
     // holds identically either way -- this document was never partially or
     // incorrectly written.
-    const existing = await BudgetModel.findOne({ userId, month }).select('_id').lean();
+    const existing = await BudgetModel.findOne({ userId, month }).select('_id syncRevision').lean();
     if (existing) {
-        return { skipped: true, reason: 'superseded' };
+        const skipped = { skipped: true, reason: 'superseded' };
+        if (Number.isFinite(existing.syncRevision)) {
+            skipped.currentRevision = existing.syncRevision;
+        }
+        return skipped;
     }
     return null;
 };

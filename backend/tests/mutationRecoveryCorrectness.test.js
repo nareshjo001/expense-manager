@@ -234,7 +234,12 @@ function makeFakeBudgetModel() {
       select: () => ({
         lean: async () => {
           const doc = store.get(key(filter.userId, filter.month));
-          return doc ? { _id: `${filter.userId}|${filter.month}` } : null;
+          return doc
+            ? {
+                _id: `${filter.userId}|${filter.month}`,
+                syncRevision: doc.syncRevision,
+              }
+            : null;
         },
       }),
     })),
@@ -502,7 +507,7 @@ describe("Required test 6/7/8: an older synchronization (A) cannot clobber a new
     // fence value. This is proven for real here (not merely asserted) by
     // the fake model's own CAS filter evaluation -- see casFilterMatches
     // above and budget.service.js's real findOneAndUpdate call it mirrors.
-    expect(aOutcome).toEqual({ skipped: true, reason: "superseded" });
+    expect(aOutcome).toEqual({ skipped: true, reason: "superseded", currentRevision: 1 });
     // BudgetModel.spent still holds B's fresher value -- never clobbered.
     expect(fakeBudgetModel.get(USER_ID, JAN_MONTH_KEY).spent).toBe(150);
     // Final content, not just the return value: the stored document's own
@@ -546,7 +551,7 @@ describe("Required test 6/7/8: an older synchronization (A) cannot clobber a new
     // A's write was skipped -- fenced out ATOMICALLY at the Mongo write
     // itself (proven by the fake's real CAS filter evaluation, not merely
     // asserted).
-    expect(aOutcome).toEqual({ skipped: true, reason: "superseded" });
+    expect(aOutcome).toEqual({ skipped: true, reason: "superseded", currentRevision: 1 });
     // Neither Mongo nor "Redis" was overwritten with A's stale content --
     // final contents, not just A's return value.
     expect(fakeReport._store.get(USER_ID).spending.totalSpent).toBe(150);
@@ -643,7 +648,7 @@ describe("Required test: repair failure with a PendingSync doc present correctly
 
     const result = await reportService.refreshReport(USER_ID, { fenceRevision: 2 }); // stale, captured before the 3rd confirm
 
-    expect(result).toEqual({ skipped: true, reason: "superseded" });
+    expect(result).toEqual({ skipped: true, reason: "superseded", currentRevision: 3 });
     expect(fakeReport._store.get(USER_ID).spending.totalSpent).toBe(999);
     expect(fakeReport._store.get(USER_ID).syncRevision).toBe(3); // never rolled back
     expect(fakeReportCache._store.get(USER_ID).spending.totalSpent).toBe(999);
@@ -1262,7 +1267,7 @@ describe("Phase C.3 requirement #3: concurrent first-report creation is fully at
     // A's fenceRevision (0) is OLDER than B's already-stamped syncRevision
     // (1) -- A's retry-into-the-fenced-update correctly loses and reports
     // superseded, exactly as a normal fenced write would.
-    expect(aResult).toEqual({ skipped: true, reason: "superseded" });
+    expect(aResult).toEqual({ skipped: true, reason: "superseded", currentRevision: 1 });
 
     // Exactly ONE document survives, end to end -- B's, the newer one.
     expect(fakeReport._store.size).toBe(1);

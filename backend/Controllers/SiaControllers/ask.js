@@ -1,4 +1,4 @@
-// SIA "ask" controller -- POST /sia/ask, the sole SIA endpoint, generic across all 7 intents via the SYSTEM_PROMPTS_BY_INTENT lookup (question validated to 500 chars, rate-limited per user). Strictly read-only: no DB writes, no direct Mongo/Redis/Expense/Income/Budget/ML-service imports -- contextBuilder.js's buildContext() is the only financial-context boundary used. Until a real LLM provider is implemented, askLlm() always ends at the generic 503 branch below by design (see sia/llmService.js) -- nothing here fabricates a response.
+// SIA "ask" controller -- POST /sia/ask, the sole SIA endpoint, generic across all 8 supported intents (HEALTH_EXPLANATION, SPENDING_CHANGE_EXPLANATION, BUDGET_STATUS_EXPLANATION, CATEGORY_SPENDING_EXPLANATION, ANOMALY_EXPLANATION, SPENDING_FORECAST_EXPLANATION, FINANCIAL_RISK_EXPLANATION, CURRENT_SPENDING_SUMMARY) via the SYSTEM_PROMPTS_BY_INTENT lookup (question validated to 500 chars, rate-limited per user). Strictly read-only: no DB writes, no direct Mongo/Redis/Expense/Income/Budget/ML-service imports -- contextBuilder.js's buildContext() is the only financial-context boundary used. askLlm() (sia/llmService.js) is a real multi-provider (OpenAI, Gemini, Groq) implementation selected by SIA_LLM_PROVIDER; a provider that is unconfigured or not one of those three still normalizes to a generic 503 by design -- nothing here fabricates a response.
 "use strict";
 
 const { isSessionStoreAvailable } = require("../../sia/sessionStoreAvailability");
@@ -18,6 +18,10 @@ const idempotencyService = require("../../sia/idempotencyService");
 const { isSiaReady } = require("../../sia/readiness");
 const { buildGroundingSnapshot } = require("../../sia/groundingService");
 const { isValidObjectId } = require("mongoose");
+// Workstream 1 -- the NEW semantic-routing fallback layer, tried only
+// after classifyIntent() above has already returned null. Never called
+// before deterministic classification; never replaces it.
+const { runSemanticPipeline } = require("../../sia/semanticPipeline");
 
 // Bounded conversation session support (additive) -- guarded by sessionStoreAvailability.js's live connection check so pre-existing tests (which don't connect to real MongoDB) never hang; unavailable is a valid, safe state, never thrown.
 // Every session-store interaction is best-effort and never fails the user's actual question, and never leaves a half-written turn -- appendTurn() only runs once a real answer exists. Session RESOLUTION and CREATION happen at two different points: an explicit session resolves up front (its history feeds the provider); a new conversation's session isn't created until a validated answer exists, so a failed first turn leaves nothing behind.
@@ -70,6 +74,8 @@ const CATEGORY_SPENDING_EXPLANATION = "CATEGORY_SPENDING_EXPLANATION";
 const ANOMALY_EXPLANATION = "ANOMALY_EXPLANATION";
 const SPENDING_FORECAST_EXPLANATION = "SPENDING_FORECAST_EXPLANATION";
 const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
+// Additive only.
+const CURRENT_SPENDING_SUMMARY = "CURRENT_SPENDING_SUMMARY";
 
 // Fixed, intent-specific prompts, read-only framing throughout: explain from the supplied context only, never invent facts or claim raw-transaction access. HEALTH_EXPLANATION's context is always the CURRENT health score only (never a historical series), so the prompt forbids decline/change-over-time language -- backed by responseValidator.js's DECLINE_LANGUAGE_PATTERN check.
 const HEALTH_SYSTEM_PROMPT =
@@ -194,6 +200,26 @@ const RISK_SYSTEM_PROMPT =
   "specific financial action. Keep the explanation concise, clear, and " +
   "non-judgmental.";
 
+// Scopes the model to exactly the one figure CURRENT_SPENDING_SUMMARY's
+// context carries -- summary.totalSpent. A deliberately narrow prompt: no
+// comparison, trend, category, forecast, or transaction-level detail was
+// ever supplied, so none may be invented.
+const CURRENT_SPENDING_SUMMARY_SYSTEM_PROMPT =
+  "You are SIA, BALENISA's read-only financial explanation assistant. " +
+  "Answer the user's question about their current month's total spending " +
+  "using only the supplied structured context, which contains exactly one " +
+  "value: the current month's total amount spent so far. Treat the " +
+  "context as authoritative. State that total directly and concisely. Do " +
+  "not recalculate it, round it differently, or derive a different figure " +
+  "from it. Do not invent or imply a comparison with a previous month or " +
+  "any change over time, a category-level breakdown, a forecast or future " +
+  "spending estimate, or any individual transaction, merchant, or expense " +
+  "detail -- none of that data was supplied. Do not give financial, tax, " +
+  "legal, or investment advice, and do not suggest what the user should " +
+  "do with their money. If the context does not contain the total, say " +
+  "plainly that you do not have enough data to answer. Keep the answer " +
+  "brief, clear, and non-judgmental.";
+
 const SYSTEM_PROMPTS_BY_INTENT = {
   [HEALTH_EXPLANATION]: HEALTH_SYSTEM_PROMPT,
   [SPENDING_CHANGE_EXPLANATION]: SPENDING_CHANGE_SYSTEM_PROMPT,
@@ -202,6 +228,7 @@ const SYSTEM_PROMPTS_BY_INTENT = {
   [ANOMALY_EXPLANATION]: ANOMALY_SYSTEM_PROMPT,
   [SPENDING_FORECAST_EXPLANATION]: FORECAST_SYSTEM_PROMPT,
   [FINANCIAL_RISK_EXPLANATION]: RISK_SYSTEM_PROMPT,
+  [CURRENT_SPENDING_SUMMARY]: CURRENT_SPENDING_SUMMARY_SYSTEM_PROMPT,
 };
 
 // Deliberately the same generic body for every failure/unavailable path -- never exposes LlmProviderError details, stack traces, provider names, questions, prompts, financial context, or raw exceptions.
@@ -302,6 +329,297 @@ async function finalizeAnswer({ req, reservation, activeSession, intent, answer,
   }
 
   return { status: 200, payload };
+}
+
+// Workstream 1 -- runs the EXISTING, UNCHANGED deterministic-intent
+// pipeline (buildContext -> askLlm -> validateGroundedAnswer) for one of
+// the four analytics explanation intents, on behalf of a QueryPlan the
+// semantic router resolved to that same intent. Never reinvents this
+// logic with a FactSet -- HEALTH/ANOMALY/FORECAST/RISK keep using
+// contextBuilder.js/Report exactly as they do for the deterministically-
+// classified path above. Returns a small, uniform shape
+// semanticPipeline.js's `existingIntentHandler` contract expects.
+async function answerExplanationIntentForSemanticPath(userId, explanationIntent, question) {
+  const contextResult = await buildContext(userId, explanationIntent);
+
+  if (!contextResult || contextResult.fields === null || contextResult.reason === "no_data") {
+    return { usedAnswerCall: false, kind: "no_data" };
+  }
+
+  const grounding = buildGroundingSnapshot(contextResult);
+  const startedAt = Date.now();
+
+  let llmResult;
+  try {
+    llmResult = await askLlm({
+      systemPrompt: SYSTEM_PROMPTS_BY_INTENT[explanationIntent],
+      context: contextResult,
+      question,
+      history: [],
+    });
+  } catch (providerErr) {
+    logSiaEvent({
+      event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
+      provider: config.provider,
+      errorCode: providerErr && providerErr.code,
+      latencyMs: Date.now() - startedAt,
+    });
+    return { usedAnswerCall: true, kind: "failed" };
+  }
+
+  if (!llmResult || typeof llmResult.answer !== "string" || llmResult.answer.trim() === "") {
+    return { usedAnswerCall: true, kind: "failed" };
+  }
+
+  const validation = validateGroundedAnswer({
+    intent: explanationIntent,
+    answer: llmResult.answer,
+    contextFields: contextResult.fields,
+  });
+  if (!validation.valid) {
+    logSiaEvent({
+      event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
+      provider: config.provider,
+      errorCode: `GROUNDING_${validation.reasonCode}`,
+      latencyMs: Date.now() - startedAt,
+    });
+    return { usedAnswerCall: true, kind: "failed" };
+  }
+
+  logSiaEvent({
+    event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED,
+    provider: config.provider,
+    latencyMs: Date.now() - startedAt,
+  });
+
+  return { usedAnswerCall: true, kind: "answer", answer: llmResult.answer, grounding };
+}
+
+// Bounded, server-authored clarification response -- the client-visible
+// contract for a `clarification`-outcome QueryPlan. `options` are always
+// server-owned and bounded to at most 5 (enforced by
+// sia/queryPlan.js's validator, re-checked here as a defensive slice).
+const MAX_CLARIFICATION_RESPONSE_OPTIONS = 5;
+function formatClarificationResponse(clarification) {
+  return {
+    success: true,
+    clarification: {
+      prompt: clarification.prompt,
+      options: clarification.options.slice(0, MAX_CLARIFICATION_RESPONSE_OPTIONS),
+    },
+  };
+}
+
+// The generic, safe-logging-preserving no-data shape for the semantic
+// path -- deliberately does not name a specific intent's message (unlike
+// formatNoDataResponse, which is intent-keyed for the 8 deterministic
+// intents); the semantic path's metric set varies per question, so a
+// single honest "not enough data" message covers every metric/period
+// combination without inventing per-metric copy this milestone doesn't
+// require.
+function formatSemanticNoDataResponse() {
+  return {
+    success: true,
+    answer: "I do not have enough data to answer that yet.",
+    basedOn: ["none"],
+  };
+}
+
+// Workstream 1 -- the pipeline ask.js falls back to ONLY after
+// classifyIntent() has already returned null. Tries, in order: (1) a
+// deterministic prohibited-phrase rejection (0 provider calls); (2) the
+// semantic router (1 router call); (3) either a deterministic
+// financialQueryService-backed answer (0 answer calls), a delegated
+// existing-intent explanation (at most 1 answer call), a semantic
+// EXPLAIN/FORECAST/COMPARE prose answer (1 answer call), a clarification
+// (0 answer calls), or unsupported/no-data (0 answer calls) -- see
+// sia/semanticPipeline.js's own header for the full contract.
+async function handleSemanticFallback({ req, res, reservation, activeSession, requestedClientMessageId, trimmedQuestion }) {
+  try {
+    const previousPlanSummary = activeSession
+      ? await (async () => {
+          if (!isSessionStoreAvailable()) return null;
+          try {
+            return await sessionService.loadLastPlanSummary(activeSession._id, req.userId);
+          } catch (_err) {
+            return null;
+          }
+        })()
+      : null;
+
+    const pipelineResult = await runSemanticPipeline({
+      question: trimmedQuestion,
+      userId: req.userId,
+      previousPlanSummary,
+      existingIntentHandler: (explanationIntent) =>
+        answerExplanationIntentForSemanticPath(req.userId, explanationIntent, trimmedQuestion),
+      // Idempotency checkpoint: persists the plan BEFORE any
+      // answer-generation call is attempted, so a crash/failure after
+      // this point lets a retry with the same clientMessageId skip the
+      // router call entirely (see sia/idempotencyService.js's
+      // saveRoutingCheckpoint()). Best-effort -- its own failure can
+      // never break the actual response (semanticPipeline.js swallows
+      // any rejection from this hook).
+      onPlanResolved: reservation
+        ? async (plan) => {
+            await idempotencyService.saveRoutingCheckpoint({
+              requestId: reservation.record._id,
+              ownerToken: reservation.ownerToken,
+              planCheckpoint: plan,
+            });
+          }
+        : undefined,
+    });
+
+    if (pipelineResult.kind === "unsupported") {
+      if (reservation) {
+        await idempotencyService.releaseRequest({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+        });
+      }
+      return res.status(422).json({
+        success: false,
+        message: "Question not recognized for the intents SIA currently supports.",
+      });
+    }
+
+    if (pipelineResult.kind === "no_data") {
+      const noDataResponse = formatSemanticNoDataResponse();
+      if (activeSession) noDataResponse.sessionId = String(activeSession._id);
+      if (reservation) {
+        await idempotencyService.markCompleted({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+          responseStatus: 200,
+          responsePayload: noDataResponse,
+          sessionId: activeSession ? activeSession._id : null,
+        });
+      }
+      return res.status(200).json(noDataResponse);
+    }
+
+    if (pipelineResult.kind === "clarification") {
+      const payload = formatClarificationResponse(pipelineResult.plan.clarification);
+      if (activeSession) payload.sessionId = String(activeSession._id);
+      if (reservation) {
+        await idempotencyService.markCompleted({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+          responseStatus: 200,
+          responsePayload: payload,
+          sessionId: activeSession ? activeSession._id : null,
+        });
+      }
+      return res.status(200).json(payload);
+    }
+
+    if (pipelineResult.kind === "explanation_intent_delegated") {
+      const delegated = pipelineResult.result;
+
+      if (!delegated || delegated.kind === "no_data") {
+        const noDataResponse = formatNoDataResponse(pipelineResult.intent);
+        if (activeSession) noDataResponse.sessionId = String(activeSession._id);
+        if (reservation) {
+          await idempotencyService.markCompleted({
+            requestId: reservation.record._id,
+            ownerToken: reservation.ownerToken,
+            responseStatus: 200,
+            responsePayload: noDataResponse,
+            sessionId: activeSession ? activeSession._id : null,
+          });
+        }
+        return res.status(200).json(noDataResponse);
+      }
+
+      if (delegated.kind === "failed") {
+        if (reservation) {
+          await idempotencyService.releaseRequest({
+            requestId: reservation.record._id,
+            ownerToken: reservation.ownerToken,
+          });
+        }
+        return res.status(503).json(UNAVAILABLE_RESPONSE);
+      }
+
+      const finished = await finalizeAnswer({
+        req,
+        reservation,
+        activeSession,
+        intent: pipelineResult.intent,
+        answer: delegated.answer,
+        clientMessageId: requestedClientMessageId,
+        grounding: delegated.grounding,
+      });
+      return res.status(finished.status).json(finished.payload);
+    }
+
+    if (pipelineResult.kind === "answer") {
+      let session = activeSession;
+      if (!session) {
+        session = await safeCreateSession(req.userId, trimmedQuestion);
+      }
+
+      if (session) {
+        await safeAppendTurn({
+          sessionId: session._id,
+          userId: req.userId,
+          question: trimmedQuestion,
+          intent: null,
+          answer: pipelineResult.answer,
+          providerMetadata: { provider: config.provider },
+          clientMessageId: requestedClientMessageId,
+          grounding: pipelineResult.grounding,
+          planSummary: pipelineResult.planSummary,
+        });
+      }
+
+      const payload = {
+        success: true,
+        answer: pipelineResult.answer,
+        grounding: pipelineResult.grounding,
+        interpretation: pipelineResult.interpretation,
+      };
+      if (session) payload.sessionId = String(session._id);
+
+      if (reservation) {
+        await idempotencyService.markCompleted({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+          responseStatus: 200,
+          responsePayload: payload,
+          sessionId: session ? session._id : null,
+        });
+      }
+
+      return res.status(200).json(payload);
+    }
+
+    // Unreachable under semanticPipeline.js's documented contract -- kept
+    // as an explicit, safe fallback rather than an unhandled case.
+    if (reservation) {
+      await idempotencyService.releaseRequest({
+        requestId: reservation.record._id,
+        ownerToken: reservation.ownerToken,
+      });
+    }
+    return res.status(422).json({
+      success: false,
+      message: "Question not recognized for the intents SIA currently supports.",
+    });
+  } catch (_err) {
+    if (reservation) {
+      try {
+        await idempotencyService.releaseRequest({
+          requestId: reservation.record._id,
+          ownerToken: reservation.ownerToken,
+        });
+      } catch (_releaseErr) {
+        // Best-effort -- the lease's own expiry is the backstop.
+      }
+    }
+    return res.status(503).json(UNAVAILABLE_RESPONSE);
+  }
 }
 
 const ask = async (req, res) => {
@@ -423,15 +741,16 @@ const ask = async (req, res) => {
   // Whatever classifyIntent returns is used as-is -- no hard-coded intent, no guessed fallback; its contract guarantees one of the known intents, or null.
   const intent = classifyIntent(trimmedQuestion);
   if (intent === null) {
-    if (reservation) {
-      await idempotencyService.releaseRequest({
-        requestId: reservation.record._id,
-        ownerToken: reservation.ownerToken,
-      });
-    }
-    return res.status(422).json({
-      success: false,
-      message: "Question not recognized for the intents SIA currently supports.",
+    // Workstream 1 -- the semantic-routing fallback layer, tried ONLY
+    // now that deterministic classification has already failed. Never
+    // invoked before classifyIntent() above; never replaces it.
+    return handleSemanticFallback({
+      req,
+      res,
+      reservation,
+      activeSession,
+      requestedClientMessageId,
+      trimmedQuestion,
     });
   }
 

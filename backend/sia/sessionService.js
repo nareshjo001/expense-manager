@@ -60,6 +60,13 @@ async function appendTurn({
   providerMetadata,
   clientMessageId,
   grounding,
+  // Workstream 1 -- bounded QueryPlan summary (see models/SiaMessage.js's
+  // siaPlanSummarySchema), stored on the assistant document only, same
+  // conditional-presence discipline as `grounding` below: only included
+  // in the create() call at all when a real plan summary exists, so a
+  // turn answered via the pre-existing pipeline stores no planSummary
+  // field.
+  planSummary,
 }) {
   // The unique index on SiaMessage.js is scoped to (session, clientMessageId) -- a single raw clientMessageId can't be stored on both the user and assistant document of the same turn without colliding, so each role gets its own derived key, reused identically at both storage and lookup time (a prior version derived the assistant key only at storage time but checked the raw key at lookup, so a retry could never find the stored assistant message -- fixed by deriving both keys once, up front). `session` alone (not `session`+`user`) is the index's scope because a session belongs to exactly one user for its lifetime (enforced by getOrCreateSession()'s ownership-checked lookup) -- a clientMessageId can never collide across two users' sessions.
   const userClientMessageId = clientMessageId ? `${clientMessageId}:user` : null;
@@ -110,6 +117,10 @@ async function appendTurn({
       metadata: providerMetadata || {},
       // `grounding` is only present on the create() call at all when a real, non-empty snapshot exists -- conditionally spread in, not set to `undefined`, so a no-op computation leaves the write attributes byte-for-byte identical to before this field existed.
       ...(grounding && Array.isArray(grounding.sources) && grounding.sources.length > 0 ? { grounding } : {}),
+      // Same conditional-presence discipline as `grounding` immediately
+      // above -- a no-op (no planSummary supplied) leaves the write
+      // attributes byte-for-byte identical to before this field existed.
+      ...(planSummary && typeof planSummary === "object" ? { planSummary } : {}),
     });
   } catch (err) {
     // MongoDB duplicate-key error (E11000) -- a concurrent request won the race and already created this exact pair between our findOne check and this create() call. Recover the winner's already-persisted pair instead of throwing, exactly as the sequential findOne path would have.
@@ -189,6 +200,29 @@ async function loadRecentTurns(sessionId, userId, limit = MAX_RECENT_TURNS_FOR_L
   return recent.reverse().map((m) => ({ role: m.role, content: m.content, intent: m.intent }));
 }
 
+// Workstream 1 -- the most recent assistant message's bounded QueryPlan
+// summary (if any) for this owned session, used ONLY to give the
+// semantic router calendar/topic continuity for a follow-up question
+// ("what about last month?") -- NEVER as a source of current financial
+// facts (a follow-up always re-fetches fresh via
+// sia/financialQueryService.js). Returns null for a missing/foreign
+// session or when no prior turn carried a plan summary, same
+// non-disclosing posture as this module's other lookups.
+async function loadLastPlanSummary(sessionId, userId) {
+  if (!isValidObjectId(sessionId)) return null;
+
+  const lastWithPlan = await SiaMessage.findOne({
+    session: sessionId,
+    user: userId,
+    role: "assistant",
+    planSummary: { $exists: true },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return lastWithPlan && lastWithPlan.planSummary ? lastWithPlan.planSummary : null;
+}
+
 module.exports = {
   findOwnedSession,
   createSession,
@@ -198,5 +232,6 @@ module.exports = {
   listMessages,
   deleteSession,
   loadRecentTurns,
+  loadLastPlanSummary,
   MAX_RECENT_TURNS_FOR_LLM,
 };
