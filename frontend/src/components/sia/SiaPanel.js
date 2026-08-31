@@ -9,8 +9,10 @@ import SiaSpeakButton from "./SiaSpeakButton";
 import { useSiaVoiceRecorder, SIA_RECORDER_STATE } from "./useSiaVoiceRecorder";
 import { insertTranscriptIntoComposer } from "./siaTranscriptInsertion";
 import { SIA_SUGGESTIONS } from "./siaSuggestions";
+import { renderSiaAnswer } from "./siaAnswerRenderer";
 import { useSiaSessionMessagesQuery } from "../../hooks/queries/useSiaSessionMessagesQuery";
 import { queryKeys } from "../../query/queryKeys";
+import { useIsMobile } from "../hooks/useIsMobile";
 import {
   PANEL_MODE,
   SIA_ERROR_CODE,
@@ -34,27 +36,34 @@ const VOICE_ACTIVE_STATES = new Set([
 // The legacy semantic path returns one `periodLabel`; the grounded v2 path
 // returns `periodLabels` because a single answer may compare periods. Keep
 // the UI label deliberately compact and never expose metrics or plan details.
+function getPlanSummaryLabel(planSummary) {
+  if (!planSummary || typeof planSummary !== "object") return null;
+  if (typeof planSummary.periodLabel === "string" && planSummary.periodLabel.trim() !== "") {
+    return planSummary.periodLabel.trim();
+  }
+  return null;
+}
+
 function getInterpretationLabel(interpretation) {
   if (!interpretation || typeof interpretation !== "object") return null;
-
   if (typeof interpretation.periodLabel === "string" && interpretation.periodLabel.trim() !== "") {
     return interpretation.periodLabel.trim();
   }
-
   if (!Array.isArray(interpretation.periodLabels)) return null;
-  const labels = [...new Set(interpretation.periodLabels.filter((label) => typeof label === "string" && label.trim() !== ""))];
-  if (labels.length === 1) return labels[0].trim();
-  return labels.length > 1 ? "multiple periods" : null;
+  const labels = interpretation.periodLabels
+    .filter((label) => typeof label === "string" && label.trim() !== "")
+    .map((label) => label.trim());
+  return labels.length > 0 ? labels.join(", ") : null;
 }
+
 
 // Presentation only. Every piece of conversation state lives in
 // SiaEntryPoint's useSiaConversation() hook, so unmounting this component
 // on close never loses the transcript, the active session, or an in-flight
 // request.
 //
-// Answers are rendered as plain text (never dangerouslySetInnerHTML);
-// newlines are handled by CSS `white-space: pre-wrap`, so HTML-looking
-// content from a provider can only ever appear as literal characters.
+// Assistant answers use a small, safe Markdown renderer. Raw HTML is never
+// interpreted, so provider content cannot execute in the page.
 // Batch 3E availability props (all optional, so any existing caller/test
 // that renders SiaPanel without them keeps working):
 //   isAvailable            -- backend confirmed SIA can answer a new question
@@ -105,6 +114,7 @@ const SiaPanel = ({
   const composerRef = useRef(null);
   const transcriptEndRef = useRef(null);
   const closeButtonRef = useRef(null);
+  const isMobile = useIsMobile(600);
   const retryButtonRef = useRef(null);
   const firstClarificationOptionRef = useRef(null);
   const lastFocusedClarificationMessageIdRef = useRef(null);
@@ -154,12 +164,28 @@ const SiaPanel = ({
     hydrate(selectedHistorySessionId, normalizeServerMessages(messagesQuery.data?.messages));
   }, [selectedHistorySessionId, messagesQuery.isSuccess, messagesQuery.data, hydrate]);
 
-  // Move focus into the composer when the panel opens.
+  // Opening the mobile panel must not summon the virtual keyboard. Keep the
+  // focus inside the dialog for keyboard/screen-reader users, but use the
+  // Close control until the user deliberately taps the composer. Desktop
+  // retains the established composer autofocus behavior.
   useEffect(() => {
-    if (mode === PANEL_MODE.CONVERSATION && composerRef.current) {
+    if (mode !== PANEL_MODE.CONVERSATION) return;
+    if (isMobile) {
+      if (closeButtonRef.current) closeButtonRef.current.focus();
+    } else if (composerRef.current) {
       composerRef.current.focus();
     }
-  }, [mode]);
+  }, [mode, isMobile]);
+
+  // The scroll-to-top control is mounted outside the authenticated app tree,
+  // so it cannot receive SIA state as a prop. Mark the document only while
+  // this full-screen mobile panel is mounted; the cleanup restores the
+  // control immediately on close or when the viewport becomes desktop-sized.
+  useEffect(() => {
+    if (!isMobile || typeof document === "undefined") return undefined;
+    document.body.classList.add("sia-mobile-panel-open");
+    return () => document.body.classList.remove("sia-mobile-panel-open");
+  }, [isMobile]);
 
   // Follow the newest message on submit/answer. Guarded because jsdom (and
   // some older browsers) do not implement scrollIntoView.
@@ -515,6 +541,7 @@ const SiaPanel = ({
               const isClarification = message.role === "assistant" && message.kind === "clarification";
               const isLastMessage = index === messages.length - 1;
               const interpretationLabel = getInterpretationLabel(message.interpretation);
+              const planSummaryLabel = getPlanSummaryLabel(message.planSummary);
               return (
               <div
                 key={message.id}
@@ -525,13 +552,21 @@ const SiaPanel = ({
                 <span className="sia-visually-hidden">
                   {message.role === "user" ? "You said:" : "SIA said:"}
                 </span>
-                <p className="sia-message-text">{message.content}</p>
+                {message.role === "assistant" ? (
+                  <div className="sia-message-text sia-markdown">{renderSiaAnswer(message.content)}</div>
+                ) : (
+                  <p className="sia-message-text">{message.content}</p>
+                )}
 
                 {/* A small, human-readable trust label from server-derived
                     period metadata. Metrics/internal ids are never rendered. */}
                 {message.role === "assistant" &&
                   !isClarification &&
-                  interpretationLabel && <p className="sia-interpretation">Using {interpretationLabel}</p>}
+                  (planSummaryLabel ? (
+                    <p className="sia-interpretation">Using {planSummaryLabel}</p>
+                  ) : (
+                    interpretationLabel && <p className="sia-interpretation">Using {interpretationLabel}</p>
+                  ))}
 
                 {/* Workstream 3, part D: each clarification option is its
                     own accessible button. Clicking one re-submits through

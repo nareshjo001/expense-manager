@@ -459,4 +459,34 @@
     align-items: flex-start;
     flex-direction: column;
   }
+
+  /* Keep the category toggle's action visible inside narrow forecast cards:
+     the title column may shrink, while Expand/Collapse and its chevron keep
+     a dedicated, non-wrapping column instead of being clipped at the edge. */
+  .forecast-category-toggle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    box-sizing: border-box;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .forecast-category-toggle > span:first-child {
+    min-width: 0;
+  }
+
+  .forecast-category-toggle-title {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .forecast-category-toggle-indicator {
+    gap: 5px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .forecast-category-chevron {
+    font-size: 18px;
+  }
 }

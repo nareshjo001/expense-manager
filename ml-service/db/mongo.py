@@ -5,11 +5,8 @@ Centralizes .env loading and MongoClient construction so the training-run
 repository (and any future in-process MongoDB access) reuses a single,
 process-wide client instead of opening a new connection per call.
 
-Note: `training/export_feedback.py` runs as its own subprocess (invoked by
-retrain_pipeline.py), not imported in-process, so it intentionally keeps its
-own standalone MongoClient for now. Refactoring it is out of scope for
-Phase B ("preserve the existing export -> merge -> trainer subprocess
-workflow", "do not yet change dataset semantics").
+The active retraining pipeline uses this shared client through the training
+repositories; obsolete standalone export scripts are not part of this flow.
 """
 
 import os
@@ -23,7 +20,7 @@ load_dotenv()
 
 MONGO_CONN = os.getenv("MONGO_CONN")
 
-# Reuses the same "auth-db" database training/export_feedback.py already targets; overridable via env var.
+# Shared application database; overridable via environment variable.
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "auth-db")
 
 

@@ -7,28 +7,57 @@ import { signUpSuccessToast, signUpErrorToast } from "../alertsEffects/toastMess
 import { useUpdateRecurringMutation } from "../../hooks/mutations/useUpdateRecurringMutation";
 
 // Single expense card with edit, delete, and recurring-toggle actions.
-const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
+const ExpenseItem = ({
+  expense,
+  onDelete,
+  setIsEdit,
+  isMobileMenuOpen,
+  onToggleMobileMenu,
+  onCloseMobileMenu,
+}) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
   const [showMenu, setShowMenu] = useState(false);
+  const isMenuControlled = typeof isMobileMenuOpen === "boolean" && typeof onToggleMobileMenu === "function";
+  const menuOpen = isMenuControlled ? isMobileMenuOpen : showMenu;
 
   const updateRecurringMutation = useUpdateRecurringMutation();
   const isRecurring = expense.isRecurring;
 
-  // Closes the mobile action menu automatically when switching from mobile to desktop view.
+  // Preserves the standalone card behavior when a parent is not coordinating mobile menus.
   useEffect(() => {
-    if (!isMobile && showMenu) {
+    if (!isMenuControlled && !isMobile && showMenu) {
       setShowMenu(false);
     }
-  }, [isMobile, showMenu]);
+  }, [isMobile, isMenuControlled, showMenu]);
+
+  const closeMobileMenu = () => {
+    if (isMenuControlled) {
+      onCloseMobileMenu?.();
+      return;
+    }
+
+    setShowMenu(false);
+  };
+
+  const toggleMobileMenu = () => {
+    if (isMenuControlled) {
+      onToggleMobileMenu();
+      return;
+    }
+
+    setShowMenu((prev) => !prev);
+  };
 
   const handleEdit = () => {
+    closeMobileMenu();
     setIsEdit({ enableEdit: true, expense_id: expense._id });
     navigate("/add");
   };
 
   const handleRecurring = () => {
+    closeMobileMenu();
     const newRecurringState = !isRecurring;
 
     updateRecurringMutation.mutate(
@@ -82,7 +111,7 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
   };
 
   return (
-    <div className={`expense-card ${showMenu ? "menu-open" : ""}`}>
+    <div className={`expense-card ${menuOpen ? "menu-open" : ""}`}>
       <div className="expense-header">
         <span className="expense-title">{expense.expenseName}</span>
 
@@ -138,7 +167,10 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
 
           <button
             className="mobile-menu-btn"
-            onClick={() => setShowMenu((prev) => !prev)}
+            type="button"
+            aria-label="Expense actions"
+            aria-expanded={menuOpen}
+            onClick={toggleMobileMenu}
           >
             <svg viewBox="0 0 24 24" className="icon">
               <circle cx="12" cy="5" r="1.5"></circle>
@@ -161,11 +193,14 @@ const ExpenseItem = ({ expense, onDelete, setIsEdit }) => {
         </span>
       </div>
 
-      {showMenu && (
+      {menuOpen && (
         <div className="mobile-menu">
           <button onClick={handleEdit}>Edit</button>
 
-          <button onClick={() => onDelete(expense._id)}>Delete</button>
+          <button onClick={() => {
+            closeMobileMenu();
+            onDelete(expense._id);
+          }}>Delete</button>
 
           <button onClick={handleRecurring}>
             {isRecurring ? 'Unmark recurring' : 'Mark Recurring'}

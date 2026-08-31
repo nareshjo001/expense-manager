@@ -477,6 +477,7 @@ describe("backend/sia/llmService -- Groq provider adapter", () => {
       await expect(askLlm(VALID_REQUEST)).rejects.toMatchObject({
         code: "PROVIDER_HTTP_ERROR",
         provider: "groq",
+        httpStatus: 429,
       });
       expect(postMock).toHaveBeenCalledTimes(1);
     });

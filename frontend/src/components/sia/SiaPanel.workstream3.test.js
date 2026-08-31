@@ -541,6 +541,25 @@ describe("SiaPanel -- Listen/Stop speech synthesis", () => {
     expect(utterance.text).not.toMatch(/this month/);
   });
 
+  it("converts Markdown tables into labelled speech without table separators", () => {
+    const { speak } = installSpeechSynthesis();
+    const conversation = makeConversation({
+      messages: [
+        {
+          id: "m2",
+          role: "assistant",
+          kind: "answer",
+          content: "| Metric | Amount |\n| --- | ---: |\n| Income | ₹10,000 |\n| Expenses | ₹3,914 |",
+        },
+      ],
+    });
+    renderPanel(conversation);
+
+    fireEvent.click(screen.getByRole("button", { name: "Listen to answer" }));
+
+    expect(speak.mock.calls[0][0].text).toBe("Metric: Income, Amount: ₹10,000\nMetric: Expenses, Amount: ₹3,914");
+  });
+
   it("clicking Listen then Stop cancels speech", () => {
     const { cancel } = installSpeechSynthesis();
     const conversation = makeConversation({

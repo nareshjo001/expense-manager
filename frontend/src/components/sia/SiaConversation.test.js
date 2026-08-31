@@ -455,9 +455,8 @@ describe("SIA conversation -- suggestions", () => {
     renderEntryPoint();
     await openPanel();
 
-    expect(SIA_SUGGESTIONS).toHaveLength(7);
-    const intents = new Set(SIA_SUGGESTIONS.map((s) => s.intent));
-    expect(intents.size).toBe(7);
+    expect(SIA_SUGGESTIONS).toHaveLength(8);
+    expect(new Set(SIA_SUGGESTIONS.map((suggestion) => suggestion.id)).size).toBe(8);
 
     for (const suggestion of SIA_SUGGESTIONS) {
       expect(screen.getByRole("button", { name: suggestion.text })).toBeInTheDocument();

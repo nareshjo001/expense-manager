@@ -110,6 +110,24 @@ describe("LandingPage confirmDeleteHandler -- committed delete UX", () => {
     useDeleteExpenseMutation.mockReturnValue({ mutate: mockDeleteMutate });
   });
 
+  it("renders the interaction-blocking chart overlay only for the mobile chart picker", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+
+    try {
+      const { container } = renderLandingPage();
+      fireEvent.click(container.querySelector(".mobile-chart-btn"));
+
+      expect(container.querySelector(".mobile-chart-overlay")).toBeInTheDocument();
+      expect(container.querySelector(".mobile-dropdown-modal")).toBeInTheDocument();
+
+      fireEvent.click(container.querySelector(".mobile-chart-overlay"));
+      expect(container.querySelector(".mobile-chart-overlay")).not.toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    }
+  });
+
   it("a synchronized 2xx closes the confirmation modal and shows the plain success toast", () => {
     renderLandingPage();
     const { callbacks } = triggerDeleteAndCapture(mockDeleteMutate);

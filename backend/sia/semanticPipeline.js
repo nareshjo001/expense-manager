@@ -338,6 +338,59 @@ function addV2ResultFacts({ builder, query, period, result }) {
     return added.ok ? { ok: true } : { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
   }
 
+  if (metric === "INCOME_BREAKDOWN") {
+    if (!Array.isArray(result.sources) || result.sources.length === 0) {
+      return { ok: false, reasonCode: "NO_INCOME_IN_PERIOD" };
+    }
+    for (const source of result.sources) {
+      const added = builder.add({
+        ...common,
+        metric,
+        value: source.total,
+        unit: "INR",
+        source: "INCOME",
+        groupKey: source.source,
+      });
+      if (!added.ok) return { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
+    }
+    return { ok: true };
+  }
+
+  if (metric === "TREND_SERIES") {
+    if (!Array.isArray(result.series) || result.series.length === 0) {
+      return { ok: false, reasonCode: "NO_TREND_DATA" };
+    }
+    for (const point of result.series) {
+      const pointStart = new Date(Date.UTC(point.year, point.month - 1, 1));
+      const pointEnd = new Date(Date.UTC(point.year, point.month, 1));
+      const added = builder.add({
+        periodStart: pointStart,
+        periodEnd: pointEnd,
+        periodLabel: point.monthLabel,
+        metric,
+        value: point.total,
+        unit: "INR",
+        source: "DERIVED",
+        groupKey: point.monthLabel,
+      });
+      if (!added.ok) return { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
+    }
+    return { ok: true };
+  }
+
+  if (metric === "PERIOD_COMPARISON") {
+    const reasonCode = result.percentChange !== null ? `${result.direction}:${result.percentChange}%` : result.direction;
+    const added = builder.add({
+      ...common,
+      metric,
+      value: result.delta,
+      unit: "INR",
+      source: "DERIVED",
+      reasonCode: reasonCode,
+    });
+    return added.ok ? { ok: true } : { ok: false, reasonCode: added.reason || "FACT_SET_BUILD_FAILED" };
+  }
+
   const metadataByMetric = {
     EXPENSE_TOTAL: { value: result.value, unit: "INR", source: "EXPENSE" },
     EXPENSE_COUNT: { value: result.value, unit: "COUNT", source: "EXPENSE" },
@@ -374,13 +427,20 @@ async function executeV2PlanToFactSet({ userId, plan, financialQueryService, now
     if (!period.ok) return { ok: false, reasonCode: `PERIOD_${period.reason}` };
 
     const periods = [period];
-    if (query.operation === "COMPARE") {
+    if (query.operation === "COMPARE" && query.metric !== "PERIOD_COMPARISON") {
       const comparisonPeriod = resolvePeriod(query.comparisonPeriod, { now, timeZone });
       if (!comparisonPeriod.ok) return { ok: false, reasonCode: `COMPARISON_PERIOD_${comparisonPeriod.reason}` };
       periods.push(comparisonPeriod);
     }
 
     for (const queryPeriod of periods) {
+      let resolvedComparisonPeriod;
+      if (query.metric === "PERIOD_COMPARISON" && query.comparisonPeriod) {
+        const compRes = resolvePeriod(query.comparisonPeriod, { now, timeZone });
+        if (!compRes.ok) return { ok: false, reasonCode: `COMPARISON_PERIOD_${compRes.reason}` };
+        resolvedComparisonPeriod = compRes;
+      }
+
       let result;
       try {
         result = await financialQueryService.executeFinancialQuery({
@@ -388,6 +448,8 @@ async function executeV2PlanToFactSet({ userId, plan, financialQueryService, now
           query,
           period: queryPeriod,
           budgetYearMonth: deriveYearMonthForBudgetQuery(query, queryPeriod, timeZone),
+          comparisonPeriod: resolvedComparisonPeriod,
+          timeZone,
         });
       } catch (_err) {
         return { ok: false, reasonCode: "FINANCIAL_QUERY_FAILED" };
@@ -449,8 +511,21 @@ function renderV2DeterministicAnswer(factSet) {
       case "BUDGET_STATUS":
         sentences.push(`Your budget status ${fact.periodLabel} is ${fact.reasonCode === "over_budget" ? "over budget" : "within budget"}.`);
         break;
+      case "PERIOD_COMPARISON": {
+        const percentPart = fact.reasonCode && fact.reasonCode.includes(":") ? ` (${fact.reasonCode.split(":")[1]})` : "";
+        const direction = fact.reasonCode && fact.reasonCode.includes(":") ? fact.reasonCode.split(":")[0] : fact.reasonCode;
+        const dirLabel = direction === "increase" ? "increased" : direction === "decrease" ? "decreased" : "did not change";
+        sentences.push(`Your spending ${dirLabel} by ${formatInr(Math.abs(fact.value))}${percentPart} compared to the previous period.`);
+        break;
+      }
+      case "INCOME_BREAKDOWN":
+        sentences.push(`${fact.groupKey}: ${formatInr(fact.value)} ${fact.periodLabel}.`);
+        break;
+      case "TREND_SERIES":
+        sentences.push(`${fact.groupKey}: ${formatInr(fact.value)}.`);
+        break;
       default:
-        return "";
+        break;
     }
   }
   return sentences.join(" ");

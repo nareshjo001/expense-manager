@@ -290,7 +290,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                     {isMobile && showMobileDropdown && (
                         <>
                             <div
-                                className="dropdown-overlay"
+                                className="dropdown-overlay mobile-chart-overlay"
                                 onClick={() => setShowMobileDropdown(false)}
                             />
 

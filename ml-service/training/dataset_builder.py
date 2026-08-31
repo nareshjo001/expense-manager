@@ -1,10 +1,7 @@
 """
 Cumulative training-dataset assembly (Phase C).
 
-Replaces the old export_feedback.py -> merge_datasets.py -> shared,
-overwritten retrain_data.csv flow (see those files' own module docstrings
-for why they are no longer invoked by the pipeline) with two explicit
-stages:
+Uses two explicit stages rather than a shared, overwritten retraining CSV:
 
   1. reserve_feedback_for_run(run_id)
        Reconciles any feedback left "reserved" by a terminal/missing run

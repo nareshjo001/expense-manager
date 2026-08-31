@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, cleanup, act } from "@testing-library/react";
+import { render, screen, cleanup, act, fireEvent } from "@testing-library/react";
 import ExpensesPage from "./ExpensesPage";
 import { useExpensesQuery } from "../../hooks/queries/useExpensesQuery";
 import { useExpenseInsights } from "../contexts/ai-contexts/ExpenseInsightsContext";
@@ -9,7 +9,16 @@ jest.mock("framer-motion", () => ({
 }));
 
 jest.mock("../imports/expensesImport", () => ({
-  ExpenseItem: ({ expense }) => <div>{expense.expenseName}</div>,
+  ExpenseItem: ({ expense, isMobileMenuOpen, onToggleMobileMenu }) => (
+    <button
+      className="mobile-menu-btn"
+      data-testid={`expense-menu-${expense._id}`}
+      data-open={String(Boolean(isMobileMenuOpen))}
+      onClick={onToggleMobileMenu}
+    >
+      {expense.expenseName}
+    </button>
+  ),
   SetBudget: () => <div />,
   formatDateRange: () => "Custom range",
 }));
@@ -79,5 +88,36 @@ describe("ExpensesPage progressive rendering", () => {
     expect(screen.getByText("Expense 31")).toBeInTheDocument();
     expect(screen.getByText("Expense 32")).toBeInTheDocument();
     expect(screen.queryByText("Loading more expenses…")).not.toBeInTheDocument();
+  });
+
+  it("keeps one mobile expense menu open and dismisses it when the screen is touched elsewhere", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+
+    const expenses = [makeExpense(1), makeExpense(2)];
+    useExpensesQuery.mockReturnValue({
+      data: { success: true, data: expenses, previousData: [], weeklyData: [] },
+      isLoading: false,
+      dataUpdatedAt: 1,
+    });
+
+    render(<ExpensesPage onDelete={jest.fn()} setIsEdit={jest.fn()} />);
+
+    const firstMenu = screen.getByTestId("expense-menu-expense-1");
+    const secondMenu = screen.getByTestId("expense-menu-expense-2");
+
+    fireEvent.click(firstMenu);
+    expect(firstMenu).toHaveAttribute("data-open", "true");
+    expect(document.body).toHaveClass("mobile-expense-menu-open");
+
+    fireEvent.click(secondMenu);
+    expect(firstMenu).toHaveAttribute("data-open", "false");
+    expect(secondMenu).toHaveAttribute("data-open", "true");
+
+    fireEvent.pointerDown(document.body);
+    expect(secondMenu).toHaveAttribute("data-open", "false");
+    expect(document.body).not.toHaveClass("mobile-expense-menu-open");
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
   });
 });

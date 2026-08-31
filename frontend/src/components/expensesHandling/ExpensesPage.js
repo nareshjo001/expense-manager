@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ExpenseItem, SetBudget, formatDateRange } from '../imports/expensesImport';
 
 import { useExpensesQuery } from '../../hooks/queries/useExpensesQuery';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 import { useExpenseInsights } from '../contexts/ai-contexts/ExpenseInsightsContext';
 import InlineExpenseInsight from '../insights/InlineExpenseInsight'
@@ -17,6 +18,8 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   const [period, setPeriod] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [openMobileMenuId, setOpenMobileMenuId] = useState(null);
+  const isMobile = useIsMobile();
 
   const {
     notifyInitialLoad,
@@ -83,6 +86,36 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   useEffect(() => {
     setVisibleExpenseCount(INITIAL_VISIBLE_EXPENSES);
   }, [filter, period, startDate, endDate, expensesQuery.dataUpdatedAt]);
+
+  // On mobile, one page-level menu state prevents multiple cards from being open.
+  // A pointer outside an action button or its menu closes the current one.
+  useEffect(() => {
+    if (!isMobile) {
+      setOpenMobileMenuId(null);
+      return undefined;
+    }
+
+    if (!openMobileMenuId) return undefined;
+
+    const closeOnOutsidePointerDown = (event) => {
+      const target = event.target;
+      if (target?.closest?.('.mobile-menu, .mobile-menu-btn')) return;
+
+      setOpenMobileMenuId(null);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+  }, [isMobile, openMobileMenuId]);
+
+  // The page's fade animation creates a stacking context below the global SIA
+  // launcher. Hide that launcher only while a mobile expense menu is active.
+  useEffect(() => {
+    const mobileMenuIsOpen = isMobile && Boolean(openMobileMenuId);
+    document.body.classList.toggle('mobile-expense-menu-open', mobileMenuIsOpen);
+
+    return () => document.body.classList.remove('mobile-expense-menu-open');
+  }, [isMobile, openMobileMenuId]);
 
   const revealMoreExpenses = useCallback(() => {
     setVisibleExpenseCount((current) => Math.min(current + EXPENSE_RENDER_BATCH_SIZE, totalExpenseCount));
@@ -178,9 +211,22 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
               <h3>{category}</h3>
               <div>
                 {Array.isArray(groupList) &&
-                  groupList.map((exp) => (
-                    <ExpenseItem key={exp._id || exp.id} expense={exp} onDelete={onDelete} setIsEdit={setIsEdit} />
-                  ))}
+                  groupList.map((exp) => {
+                    const expenseId = String(exp._id || exp.id);
+                    return (
+                      <ExpenseItem
+                        key={expenseId}
+                        expense={exp}
+                        onDelete={onDelete}
+                        setIsEdit={setIsEdit}
+                        isMobileMenuOpen={isMobile && openMobileMenuId === expenseId}
+                        onToggleMobileMenu={() => {
+                          setOpenMobileMenuId((current) => current === expenseId ? null : expenseId);
+                        }}
+                        onCloseMobileMenu={() => setOpenMobileMenuId(null)}
+                      />
+                    );
+                  })}
               </div>
 
               {filter === 'bycategory' && categoryTotals[category] !== undefined && (

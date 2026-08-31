@@ -1,65 +1,40 @@
 // Starter questions shown when a conversation is empty.
 //
-// Every question below is worded to satisfy the CURRENT patterns in
-// backend/sia/intentClassifier.js for exactly one supported intent -- the
-// classifier is regex-based and returns 422 for anything it does not
-// recognize, so a suggestion that failed to classify would hand the user a
-// guaranteed error. The `intent` field records which intent each question
-// is written for; it is metadata for maintenance and tests only and is
-// never rendered.
-//
-// Classifier constraints these were written against (see that file):
-//  - HEALTH_EXPLANATION needs "financial health"/"financial risk" AND an
-//    explanation verb (why/explain/...).
-//  - CATEGORY_SPENDING_EXPLANATION is checked BEFORE spending-change and
-//    must avoid the advice/prediction/lookup/cross-domain vetoes (no
-//    "should", "budget", "financial health", "show/list").
-//  - ANOMALY_EXPLANATION needs an anomaly word (unusual/flagged/...).
-//  - SPENDING_CHANGE_EXPLANATION needs a spending word AND a change verb,
-//    while naming no category.
-//  - BUDGET_STATUS_EXPLANATION needs "budget" AND a status verb, and must
-//    not read as a mutation ("increase my budget") or advice.
-//  - SPENDING_FORECAST_EXPLANATION needs a forecast keyword, or spending
-//    plus a future horizon; it is checked after budget, so it must not
-//    mention "budget".
-//  - FINANCIAL_RISK_EXPLANATION is checked last and must not use the
-//    "financial risk" + explanation-verb wording that HEALTH_EXPLANATION
-//    already owns, nor mention a budget.
+// These prompts are interpreted by SIA's LLM semantic router. The router
+// may choose only from the backend's validated, read-only financial-data
+// capability catalog; suggestions must not be phrased around regex rules.
 export const SIA_SUGGESTIONS = [
   {
-    id: "health",
-    intent: "HEALTH_EXPLANATION",
-    text: "Why is my financial health score what it is?",
+    id: "spending-current",
+    text: "How much did I spend this month?",
   },
   {
-    id: "spending-change",
-    intent: "SPENDING_CHANGE_EXPLANATION",
-    text: "Why did my overall spending change this month?",
+    id: "category-highest",
+    text: "Which category am I spending the most on?",
   },
   {
-    id: "budget-status",
-    intent: "BUDGET_STATUS_EXPLANATION",
-    text: "Explain my current budget status and utilization.",
+    id: "comparison-month",
+    text: "How does this month compare to last month?",
   },
   {
-    id: "category-spending",
-    intent: "CATEGORY_SPENDING_EXPLANATION",
-    text: "Which category accounts for the most of my spending?",
+    id: "income-expenses",
+    text: "What's my income vs expenses this month?",
   },
   {
-    id: "anomaly",
-    intent: "ANOMALY_EXPLANATION",
-    text: "Why were some of my expenses flagged as unusual?",
+    id: "budget-track",
+    text: "Am I on track with my budget?",
   },
   {
-    id: "forecast",
-    intent: "SPENDING_FORECAST_EXPLANATION",
-    text: "What is my spending forecast for next month?",
+    id: "spending-trend",
+    text: "Show me my spending trend over the last 3 months.",
   },
   {
-    id: "risk",
-    intent: "FINANCIAL_RISK_EXPLANATION",
-    text: "Do I have any risks I should know about right now?",
+    id: "unusual-recent",
+    text: "Were there any unusual expenses recently?",
+  },
+  {
+    id: "cash-flow",
+    text: "What is my net cash flow this month?",
   },
 ];
 

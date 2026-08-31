@@ -155,6 +155,11 @@
     width: 24px;
     height: 24px;
     font-size: 11px;
+    /* Keep the visual weight outside the compact percentage badge so its
+       unchanged font remains clear. */
+    border-width: 1px;
+    outline-width: 4px;
+    box-shadow: 0 0 8px var(--box-shadow);
   }
 
   .tooltip-text {

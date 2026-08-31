@@ -4,7 +4,6 @@
 const { isSessionStoreAvailable } = require("../../sia/sessionStoreAvailability");
 
 const config = require("../../sia/config");
-const { classifyIntent } = require("../../sia/intentClassifier");
 const { buildContext } = require("../../sia/contextBuilder");
 const { askLlm } = require("../../sia/llmService");
 const {
@@ -18,10 +17,13 @@ const idempotencyService = require("../../sia/idempotencyService");
 const { isSiaReady } = require("../../sia/readiness");
 const { buildGroundingSnapshot } = require("../../sia/groundingService");
 const { isValidObjectId } = require("mongoose");
-// Workstream 1 -- the NEW semantic-routing fallback layer, tried only
-// after classifyIntent() above has already returned null. Never called
-// before deterministic classification; never replaces it.
+// Semantic routing extends the established deterministic intent path. It
+// receives no financial data and can only produce a locally validated,
+// allowlisted QueryPlan.
 const { runSemanticPipeline } = require("../../sia/semanticPipeline");
+const { buildFinancialSnapshot } = require("../../sia/financialSnapshotService");
+const { answerDirectly } = require("../../sia/directAnswerService");
+const { isClearlyProhibited } = require("../../sia/prohibitedPhrases");
 
 // Bounded conversation session support (additive) -- guarded by sessionStoreAvailability.js's live connection check so pre-existing tests (which don't connect to real MongoDB) never hang; unavailable is a valid, safe state, never thrown.
 // Every session-store interaction is best-effort and never fails the user's actual question, and never leaves a half-written turn -- appendTurn() only runs once a real answer exists. Session RESOLUTION and CREATION happen at two different points: an explicit session resolves up front (its history feeds the provider); a new conversation's session isn't created until a validated answer exists, so a failed first turn leaves nothing behind.
@@ -439,13 +441,13 @@ function isSemanticUnavailableReason(reasonCode) {
     "FINANCIAL_QUERY_FAILED",
     "PROVIDER_FAILED",
     "MALFORMED_ANSWER_RESPONSE",
-  ].includes(reasonCode) || reasonCode.startsWith("PLAN_REJECTED:") || reasonCode.startsWith("GROUNDING_");
+  ].includes(reasonCode) || reasonCode.startsWith("GROUNDING_");
 }
 
-// Workstream 1 -- the pipeline ask.js falls back to ONLY after
-// classifyIntent() has already returned null. Tries, in order: (1) a
-// deterministic prohibited-phrase rejection (0 provider calls); (2) the
-// semantic router (1 router call); (3) either a deterministic
+// Legacy semantic fallback retained for existing stored request recovery.
+// New questions use the model-first direct path below. It tries, in
+// order: (1) a deterministic prohibited-phrase rejection (0 provider
+// calls); (2) the LLM semantic router (1 router call); (3) either a deterministic
 // financialQueryService-backed answer (0 answer calls), a delegated
 // existing-intent explanation (at most 1 answer call), a semantic
 // EXPLAIN/FORECAST/COMPARE prose answer (1 answer call), a clarification
@@ -642,6 +644,97 @@ async function handleSemanticFallback({ req, res, reservation, activeSession, re
   }
 }
 
+async function handleDirectAnswer({ req, res, reservation, activeSession, requestedClientMessageId, trimmedQuestion }) {
+  try {
+    if (isClearlyProhibited(trimmedQuestion)) {
+      if (reservation) {
+        await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
+      }
+      return res.status(422).json({ success: false, message: "That request is outside SIA's financial-data scope." });
+    }
+
+    const snapshotResult = await buildFinancialSnapshot(req.userId, { timeZone: config.appTimeZone });
+    if (!snapshotResult.ok) return res.status(503).json(UNAVAILABLE_RESPONSE);
+
+    const recentTurns = activeSession ? await safeLoadRecentTurns(activeSession._id, req.userId) : [];
+    const providerStartedAt = Date.now();
+    let directResult;
+    try {
+      directResult = await answerDirectly({ question: trimmedQuestion, snapshot: snapshotResult.snapshot, history: recentTurns });
+    } catch (providerErr) {
+      logSiaEvent({
+        event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
+        provider: config.provider,
+        errorCode: providerErr && providerErr.code,
+        latencyMs: Date.now() - providerStartedAt,
+      });
+      throw providerErr;
+    }
+
+    if (!directResult.ok) {
+      logSiaEvent({
+        event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
+        provider: config.provider,
+        errorCode: `DIRECT_ANSWER_${directResult.reasonCode || "REJECTED"}`,
+        latencyMs: Date.now() - providerStartedAt,
+      });
+      return res.status(503).json(UNAVAILABLE_RESPONSE);
+    }
+
+    logSiaEvent({ event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED, provider: config.provider, latencyMs: Date.now() - providerStartedAt });
+    const grounding = {
+      sources: [{ key: "financialReport", label: "Financial report", period: snapshotResult.snapshot.period.label }],
+    };
+    if (reservation) {
+      await idempotencyService.markAnswerReady({
+        requestId: reservation.record._id,
+        ownerToken: reservation.ownerToken,
+        answer: directResult.answer,
+        intent: null,
+        sessionId: activeSession ? activeSession._id : null,
+        grounding,
+      });
+    }
+
+    let session = activeSession;
+    if (!session) session = await safeCreateSession(req.userId, trimmedQuestion);
+    if (session) {
+      await safeAppendTurn({
+        sessionId: session._id,
+        userId: req.userId,
+        question: trimmedQuestion,
+        intent: null,
+        answer: directResult.answer,
+        providerMetadata: { provider: config.provider },
+        clientMessageId: requestedClientMessageId,
+        grounding,
+      });
+    }
+
+    const payload = { success: true, answer: directResult.answer, grounding };
+    if (session) payload.sessionId = String(session._id);
+    if (reservation) {
+      await idempotencyService.markCompleted({
+        requestId: reservation.record._id,
+        ownerToken: reservation.ownerToken,
+        responseStatus: 200,
+        responsePayload: payload,
+        sessionId: session ? session._id : null,
+      });
+    }
+    return res.status(200).json(payload);
+  } catch (_err) {
+    if (reservation) {
+      try {
+        await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
+      } catch (_releaseErr) {
+        // Lease expiry keeps the idempotency key recoverable.
+      }
+    }
+    return res.status(503).json(UNAVAILABLE_RESPONSE);
+  }
+}
+
 const ask = async (req, res) => {
   // Readiness gate: isSiaReady() (sia/readiness.js) is the SAME function GET /sia/status answers with, so the two can never disagree. Rejection is the pre-existing generic 503, happening BEFORE any validation, classification, context build, provider call, session creation, or reservation -- an unready deployment does no work and leaves no trace.
   if (!isSiaReady()) {
@@ -758,22 +851,16 @@ const ask = async (req, res) => {
     }
   }
 
-  // Whatever classifyIntent returns is used as-is -- no hard-coded intent, no guessed fallback; its contract guarantees one of the known intents, or null.
-  const intent = classifyIntent(trimmedQuestion);
-  if (intent === null) {
-    // Workstream 1 -- the semantic-routing fallback layer, tried ONLY
-    // now that deterministic classification has already failed. Never
-    // invoked before classifyIntent() above; never replaces it.
-    return handleSemanticFallback({
-      req,
-      res,
-      reservation,
-      activeSession,
-      requestedClientMessageId,
-      trimmedQuestion,
-    });
-  }
+  return handleDirectAnswer({
+    req,
+    res,
+    reservation,
+    activeSession,
+    requestedClientMessageId,
+    trimmedQuestion,
+  });
 
+  /* Legacy intent-specific path retained for request compatibility. */
   try {
     // req.userId comes only from verifyToken (Middlewares/Auth.js), which ran before this controller -- the sole identity ever passed into buildContext; req.body/query/params are never read for a userId. The canonical Report is fetched fresh every turn -- conversation history is never a substitute source of current facts.
     const contextResult = await buildContext(req.userId, intent);

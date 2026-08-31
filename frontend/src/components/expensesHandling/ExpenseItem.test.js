@@ -132,3 +132,26 @@ describe("ExpenseItem -- recurring toggle result handling", () => {
     expect(signUpErrorToast).toHaveBeenCalledWith(errorData);
   });
 });
+
+describe("ExpenseItem -- controlled mobile menu actions", () => {
+  it("closes the open menu before deleting an expense", () => {
+    setupMutation();
+    const onDelete = jest.fn();
+    const onCloseMobileMenu = jest.fn();
+    render(
+      <ExpenseItem
+        expense={baseExpense}
+        onDelete={onDelete}
+        setIsEdit={jest.fn()}
+        isMobileMenuOpen
+        onToggleMobileMenu={jest.fn()}
+        onCloseMobileMenu={onCloseMobileMenu}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Delete"));
+
+    expect(onCloseMobileMenu).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledWith("exp-1");
+  });
+});

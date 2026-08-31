@@ -234,6 +234,16 @@
 
 /* RESPONSIVE LOOK */
 @media (max-width: 640px) {
+  body.mobile-expense-menu-open .sia-entry-point {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .expense-card.menu-open,
+  .expense-card.menu-open .mobile-menu {
+    z-index: 10001 !important;
+  }
+
   .desktop-actions {
     display: none;
   }

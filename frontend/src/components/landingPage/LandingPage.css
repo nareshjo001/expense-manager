@@ -513,6 +513,16 @@ select > option {
     z-index: 999;
   }
 
+  .mobile-chart-overlay {
+    z-index: 10000000;
+  }
+
+  /* A mobile chart picker is modal: it must sit above the SIA launcher,
+     bottom navigation, and scroll-to-top control while it is open. */
+  .mobile-dropdown-modal {
+    z-index: 10000001;
+  }
+
   .modal {
     width: 75%;
   }

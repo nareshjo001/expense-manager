@@ -75,7 +75,7 @@ const persistAndCache = async (userId, generatedReport, options = {}) => {
   // Remove the retired report branch from already-persisted documents as
   // part of the same atomic refresh. Without this, `$set` would preserve a
   // legacy `risk` field even though new reports no longer generate one.
-  const update = { $set: setFields, $unset: { risk: "" } };
+  const update = { $set: setFields };
 
   // Phase C.2 correction -- this conditional write is NEVER allowed to
   // upsert. `user` carries a unique index (see models/Report.js), and

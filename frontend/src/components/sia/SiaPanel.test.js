@@ -105,6 +105,37 @@ describe("frontend/src/components/sia/SiaPanel", () => {
     expect(screen.getByRole("button", { name: "Close SIA" })).toBeInTheDocument();
   });
 
+  it("opens without focusing the composer on mobile, so the virtual keyboard stays closed", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+
+    try {
+      renderPanel(makeConversation());
+
+      expect(screen.getByRole("button", { name: "Close SIA" })).toHaveFocus();
+      expect(screen.getByLabelText(/your question/i)).not.toHaveFocus();
+      expect(document.body).toHaveClass("sia-mobile-panel-open");
+    } finally {
+      cleanup();
+      expect(document.body).not.toHaveClass("sia-mobile-panel-open");
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    }
+  });
+
+  it("keeps composer autofocus on desktop", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+
+    try {
+      renderPanel(makeConversation());
+
+      expect(screen.getByLabelText(/your question/i)).toHaveFocus();
+    } finally {
+      cleanup();
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    }
+  });
+
   it("does not submit when the conversation reports the input is not submittable", () => {
     const conversation = makeConversation({ input: "   ", canSubmit: false });
     renderPanel(conversation);

@@ -38,6 +38,8 @@ const METRICS = Object.freeze([
   "INCOME_COUNT",
   "NET_CASH_FLOW",
   "PERIOD_COMPARISON",
+  "INCOME_BREAKDOWN",
+  "TREND_SERIES",
   // Existing deterministic explanation intents -- reused, never reinvented.
   "HEALTH_EXPLANATION",
   "ANOMALY_EXPLANATION",

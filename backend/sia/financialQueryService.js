@@ -254,12 +254,161 @@ async function getBudgetSnapshot(userId, { year, month }) {
   };
 }
 
+async function getPeriodComparison(userId, period, comparisonPeriod, { categoryFilter } = {}) {
+  const guardCurrent = guardCommonInputs(userId, period);
+  if (!guardCurrent.ok) return { hasData: false, reasonCode: guardCurrent.reason, value: null };
+
+  const guardComp = guardCommonInputs(userId, comparisonPeriod);
+  if (!guardComp.ok) return { hasData: false, reasonCode: guardComp.reason, value: null };
+
+  let currentResult;
+  let comparisonResult;
+
+  if (categoryFilter) {
+    currentResult = await getCategoryTotal(userId, period, categoryFilter);
+    comparisonResult = await getCategoryTotal(userId, comparisonPeriod, categoryFilter);
+  } else {
+    currentResult = await getExpenseTotal(userId, period);
+    comparisonResult = await getExpenseTotal(userId, comparisonPeriod);
+  }
+
+  if (!currentResult.hasData || !comparisonResult.hasData) {
+    return { hasData: false, reasonCode: "COMPARISON_DATA_MISSING" };
+  }
+
+  const currentValue = currentResult.value !== null ? currentResult.value : 0;
+  const comparisonValue = comparisonResult.value !== null ? comparisonResult.value : 0;
+  const delta = Math.round((currentValue - comparisonValue) * 100) / 100;
+  const percentChange = comparisonValue !== 0
+    ? Math.round((delta / comparisonValue) * 10000) / 100
+    : null;
+
+  return {
+    hasData: true,
+    value: delta,
+    currentValue,
+    comparisonValue,
+    delta,
+    percentChange,
+    direction: delta > 0 ? "increase" : delta < 0 ? "decrease" : "no_change",
+  };
+}
+
+async function getIncomeBreakdown(userId, period, { maxSources = MAX_CATEGORY_RESULTS } = {}) {
+  const guard = guardCommonInputs(userId, period);
+  if (!guard.ok) return { hasData: false, reasonCode: guard.reason, sources: [] };
+
+  const boundedMax = Math.min(Math.max(1, Number(maxSources) || MAX_CATEGORY_RESULTS), MAX_CATEGORY_RESULTS);
+
+  const rows = await IncomeModel.aggregate([
+    { $match: { userId: guard.objectId, incomeDate: { $gte: period.start, $lt: period.end } } },
+    { $group: { _id: "$incomeSource", total: { $sum: "$incomeAmount" }, count: { $sum: 1 } } },
+    { $sort: { total: -1 } },
+    { $limit: boundedMax },
+  ]);
+
+  return {
+    hasData: true,
+    sources: rows.map((r) => ({
+      source: typeof r._id === "string" ? r._id : "Other",
+      total: Math.round(r.total * 100) / 100,
+      count: r.count,
+    })),
+  };
+}
+
+async function getIncomeSummary(userId, period) {
+  const guard = guardCommonInputs(userId, period);
+  if (!guard.ok) return { hasData: false, reasonCode: guard.reason, value: null, count: 0, topSource: null };
+
+  const breakdown = await getIncomeBreakdown(userId, period, { maxSources: 1 });
+  const totalResult = await getIncomeTotal(userId, period);
+
+  if (!totalResult.hasData) {
+    return { hasData: false, reasonCode: totalResult.reasonCode, value: null, count: 0, topSource: null };
+  }
+
+  const top = (breakdown.sources && breakdown.sources[0]) || null;
+
+  return {
+    hasData: true,
+    value: totalResult.value,
+    count: totalResult.count,
+    topSource: top ? top.source : null,
+    topSourceTotal: top ? top.total : null,
+  };
+}
+
+async function getTrendSeries(userId, period, { timeZone } = {}) {
+  const guard = guardCommonInputs(userId, period);
+  if (!guard.ok) return { hasData: false, reasonCode: guard.reason, series: [] };
+  if (typeof timeZone !== "string" || timeZone.trim() === "") {
+    return { hasData: false, reasonCode: "INVALID_TIME_ZONE", series: [] };
+  }
+
+  const rows = await ExpenseModel.aggregate([
+    {
+      $match: {
+        userId: guard.objectId,
+        expenseDate: { $gte: period.start, $lt: period.end },
+      },
+    },
+    {
+      $group: {
+        _id: { $dateToString: { date: "$expenseDate", format: "%Y-%m", timezone: timeZone } },
+        total: { $sum: "$expenseAmount" },
+        count: { $sum: 1 },
+      },
+    },
+    {
+      $sort: { "_id.year": 1, "_id.month": 1 },
+    },
+  ]);
+
+  const formatter = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit" });
+  const partsFor = (date) =>
+    Object.fromEntries(
+      formatter.formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, part.value])
+    );
+  const startParts = partsFor(period.start);
+  const endParts = partsFor(new Date(period.end.getTime() - 1));
+  const series = [];
+  let year = Number(startParts.year);
+  let month = Number(startParts.month);
+  const endYear = Number(endParts.year);
+  const endMonth = Number(endParts.month);
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    const match = rows.find((r) => r._id === monthKey);
+
+    const monthName = MONTH_NAMES[month - 1];
+    series.push({
+      year,
+      month,
+      monthLabel: `${monthName} ${year}`,
+      total: match ? Math.round(match.total * 100) / 100 : 0,
+      count: match ? match.count : 0,
+    });
+
+    month += 1;
+    if (month === 13) {
+      month = 1;
+      year += 1;
+    }
+  }
+
+  return {
+    hasData: true,
+    series,
+  };
+}
+
 // V2-query execution boundary. This deliberately composes the existing
 // aggregate-only helpers above instead of accepting database fields,
 // pipelines, or transaction selectors from a caller. The semantic pipeline
 // resolves the approved QueryPlan period first; this service only receives
 // that resolved range plus, for budget metrics, its already-derived month.
-async function executeFinancialQuery({ userId, query, period, budgetYearMonth } = {}) {
+async function executeFinancialQuery({ userId, query, period, budgetYearMonth, comparisonPeriod, timeZone } = {}) {
   if (!query || typeof query !== "object" || Array.isArray(query) || typeof query.metric !== "string") {
     return { hasData: false, reasonCode: "INVALID_QUERY" };
   }
@@ -304,6 +453,16 @@ async function executeFinancialQuery({ userId, query, period, budgetYearMonth } 
       }
       result = await getBudgetSnapshot(userId, budgetYearMonth);
       break;
+    case "PERIOD_COMPARISON":
+      if (!comparisonPeriod) return { hasData: false, reasonCode: "MISSING_COMPARISON_PERIOD" };
+      result = await getPeriodComparison(userId, period, comparisonPeriod, query);
+      break;
+    case "INCOME_BREAKDOWN":
+      result = await getIncomeBreakdown(userId, period);
+      break;
+    case "TREND_SERIES":
+      result = await getTrendSeries(userId, period, { timeZone });
+      break;
     default:
       return { hasData: false, reasonCode: "UNSUPPORTED_METRIC" };
   }
@@ -324,6 +483,10 @@ module.exports = {
   getIncomeCount,
   getNetCashFlow,
   getBudgetSnapshot,
+  getPeriodComparison,
+  getIncomeBreakdown,
+  getIncomeSummary,
+  getTrendSeries,
   executeFinancialQuery,
   monthKeyFromZonedYearMonth,
 };

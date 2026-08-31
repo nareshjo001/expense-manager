@@ -28,15 +28,13 @@ const MUTATION_REQUEST_PATTERN = new RegExp(
 // consumes whole "<space><word>" units, so a trailing "\s+" is required
 // before the final noun to consume the space immediately preceding it
 // (matching intentClassifier.js's own proven BUDGET_ACTION_EXCLUSION_PATTERN shape).
-// "spending"/"income" are included alongside the raw-record nouns
-// deliberately: a "give me a LIST of ..." request is rejected on its FORM
-// (the user asked for a listing) regardless of whether the target happens
-// to be an aggregate figure -- SIA only ever returns single values/
-// summaries, never a list-shaped response, so re-interpreting "a list of
-// my total spending" as "my total spending" would silently answer a
-// different question than the one actually asked.
+// Keep this restricted to records. Aggregate requests such as "show my
+// spending trend" or "show my income this month" are legitimate read-only
+// financial questions and must reach the LLM router, which can produce a
+// validated aggregate query plan.
 const RAW_LIST_REQUEST_PATTERN = new RegExp(
-  "\\b(?:list|show|display|export|give me a list of)\\b(?:\\s+\\S+){0,4}\\s+(?:transactions?|expenses|records|raw data|line items?|spending|income)\\b"
+  "\\b(?:(?:list|give me a list of|show me a list of)\\b(?:\\s+\\S+){0,6}\\s+(?:transactions?|expenses|records|raw data|line items?|spending|income)\\b|" +
+    "(?:show|display|export)\\b(?:\\s+\\S+){0,4}\\s+(?:transactions?|expenses|records|raw data|line items?)\\b)"
 );
 
 // Out-of-scope financial/investment/legal/medical advice -- mirrors

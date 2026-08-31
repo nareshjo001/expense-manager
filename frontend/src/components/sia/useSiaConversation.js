@@ -101,6 +101,7 @@ export function siaConversationReducer(state, action) {
         // missing/malformed value here simply renders no label, never a
         // crash.
         interpretation: action.interpretation,
+        planSummary: action.planSummary,
       };
       return {
         ...state,
@@ -254,6 +255,7 @@ function dispatchAskSuccess(dispatch, data) {
     sessionId: data?.sessionId,
     grounding: data?.grounding,
     interpretation: data?.interpretation,
+    planSummary: data?.planSummary,
   });
 }
 

@@ -52,7 +52,7 @@ function qualityFor(points) {
   };
 }
 
-async function analyze({ input, currentMonthStart, currentMonthBudget } = {}) {
+function analyze({ input, currentMonthStart, currentMonthBudget } = {}) {
   const validAnchor = currentMonthStart instanceof Date && !Number.isNaN(currentMonthStart.getTime());
   const safe = input && typeof input === "object" ? input : {};
   const spentSoFar = Number.isFinite(safe.spentSoFar) ? safe.spentSoFar : 0;
@@ -185,26 +185,8 @@ async function analyze({ input, currentMonthStart, currentMonthBudget } = {}) {
     },
   };
 
-  // Attempt ML forecast fallback
-  try {
-    const { requestSpendingForecast } = require("../utils/mlServiceClient");
-    const mlResp = await requestSpendingForecast(safe, { timeoutMs: 3000 });
-    if (mlResp.success) {
-      const d = mlResp.data;
-      result.method = "ML_REGRESSION_ENSEMBLE_V1";
-      result.estimate = Math.round(d.predictedTotal * 100) / 100;
-      result.expectedRemaining = Math.round(d.predictedRemaining * 100) / 100;
-      result.range = {
-        lower: Math.round(d.range.lower * 100) / 100,
-        upper: Math.round(d.range.upper * 100) / 100,
-      };
-      result.confidenceScore = d.confidenceScore;
-      result.modelVersion = d.modelVersion;
-    }
-  } catch (_) {
-    // keep deterministic result on error
-  }
-
   return result;
 }
+
+
 module.exports = { analyze };

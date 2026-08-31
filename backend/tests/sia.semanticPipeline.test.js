@@ -107,7 +107,45 @@ const v2ComparisonPlan = {
   ],
 };
 
+const budgetOnTrackPlan = {
+  version: 2,
+  outcome: "supported",
+  queries: [
+    {
+      metric: "BUDGET_STATUS",
+      operation: "LOOKUP",
+      period: { type: "CURRENT_MONTH" },
+      grouping: "NONE",
+      responseMode: "DETERMINISTIC",
+    },
+  ],
+};
+
 describe("backend/sia/semanticPipeline -- provider-call budgets", () => {
+  it("routes the panel's natural-language budget prompt through the LLM plan, not an intent regex", async () => {
+    const routerCall = jsonRouterCall(budgetOnTrackPlan);
+    const financialQueryService = fakeFinancialQueryService({
+      executeFinancialQuery: jest.fn(async ({ query }) => {
+        expect(query.metric).toBe("BUDGET_STATUS");
+        return { hasData: true, spent: 4250, status: "within_budget" };
+      }),
+    });
+
+    const result = await runSemanticPipeline({
+      question: "Am I on track with my budget?",
+      userId: "user-1",
+      now: NOW,
+      routerCall,
+      askLlmFn: jest.fn(),
+      financialQueryService,
+    });
+
+    expect(routerCall).toHaveBeenCalledTimes(1);
+    expect(result.kind).toBe("answer");
+    expect(result.answer).toContain("within budget");
+    expect(result.providerCallsUsed).toEqual({ router: 1, answer: 0 });
+  });
+
   it("scenario: semantic direct lookup = 1 router call + 0 answer calls (deterministic answer)", async () => {
     const routerCall = jsonRouterCall(lookupPlan);
     const askLlmFn = jest.fn();

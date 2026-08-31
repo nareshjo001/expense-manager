@@ -157,10 +157,8 @@ const MlFeedbackSchema = new mongoose.Schema({
     },
 
     corrected: {
-        // Kept temporarily for backward compatibility: the current backend cron
-        // (feedbackCollector.js) and the ML-service export script
-        // (training/export_feedback.py) still read/write this boolean directly.
-        // Do not remove until those readers are migrated to `status` (Phase C).
+        // Kept for backward compatibility with existing feedback documents and
+        // the backend collector while lifecycle status is adopted.
         type: Boolean,
         default: false
     },

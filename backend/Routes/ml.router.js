@@ -102,7 +102,7 @@ router.post('/predict-spending-forecast', async (req, res) => {
   try {
     const result = await requestSpendingForecast(req.body);
     if (result.success) {
-      return res.json({ success: true, data: result.data });
+      return res.json({ success: true, data: { success: true, ...result.data } });
     }
     // Forward any error from the ML service
     return res.status(502).json({ success: false, reason: result.reason || 'ML service error' });

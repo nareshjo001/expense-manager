@@ -273,13 +273,84 @@
   border-bottom-left-radius: 4px;
 }
 
-/* Newlines come from the answer text itself via pre-wrap -- never from
-   injected markup. Long unbroken strings wrap instead of overflowing. */
+/* User questions remain plain text. Assistant Markdown is rendered as safe
+   React elements; raw provider HTML is never injected. */
 .sia-message-text {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.sia-markdown {
+  white-space: normal;
+}
+
+.sia-markdown-paragraph,
+.sia-markdown-heading {
+  margin: 0;
+}
+
+.sia-markdown-paragraph + .sia-markdown-paragraph,
+.sia-markdown-heading,
+.sia-markdown-list,
+.sia-markdown-table-wrap {
+  margin-top: 10px;
+}
+
+.sia-markdown-heading {
+  font-size: 0.98em;
+  line-height: 1.35;
+}
+
+.sia-markdown-list {
+  margin-bottom: 0;
+  padding-left: 20px;
+}
+
+.sia-markdown-list li + li {
+  margin-top: 4px;
+}
+
+.sia-markdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--sia-border);
+  font-size: 0.9em;
+}
+
+.sia-markdown-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--sia-border);
+  border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sia-markdown-table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: 0.82em;
+  line-height: 1.4;
+}
+
+.sia-markdown-table th,
+.sia-markdown-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--sia-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.sia-markdown-table th {
+  background: var(--sia-border);
+  font-weight: 700;
+}
+
+.sia-markdown-table tr:last-child td {
+  border-bottom: 0;
 }
 
 /* ===== Batch 3F: answer-grounding transparency disclosure =====
@@ -1560,6 +1631,9 @@
     padding-right: env(safe-area-inset-right, 0px);
     box-sizing: border-box;
     border: none;
+    /* Smooth the browser-driven dynamic-viewport resize when the keyboard
+       opens or closes; reduced-motion users retain the override below. */
+    transition: height 180ms cubic-bezier(0.2, 0, 0, 1), max-height 180ms cubic-bezier(0.2, 0, 0, 1);
   }
 
   .sia-panel-submit {

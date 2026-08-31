@@ -325,9 +325,8 @@ const addExpense = async (req, res) => {
             predictedCategory: mlPredictedCategory,
             actualCategory: normalizedCategory,
             confidence: mlConfidence,
-            // Backward compatibility: the current cron and export_feedback.py
-            // still read this boolean directly (Phase A keeps it in sync with
-            // `status` rather than migrating those readers yet).
+            // Backward compatibility: keep the legacy boolean aligned with
+            // lifecycle status for existing backend consumers.
             corrected: mlCorrected,
             // "pending" only for a genuine, server-confirmed correction.
             // Accepted predictions are left as status: null — never assigned

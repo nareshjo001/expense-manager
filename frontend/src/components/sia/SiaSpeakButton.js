@@ -14,6 +14,65 @@ function isSpeechSynthesisAvailable() {
   return typeof window !== "undefined" && Boolean(window.speechSynthesis) && typeof window.SpeechSynthesisUtterance === "function";
 }
 
+function cleanInlineMarkdown(value) {
+  return value
+    .replace(/\[([^\]]+)\]\([^\s)]+(?:\s+[^)]*)?\)/g, "$1")
+    .replace(/[`*_~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseTableRow(line) {
+  return line
+    .trim()
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map(cleanInlineMarkdown);
+}
+
+function isTableSeparator(line, columnCount) {
+  const cells = parseTableRow(line);
+  return cells.length === columnCount && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+// Browser speech synthesis reads Markdown table separators literally. Keep
+// the displayed answer untouched, but turn each table row into labelled
+// speech so values retain their column meaning without speaking "dash".
+export function toSpeechText(text) {
+  if (typeof text !== "string") return "";
+
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const spokenLines = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const headers = parseTableRow(lines[index]);
+    if (lines[index].includes("|") && isTableSeparator(lines[index + 1] || "", headers.length)) {
+      index += 2;
+      while (index < lines.length && lines[index].includes("|")) {
+        const cells = parseTableRow(lines[index]);
+        if (cells.length !== headers.length) break;
+        const row = cells
+          .map((cell, cellIndex) => (cell ? `${headers[cellIndex]}: ${cell}` : ""))
+          .filter(Boolean)
+          .join(", ");
+        if (row) spokenLines.push(row);
+        index += 1;
+      }
+      index -= 1;
+      continue;
+    }
+
+    const line = cleanInlineMarkdown(lines[index])
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/^>\s?/, "")
+      .replace(/^[-*+]\s+/, "")
+      .replace(/^\d+[.)]\s+/, "");
+    if (line && !/^[-*_]{3,}$/.test(line)) spokenLines.push(line);
+  }
+
+  return spokenLines.join("\n");
+}
+
 // `stopSignal` is any value that changes when the caller wants speech
 // stopped as a side effect of something else happening (panel close, new
 // chat, logout, the active message changing, unmount) -- SiaPanel.js
@@ -52,7 +111,7 @@ const SiaSpeakButton = ({ text, stopSignal }) => {
 
   const handleListen = () => {
     window.speechSynthesis.cancel();
-    const utterance = new window.SpeechSynthesisUtterance(text);
+    const utterance = new window.SpeechSynthesisUtterance(toSpeechText(text));
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
     setIsSpeaking(true);

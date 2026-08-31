@@ -28,10 +28,6 @@ previous-run baseline (previous_accuracy / previous_categories) is fetched
 by app.py BEFORE calling run_retraining and passed in as plain arguments,
 since only app.py has a database connection.
 
-Note: training/export_feedback.py and training/feedback/merge_datasets.py
-are superseded by training/dataset_builder.py as of Phase C and are no
-longer invoked by this pipeline -- see their own module docstrings.
-
 Note: this module does NOT decide model versions itself -- it asks
 training/model_bundle.py (model_bundle.model_version_for_run(run_id)) for
 the version, so trainer.py, validate_model.py, and any future

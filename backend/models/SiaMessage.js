@@ -38,6 +38,8 @@ const siaPlanSummarySchema = new mongoose.Schema(
     periodLabel: { type: String, maxlength: 60 },
     grouping: { type: String, maxlength: 16 },
     categoryFilter: { type: String, maxlength: 60 },
+    topicLabel: { type: String, maxlength: 80 },
+    entityFilter: { type: String, maxlength: 60 },
   },
   { _id: false }
 );

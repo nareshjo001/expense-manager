@@ -22,13 +22,15 @@ const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completio
 const MAX_STRUCTURED_OUTPUT_NAME_LENGTH = 64;
 const STRUCTURED_OUTPUT_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
-// Stable, provider-neutral failure contract -- a caller relies on `.name`/`.code`/`.provider`/`.message` without knowing which provider was involved, and without ever seeing a raw provider exception, secret, or prompt/context/question content. Deliberately does not invent an HTTP status code -- that mapping belongs to a future route.
+// Stable, provider-neutral failure contract -- a caller relies on `.name`/`.code`/`.provider`/`.message` without knowing which provider was involved, and without ever seeing a raw provider exception, secret, or prompt/context/question content. HTTP status and Retry-After are safe operational metadata used only to decide whether a single transient retry is appropriate.
 class LlmProviderError extends Error {
-  constructor(message, { code, provider } = {}) {
+  constructor(message, { code, provider, httpStatus, retryAfterMs } = {}) {
     super(message);
     this.name = "LlmProviderError";
     this.code = code;
     this.provider = provider;
+    this.httpStatus = Number.isInteger(httpStatus) ? httpStatus : null;
+    this.retryAfterMs = Number.isFinite(retryAfterMs) && retryAfterMs >= 0 ? retryAfterMs : null;
 
     // Preserves a normal, useful stack trace pointing at the real throw site.
     if (Error.captureStackTrace) {
@@ -227,9 +229,14 @@ function normalizeAxiosError(err, provider) {
   }
 
   if (err && err.response) {
+    const headers = err.response.headers || {};
+    const retryAfter = headers["retry-after"];
+    const retryAfterSeconds = typeof retryAfter === "string" || typeof retryAfter === "number" ? Number(retryAfter) : NaN;
     return new LlmProviderError("The LLM provider returned an error response.", {
       code: "PROVIDER_HTTP_ERROR",
       provider,
+      httpStatus: Number.isInteger(err.response.status) ? err.response.status : undefined,
+      retryAfterMs: Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0 ? retryAfterSeconds * 1000 : undefined,
     });
   }
 
