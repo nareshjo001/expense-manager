@@ -1,12 +1,4 @@
 // Unit tests for the Workstream 2 (voice input) additions to
-// backend/sia/config.js: SIA_VOICE_ENABLED, SIA_STT_PROVIDER,
-// SIA_STT_MODEL, SIA_STT_TIMEOUT_MS, SIA_STT_MAX_BYTES,
-// SIA_STT_MAX_DURATION_SECONDS.
-//
-// Same isolation style as tests/sia.config.test.js: pure environment-
-// variable parsing, no network/MongoDB/Redis/ML-service/provider calls of
-// any kind. Each case resets Jest's module registry and re-requires
-// config.js so it re-reads process.env fresh.
 "use strict";
 
 const ENV_KEYS = [

@@ -1,6 +1,4 @@
 // Transaction-to-aggregate boundary for the current-month nowcast. Raw
-// expense fields are inspected only here; the analyzer receives bounded
-// monthly/category totals, completion ratios and explainable adjustments.
 "use strict";
 
 const { forecast: RULES } = require("./analyzers/scores/forecastRules");

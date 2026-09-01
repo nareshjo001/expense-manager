@@ -13,17 +13,11 @@ function freshUserId() {
 }
 
 // Mirrors Controllers/AuthControllers/login.js's JWT payload shape exactly
-// ({ email, _id }, signed with JWT_SECRET) so tokens are valid against the
-// real, unmodified verifyToken middleware. Test-only -- not a production
-// JWT helper; no User document is created or required (verifyToken never
-// queries the User collection -- see the approved M0-2 design).
 function signTestToken(userId, email) {
   return jwt.sign({ email, _id: userId }, process.env.JWT_SECRET);
 }
 
 // Matches budgetAnalyzer.js's own month-key derivation exactly
-// (`toLocaleString("en-US", { month: "short" })` + year) so a seeded budget
-// document is actually found as "the current month" by the live pipeline.
 function currentMonthKey() {
   const now = new Date();
   return `${now.toLocaleString("en-US", { month: "short" })} ${now.getFullYear()}`;
@@ -35,27 +29,16 @@ function currentMonthDate(dayOfMonth = 10) {
 }
 
 // Matches dataProvider.js's getPreviousMonthExpenses range exactly
-// (previous calendar month, 1st through last day, inclusive) so a seeded
-// expense here is actually picked up as "previous month" by the live
-// pipeline's trend comparison -- day 10 is safely inside that range
-// regardless of the previous month's length.
 function previousMonthDate(dayOfMonth = 10) {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth() - 1, dayOfMonth);
 }
 
 // A structurally plausible cached report matching the shape reportAssembler.js
-// produces, with `summary.totalSpent` set to a caller-supplied marker value
-// that could not arise from real MongoDB generation. Used only to pre-seed
-// Redis directly for the cache-hit tests -- never inserted into MongoDB.
 function buildFakeCachedReport(marker) {
   return {
     metadata: {
       // Reuses the same shared current-version constant reportService.js's
-      // isCurrentReport() checks -- a fake cache-hit fixture must be
-      // current, or the version-aware read path (Batch 1) would correctly
-      // reject it as stale and fall through to Mongo instead of returning
-      // it, breaking these cache-hit tests for an unrelated reason.
       version: CURRENT_REPORT_VERSION,
       generatedAt: new Date().toISOString(),
       reportPeriod: { month: new Date().getMonth() + 1, year: new Date().getFullYear() },
@@ -83,8 +66,6 @@ function buildFakeCachedReport(marker) {
 }
 
 // Tracks exactly what one test creates, so cleanup and its verification
-// only ever touch this test's own artifacts -- never an unscoped filter,
-// never another test's data.
 class ArtifactTracker {
   constructor() {
     this.expenseIds = [];
@@ -118,9 +99,6 @@ class ArtifactTracker {
   }
 
   // Tracks a userId whose FinancialReport document (if any gets persisted
-  // by a request in this test) must be cleaned up -- safe to call even if
-  // no such document ever ends up existing (cleanup/verify both no-op on
-  // an empty match).
   trackReportUser(userId) {
     this.reportUserIds.push(userId);
   }
@@ -145,9 +123,6 @@ class ArtifactTracker {
   }
 
   // Re-queries every tracked id/key by its exact identity (never a scan,
-  // never a count of the whole collection/keyspace) and confirms it is
-  // gone. This is the only cleanup proof this suite makes -- it does not
-  // claim the database/cache is "exactly as it was" globally.
   async verifyAbsent() {
     const remainingExpenses = this.expenseIds.length
       ? await ExpenseModel.countDocuments({ _id: { $in: this.expenseIds } })

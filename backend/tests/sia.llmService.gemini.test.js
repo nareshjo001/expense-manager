@@ -1,14 +1,4 @@
 // Unit tests for the real Gemini provider adapter inside
-// backend/sia/llmService.js.
-//
-// axios is fully mocked BEFORE llmService.js is ever required, in every
-// test in this file -- no real HTTP request is possible. backend/sia/config
-// is also mocked, the same isolation style as tests/sia.llmService.openai.test.js
-// (this file's direct sibling -- Gemini is the second implemented provider,
-// OpenAI's adapter is untouched). Only GEMINI_API_KEY is a real
-// (test-controlled) environment variable, because llmService.js
-// deliberately reads it directly from process.env rather than through the
-// shared config module.
 "use strict";
 
 const ORIGINAL_GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -33,9 +23,6 @@ afterAll(() => {
 const GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 // Loads a brand-new backend/sia/config mock and a brand-new mocked axios
-// module, then a brand-new llmService module, for a single test. Returns the
-// axios post mock alongside askLlm/LlmProviderError so callers can both
-// exercise the service and assert on the exact request axios received.
 function loadLlmServiceWithMockedAxios({ configOverrides = {}, axiosPostMock } = {}) {
   jest.resetModules();
 

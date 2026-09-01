@@ -5,9 +5,6 @@ import { useSiaConversation } from "./useSiaConversation";
 import { askSia } from "../../api/siaApi";
 
 // Only the API layer is mocked -- the reducer, useSiaAskMutation and
-// TanStack wiring are all real, matching SiaConversation.test.js's own
-// convention (real end-to-end frontend behaviour, not a mock agreeing with
-// itself).
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 
 const originalCrypto = window.crypto;
@@ -114,8 +111,6 @@ describe("useSiaConversation -- Workstream 3: clarification responses", () => {
     expect(secondCallPayload.clientMessageId).not.toBe("");
 
     // A real new user turn was rendered for the clicked option (its label),
-    // and a real answer followed -- proving this is the SAME send() path
-    // submitQuestion uses, not a one-off fetch bypassing the reducer.
     const userTurns = result.current.messages.filter((m) => m.role === "user");
     expect(userTurns.map((m) => m.content)).toEqual([
       "How much did I spend on that?",

@@ -1,31 +1,4 @@
 // Jest `setupFiles` module for the M0-2 integration suite ONLY (wired via
-// jest.integration.config.js -- backend/jest.config.js and the M0-T smoke
-// test are untouched and never load this file).
-//
-// Runs once per test file, in the SAME process/environment as the test
-// file, before the test file's own top-level `require`s execute. This is
-// what makes it safe to map env vars here and have
-// tests/report.integration.itest.js's later `require("../app")` see the
-// mapped values -- unlike Jest's `globalSetup`, which runs in a separate
-// process and cannot mutate this process's `process.env`.
-//
-// Responsibilities, strictly in this order:
-//   1. Snapshot whatever MONGO_CONN/REDIS_URL/JWT_SECRET already exist in
-//      process.env -- comparison only, never reassigned back.
-//   2. Parse backend/.env (if present) into memory ONLY, for comparison --
-//      never assigned to process.env, never logged, whole or in part.
-//   3. Parse backend/.env.test (if present), allowlisting only
-//      TEST_MONGO_CONN / TEST_REDIS_URL / TEST_JWT_SECRET -- any other key
-//      present in that file is ignored, never imported.
-//   4. Validate all three TEST_* values are non-empty, that TEST_MONGO_CONN
-//      names an explicit database whose name contains "test", and that
-//      neither TEST_MONGO_CONN nor TEST_REDIS_URL resolves to the same
-//      target as the ordinary MONGO_CONN/REDIS_URL (when available).
-//   5. Only once every validation has passed: map TEST_* onto the real
-//      MONGO_CONN/REDIS_URL/JWT_SECRET keys and set NODE_ENV=test.
-//   6. Any failure throws synchronously, before any application module is
-//      ever required by the test file -- this module never connects to
-//      anything itself.
 "use strict";
 
 const fs = require("fs");
@@ -33,8 +6,6 @@ const path = require("path");
 const dotenv = require("dotenv");
 
 // Resolved relative to THIS file's location (backend/tests/setup/), not the
-// caller's working directory -- so `.env`/`.env.test` are always read from
-// the backend/ directory regardless of where `jest`/`npm` was invoked from.
 const BACKEND_ROOT = path.resolve(__dirname, "..", "..");
 
 function readParsedEnvFile(fileName) {
@@ -48,8 +19,6 @@ function readParsedEnvFile(fileName) {
 
 function fail(message) {
   // Deliberately never includes a raw connection string, credential, or
-  // secret value -- only non-secret metadata (e.g. a parsed database name)
-  // is ever included in a thrown message.
   throw new Error(`[integrationEnv] ${message}`);
 }
 
@@ -75,9 +44,6 @@ const testEnvFile = readParsedEnvFile(".env.test");
 const testValues = {};
 for (const key of ALLOWLIST) {
   // A real CI-injected process.env value takes precedence over the file,
-  // mirroring dotenv's own "never override an already-set var" convention
-  // -- but only for these three allowlisted names. Nothing else from
-  // .env.test is ever read.
   testValues[key] = process.env[key] || testEnvFile[key] || "";
 }
 
@@ -92,13 +58,6 @@ for (const key of ALLOWLIST) {
 }
 
 // --- Mongo URI parsing -------------------------------------------------------
-// Supports exactly the two real forms this repository's driver (mongoose 9 /
-// mongodb 6) and server.js's own DNS-SRV-fix comment indicate are in use:
-//   mongodb://[user:pass@]host[,host...][/db][?opts]
-//   mongodb+srv://[user:pass@]host[/db][?opts]
-// This is NOT a general-purpose MongoDB connection-string parser -- any
-// other scheme or an unparseable string fails closed with a clear error,
-// per the explicit instruction not to claim broader support than this.
 const MONGO_URI_PATTERN = /^mongodb(\+srv)?:\/\/(?:[^@/]*@)?([^/?]+)(?:\/([^?]*))?/i;
 
 function parseMongoTarget(uri, label) {
@@ -137,8 +96,6 @@ if (ordinaryMongoConn) {
     ordinaryMongoTarget = parseMongoTarget(ordinaryMongoConn, "MONGO_CONN");
   } catch (err) {
     // The ordinary target being unparseable does not block TEST_MONGO_CONN's
-    // own validation above -- it only means this specific same-target
-    // comparison is skipped, never silently treated as a pass.
     ordinaryMongoTarget = null;
   }
   if (
@@ -155,8 +112,6 @@ if (ordinaryMongoConn) {
 }
 
 // --- Redis URI parsing -------------------------------------------------------
-// Supports redis:// and rediss://. Host is lowercased; an omitted port is
-// treated as the Redis default, 6379, per the approved normalization rule.
 const REDIS_URI_PATTERN = /^rediss?:\/\/(?:[^@/]*@)?([^/:?]+)(?::(\d+))?/i;
 
 function parseRedisTarget(uri, label) {

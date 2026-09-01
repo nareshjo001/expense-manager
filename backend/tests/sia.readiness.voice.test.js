@@ -1,22 +1,4 @@
 // Workstream 2: SIA voice-input readiness regression suite --
-// backend/sia/readiness.js's isVoiceReady(), and the additive
-// capabilities.voiceInput block on GET /sia/status.
-//
-// Proves:
-//   1. isVoiceReady() table-driven across every configuration permutation
-//      that matters.
-//   2. isVoiceReady() is fully INDEPENDENT of isSiaReady() -- voice can be
-//      unavailable while text stays ready, and vice versa (neither reads
-//      the other's config fields or credential).
-//   3. GET /sia/status's capabilities.voiceInput block reflects
-//      isVoiceReady() and never leaks "groq"/"whisper"/a credential-shaped
-//      string.
-//
-// Same isolation style as tests/sia.readiness.groq.test.js: sia/config.js
-// is re-mocked per test via jest.doMock + jest.resetModules(), and every
-// credential env var is saved/restored around every test so no real value
-// ever leaks between tests or into a later suite. No live network/provider
-// call is possible anywhere in this file.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -60,8 +42,6 @@ function signToken(userId) {
 }
 
 // Loads a fresh readiness module against an explicit, fully-specified
-// config shape (both the text SIA_LLM_* surface and the voice SIA_STT_*
-// surface), without touching the real process.env-derived config object.
 function loadReadiness({
   enabled = false,
   provider = null,
@@ -250,14 +230,6 @@ describe("GET /sia/status -- capabilities.voiceInput reflects isVoiceReady()", (
   }
 
   // NOTE on the explicit 60000ms third argument below: this sandbox pays a
-  // large one-time-per-call cost for jest.resetModules() + require("../app")
-  // (the same characteristic already visible, unmodified by this file, in
-  // tests/sia.readiness.groq.test.js's sibling GET /sia/status block) --
-  // each call here has been observed taking up to ~55s in this environment,
-  // well past Jest's default 5000ms per-test timeout, even though the
-  // request itself resolves correctly. This mirrors the documented,
-  // narrowly-scoped fix in tests/sia.ask.test.js (a per-test timeout, not a
-  // suite-wide jest.setTimeout()) rather than masking a real hang.
   it(
     "capabilities.voiceInput.available is true when voice is fully configured",
     async () => {

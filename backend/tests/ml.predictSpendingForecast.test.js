@@ -1,10 +1,6 @@
 // backend/tests/ml.predictSpendingForecast.test.js
 
-/**
- * Test the proxy endpoint /ml/predict-spending-forecast.
- * Uses supertest to make an HTTP request against the Express app.
- * The external ML service call is mocked via jest.mock of utils/mlServiceClient.
- */
+/* Test the proxy endpoint /ml/predict-spending-forecast. */
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');

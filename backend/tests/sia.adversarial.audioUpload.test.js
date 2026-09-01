@@ -1,21 +1,4 @@
 // Adversarial security tests (Workstream 5 review) -- POST
-// /sia/transcriptions upload-abuse scenarios NOT already covered by
-// tests/sia.transcribe.route.test.js (which already proves: a lying
-// Content-Type, a generically-oversized file, rate-limiter separation,
-// memoryStorage-only, and no logged audio/transcript content). This file
-// adds: the EXACT SIA_STT_MAX_BYTES+1/=/-1 byte boundary (off-by-one
-// correctness, not just "some oversized file"), a polyglot payload (a
-// genuine container signature followed by embedded script-like/shell-
-// metacharacter bytes) proving the bytes are forwarded OPAQUELY and never
-// reflected/executed/logged, and a static source-level confirmation that
-// neither audioUpload.js nor transcribe.js ever writes a received byte to
-// disk.
-//
-// Same hoisted single-mock, single-app-load pattern as
-// tests/sia.transcribe.route.test.js -- this sandboxed environment has
-// been observed to take a long time per jest.resetModules()+require("../app")
-// cycle over its network-mounted filesystem, so this file also pays that
-// cost exactly once.
 "use strict";
 
 const fs = require("fs");
@@ -136,15 +119,6 @@ function webmFixture(totalSize = 32) {
 
 describe("adversarial: exact SIA_STT_MAX_BYTES boundary (off-by-one correctness)", () => {
   // FINDING (low severity, documentation/UX nuance, not a security gap):
-  // multer's `limits.fileSize` is enforced as an EXCLUSIVE ceiling -- a
-  // file of exactly `config.sttMaxBytes` is itself rejected with 413, so
-  // the real usable maximum is `sttMaxBytes - 1`. config.js's own comment
-  // ("SIA_STT_MAX_BYTES (default 5242880) -- the single size ceiling")
-  // reads as an inclusive limit. This is fail-closed (stricter than
-  // documented, never more permissive) so it is not a security issue, but
-  // it is worth either documenting the off-by-one explicitly or adjusting
-  // multer's configured limit to `config.sttMaxBytes + 1` if an exactly-
-  // sized file at the documented ceiling should be accepted.
   it("rejects a file at EXACTLY the configured max byte size (multer's fileSize limit is exclusive, not inclusive)", async () => {
     config.sttMaxBytes = 100;
     const res = await request(app)
@@ -281,8 +255,6 @@ describe("adversarial: repeated rapid requests genuinely hit siaVoiceLimiter's o
         .attach("audio", webmFixture(), { filename: "clip.webm", contentType: "audio/webm" });
     }
     // siaVoiceLimiter's documented budget is 15 per 15-minute window (see
-    // utils/rateLimiter.js) -- the 16th request in the SAME window must be
-    // throttled.
     expect(lastRes.status).toBe(429);
   });
 });

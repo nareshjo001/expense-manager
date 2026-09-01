@@ -4,17 +4,6 @@ const syncRecoveryService = require('../../Services/syncRecoveryService');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 
 // Budget Derived-Spent Authority remediation -- this route used to call
-// setBudgetForCurrentMonth(), which upserted `budget` then called
-// recalculateBudget() with NO fenceRevision: an unconditional `$set`
-// completely outside syncRecoveryService's reserve/confirm/repair
-// architecture (unlike every expense-mutation controller). That left two
-// gaps: (1) a crash between the budget-amount write and the recompute left
-// no durable PendingSync evidence, so repairIfPending() could never find
-// or fix it; (2) the unfenced write could silently overwrite a
-// concurrently fenced, fresher expense-mutation repair for the same
-// user+month with no CAS protection. This now follows the exact same
-// reserve -> primary write -> synchronizeAfterMutation (fenced) pattern
-// addexpense.js/editExpense.js/deleteExpense.js already use.
 const setbudget = async (req, res) => {
   try {
     // Validate user
@@ -62,8 +51,6 @@ const setbudget = async (req, res) => {
     );
 
     // Cache clearing is a pure optimization (utils/expenseCache.js's own
-    // functions already self-catch every Redis error) -- matches the
-    // expense-mutation controllers' convention.
     await clearUserExpenseCache(user._id);
 
     // Recompute spent (fenced) and refresh the report -- synchronizeAfterMutation

@@ -67,12 +67,6 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
         deleteExpenseMutation.mutate(confirmDeleteId, {
             // Phase C -- Expense Mutation Reliability: a 2xx here always means
-            // the delete itself committed, whether or not derived budget/report
-            // sync finished yet (see derivedData.recoveryPending) -- so this
-            // always follows the success path: dismiss the confirmation modal
-            // and let the mutation's own onSuccess invalidate expenses/budgets/
-            // reports/charts (backend/Controllers/ExpenseControllers/
-            // deleteExpense.js's read-time repair covers the rest on next read).
             onSuccess: (data) => {
                 deleteSuccessToast(Boolean(data?.derivedData?.recoveryPending));
                 setConfirmDeleteId(null);

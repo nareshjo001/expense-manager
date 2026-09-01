@@ -2,9 +2,6 @@ import api from "./axios";
 import { askSia } from "./siaApi";
 
 // The shared axios instance (frontend/src/api/axios.js) is mocked here, not
-// the network -- no real HTTP request, backend, or token/localStorage
-// interceptor logic is ever exercised by this test file. Only api.post is
-// given a mock implementation, matching askSia's actual usage.
 jest.mock("./axios", () => ({
   __esModule: true,
   default: { post: jest.fn() },

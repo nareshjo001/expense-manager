@@ -1,16 +1,4 @@
 // BALENISA Firebase Startup Resilience -- GET /ping optional-capability field
-// and unrelated-route proof.
-//
-// Firebase/push must be exposed as an OPTIONAL capability on the existing
-// health surface (GET /ping is the only health-adjacent endpoint in this
-// codebase -- no /health, /ready, or /live route exists) without ever
-// flipping the endpoint's overall success/status code, since push being
-// unavailable does not make the rest of the application unavailable. This
-// suite also proves unrelated routes (the root route and an authenticated
-// route's pre-auth rejection) continue to work normally when Firebase is
-// unavailable, mirroring report.route.smoke.test.js's established
-// supertest-against-the-real-app convention (no MongoDB/Redis/network
-// touched -- axios and firebaseAdmin are both mocked).
 "use strict";
 
 const request = require("supertest");

@@ -1,28 +1,4 @@
 // BALENISA Budget Derived-Spent Authority and Crash-Recovery Remediation.
-//
-// Architectural correction: an earlier pass added
-// `syncRecoveryService.repairIfPending()` inside fetchBudgets(), reasoning
-// that it was "the last remaining reader of Budget.spent with no repair
-// step." That reasoning was incomplete: fetchBudgets() is called from
-// WITHIN report generation itself (reportService -> reportGenerator ->
-// analyticsContext -> dataProvider -> fetchBudgets). reportService already
-// performs its own repair-on-read before it ever starts generating a
-// report -- calling repairIfPending() again from inside fetchBudgets()
-// re-entered the sync recovery machinery mid-generation, which was the
-// actual cause of the slow/stuck budget response (a real architectural
-// defect, not just the CommonJS circular-require crash a prior hotfix
-// pass fixed separately).
-//
-// fetchBudgets() is therefore a PURE BudgetModel read/sort helper with NO
-// recovery step of its own. Read-time repair belongs only at the actual
-// entry points that decide to serve Budget.spent to a caller:
-// getbudgets.js, chart.service.js's getBudgetComparison, and
-// reportService's own pre-generation repair -- never inside internal
-// data-loading helpers consumed mid-generation.
-//
-// Mocks only ../config/Schemas -- never touches MongoDB, Redis, or the
-// network, and never mocks ../Services/syncRecoveryService because
-// fetchBudgets.js must not reference it at all.
 "use strict";
 
 const SCHEMAS_PATH = "../config/Schemas";

@@ -1,8 +1,4 @@
 // Unit tests for backend/sia/contextBuilder.js's CURRENT_SPENDING_SUMMARY
-// branch -- the smallest bounded context of any supported intent (a single
-// leaf value, summary.totalSpent). Mirrors tests/sia.contextBuilder.batch2.test.js's
-// jest.doMock(reportService) isolation pattern exactly -- no real
-// MongoDB/Redis/report generation.
 "use strict";
 
 const REPORT_SERVICE_PATH = "../Services/reportService";

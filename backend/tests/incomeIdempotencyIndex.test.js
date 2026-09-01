@@ -1,11 +1,4 @@
 // Remediation Workstream B (follow-up) -- proves the declared income
-// idempotency index specification and the deployment-time index-bootstrap
-// script (backend/scripts/ensureIncomeIdempotencyIndex.js) required because
-// server startup (config/db.js -> server.js) never awaits background index
-// creation before accepting requests. Never opens a real Mongo connection:
-// the script's own config/db.js and config/Schemas.js dependencies are
-// mocked throughout, mirroring tests/income.idempotency.route.test.js's own
-// jest.doMock + jest.resetModules convention.
 "use strict";
 
 const SCRIPT_PATH = "../scripts/ensureIncomeIdempotencyIndex";
@@ -60,8 +53,6 @@ describe("Remediation Workstream B (follow-up): declared income idempotency inde
     );
     expect(lookupIndex).toBeDefined();
     // Confirms the two indexes were declared independently -- the
-    // idempotency index carries `unique`/`partialFilterExpression`, the
-    // lookup index carries neither.
     expect(lookupIndex[1] && lookupIndex[1].unique).not.toBe(true);
   });
 });
@@ -131,9 +122,6 @@ describe("Remediation Workstream B (follow-up): scripts/ensureIncomeIdempotencyI
   it("only ever calls the additive/read collection APIs -- never syncIndexes or dropIndex", async () => {
     jest.resetModules();
     // Deliberately no `dropIndex`/`syncIndexes` mock provided at all -- if
-    // the script ever called either, this test would throw
-    // "... is not a function", proving it only uses the two documented
-    // additive/read APIs.
     const { indexesFn, createIndexFn } = mockDeps({ existingIndexNames: [] });
     const { run } = require(SCRIPT_PATH);
 

@@ -7,16 +7,6 @@ import { useSiaSessionMessagesQuery } from "../../hooks/queries/useSiaSessionMes
 import { useSiaSessionsQuery } from "../../hooks/queries/useSiaSessionsQuery";
 
 // Batch 3C: SiaPanel is now pure presentation -- the conversation state it
-// renders is owned by SiaEntryPoint (see useSiaConversation). This file
-// therefore injects a controlled conversation object and proves the
-// PANEL's own rendering/interaction contract in isolation, exactly as it
-// previously did against a controlled mutation object. End-to-end
-// behaviour (real reducer + real hooks + real query wiring) is proven
-// separately in SiaConversation.test.js.
-// The API modules are mocked (matching this repository's existing
-// convention in siaApi.test.js) so the real axios instance -- which ships
-// as ESM and is not transformed by CRA's Jest config -- is never imported
-// through the component tree.
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 jest.mock("../../api/siaSessionsApi", () => ({
   getSiaSessions: jest.fn(),
@@ -24,13 +14,6 @@ jest.mock("../../api/siaSessionsApi", () => ({
   deleteSiaSession: jest.fn(),
 }));
 // Workstream 3: SiaPanel now transitively renders SiaVoiceRecorderControls
-// -> useSiaVoiceRecorder -> siaVoiceApi.js, which itself imports the shared
-// axios instance -- mocked here for the exact same reason the two mocks
-// above already exist (the real axios package ships as ESM and is never
-// imported through this component tree in tests). No test in this file
-// exercises voice recording (that behaviour has its own dedicated suite in
-// SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js); this mock only
-// keeps this pre-existing file loadable.
 jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 jest.mock("../../hooks/queries/useSiaSessionMessagesQuery", () => ({
@@ -42,8 +25,6 @@ jest.mock("../../hooks/queries/useSiaSessionsQuery", () => ({
 }));
 
 // This project's CRA Jest config enables `resetMocks`, which clears any
-// implementation supplied in a jest.mock factory before each test -- so
-// the query-hook return shapes are (re)installed here instead.
 beforeEach(() => {
   useSiaSessionMessagesQuery.mockReturnValue({ isSuccess: false, isError: false, data: undefined });
   useSiaSessionsQuery.mockReturnValue({

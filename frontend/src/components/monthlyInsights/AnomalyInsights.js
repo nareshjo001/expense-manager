@@ -2,36 +2,6 @@ import { FaExclamationTriangle } from "react-icons/fa";
 import "./AnomalyInsights.css";
 
 // Material spending-review surfacing only.
-//
-// This component is a pure, read-only renderer over `report.anomalies`,
-// which backend/analytics/analyzers/expenseAnomalyAnalyzer.js already
-// computes and backend/analytics/reportGenerator.js already stores on the
-// SAME report every other Monthly Insights section reads (see
-// MonthlyInsightPage.js). There is deliberately no second fetch, no new
-// query key, and no useReport() call here -- exactly the pattern
-// SpendingForecast.js already established for this page.
-//
-// This is a BEHAVIOURAL observation against the user's own history, never a
-// fraud, wrongdoing, or "incorrect expense" signal -- the wording below is
-// chosen carefully to never imply otherwise.
-//
-// Contract read here (see backend/analytics/analyzers/expenseAnomalyAnalyzer.js
-// and backend/analytics/analyzers/scores/expenseAnomalyRules.js):
-//   report.anomalies = {
-//     hasData, reasonCode, flaggedCount, comparedExpenseCount,
-//     uncomparableExpenseCount, ...
-//     anomalies: [{
-//       expenseId, expenseName, category, amount, expenseDate, severity,
-//       reasonCode,
-//       baseline: { scope, sampleCount, monthCount, medianAmount },
-//       impact: { excessAmount, monthlyReferenceAmount,
-//                 monthlyReferenceSource, percentage },
-//       detection: { method, score, threshold, thresholdMultiple, amountRatio },
-//     }]
-//   }
-// The flagged list lives at report.anomalies.anomalies -- NOT
-// report.anomalies.records (that key only exists inside SIA's own bounded
-// context copy, never on the stored report itself).
 
 const isPlainObject = (value) =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -41,14 +11,9 @@ const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(v
 const isNonBlankString = (value) => typeof value === "string" && value.trim() !== "";
 
 // Whole rupees only, explicit "en-IN" locale so the grouping is identical on
-// every machine regardless of runtime default locale (same lesson already
-// applied in SpendingForecast.js's own formatMoney).
 const formatMoney = (value) => `₹${Math.round(Number(value) || 0).toLocaleString("en-IN")}`;
 
 // Matches the project's established absolute-date style already used for
-// expense dates elsewhere (see ExpenseItem.js's formatDate: en-GB,
-// DD Mon YYYY). Returns null -- never the string "Invalid Date" -- when the
-// value cannot be parsed.
 const formatExpenseDate = (value) => {
   if (typeof value !== "string" && !(value instanceof Date)) return null;
   const date = new Date(value);
@@ -68,9 +33,6 @@ const formatMultiple = (ratio) => {
 };
 
 // Builds one safely-displayable card from a raw backend anomaly record, or
-// null when the record is too malformed to show at all (missing amount or
-// category -- the two fields every other piece of the card depends on).
-// Never mutates `raw`.
 function toDisplayRecord(raw, index) {
   if (!isPlainObject(raw)) return null;
 
@@ -113,10 +75,6 @@ function toDisplayRecord(raw, index) {
   const comparisonLabel = baseline?.scope === "expense_name" && name ? name : category;
 
   // The full, specific explanation is only ever built from real numbers
-  // already on the contract -- no jargon (method/score/threshold) is ever
-  // surfaced here. When any one of the three supporting numbers is missing
-  // or malformed, a concise, still-honest fallback is shown instead of a
-  // broken or partially-numeric sentence.
   const explanation = medianAmount !== null && excessAmount !== null
     ? `${formatMoney(amount)} was ${formatMoney(excessAmount)} above your usual ${formatMoney(medianAmount)} ${comparisonLabel} purchase.`
     : `${formatMoney(amount)} was meaningfully higher than your usual ${comparisonLabel} purchase.`;
@@ -169,10 +127,6 @@ export default function AnomalyInsights({ report }) {
   const anomalies = report?.anomalies;
 
   // The anomalies block is missing or not shaped like a real result at all
-  // (e.g. an older cached report, or the analytics layer could not produce
-  // this section this time). This is deliberately NOT the same message as
-  // "no unusual expenses" -- an unavailable check is never presented as a
-  // clean bill of health.
   if (!isPlainObject(anomalies) || typeof anomalies.hasData !== "boolean") {
     return (
       <AnomalyShell>
@@ -210,8 +164,6 @@ export default function AnomalyInsights({ report }) {
     }
 
     // An explicit hasData:false with a reason code this component does not
-    // recognise -- treated the same as "unavailable", never as "normal
-    // spending", since no real evaluation is confirmed to have happened.
     return (
       <AnomalyShell>
         <EmptyState
@@ -223,8 +175,6 @@ export default function AnomalyInsights({ report }) {
   }
 
   // hasData === true: a genuine evaluation happened. Build safely-displayable
-  // cards from whatever the backend supplied, without ever reordering the
-  // backend's own ranking and without mutating the source array.
   const rawList = Array.isArray(anomalies.anomalies) ? anomalies.anomalies : [];
   const records = rawList.map(toDisplayRecord).filter(Boolean);
   const candidateCount = isFiniteNumber(anomalies.evaluatedExpenseCount)

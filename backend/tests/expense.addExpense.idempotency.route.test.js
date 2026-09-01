@@ -1,36 +1,4 @@
 // Phase C.2, requirement 6 -- REAL route-level idempotency replay/conflict
-// coverage for POST /expense/add-expense.
-//
-// tests/expense.mutationReliability.test.js's existing idempotency tests
-// only prove two things through the real route: a missing `id` is rejected
-// by the real Joi middleware, and a valid `id` is preserved unchanged
-// through to the idempotency lookup. Its ExpenseModel mock is a bare stub
-// whose findOne/save behavior is entirely dictated per-test by injected
-// callbacks -- it never actually enforces the { userId, id } unique index,
-// so it cannot prove "only one expense is created", "no mutation of the
-// original document", or a genuine concurrent E11000 race resolving via
-// the real reconciliation logic.
-//
-// This file instead backs the real Express route (real rate limiter, real
-// verifyToken, real expenseValidation Joi middleware, and the real
-// Controllers/ExpenseControllers/addexpense.js) with a STATEFUL in-memory
-// fake ExpenseModel that:
-//   - actually stores documents keyed by `${userId}:${id}`;
-//   - actually rejects a second save() for an already-used key with a
-//     real-shaped Mongo E11000 duplicate-key error (code/name/keyPattern/
-//     keyValue), the same fields a genuine MongoServerError carries;
-//   - serializes concurrent save() calls for the SAME key through a
-//     promise-chain mutex (never a real sleep/timer) so a "concurrent
-//     E11000" scenario is deterministic: the loser's check-and-insert only
-//     runs after the winner's has fully committed, exactly mirroring how a
-//     real unique index resolves a genuine write race.
-//
-// Only the three seams addexpense.js itself calls through --
-// ../config/Schemas, ../Services/syncRecoveryService, and
-// ../utils/expenseCache -- are mocked; every other module (routes,
-// middleware, the controller) executes for real, exactly matching
-// tests/expense.mutationReliability.test.js's and tests/report.contract.
-// test.js's established isolation convention.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -81,20 +49,12 @@ const SYNCHRONIZED_RESULT = {
 };
 
 // A stateful, in-memory stand-in for config/Schemas.js's real ExpenseModel
-// -- actually enforces the { userId, id } unique index (see
-// expenseSchema.index({ userId: 1, id: 1 }, { unique: true })) and actually
-// tracks inserted documents, rather than a per-test-scripted stub.
 function makeExpenseModel() {
   const store = new Map(); // key: `${userId}:${id}` -> plain stored doc
   const perKeyChain = new Map(); // key -> promise chain, serializes concurrent save() calls per key
   let idCounter = 0;
 
   // Deterministic concurrency control (never a real sleep/timer): when
-  // armed via __armConcurrentSaveGate(n), every save() call blocks until
-  // at least n findOne() lookups have happened -- i.e. until every
-  // concurrent request's own pre-write idempotency check has already run
-  // and observed the pre-race state, exactly like two real concurrent
-  // requests that both check-then-write.
   let saveGate = null;
   let findOneCallCount = 0;
 
@@ -112,11 +72,6 @@ function makeExpenseModel() {
       const key = `${this.userId}:${this.id}`;
 
       // Serialize concurrent save() calls for the SAME key through a
-      // promise-chain mutex -- this is what makes the "loser" in a
-      // concurrent-insert race deterministically observe the winner's
-      // already-committed row, the same way a real unique index resolves
-      // a genuine write race (the second insert waits for the first
-      // write's lock, then fails its own uniqueness check).
       const previous = perKeyChain.get(key) || Promise.resolve();
       let release;
       const ownTurn = new Promise((resolve) => {
@@ -217,8 +172,6 @@ function loadApp() {
   }));
 
   // Recurring-state authority remediation -- addexpense.js's replay path
-  // calls annotateRecurringState, which queries RecurringExpenseModel. No
-  // recurring definitions exist in this file's scenarios.
   jest.doMock(RECURRING_MODEL_PATH, () => ({
     RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
@@ -275,10 +228,6 @@ describe("POST /expense/add-expense -- real route-level idempotency (Phase C.2, 
     expect(ExpenseModelMock.__store.size).toBe(1);
 
     // Same economic identity (name/category/amount/date), differing only in
-    // incidental whitespace/casing on expenseName -- isSameExpensePayload's
-    // own normalization (trim + case-insensitive-adjacent comparisons are
-    // NOT applied to amount/date, but expenseName IS trimmed) must treat
-    // this as the same logical request.
     const replay = await postAdd(
       app,
       USER_ID,
@@ -340,8 +289,6 @@ describe("POST /expense/add-expense -- real route-level idempotency (Phase C.2, 
   it("7a. a genuine concurrent E11000 race (same id, same payload) resolves as exactly one commit + one replay, never two documents", async () => {
     const { app, ExpenseModelMock } = loadApp();
     // Both requests' pre-write idempotency check must run before either
-    // save() is allowed to proceed -- deterministically reproduces "both
-    // requests see nothing reserved yet" without any real sleep.
     ExpenseModelMock.__armConcurrentSaveGate(2);
 
     const payload = validAddPayload({ id: "race-same-payload" });
@@ -384,9 +331,6 @@ describe("POST /expense/add-expense -- real route-level idempotency (Phase C.2, 
     expect(ExpenseModelMock.__store.size).toBe(1);
     const stored = ExpenseModelMock.__store.get(`${USER_ID}:race-conflict`);
     // The stored document belongs to whichever request actually won the
-    // race -- either amount is an acceptable, non-corrupted outcome, but it
-    // must be EXACTLY one of the two attempted values, never a merge/
-    // mutation of both.
     expect([5.5, 999]).toContain(stored.expenseAmount);
   });
 });

@@ -1,25 +1,4 @@
 // System-wide reservation-ownership correction.
-//
-// Proves the fix to the hazard identified in follow-up review: reservedReport
-// and reservedUserWide used to be SINGLE objects on PendingSync (see
-// models/PendingSync.js's own doc comment for the full history), each
-// written via an unconditional `$set`. A second reserve() call for the same
-// user silently overwrote an earlier, still-unconfirmed reservation's token,
-// and abandon() cleared the field unconditionally with no ownership check --
-// so a sequence like "R1 reserves+commits+crashes, R2 reserves (overwriting
-// R1's token), R2 fails and abandons (clearing the field)" left NO durable
-// evidence that R1's committed mutation still needed synchronization.
-//
-// Fix: reservedReports/reservedUserWideReservations are now OWNED-TOKEN
-// ARRAYS, structured identically to the (always-safe) reservedBudgetMonths
-// array -- reserve() pushes its own entry, confirm()/abandon() only ever
-// pull the exact token they own.
-//
-// This file uses the REAL, unmocked Services/syncRecoveryService.js against
-// a stateful, real-CAS-semantics fake models/PendingSync (adapted from
-// tests/mutationRecoveryCorrectness.test.js's own makeFakePendingSyncModel())
-// -- every assertion below inspects the actual fake document state, never
-// merely a mocked call count.
 "use strict";
 
 const PENDING_SYNC_PATH = "../models/PendingSync";
@@ -34,8 +13,6 @@ afterEach(() => {
 });
 
 // Verbatim (same update semantics) as tests/mutationRecoveryCorrectness.
-// test.js's own makeFakePendingSyncModel() -- real CAS on `revision`, real
-// $inc/$set/$addToSet/$push/$pull application, real upsert.
 function makeFakePendingSyncModel() {
   const store = new Map();
 
@@ -392,9 +369,6 @@ describe("System-wide reservation ownership -- guarantee #7 (concurrent commits,
     const r2 = await svc.reserve({ userId: USER_ID, reserveReport: true });
 
     // R1 confirms and its own recompute runs (observes only R1's write in
-    // this simulation) -- R1's own token/Tier-1 slice is cleared, but R2's
-    // reservation (a DIFFERENT, still-untouched array entry) is untouched,
-    // so the overall pending state correctly remains until R2 also confirms.
     await svc.synchronizeAfterMutation({
       userId: USER_ID,
       reportToken: r1.reportReservation.token,
@@ -405,8 +379,6 @@ describe("System-wide reservation ownership -- guarantee #7 (concurrent commits,
     expect(doc.reservedReports[0].token).toBe(r2.reportReservation.token);
 
     // R2 now confirms -- its own recompute (this call) observes both writes
-    // by the time it actually runs (real recalculateBudget/refreshReport
-    // always read CURRENT live data), and clears the remaining evidence.
     await svc.synchronizeAfterMutation({
       userId: USER_ID,
       reportToken: r2.reportReservation.token,

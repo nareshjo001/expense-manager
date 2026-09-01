@@ -1,17 +1,7 @@
 // SIA QueryPlan contract -- a versioned, CLOSED schema describing exactly
-// what a semantic-routed or deterministic question resolves to before any
-// financial data is touched. This module owns the allowlists (metrics,
-// operations, periods, groupings) and a pure, side-effect-free validator
-// that fails CLOSED on anything malformed: unknown top-level keys, unknown
-// nested keys, invalid enum values, oversized arrays/strings, or a
-// category filter shaped like a field path/operator are all rejected.
-// Never throws -- validateQueryPlan() always returns a result object, even
-// for wildly malformed input (null, a string, a circular object, etc.).
 "use strict";
 
 // Version 1 remains the active wire format until semanticRouter.js and
-// semanticPipeline.js move together in later modules. Keeping it accepted
-// here protects existing router output and persisted idempotency checkpoints.
 const QUERY_PLAN_VERSION = 1;
 const QUERY_PLAN_V2_VERSION = 2;
 const SUPPORTED_QUERY_PLAN_VERSIONS = Object.freeze([QUERY_PLAN_VERSION, QUERY_PLAN_V2_VERSION]);
@@ -19,9 +9,6 @@ const SUPPORTED_QUERY_PLAN_VERSIONS = Object.freeze([QUERY_PLAN_VERSION, QUERY_P
 const OUTCOMES = Object.freeze(["supported", "unsupported", "clarification"]);
 
 // Direct, deterministically-answerable financial metrics, plus the four
-// existing analytics explanation intents (mapped here so a semantically
-// routed question can resolve to the SAME four already-working intents
-// rather than a reinvented capability).
 const METRICS = Object.freeze([
   "EXPENSE_TOTAL",
   "EXPENSE_COUNT",
@@ -66,15 +53,6 @@ const PERIOD_TYPES = Object.freeze([
 const GROUPINGS = Object.freeze(["NONE", "CATEGORY", "MONTH"]);
 
 // A metric x operation CAPABILITY contract -- not every operation is
-// meaningful for every metric. FORECAST is only meaningful for the one
-// existing analytics capability that genuinely produces an estimate
-// (SPENDING_FORECAST_EXPLANATION, backed by forecastAnalyzer.js); nothing
-// else in this system has a forecasting model, so a plan combining
-// FORECAST with any other metric (e.g. a router mistakenly proposing
-// "predict my top category next month" as TOP_CATEGORY+FORECAST) must
-// fail CLOSED here, at the schema boundary, rather than silently falling
-// through to a deterministic lookup or an ordinary prose explanation that
-// would let an LLM author an unsupported prediction.
 const FORECAST_CAPABLE_METRICS = Object.freeze(["SPENDING_FORECAST_EXPLANATION"]);
 
 const RESPONSE_MODES = Object.freeze(["DETERMINISTIC", "PROSE"]);
@@ -103,11 +81,6 @@ function isNonEmptyString(value, maxLength) {
 }
 
 // Rejects anything shaped like a Mongo field path, operator, or injection
-// attempt -- a category is always a plain user-facing label, never a
-// dotted path ("a.b"), a Mongo operator ("$where"), or a brace/JSON
-// fragment. Deliberately conservative: letters, digits, spaces, and a
-// small set of punctuation marks that occur in real category names
-// (apostrophe, hyphen, ampersand, slash, parentheses).
 const SAFE_CATEGORY_PATTERN = /^[\p{L}\p{N} '&/(),-]+$/u;
 
 function isValidCategoryFilter(value) {
@@ -252,14 +225,7 @@ const TOP_LEVEL_ALLOWED_KEYS = new Set([
   "safeInterpretation",
 ]);
 
-/**
- * Pure, synchronous, side-effect-free QueryPlan validator. Fails CLOSED --
- * any unexpected shape, unknown key, invalid enum, oversized array/string,
- * or internal exception all resolve to `{ valid: false, reason }`, never a
- * thrown error and never a best-effort partial acceptance.
- *
- * @returns {{ valid: true, plan: object } | { valid: false, reason: string }}
- */
+/* Pure, synchronous, side-effect-free QueryPlan validator. Fails CLOSED -- */
 function validateV1QueryPlan(candidate) {
   try {
     if (!isPlainObject(candidate)) return fail("PLAN_NOT_OBJECT");
@@ -273,8 +239,6 @@ function validateV1QueryPlan(candidate) {
 
     if (candidate.outcome === "clarification") {
       // A clarification plan carries no metric/operation/period execution
-      // details -- those are meaningless (and dangerous to half-trust)
-      // before the user disambiguates.
       const disallowed = ["metrics", "operation", "period", "grouping", "categoryFilter", "comparisonPeriod", "responseMode"];
       for (const key of disallowed) {
         if (key in candidate) return fail(`UNEXPECTED_FIELD_FOR_CLARIFICATION:${key}`);
@@ -530,11 +494,7 @@ function validateV2QueryPlan(candidate) {
   }
 }
 
-/**
- * Accepts persisted v1 plans and new v2 plans. The returned plan preserves
- * its source version so existing v1 callers remain unchanged until the v2
- * executor is introduced.
- */
+/* Accepts persisted v1 plans and new v2 plans. The returned plan preserves */
 function validateQueryPlan(candidate) {
   try {
     if (!isPlainObject(candidate)) return fail("PLAN_NOT_OBJECT");
@@ -546,10 +506,7 @@ function validateQueryPlan(candidate) {
   }
 }
 
-/**
- * Converts either accepted plan version to the v2 execution shape without
- * changing the existing v1 validator result used by current callers.
- */
+/* Converts either accepted plan version to the v2 execution shape without */
 function normalizeQueryPlan(candidate) {
   const validation = validateQueryPlan(candidate);
   if (!validation.valid) return validation;

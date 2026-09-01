@@ -1,18 +1,4 @@
 // Gemini-provider readiness regression suite -- sia/readiness.js's
-// isSiaReady() extended to a second provider (M-gemini). Companion to
-// tests/sia.readiness.test.js (which stays entirely OpenAI-focused and is
-// deliberately left unmodified); this file proves:
-//   1. Gemini readiness with and without GEMINI_API_KEY.
-//   2. OpenAI readiness is provably unaffected by the Gemini addition (no
-//      cross-contamination between the two credential env vars).
-//   3. IMPLEMENTED_PROVIDERS now includes "gemini" without dropping "openai".
-//   4. GET /sia/status still never leaks a provider name, model, or
-//      credential for either provider.
-//
-// Same isolation style as sia.readiness.test.js: sia/config.js is re-mocked
-// per test via jest.doMock + jest.resetModules(), and both credential env
-// vars are saved/restored around every test so no real value ever leaks
-// between tests or into a later suite.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -57,9 +43,6 @@ function signToken(userId) {
 }
 
 // Workstream 2 -- voice-input config defaults (see
-// tests/sia.readiness.test.js's identical constant for the full rationale).
-// This whole file is about the TEXT (isSiaReady) surface; voice readiness
-// is covered separately by tests/sia.readiness.voice.test.js.
 const VOICE_CONFIG_DEFAULTS = {
   voiceEnabled: false,
   sttProvider: "groq",
@@ -268,8 +251,6 @@ describe("GET /sia/status -- never leaks provider/model/credential for either pr
   }
 
   // Workstream 2 -- the additive capabilities.voiceInput block every
-  // GET /sia/status response now carries; voiceEnabled is unset/false
-  // throughout this file, so voiceInput.available is always false here.
   const EXPECTED_VOICE_CAPABILITIES = {
     voiceInput: {
       available: false,
@@ -280,9 +261,6 @@ describe("GET /sia/status -- never leaks provider/model/credential for either pr
   };
 
   // NOTE on the explicit 60000ms third argument below (Workstream 2): see
-  // the identical note in tests/sia.readiness.groq.test.js's sibling block
-  // -- this sandbox pays a large one-time-per-call cost for
-  // jest.resetModules() + require("../app"), observed up to ~55s.
   it(
     "returns exactly { success: true, available: true, capabilities } when ready with provider=gemini",
     async () => {

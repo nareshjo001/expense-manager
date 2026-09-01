@@ -70,8 +70,6 @@ function toTitleCase(value) {
 }
 
 // Normalizes a RAW category value for a WRITE boundary (add/edit expense, recurring-expense definitions, the cron auto-logger). Returns the canonical/cleaned string, or `null` when invalid -- callers MUST treat `null` as "reject this write", never coerce it to a default category themselves.
-//
-// Behavior (mirrors category_config.py's normalize_category, extended per this module's requirements): only a `string` is accepted; trimmed and whitespace-collapsed; case-insensitive alias lookup against CATEGORY_ALIASES returns the canonical value for a known alias (including every canonical name's own identity mapping); an unknown but non-empty cleaned value is NOT rejected -- lowercased then Title-Cased (same convention as toTitleCase above) and preserved as its own genuinely distinct category, since aliases are compatibility metadata, not an allowlist (full casing normalization means "PET CARE" vs "Pet Care" now converge); empty/whitespace-only/null/undefined/non-string values are all invalid, returning null; idempotent -- normalizeCategory(normalizeCategory(x)) === normalizeCategory(x) for every valid x (a canonical alias re-normalizes to itself by construction; an unknown Title-Cased pass-through value is a no-op on the second pass).
 function normalizeCategory(raw) {
     if (typeof raw !== "string") {
         return null;

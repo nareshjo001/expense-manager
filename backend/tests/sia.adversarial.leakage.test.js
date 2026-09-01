@@ -1,8 +1,4 @@
 // Adversarial security tests (Workstream 5 review) -- raw-data / internal-
-// identifier leakage across responseValidator.js, groundingService.js, and
-// factSet.js. No mocks needed: all three modules are pure, dependency-free
-// (no Mongo, no network), so this file drives their REAL implementations
-// directly with deliberately malicious/crafted input.
 "use strict";
 
 const { validateGroundedAnswer, validateCitedAnswer } = require("../sia/responseValidator");
@@ -26,9 +22,6 @@ describe("adversarial: a maliciously-crafted LLM answer combining an ObjectId, a
 
     expect(result.valid).toBe(false);
     // The FIRST check in validateGroundedAnswer's ordered pipeline (Mongo
-    // ID shape) fires before the raw-field-token check reaches "userId" or
-    // "recentExpensePool" -- either way, this is rejected, never passed
-    // through.
     expect(result.reasonCode).toBe("LEAKED_IDENTIFIER");
   });
 
@@ -81,20 +74,6 @@ describe("adversarial: a maliciously-crafted LLM answer combining an ObjectId, a
 
 describe("FIXED: general-purpose leaked-transaction-detail check now applies outside CURRENT_SPENDING_SUMMARY / validateCitedAnswer", () => {
   // responseValidator.js's SUMMARY_TRANSACTION_DETAIL_PATTERN (which
-  // matches the word "merchant", "receipt", "transaction id", "expense
-  // id", "line item") was originally wired up ONLY inside the
-  // `if (intent === CURRENT_SPENDING_SUMMARY)` branch of
-  // validateGroundedAnswer, leaving the other 7 intents and
-  // validateCitedAnswer (the FactSet/semantic-EXPLAIN path) without a
-  // deterministic backstop against a fabricated transaction-level claim.
-  // Since contextBuilder.js/factSet.js never actually supply a
-  // merchant/description field to the LLM, such a claim can only be a
-  // HALLUCINATION, never a genuine data leak -- but the system prompts
-  // explicitly forbid "inventing" such details, so a deterministic check
-  // belongs here regardless. FIXED: the check now runs generically for
-  // every validated intent and every FactSet-cited answer -- see the
-  // "Generic across all eight validated intents" comment in
-  // sia/responseValidator.js. These tests confirm the fix.
   it("rejects a fabricated merchant name in an ANOMALY_EXPLANATION answer (fix confirmed)", () => {
     const contextFields = {
       anomalies: { flaggedExpenses: [{ expenseId: "abc", category: "Dining", amount: 500, expenseDate: "2026-08-01" }] },

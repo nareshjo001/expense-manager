@@ -1,8 +1,6 @@
 "use strict";
 
 // Batch 3G: unit tests for the deterministic, local session-title
-// derivation helper. No provider/LLM call is possible here -- the module
-// under test has no async surface and no external dependency at all.
 
 const { deriveSessionTitle, MAX_TITLE_LENGTH } = require("../sia/sessionTitle");
 

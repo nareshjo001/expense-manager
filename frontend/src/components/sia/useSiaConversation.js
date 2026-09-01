@@ -5,18 +5,6 @@ import { createClientMessageId } from "../../utils/createClientMessageId";
 import { queryKeys } from "../../query/queryKeys";
 
 // Owns the entire SIA conversation. Deliberately a reducer rather than a
-// pile of useState calls: sending, succeeding, failing, retrying,
-// hydrating from history and starting a new chat each move several fields
-// at once, and those fields must never drift out of step with each other
-// (a pending request with no visible user turn, or a failed request whose
-// key was silently replaced, are exactly the bugs this shape prevents).
-//
-// This hook is mounted by SiaEntryPoint, NOT by SiaPanel, so closing the
-// panel unmounts only the presentation -- the transcript, active session
-// and any in-flight request survive until the page itself is remounted.
-// Nothing here touches localStorage/sessionStorage: a refresh is meant to
-// start a fresh local conversation, with server-side history as the
-// explicit recovery path.
 
 export const PANEL_MODE = Object.freeze({
   CONVERSATION: "conversation",
@@ -77,8 +65,6 @@ export function siaConversationReducer(state, action) {
 
     case "RETRY":
       // Moves the failed request back to pending WITHOUT touching
-      // messages: no second user bubble, and the original key/question/
-      // session are carried over byte-for-byte.
       if (!state.failed) return state;
       return { ...state, pending: state.failed, failed: null };
 
@@ -90,16 +76,8 @@ export function siaConversationReducer(state, action) {
         kind: "answer",
         content: action.answer,
         // Batch 3F: the server-computed grounding snapshot, passed through
-        // exactly as received (SiaGroundingDisclosure.js is the single
-        // validation gate at render time -- a missing/malformed value here
-        // simply renders nothing, never a crash).
         grounding: action.grounding,
         // Workstream 3: the server's period/metric interpretation summary
-        // (see backend/sia/semanticPipeline.js's `interpretation` field),
-        // passed through exactly as received -- SiaPanel.js's trust-label
-        // rendering is the single validation gate at render time, so a
-        // missing/malformed value here simply renders no label, never a
-        // crash.
         interpretation: action.interpretation,
         planSummary: action.planSummary,
       };
@@ -107,8 +85,6 @@ export function siaConversationReducer(state, action) {
         ...state,
         messages: [...state.messages, assistantMessage],
         // Adopt the server's session id so every later turn continues the
-        // same conversation. An absent id (session store unavailable)
-        // leaves the previous value untouched.
         activeSessionId: action.sessionId || state.activeSessionId,
         pending: null,
         failed: null,
@@ -116,13 +92,6 @@ export function siaConversationReducer(state, action) {
     }
 
     // Workstream 3: a `clarification`-kind response from POST /sia/ask
-    // (see backend/Controllers/SiaControllers/ask.js's
-    // formatClarificationResponse -- `{ clarification: { prompt, options:
-    // [{id, label}] } }`). Rendered as its own assistant turn whose
-    // `options` SiaPanel.js renders as accessible buttons; picking one
-    // re-enters this SAME reducer/mutation path via
-    // submitClarificationOption below, exactly like a typed follow-up
-    // question -- never a special one-off fetch.
     case "CLARIFICATION": {
       if (!state.pending) return state;
       const assistantMessage = {
@@ -178,9 +147,6 @@ export function siaConversationReducer(state, action) {
 
     case "HYDRATE": {
       // Replaces the transcript ONLY on a successful load, and only for
-      // the session the user most recently selected -- a slow response for
-      // an abandoned selection is dropped rather than overwriting a newer
-      // one.
       if (state.selectedHistorySessionId !== action.sessionId) return state;
       return {
         ...state,
@@ -207,8 +173,6 @@ export function siaConversationReducer(state, action) {
 }
 
 // Extracts a safe, plain string from a rejected Axios error, never the raw
-// error object, config, stack or response body. Mirrors the backend's
-// {success:false, message} contract.
 export function getErrorMessage(error) {
   const message = error?.response?.data?.message;
   return typeof message === "string" && message.trim() !== "" ? message : GENERIC_ERROR_MESSAGE;
@@ -220,8 +184,6 @@ export function getErrorCode(error) {
 }
 
 // Normalizes server messages for rendering. Unknown roles are dropped
-// rather than rendered as an unstyled/mislabelled bubble, and non-string
-// content is skipped -- neither can crash the transcript.
 export function normalizeServerMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages
@@ -232,13 +194,6 @@ export function normalizeServerMessages(messages) {
 export const MAX_QUESTION_LENGTH = 500;
 
 // Workstream 3: routes a resolved POST /sia/ask response to the correct
-// reducer action based on its actual shape, rather than assuming every
-// success is a plain answer. A `clarification` response (see
-// backend/Controllers/SiaControllers/ask.js's formatClarificationResponse)
-// carries a `clarification` object and no `answer`; anything else is
-// treated as the existing answer contract, unchanged. Shared by both the
-// first-submission and retry success handlers below so the two paths can
-// never drift apart.
 function dispatchAskSuccess(dispatch, data) {
   if (data && data.clarification && typeof data.clarification === "object") {
     dispatch({
@@ -308,10 +263,6 @@ export function useSiaConversation() {
   }, [state.input, state.activeSessionId, state.failed, isBusy, send]);
 
   // Workstream 3: a clarification option click re-submits through this
-  // EXACT SAME path submitQuestion/send uses -- a fresh clientMessageId, a
-  // real user turn rendered in the transcript, the same ask mutation. The
-  // only difference from typing is where the question text comes from
-  // (the option's server-authored `label`, never option.id or free text).
   const submitClarificationOption = useCallback(
     (option) => {
       if (!option || typeof option.label !== "string" || option.label.trim() === "") return;
@@ -331,8 +282,6 @@ export function useSiaConversation() {
     const { question, clientMessageId, sessionId, messageId } = state.failed;
     dispatch({ type: "RETRY" });
     // Resends the EXACT original key, question and request session -- the
-    // backend replays the original answer rather than paying for a second
-    // LLM call.
     mutation.mutate(
       { question, sessionId, clientMessageId },
       {

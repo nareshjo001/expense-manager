@@ -1,38 +1,4 @@
 // BALENISA Budget Derived-Spent Authority and Crash-Recovery Remediation.
-//
-// Phase 2 defect reproduction: these assertions encode the CORRECT,
-// required behavior and are run FIRST against current (unmodified)
-// production code, where they FAIL -- proving the defect is real, not
-// assumed. After the fix (Phase 3) they pass and this file also serves as
-// Phase 4's regression coverage for this specific gap; no assertion here
-// is weakened after the fix lands.
-//
-// Traced call chain (independently verified against source before writing
-// this test): POST /api/setbudget -> setbudget.js -> budget.service.js's
-// setBudgetForCurrentMonth() -> recalculateBudget(userId, date) with NO
-// options object, and PUT /api/update-budget -> updatebudget.js ->
-// recalculateBudget(user._id, now) -- also with no options object.
-// budget.service.js's recalculateBudget(userId, date, options={}) only
-// applies the syncRevision CAS fence when `options.fenceRevision` is
-// provided (budget.service.js:118-126); when omitted it issues an
-// UNCONDITIONAL `$set:{spent}` (budget.service.js:121-125), and neither
-// controller calls syncRecoveryService.reserve()/confirm() at all, unlike
-// every expense-mutation controller (addexpense.js/editExpense.js/
-// deleteExpense.js) and recurringJob.js, which all reserve before their
-// primary write and synchronize via the fenced synchronizeAfterMutation().
-//
-// Defect consequence: (1) a crash between the budget-amount write and
-// recalculateBudget leaves NO durable PendingSync evidence, so
-// repairIfPending() has nothing to find and never repairs it; (2) a
-// concurrent FENCED expense-mutation repair for the same user+month can be
-// silently overwritten by this unfenced write, with no CAS protection and
-// no recorded error -- candidate #9 ("Budget is created/edited while an
-// expense mutation occurs").
-//
-// Mocks only ../config/Schemas, ../Services/syncRecoveryService, and
-// ../Services/BudgetServices/budget.service -- never touches MongoDB,
-// Redis, or the network. Follows the established supertest-against-the-
-// real-app convention (mirrors tests/getbudgets.reliability.test.js).
 "use strict";
 
 const jwt = require("jsonwebtoken");

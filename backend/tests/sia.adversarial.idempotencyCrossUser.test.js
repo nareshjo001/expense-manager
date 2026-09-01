@@ -1,15 +1,4 @@
 // Adversarial security tests (Workstream 5 review) -- proves
-// sia/idempotencyService.js's request-level idempotency key is scoped
-// PER-USER, never global: two different userIds using the exact SAME
-// clientMessageId must get fully independent reservations/results, and a
-// second user can never replay/read/conflict against a first user's
-// in-flight or completed request.
-//
-// Drives the REAL sia/idempotencyService.js against a small, faithful,
-// non-Mongo in-memory fake of models/SiaRequest.js (matching its documented
-// unique index -- {user, clientMessageId} -- and its findOne/create/
-// findOneAndUpdate/deleteOne contract exactly, including returning `null`
-// on no-match). This file never loads the real "mongoose" package.
 "use strict";
 
 const REQUEST_STATUS = Object.freeze({
@@ -42,8 +31,6 @@ function createFakeSiaRequestModel() {
     },
     async create(attrs) {
       // Faithfully enforces the REAL model's unique index on
-      // (user, clientMessageId) -- the exact mechanism that must make
-      // this key per-user, not global.
       const collision = store.find(
         (doc) => String(doc.user) === String(attrs.user) && doc.clientMessageId === attrs.clientMessageId
       );
@@ -120,9 +107,6 @@ describe("idempotency keys are scoped per-user, never global", () => {
       userId: USER_B,
       clientMessageId: SHARED_CLIENT_MESSAGE_ID,
       // Deliberately a DIFFERENT question -- if the key were global, this
-      // would be flagged as a fingerprint CONFLICT against user A's
-      // request; since it's correctly per-user, it must be a fresh OWNED
-      // reservation instead.
       question: "What is my top spending category?",
     });
 
@@ -149,9 +133,6 @@ describe("idempotency keys are scoped per-user, never global", () => {
     });
 
     // User B retries with the SAME clientMessageId (an attacker who
-    // observed/guessed/reused another user's client-generated key). This
-    // must be evaluated as a brand-new, independent reservation for B --
-    // never a REPLAY_COMPLETED of A's answer.
     const resB = await idempotencyService.reserveRequest({
       userId: USER_B,
       clientMessageId: SHARED_CLIENT_MESSAGE_ID,
@@ -196,8 +177,6 @@ describe("idempotency keys are scoped per-user, never global", () => {
     expect(first.outcome).toBe(idempotencyService.OUTCOME.OWNED);
 
     // Same user, same key, same (fingerprint-normalized) question, while
-    // still processing -- must be IN_PROGRESS, proving the per-user
-    // uniqueness constraint really is enforced (not merely absent).
     const second = await idempotencyService.reserveRequest({
       userId: USER_A,
       clientMessageId: SHARED_CLIENT_MESSAGE_ID,
@@ -211,10 +190,6 @@ describe("idempotency keys are scoped per-user, never global", () => {
     const fp1 = idempotencyService.fingerprintQuestion("How much did I spend this month?");
     const fp2 = idempotencyService.fingerprintQuestion("How much did I spend this month?");
     // Same question -> same fingerprint regardless of which user asks --
-    // by itself this is fine (uniqueness comes from the {user,
-    // clientMessageId} index, not the fingerprint), but confirms the
-    // fingerprint carries no user-identifying salt that could leak
-    // cross-user correlation metadata.
     expect(fp1).toBe(fp2);
     expect(typeof fp1).toBe("string");
     expect(fp1).not.toContain(USER_A);

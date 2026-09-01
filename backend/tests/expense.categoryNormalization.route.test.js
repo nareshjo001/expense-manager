@@ -1,17 +1,4 @@
 // Category Normalization -- single implementation pass, required test
-// scenarios #7-12 (route-level proof that add/edit expense store the
-// canonical category, that alias/case/whitespace-equivalent replays are
-// idempotent while genuinely different categories still conflict, and that
-// ML-prediction correction detection is alias-aware).
-//
-// Follows the exact isolation convention established in
-// tests/expense.addExpense.idempotency.route.test.js (stateful in-memory
-// ExpenseModel enforcing the real { userId, id } unique index) and
-// tests/expense.mutationReliability.test.js (findOneAndUpdate-based edit
-// route coverage). Only ../config/Schemas, ../Services/syncRecoveryService,
-// and ../utils/expenseCache are mocked; routes, middleware, and the real
-// controllers (including the real categoryNormalization module) execute
-// for real.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -62,8 +49,6 @@ const SYNCHRONIZED_RESULT = {
 };
 
 // Stateful in-memory ExpenseModel stand-in, same shape as
-// tests/expense.addExpense.idempotency.route.test.js's makeExpenseModel(),
-// plus findOneAndUpdate support for the edit route.
 function makeExpenseModel() {
   const store = new Map();
   let idCounter = 0;
@@ -93,10 +78,6 @@ function makeExpenseModel() {
   }
 
   // Supports both call shapes used across the two controllers:
-  // addexpense.js does `await ExpenseModel.findOne(...).lean()`, while
-  // editExpense.js does a plain `await ExpenseModel.findOne(...)` with no
-  // `.lean()` chain. Returning a thenable object with an additional
-  // `.lean()` method satisfies both.
   ExpenseModelMock.findOne = (query) => {
     const resolve = async () => {
       if (query.id !== undefined) {
@@ -119,9 +100,6 @@ function makeExpenseModel() {
   };
 
   // Minimal findOneAndUpdate for the edit route: looks the doc up by _id,
-  // applies $set, returns the PRIOR document (editExpense.js requests
-  // {new:false}) wrapped with a .toObject() the same way a real Mongoose
-  // document would provide.
   ExpenseModelMock.findOneAndUpdate = async (query, update) => {
     let foundKey = null;
     let foundDoc = null;
@@ -142,9 +120,6 @@ function makeExpenseModel() {
 
   ExpenseModelMock.__store = store;
   // Real mongoose (unmocked) validates expenseId via
-  // mongoose.Types.ObjectId.isValid() in editExpense.js, so seeded _id
-  // values must be genuine 24-hex-char ObjectId strings, never an
-  // arbitrary placeholder string.
   ExpenseModelMock.__seed = (doc) => {
     const key = `${doc.userId}:${doc.id}`;
     const _id = doc._id || new mongoose.Types.ObjectId().toString();
@@ -203,9 +178,6 @@ function loadApp() {
   }));
 
   // Recurring-state authority remediation -- addexpense.js's replay path
-  // and editExpense.js now call annotateRecurringState, which queries
-  // RecurringExpenseModel. No recurring definitions exist in this file's
-  // scenarios, so an always-empty result is the correct stub.
   jest.doMock(RECURRING_MODEL_PATH, () => ({
     RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
@@ -239,26 +211,6 @@ const putEdit = (app, userId, editID, payload) =>
 
 describe("Category Normalization: POST /expense/add-expense stores canonical category (#7)", () => {
   // Verification-remediation note (narrowly scoped, evidence-based --
-  // see the diagnosis in this phase's report for the full investigation).
-  // This is the FIRST test in this file to call loadApp(), which
-  // `require("../app")`s the real Express app for the first time in this
-  // Jest worker. That require chain reaches
-  // Controllers/ExpenseControllers/editExpense.js, which has its own
-  // pre-existing, unrelated top-level `require("mongoose")` (used for
-  // `mongoose.Types.ObjectId.isValid`, not something this phase added).
-  // mongoose's OWN first require in a cold process is measurably expensive
-  // (a direct, isolated measurement in this environment recorded a single
-  // cold `require("mongoose")` taking over a minute; several OTHER
-  // pre-existing suite files -- e.g. report.schema.persistence.test.js,
-  // sia.historySafety.test.js -- also require mongoose directly). In a
-  // full-suite run, one of those earlier files has already paid that
-  // one-time cost before this file's tests run, so mongoose is warm; run
-  // in isolation (this file alone), nothing has warmed it yet, and only
-  // this FIRST test pays it. No assertion here ever failed -- the request
-  // itself resolves correctly once module loading completes, which is
-  // exactly what the full-suite run already demonstrated. This bump is
-  // scoped to this ONE test only (not the file, not globally, and
-  // jest.config.js is untouched) and only covers the cold-load window.
   it("stores the canonical, alias-resolved, Title-Cased category rather than the raw submitted string", async () => {
     const { app, ExpenseModelMock } = loadApp();
 
@@ -369,13 +321,6 @@ describe("Category Normalization: idempotent replay across alias/case/whitespace
   });
 
   // Casing-correction fix -- an UNKNOWN/custom category replayed with a
-  // casing variant that differs in NON-LEADING character casing must also
-  // be recognized as the same expense. Confirmed defect (forecast-
-  // aggregation verification): before the fix, normalizeCategory("Pet
-  // Care") !== normalizeCategory("PET CARE") ("Pet Care" vs "PET CARE"),
-  // so this exact replay would have been misreported as a genuinely
-  // different category and rejected with 409, rather than recognized as
-  // the same expense.
   it("a replay of a custom category using a full-caps casing variant ('PET CARE' vs 'Pet Care') succeeds as a true replay, not a conflict", async () => {
     const { app, ExpenseModelMock } = loadApp();
 
@@ -423,9 +368,6 @@ describe("Category Normalization: genuinely different categories still conflict 
   });
 
   // Casing-correction fix -- confirms the fix does not turn genuinely
-  // DIFFERENT custom categories into false replays. "Pet Care" and "Dog
-  // Care" are two distinct, unrelated custom categories (not casing
-  // variants of one another), so this must still 409.
   it("a genuinely different custom category ('Pet Care' vs 'Dog Care') still returns 409 IDEMPOTENCY_KEY_CONFLICT", async () => {
     const { app, ExpenseModelMock } = loadApp();
 

@@ -1,16 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-//
-// Covers the AddExpense.js changes: a stable per-add-attempt idempotency id
-// (survives rerenders/retries, only replaced on committed success or a
-// genuinely new form session), and calm "still refreshing" messaging for a
-// committed-but-pending response instead of the default success toast.
-//
-// useAddExpenseMutation/useUpdateExpenseMutation are mocked directly (their
-// own Phase C compatibility is covered separately in
-// src/hooks/mutations/expenseMutations.reliability.test.js) so every
-// mutation outcome here is driven by manually invoking the exact
-// onSuccess/onError callbacks AddExpense.js passed in -- deterministic,
-// no real network, no timers.
 import React from "react";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import AddExpense from "./AddExpense";
@@ -20,10 +8,6 @@ import { expenseAddSuccessToast, expenseAddErrorToast } from "../alertsEffects/t
 import { queryClient } from "../../query/queryClient";
 
 // Explicit factories (not bare jest.mock(path) auto-mocking) so Jest never
-// needs to load-and-introspect the real hook modules -- those transitively
-// import ../../api/axios, and this project's pinned axios version ships an
-// ESM-only entry that CRA's bundled Jest transform config does not parse
-// (a pre-existing, unrelated environment limitation).
 jest.mock("../../hooks/mutations/useAddExpenseMutation", () => ({
   useAddExpenseMutation: jest.fn(),
 }));
@@ -43,19 +27,11 @@ jest.mock("../../query/queryClient", () => ({
 }));
 
 // CRA's default Jest config sets `resetMocks: true`, which wipes a
-// jest.fn()'s implementation (including mockResolvedValue) before every
-// single test -- so the resolved value must be (re-)installed in
-// beforeEach, not at jest.mock() factory time, or every test after the
-// first would see fetchQuery() resolve to undefined.
 beforeEach(() => {
   queryClient.fetchQuery.mockResolvedValue({ data: null });
 });
 
 // Fully hand-mocked (no jest.requireActual, no Router wrapper needed) --
-// AddExpense.js only calls useNavigate(), and the real react-router-dom v7
-// package is not resolvable under this project's bundled CRA/Jest 27 setup
-// (a pre-existing, unrelated environment limitation: react-router-dom v7's
-// ESM-first "exports" map is not resolved by Jest 27's bundled resolver).
 const mockNavigate = jest.fn();
 jest.mock(
   "react-router-dom",
@@ -71,8 +47,6 @@ afterEach(() => {
 
 function fillRequiredFields({ name = "Tx" } = {}) {
   // "Tx" is deliberately under the ML-prediction debounce effect's 3-char
-  // threshold (see AddExpense.js) so no debounced fetch is ever scheduled
-  // -- keeps this suite fully synchronous and timer-free.
   fireEvent.change(screen.getByLabelText(/name of the expense/i), { target: { value: name } });
   fireEvent.change(screen.getByLabelText(/category/i), { target: { value: "Food" } });
   fireEvent.change(screen.getByLabelText(/amount spent/i), { target: { value: "10" } });
@@ -153,10 +127,6 @@ describe("AddExpense -- stable add-attempt idempotency id", () => {
     const first = submitAndCaptureCallbacks(mockAddMutate, 0);
 
     // Parent transitions into edit mode (e.g. user clicked "edit" on an
-    // existing expense) -- the abandoned add attempt's id must not survive.
-    // Awaits the real edit-load effect's fetchQuery() call to settle (its
-    // resolved value is asserted deterministically, not timing-guessed)
-    // before continuing, so no state update lands outside act().
     await act(async () => {
       rerender(<AddExpense isEdit={{ enableEdit: true, expense_id: "some-expense-id" }} setIsEdit={jest.fn()} />);
     });
@@ -296,8 +266,6 @@ describe("AddExpense -- genuine failure and idempotency-conflict UX", () => {
 });
 
 // Category Normalization -- single implementation pass, required test
-// scenarios #17 ("edit-open displays mechanically normalized historical
-// category") and #18 ("unknown categories still render/submit normally").
 describe("AddExpense -- Category Normalization: edit-load display and unknown-category submit", () => {
   beforeEach(() => {
     useAddExpenseMutation.mockReturnValue({ mutate: jest.fn() });
@@ -321,9 +289,6 @@ describe("AddExpense -- Category Normalization: edit-load display and unknown-ca
     await waitFor(() => expect(queryClient.fetchQuery).toHaveBeenCalled());
 
     // Same mechanical cleanup AddExpense.js's own submit-time
-    // normalizeCategory already applies: trim + collapse whitespace +
-    // Title-Case each word. This is a display/UX aid only -- the backend
-    // remains the authoritative normalizer/validator.
     await waitFor(() =>
       expect(screen.getByLabelText(/category/i).value).toBe("Medical Checkup")
     );

@@ -1,12 +1,4 @@
 // Batch 3B.1: unit proof of sia/idempotencyService.js's own state machine
-// and of models/SiaRequest.js's index declarations.
-//
-// models/SiaRequest.js is mocked here (same convention as
-// tests/sia.sessionService.test.js) -- these tests prove the SERVICE's
-// logic: which outcome each prior state produces, that ownership is a real
-// compare-and-set, and that a fingerprint mismatch is a conflict. The
-// controller-level consequences are proven separately in
-// tests/sia.ask.idempotency.test.js.
 "use strict";
 
 const MODEL_PATH = "../models/SiaRequest";
@@ -253,21 +245,6 @@ describe("sia/idempotencyService -- reserveRequest outcomes", () => {
   });
 
   // Batch 3G narrow regression: the audit found that evaluateExisting()'s
-  // ANSWER_READY branch, unlike its PROCESSING sibling immediately below in
-  // this same function, never checked processingExpiresAt at all before
-  // attempting a takeover -- so a duplicate request arriving in the window
-  // between markAnswerReady() (which DOES renew the lease -- see
-  // idempotencyService.js) and the original owner finishing finalizeAnswer()
-  // could immediately steal ownership via the compare-and-set (which still
-  // matches, because the original owner hasn't changed its own ownerToken
-  // yet -- it's still working). That would let TWO finalizers run
-  // concurrently for the same first turn: the original (still executing
-  // with its now-stale, silently-superseded ownerToken) and the taker, each
-  // independently creating/appending a session for what the user experiences
-  // as one submission. This test proves the corrected behavior: a live
-  // (unexpired) ANSWER_READY lease is never taken over -- the caller is told
-  // IN_PROGRESS, the exact same outcome a live PROCESSING lease already
-  // produces, and no compare-and-set write is attempted at all.
   it("a LIVE (unexpired) ANSWER_READY lease is never taken over -- returns IN_PROGRESS, matching the live-PROCESSING behavior", async () => {
     const { service, requestDocs } = loadService();
     const ready = {
@@ -288,8 +265,6 @@ describe("sia/idempotencyService -- reserveRequest outcomes", () => {
 
     expect(result.outcome).toBe(service.OUTCOME.IN_PROGRESS);
     // The decisive assertion: no takeover write is even attempted while the
-    // lease is live -- a second finalizer must never be given the chance to
-    // start, not merely be expected to lose a race it should never enter.
     expect(requestDocs.findOneAndUpdate).not.toHaveBeenCalled();
   });
 

@@ -3,11 +3,6 @@ import { render, screen, cleanup, within } from "@testing-library/react";
 import AnomalyInsights from "./AnomalyInsights";
 
 // Material, history-based spending-review section.
-//
-// Renders the REAL component against report shapes the backend genuinely
-// produces (see backend/analytics/analyzers/expenseAnomalyAnalyzer.js) --
-// nothing about anomaly detection is mocked, so these assert user-visible
-// behavior rather than internal props.
 
 afterEach(() => {
   cleanup();

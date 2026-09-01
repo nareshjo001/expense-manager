@@ -4,18 +4,11 @@ module.exports = {
       minimumSampleSize: 5,
       floorAmount: 50,
       // Threshold = max(floorAmount, median expense * this multiplier).
-      // Median, not mean — one large one-off bill (rent, insurance)
-      // shouldn't drag the "typical" expense size up and silently
-      // reclassify what counts as "micro" that month.
       medianMultiplier: 0.18,
     },
  
     impulseSpending: {
       // Judgment call, worth revisiting against your real category
-      // taxonomy: "Food" here means ALL food spend, including
-      // groceries, which are a necessity, not an impulse buy. If you
-      // can distinguish "Dining Out"/"Food Delivery" from "Groceries,"
-      // only the discretionary one belongs here.
       categories: ["Shopping", "Entertainment", "Food", "Personal Care"],
     },
  
@@ -32,17 +25,12 @@ module.exports = {
     ],
  
     // Weekend-skew only, not symmetric deviation from 1.0 — intentional.
-    // Weekday spend tends to be necessity-driven (commute, lunch);
-    // weekend spend is more discretionary, so this specifically flags
-    // weekend OVERspend rather than penalizing being weekday-heavy too.
     weekendRatio: {
       balancedMax: 1.2,
       scores: { balanced: 5, unbalanced: 2 },
     },
  
     // Both penalties below scale with how far past the threshold the
-    // user is, instead of a flat cliff-edge deduction (8 subscriptions
-    // = 0 penalty, 9 = full penalty was the original behavior).
     subscriptionPenalty: {
       threshold: 8,
       perExtra: 0.75,

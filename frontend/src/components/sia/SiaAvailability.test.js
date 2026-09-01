@@ -6,13 +6,6 @@ import { getSiaStatus, getSiaSessions, getSiaSessionMessages, deleteSiaSession }
 import { askSia } from "../../api/siaApi";
 
 // Batch 3E: runtime availability / graceful degradation.
-//
-// Renders the REAL SiaEntryPoint + SiaPanel + useSiaConversation +
-// useSiaStatusQuery stack (only the API layer is mocked), so these tests
-// prove the actual user-visible behaviour rather than a component's props.
-// The API modules are mocked -- matching this repository's established
-// convention -- so the real axios instance (ESM, untransformed by CRA's
-// Jest config) is never imported through the component tree.
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 jest.mock("../../api/siaSessionsApi", () => ({
   getSiaStatus: jest.fn(),
@@ -21,21 +14,12 @@ jest.mock("../../api/siaSessionsApi", () => ({
   deleteSiaSession: jest.fn(),
 }));
 // Workstream 3: SiaEntryPoint -> SiaPanel now transitively renders
-// SiaVoiceRecorderControls -> useSiaVoiceRecorder -> siaVoiceApi.js, which
-// imports the shared axios instance -- mocked for the same ESM-import
-// reason as the mock above. No test in this file exercises voice
-// recording (see SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js).
 jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
 const originalFlag = process.env[ENV_KEY];
 
 // This jsdom environment exposes no `crypto` global at all, so a Web Crypto
-// source is installed for the duration of these tests -- the same shim
-// SiaConversation.test.js already uses. It stands in for the environment,
-// not for the code under test: the real createClientMessageId still runs,
-// and without a secure source it correctly throws rather than producing a
-// weak idempotency key.
 const originalCrypto = window.crypto;
 beforeAll(() => {
   Object.defineProperty(window, "crypto", {
@@ -66,8 +50,6 @@ function setFlag(value) {
 }
 
 // This project's CRA Jest config enables `resetMocks`, which clears any
-// implementation supplied in a jest.mock factory before each test, so the
-// default shapes are (re)installed here.
 beforeEach(() => {
   setFlag("true");
   getSiaSessions.mockResolvedValue({ success: true, sessions: [] });
@@ -254,16 +236,6 @@ describe("SIA availability -- fails closed", () => {
     openPanel();
 
     // Bounded wait, not a sleep: useSiaStatusQuery.js hardcodes `retry: 1`
-    // on the query itself, which takes precedence over this test's
-    // client-level `retry: false` default. For the "a rejected request"
-    // case specifically, that means TanStack performs one real retry with
-    // its default ~1000ms backoff before the query settles into its error
-    // state -- the same intentional retry lifecycle already documented in
-    // the "SIA availability -- retry" describe block below. findByText's
-    // implicit 1000ms default sits right at that boundary, which is fine
-    // running this file alone but can tip over under full-suite CPU
-    // contention. 3000ms comfortably covers the retry + backoff without
-    // masking a genuine failure to reach the unavailable state.
     await screen.findByText(UNAVAILABLE_TEXT, {}, { timeout: 3000 });
     expect(composer()).toBeDisabled();
     expect(askButton()).toBeDisabled();
@@ -287,10 +259,6 @@ describe("SIA availability -- fails closed", () => {
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
     openPanel();
     // Same bounded wait as the parameterized "a rejected request" case
-    // above: this is also a genuinely rejected getSiaStatus call, so it
-    // hits useSiaStatusQuery.js's real `retry: 1` and its ~1000ms default
-    // backoff before settling into the error state -- findByText's
-    // implicit 1000ms default sits right at that boundary.
     await screen.findByText(UNAVAILABLE_TEXT, {}, { timeout: 3000 });
 
     const text = container.textContent;
@@ -304,17 +272,11 @@ describe("SIA availability -- fails closed", () => {
 describe("SIA availability -- retry", () => {
   it("Retry refetches status and recovers to the working experience", async () => {
     // Every initial attempt fails. Note the hook's bounded `retry: 1` means
-    // TanStack itself makes one extra attempt before settling into the
-    // error state -- so the mock must reject for ALL of them, otherwise the
-    // automatic retry would silently "recover" and this test would never
-    // exercise the user-driven Retry control at all.
     getSiaStatus.mockRejectedValue(new Error("temporary failure"));
 
     renderEntryPoint();
     openPanel();
     // Generous timeout on purpose: the hook's bounded `retry: 1` adds
-    // TanStack's own backoff delay before the query finally settles into
-    // its error state, which exceeds findByText's 1s default.
     await screen.findByText(UNAVAILABLE_TEXT, {}, { timeout: 5000 });
     const callsBeforeRetry = getSiaStatus.mock.calls.length;
 

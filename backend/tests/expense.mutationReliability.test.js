@@ -1,20 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-//
-// Controller/route-level coverage for the add/edit/delete expense contract
-// change: a committed primary write must never be reported as a failure
-// merely because derived budget/report synchronization failed afterward,
-// and a retried add-expense request must be recognized as a safe replay
-// (or rejected as a genuine conflict) rather than creating a duplicate.
-//
-// Runs under the default backend/jest.config.js (npm test) -- never touches
-// MongoDB, Redis, or the network. Follows the same isolation convention as
-// tests/report.contract.test.js: the real app, real rate limiter, real
-// routes, real verifyToken/expenseValidation middleware, and real
-// Controllers/ExpenseControllers/*.js all execute for real; only their two
-// seams (../config/Schemas model access and
-// ../Services/syncRecoveryService) plus ../utils/expenseCache are mocked.
-// Every test calls jest.resetModules() and requires a fresh ../app AFTER
-// its own jest.doMock calls, mirroring that file's loadApp() pattern.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -79,9 +63,6 @@ const PENDING_REPORT_RESULT = {
 };
 
 // Loads a fresh Express app with ../config/Schemas, ../Services/
-// syncRecoveryService, and ../utils/expenseCache mocked -- exactly the
-// three seams Controllers/ExpenseControllers/*.js call through. Every
-// other module (routes, middleware, the controllers themselves) is real.
 function loadApp({
   findByIdImpl,
   findOneImpl,
@@ -99,13 +80,6 @@ function loadApp({
   const saveMock = jest.fn(saveImpl || (async function () {}));
 
   // A minimal stand-in for `new ExpenseModel(doc)` -- config/Schemas.js's
-  // real expenseSchema is not needed here since every field the
-  // controllers read back off the saved document (expenseDate, etc.) is
-  // exactly what was assigned onto `this` at construction time. expenseDate
-  // is cast to a real Date the same way Mongoose's real `type: Date` field
-  // would, since Controllers/ExpenseControllers/addexpense.js relies on
-  // newExpense.expenseDate being a Date instance (not the raw request
-  // string) when building synchronizeAfterMutation's budgetDates.
   function ExpenseModelMock(doc) {
     Object.assign(this, doc);
     if (this.expenseDate !== undefined) {
@@ -115,12 +89,6 @@ function loadApp({
   }
   ExpenseModelMock.findOne = findOneMock;
   // Phase C.2 -- editExpense.js now requests `{new:false}` (the PRIOR
-  // document) and calls `.toObject()` on whatever findOneAndUpdate
-  // resolves to, to reconstruct the post-update response without trusting
-  // a (potentially stale) pre-write snapshot. Per-test `findOneAndUpdateImpl`
-  // overrides return plain fixture objects with no such method -- wrap
-  // whatever they resolve to with a `.toObject()` if it doesn't already
-  // have one, exactly like a real Mongoose document would.
   const findOneAndUpdateBase = findOneAndUpdateImpl || (async () => null);
   ExpenseModelMock.findOneAndUpdate = jest.fn(async (...args) => {
     const result = await findOneAndUpdateBase(...args);
@@ -149,27 +117,12 @@ function loadApp({
     synchronizeAfterMutationImpl || (async () => SYNCHRONIZED_RESULT)
   );
   // Phase C.1 -- addexpense.js/editExpense.js/deleteExpense.js now also call
-  // reserve() BEFORE their primary write. Default resolves fixed, inert
-  // tokens so tests that don't care about the reservation plumbing itself
-  // still exercise the full call chain; tests that DO care assert on
-  // reserveMock's own call args and/or on the tokens synchronizeAfterMutation
-  // received.
-  // Phase C.3 -- edit/delete now take a single BROAD reservation
-  // (reserveUserWide:true) before their primary write instead of naming a
-  // specific month; add still names its one known month directly. Default
-  // resolves fixed, inert tokens for both shapes so tests that don't care
-  // about the reservation plumbing itself still exercise the full call
-  // chain.
   const reserveMock = jest.fn(async () => ({
     budgetReservations: [{ month: new Date("2026-01-01T00:00:00.000Z"), token: "budget-token-1" }],
     reportReservation: { token: "report-token-1" },
     userWideReservation: { token: "user-wide-token-1" },
   }));
   // Phase C.2 -- addexpense.js/editExpense.js/deleteExpense.js now also
-  // call abandon() (on the E11000 replay path, on a not-found/prior-write-
-  // never-happened path, and in every outer catch block) -- omitting this
-  // from the mock throws "abandon is not a function" the first time any
-  // covered code path reaches it.
   const abandonMock = jest.fn(async () => null);
   jest.doMock(SYNC_RECOVERY_SERVICE_PATH, () => ({
     synchronizeAfterMutation: synchronizeAfterMutationMock,
@@ -190,9 +143,6 @@ function loadApp({
   }));
 
   // Recurring-state authority remediation -- addexpense.js's replay path
-  // and editExpense.js now call annotateRecurringState, which queries
-  // RecurringExpenseModel. No recurring definitions exist in this file's
-  // scenarios.
   jest.doMock(RECURRING_MODEL_PATH, () => ({
     RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
@@ -240,9 +190,6 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
     expect(saveMock).toHaveBeenCalledTimes(1);
     expect(synchronizeAfterMutationMock).not.toHaveBeenCalled();
     // Phase C.4 requirement #1 -- a non-E11000 rejection does NOT
-    // conclusively prove the insert never landed at the server. The
-    // reservation must survive for a later read to repair, whichever way
-    // the write actually resolved.
     expect(abandonMock).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
@@ -282,8 +229,6 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
     expect(res.status).toBe(409);
     expect(saveMock).toHaveBeenCalledTimes(1);
     // Phase C.4 requirement #1 -- E11000 is the one error shape MongoDB's
-    // unique index guarantees is a conclusive proof this exact insert
-    // never landed -- abandon() legitimately runs.
     expect(abandonMock).toHaveBeenCalledTimes(1);
     expect(abandonMock).toHaveBeenCalledWith(
       expect.objectContaining({ budgetTokens: ["budget-token-1"], reportToken: "report-token-1" })
@@ -309,10 +254,6 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
     // The primary write itself DID commit.
     expect(saveMock).toHaveBeenCalledTimes(1);
     // The failure is entirely downstream (derived-data sync) -- the
-    // reservation protecting this already-committed expense must survive
-    // untouched for a later repair to find. Abandoning it here would
-    // silently and permanently lose the only durable evidence for a
-    // committed mutation.
     expect(abandonMock).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
@@ -343,8 +284,6 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
     // Middlewares/AuthValidation.js's real expenseValidation ran (not a
-    // mocked stand-in) -- the controller (and therefore the user lookup)
-    // was never reached.
     expect(findByIdMock).not.toHaveBeenCalled();
   });
 
@@ -357,8 +296,6 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
       .send(validAddPayload({ id: "client-generated-uuid-abc123" }));
 
     // The exact same id string that passed real Joi validation is what
-    // reaches the ownership-scoped idempotency lookup -- middleware does
-    // not transform, trim, or replace it.
     expect(findOneMock).toHaveBeenCalledWith({ userId: USER_ID, id: "client-generated-uuid-abc123" });
   });
 });
@@ -410,13 +347,8 @@ describe("POST /expense/add-expense -- committed success, synchronized vs pendin
 
   it("still returns 201 even if cache clearing rejects -- clearUserExpenseCache failing must not fail the request", async () => {
     // utils/expenseCache.js's real clearUserExpenseCache never rejects (see
-    // tests/expenseCache.reliability.test.js), but this proves the
-    // add-expense success response the user actually sees does not depend
-    // on that self-catching behavior surviving unmodified elsewhere.
     const { app, synchronizeAfterMutationMock } = loadApp();
     // no-op: this suite intentionally does not simulate a rejecting cache
-    // mock here (that would misrepresent production, where the real cache
-    // module cannot reject) -- see the dedicated cache suite instead.
     const res = await request(app)
       .post("/expense/add-expense")
       .set("Authorization", `Bearer ${signToken(USER_ID)}`)
@@ -446,8 +378,6 @@ describe("POST /expense/add-expense -- idempotency", () => {
       expenseAmount: 5.5,
       expenseDate: "2026-01-15T00:00:00.000Z",
       // Recurring-state authority remediation -- buildReplayResponse now
-      // annotates every replay with the authoritative isRecurring; no
-      // definition exists in this fixture, so it is explicitly false.
       isRecurring: false,
     };
     const { app, saveMock, synchronizeAfterMutationMock } = loadApp({
@@ -503,15 +433,11 @@ describe("POST /expense/add-expense -- idempotency", () => {
       expenseAmount: 5.5,
       expenseDate: "2026-01-15T00:00:00.000Z",
       // Recurring-state authority remediation -- buildReplayResponse now
-      // annotates every replay with the authoritative isRecurring; no
-      // definition exists in this fixture, so it is explicitly false.
       isRecurring: false,
     };
     let call = 0;
     const { app, synchronizeAfterMutationMock } = loadApp({
       // First lookup (pre-write check) finds nothing; a concurrent request
-      // wins the race and inserts first. The second lookup (post-E11000
-      // reconciliation) finds that winner.
       findOneImpl: () => ({
         lean: jest.fn().mockImplementation(async () => {
           call += 1;
@@ -696,13 +622,6 @@ describe("PUT /expense/update-expense -- committed success, synchronized vs pend
     expect(res.body.derivedData).toEqual(SYNCHRONIZED_RESULT);
     expect(res.body.replayed).toBe(false);
     // Phase C.3 -- editExpense.js no longer makes a pre-write budgetDates
-    // guess or a second post-write reservation call; a single broad
-    // userWideReservation (taken before the write) covers the true
-    // result, and the final recompute target is simply the TRUE discovered
-    // month(s) (from findOneAndUpdate's own `{new:false}` result). This
-    // fixture's mock returns the identical fixed `updatedExpense` doc
-    // regardless of the `{new:false}` option, so old/new compare equal and
-    // only the single true month is targeted.
     expect(synchronizeAfterMutationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
@@ -743,19 +662,12 @@ describe("PUT /expense/update-expense -- committed success, synchronized vs pend
 
     expect(res.status).toBe(200);
     // Phase C.3 -- editExpense.js now reserves a single BROAD,
-    // month-agnostic reservation BEFORE the primary write instead of
-    // guessing the affected month(s) upfront -- see reserve()'s
-    // reserveUserWide doc comment for why this is what actually closes the
-    // post-write corrective-reservation gap.
     expect(reserveMock).toHaveBeenCalledWith({
       userId: USER_ID,
       reserveUserWide: true,
       reserveReport: true,
     });
     // The final recompute target is the TRUE discovered month(s) only
-    // (this fixture's mock returns `newDate` as BOTH the "prior" and
-    // reconstructed-"new" state, so old/new compare equal and only the
-    // single true new month is targeted).
     expect(synchronizeAfterMutationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
@@ -815,9 +727,6 @@ describe("DELETE /expense/delete-expense -- committed success, synchronized vs p
   const deletedExpense = { _id: EXPENSE_ID, expenseDate: new Date("2026-01-15T00:00:00.000Z") };
 
   // Phase C.1 -- deleteExpense.js now performs a PRE-delete read (to learn
-  // the expense's month before reserve()) via ExpenseModel.findOne(...).lean(),
-  // in addition to the actual findOneAndDelete. Both must resolve the same
-  // document for these tests.
   function loadDeleteApp(overrides = {}) {
     return loadApp({
       findOneImpl: () => ({ lean: jest.fn().mockResolvedValue(deletedExpense) }),
@@ -842,11 +751,6 @@ describe("DELETE /expense/delete-expense -- committed success, synchronized vs p
       replayed: false,
     });
     // Phase C.3 -- deleteExpense.js now takes a single BROAD,
-    // month-agnostic reservation BEFORE the primary delete, instead of
-    // C.2's pre-read-month reserve() followed by a second post-write
-    // corrective reserve() call -- see reserve()'s reserveUserWide doc
-    // comment for why this closes the post-write corrective-reservation
-    // gap.
     expect(reserveMock).toHaveBeenCalledWith({
       userId: USER_ID,
       reserveUserWide: true,

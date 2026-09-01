@@ -38,10 +38,6 @@ const BUDGET_ACTION_EXCLUSION_PATTERN = new RegExp(
 );
 
 // -- CATEGORY_SPENDING_EXPLANATION ------------------------------------
-//
-// Every concept below maps to a field contextBuilder.js's CATEGORY_SPENDING_EXPLANATION context actually guarantees (topCategory/leastCategory, categoryDistribution's amount+percentage, concentrationIndex, top3Concentration, categoryGrowth's fields) -- classification is never broader than what the context supports.
-//
-// Two ways a question can be category-focused: (1) says "category"/"categories" explicitly.
 const CATEGORY_WORD_PATTERN = /\bcategor(?:y|ies)\b/;
 // (2) names a specific spending area possessively/attributively ("my grocery spending") rather than asking about spending overall. Deliberately NOT a hard-coded category list (categories are user-defined): matches the grammatical SHAPE of a modifier word before spending/expenses, or a noun before "account(s) for". Overall/time-based modifiers are excluded so "my monthly spending" never looks category-named; pronouns/auxiliaries are included so "did I spend" isn't mistaken for a category name; the twelve full month names are included so a time-scoped question isn't treated as naming a category (abbreviations are deliberately excluded as plausible user category names); forecast-qualifier words ("projected", "predicted", etc.) are included so "projected spending" isn't mistaken for a category named "projected" (that's SPENDING_FORECAST_EXPLANATION's territory).
 const OVERALL_MODIFIERS =
@@ -92,10 +88,6 @@ const CATEGORY_NOT_APPLICABLE = "CATEGORY_NOT_APPLICABLE";
 
 function evaluateCategoryQuestion(normalized) {
   // The share-of-spending shape encodes BOTH the category topic and the
-  // share question in one pattern, so it needs no separate intent verb --
-  // "How much of my spending comes from Dining?" contains no word from
-  // CATEGORY_INTENT_VERB_PATTERN, yet is unambiguously a category-share
-  // question that categoryDistribution's percentages can answer.
   const asksCategoryShare = CATEGORY_SHARE_OF_SPENDING_PATTERN.test(normalized);
 
   const namesCategory =
@@ -146,41 +138,16 @@ const RISK_TOPIC_PATTERN = /\b(financial risks?|risks?|risky)\b/;
 const RISK_VERB_PATTERN = /\b(why|explain|do i have|have any|is there|risk status|current risk|financial risk status)\b/;
 
 // -- CURRENT_SPENDING_SUMMARY -----------------------------------------
-//
-// A bare "what's my current-month total?" lookup question -- NOT an
-// explanation, comparison, forecast, category breakdown, or advice
-// request. Checked strictly LAST, after all seven existing intents above
-// have already had a chance to claim the question, so it can never steal
-// a genuine health/spending-change/budget/category/anomaly/forecast/risk
-// question that merely happens to also mention "spend"/"this month"/
-// "how much" -- those intents all return before this point is reached.
-//
-// Requires THREE independent signal groups to ALL be true (not one
-// sentence-shaped regex): (1) a spending topic word, (2) an explicit
-// CURRENT-period phrase (never a bare "this"/implicit period, and never a
-// past/named month -- that is what actually distinguishes this from the
-// existing, deliberately-null "How much did I spend?" case), and (3) a
-// total/amount lookup word. Every concept maps to exactly the one field
-// contextBuilder.js's CURRENT_SPENDING_SUMMARY context will supply --
-// summary.totalSpent -- so classification is never broader than what the
-// context can ground.
 const SPENDING_SUMMARY_TOPIC_PATTERN =
   /\b(spend|spent|spending|expense|expenses|expenditure|expenditures)\b/;
 
 // Curly apostrophes normalized to straight ones and hyphens normalized to
-// spaces before this is tested (see normalizeForCurrentPeriod below), so
-// "current month's" and "month-to-date"/"month to date" are all covered
-// by these plain-space phrases without needing separate hyphen-tolerant
-// alternatives.
 const CURRENT_PERIOD_PATTERN =
   /\b(this month|current month|month to date|so far this month)\b/;
 
 const TOTAL_LOOKUP_PATTERN = /\b(how much|total|amount|what is|tell me)\b/;
 
 // Curly-apostrophe collapse + hyphen-to-space + whitespace collapse,
-// scoped ONLY to the CURRENT_SPENDING_SUMMARY check below -- every other
-// intent's patterns above continue to run against the plain
-// trim()+toLowerCase() `normalized` string exactly as before, unchanged.
 function normalizeForCurrentPeriod(normalized) {
   return normalized
     .replace(/[‘’]/g, "'")
@@ -190,23 +157,6 @@ function normalizeForCurrentPeriod(normalized) {
 }
 
 // Excludes any question already recognizable as a change/comparison
-// question (reuses SPENDING_CHANGE_VERB_PATTERN verbatim -- "why did my
-// spending increase this month" must never be double-claimed), a budget
-// question (reuses CATEGORY_WORD_PATTERN/NAMED_AREA_SPENDING_PATTERN/
-// ACCOUNTS_FOR_PATTERN/CATEGORY_SHARE_OF_SPENDING_PATTERN -- the exact same
-// "names a category" shapes evaluateCategoryQuestion() uses -- as a
-// defensive backstop; a genuine CATEGORY_MATCH/CATEGORY_AMBIGUOUS question
-// already returned above before this function is ever reached, but a
-// category-NAMED, verb-less question such as "How much is my grocery
-// spending this month?" reaches CATEGORY_NOT_APPLICABLE and falls through
-// to here, so it must still be excluded rather than answered from a
-// total-only context that has no category breakdown), a forecast question
-// (reuses the three existing forecast patterns verbatim), advice/
-// recommendation language ("should i spend" / "can i spend" must never be
-// read as a total lookup), a raw transaction/list/detail request (a list
-// of transactions is not a single total), or historical/named-month
-// wording (a bare "last month" or a named month is explicitly NOT a
-// current-period phrase, and is excluded again here defensively).
 const SUMMARY_ADVICE_EXCLUSION_PATTERN =
   /\b(should|can|could|advice|advise|recommend|recommendation)\b/;
 const SUMMARY_LOOKUP_EXCLUSION_PATTERN =
@@ -215,11 +165,6 @@ const SUMMARY_HISTORICAL_EXCLUSION_PATTERN =
   /\b(last month|previous month|prior month|january|february|march|april|may|june|july|august|september|october|november|december)\b/;
 
 // A preposition after a spending topic names a spending area (for example,
-// "spent on Food" or "spending for Travel"). The current-summary context
-// only has the overall total, so this shape must reach semantic routing,
-// where the existing CATEGORY_TOTAL lookup can be planned. Time and overall
-// modifiers stay excluded, preserving ordinary totals such as "spending for
-// this month" on the deterministic current-summary path.
 const SUMMARY_NAMED_CATEGORY_PREPOSITION_PATTERN = new RegExp(
   "\\b(?:spend|spent|spending|expense|expenses|expenditure|expenditures)\\s+" +
     "(?:on|for|in)\\s+(?:(?:the|my)\\s+)?" +
@@ -240,13 +185,6 @@ function isCurrentSpendingSummaryQuestion(normalized) {
   if (SPENDING_CHANGE_VERB_PATTERN.test(s)) return false;
   if (BUDGET_TOPIC_PATTERN.test(s)) return false;
   // NAMED_AREA_SPENDING_PATTERN is tested against the current-period phrase
-  // STRIPPED OUT of `s` -- "month to date"/"month-to-date" itself ends in a
-  // word ("date") immediately followed by "spend" ("...month to date
-  // spend?"), which would otherwise be misread as a category named "date".
-  // Stripping the matched period phrase first removes that false trigger
-  // while leaving a genuine category mention ("grocery spending this
-  // month") completely unaffected, since the period phrase there is a
-  // separate trailing word group, not adjacent to the topic word.
   const withoutCurrentPeriodPhrase = s.replace(CURRENT_PERIOD_PATTERN, " ");
   if (
     CATEGORY_WORD_PATTERN.test(s) ||
@@ -326,9 +264,6 @@ function classifyIntent(question) {
   }
 
   // Checked strictly LAST -- every other supported intent above has
-  // already had a chance to claim the question and return, so this can
-  // only ever catch a genuine bare current-month total lookup that none
-  // of the other six intents' more specific patterns recognized.
   if (isCurrentSpendingSummaryQuestion(normalized)) {
     return CURRENT_SPENDING_SUMMARY;
   }

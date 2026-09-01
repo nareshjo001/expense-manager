@@ -13,19 +13,10 @@ import {
 import { askSia } from "../../api/siaApi";
 
 // This project’s CRA Jest resolver cannot load react-router-dom directly;
-// the provider needs only the current pathname, so keep routing mocked at
-// this boundary just as other frontend route-dependent tests do.
 jest.mock("react-router-dom", () => ({ useLocation: jest.fn() }), { virtual: true });
 const { useLocation } = require("react-router-dom");
 
 // Batch 3G: the shared contextual launcher's end-to-end contract.
-//
-// Renders the REAL SiaLauncherProvider -> SiaEntryPoint -> SiaPanel ->
-// useSiaConversation -> useSiaStatusQuery stack (only the API layer is
-// mocked), exactly like SiaAvailability.test.js does for the base panel --
-// so these tests prove actual user-visible behavior (what text ends up in
-// the composer, what has focus, whether the panel opens) rather than a
-// component's internal props.
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 jest.mock("../../api/siaSessionsApi", () => ({
   getSiaStatus: jest.fn(),
@@ -34,10 +25,6 @@ jest.mock("../../api/siaSessionsApi", () => ({
   deleteSiaSession: jest.fn(),
 }));
 // Workstream 3: this stack now transitively renders SiaPanel ->
-// SiaVoiceRecorderControls -> useSiaVoiceRecorder -> siaVoiceApi.js, which
-// imports the shared axios instance -- mocked for the same ESM-import
-// reason as the two mocks above. No test in this file exercises voice
-// recording (see SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js).
 jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
@@ -90,8 +77,6 @@ afterEach(() => {
 });
 
 // A minimal consumer used only to prove that an UNKNOWN suggestion id
-// fails closed -- this is the one scenario SiaAskButton itself cannot
-// exercise, since it only ever passes fixed, real ids.
 function RawLauncherButton({ suggestionId }) {
   const launcher = useSiaLauncher();
   return (
@@ -118,14 +103,6 @@ const composer = () => screen.getByLabelText(/your question/i);
 const askButtonEl = () => screen.getByRole("button", { name: "Ask" });
 
 // The status query is only started (not necessarily settled) by the time
-// `getSiaStatus` has been called -- a bare click immediately afterward can
-// race the query's own resolution, during which `blockedByAvailability` is
-// legitimately true (the SAME "checking" state SiaAvailability.test.js
-// covers). Tests that specifically want to observe the AVAILABLE prefill
-// path settle first, exactly like SiaAvailability.test.js's own "available"
-// describe block does: open the base launcher, wait for the composer to
-// become enabled (proof the query resolved to available: true), then close
-// it again so the scenario under test starts from a closed panel.
 async function settleAvailability() {
   fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
   await waitFor(() => expect(composer()).not.toBeDisabled());
@@ -252,18 +229,6 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
   });
 
   // Batch 3G remediation: contextual focus-signal replay regression.
-  //
-  // The audit found that because SiaPanel fully unmounts on close,
-  // `focusRequestVersion` (owned by SiaEntryPoint, which never unmounts)
-  // stays nonzero after a contextual launch. Before the fix, a later
-  // ORDINARY (non-contextual) reopen remounted SiaPanel, whose focus effect
-  // reran with the SAME already-consumed version and incorrectly replayed
-  // the contextual focus behavior (forcing focus onto Retry, even though
-  // this open was never a contextual click). These tests prove the fix:
-  // an acknowledgement ref owned by SiaEntryPoint (survives the SiaPanel
-  // unmount) prevents an already-handled version from ever being
-  // reprocessed, while still correctly firing every genuinely NEW
-  // contextual launch.
   describe("contextual focus-signal replay (Batch 3G remediation)", () => {
     it("a genuinely new contextual launch (first click) still moves focus to the composer", async () => {
       renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
@@ -289,8 +254,6 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
       await waitFor(() => expect(firstInput).toHaveFocus());
 
       // Move focus elsewhere and close via an ordinary close/reopen cycle
-      // in between, then launch a SECOND, different contextual button --
-      // this is a genuinely NEW version and must still focus.
       fireEvent.click(screen.getByRole("button", { name: "Close SIA" }));
       await waitFor(() => expect(screen.queryByLabelText(/your question/i)).not.toBeInTheDocument());
 
@@ -311,16 +274,12 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
       await waitFor(() => expect(retryBtn).toHaveFocus());
 
       // Close (unmounts SiaPanel; focusRequestVersion in SiaEntryPoint
-      // stays at its already-handled value) and reopen via the PLAIN,
-      // non-contextual "Ask SIA" button.
       fireEvent.click(screen.getByRole("button", { name: "Close SIA" }));
       await waitFor(() => expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument());
       fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
 
       const reopenedRetryBtn = await screen.findByRole("button", { name: "Retry" });
       // The regression: without the fix, this ordinary reopen would replay
-      // the stale (already-consumed) focus request and force focus onto
-      // Retry again, even though this open was never a contextual click.
       await waitFor(() => expect(reopenedRetryBtn).not.toHaveFocus());
     });
 
@@ -344,9 +303,6 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
       await waitFor(() => expect(input).toHaveFocus());
 
       // Move focus away deliberately, then continue interacting (typing
-      // further, which changes conversation/message state but not
-      // focusRequestVersion) -- this must NOT re-run the already-handled
-      // focus request and pull focus back to the composer on its own.
       const closeBtn = screen.getByRole("button", { name: "Close SIA" });
       closeBtn.focus();
       expect(input).not.toHaveFocus();
@@ -416,16 +372,6 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
 });
 
 // Batch 3G remediation: the audit found the architecture's render-isolation
-// and Context-value-stability claims were correct in production code
-// (SiaLauncherContext.js already wraps { openSiaWithQuestion } in
-// useMemo(..., [openSiaWithQuestion])) but were NOT proven by any shipped
-// test -- a stable CALLBACK identity is not the same claim as a stable
-// CONTEXT VALUE identity, and neither was empirically demonstrated against
-// the real provider/entry-point stack. These tests close that gap. Each
-// would fail if SiaLauncherContext.js's `contextValue` were changed back to
-// an inline object literal (`{ openSiaWithQuestion }` recreated every
-// render), or if SiaEntryPoint's internal state were ever lifted into the
-// Provider itself.
 describe("SiaLauncherContext -- render isolation and Context value stability (Batch 3G remediation)", () => {
   it("the Context value object and openSiaWithQuestion retain identity across an unrelated parent rerender", async () => {
     const seenValues = [];
@@ -466,8 +412,6 @@ describe("SiaLauncherContext -- render isolation and Context value stability (Ba
     const firstCallback = firstValue.openSiaWithQuestion;
 
     // Force several rerenders of an ancestor that is completely unrelated
-    // to SIA state -- this remounts nothing, but does cause React to
-    // re-render the whole Harness subtree, including Probe.
     fireEvent.click(screen.getByRole("button", { name: "tick" }));
     fireEvent.click(screen.getByRole("button", { name: "tick" }));
     fireEvent.click(screen.getByRole("button", { name: "tick" }));
@@ -496,10 +440,6 @@ describe("SiaLauncherContext -- render isolation and Context value stability (Ba
     expect(countAfterMount).toBe(1);
 
     // Reopen the base launcher (SiaEntryPoint's own isOpen state) and fire
-    // five sequential composer keystrokes -- all of this state lives
-    // entirely inside SiaEntryPoint, which the Provider renders as a
-    // SIBLING of `children`, not an ancestor of it. This test would fail
-    // (render count > 1) if that ownership boundary were ever violated.
     fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
     await waitFor(() => expect(composer()).not.toBeDisabled());
     fireEvent.change(composer(), { target: { value: "a" } });

@@ -1,11 +1,4 @@
 // siaTranscriptInsertion.js imports MAX_QUESTION_LENGTH from
-// useSiaConversation.js, whose own module graph reaches the shared axios
-// instance (frontend/src/api/axios.js) via useSiaAskMutation/siaApi.js.
-// axios ships as ESM and CRA's Jest config does not transform node_modules,
-// so -- matching this repository's established convention (see
-// siaApi.test.js/SiaPanel.test.js) -- the API layer is mocked here purely
-// to keep the real axios package out of this test file's module graph;
-// nothing in this file ever calls askSia.
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 
 import { insertTranscriptIntoComposer, SIA_TRANSCRIPT_TOO_LONG_MESSAGE } from "./siaTranscriptInsertion";

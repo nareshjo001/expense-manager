@@ -1,10 +1,4 @@
 // Batch 2: context builder coverage for the three new report-backed
-// intents (ANOMALY_EXPLANATION, SPENDING_FORECAST_EXPLANATION,
-// FINANCIAL_RISK_EXPLANATION). Mirrors tests/sia.contextBuilder.test.js's
-// existing jest.doMock(reportService) isolation pattern exactly -- no real
-// MongoDB/Redis/report generation, no top-level jest.mock/require of
-// contextBuilder (loaded fresh per test via a small harness so each test's
-// mocked reportService is isolated).
 "use strict";
 
 const REPORT_SERVICE_PATH = "../Services/reportService";
@@ -117,11 +111,6 @@ describe("backend/sia/contextBuilder -- Batch 2: ANOMALY_EXPLANATION", () => {
 
 describe("backend/sia/contextBuilder -- Batch 2: SPENDING_FORECAST_EXPLANATION", () => {
   // Prediction Layer V1 correction: SIA grounds forecast answers on the
-  // TRUE next-calendar-month horizon. The legacy `nextMonthForecast` field
-  // projects the CURRENT, in-progress month despite its name, so it is no
-  // longer forwarded to the provider at all. The fixture below carries a
-  // deliberately DIFFERENT legacy estimate so the assertions cannot pass by
-  // coincidence.
   it("returns a bounded forecast context with every horizon explicitly marked as an estimate", async () => {
     const report = baseReport({
       forecast: {
@@ -224,9 +213,6 @@ describe("backend/sia/contextBuilder -- Batch 2: FINANCIAL_RISK_EXPLANATION", ()
     const { buildContext } = loadContextBuilderWithReport(report);
     const result = await buildContext("user-1", "FINANCIAL_RISK_EXPLANATION");
     // evidence is copied via JSON clone -- whatever riskAnalyzer.js itself
-    // put there passes through unmodified. This test documents that the
-    // leakage boundary is riskAnalyzer.js's own contract (already proven
-    // leak-free in tests/analytics.risk.test.js), not a second filter here.
     expect(result.fields.risk.signals[0].evidence.percentageChange).toBe(25);
   });
 });

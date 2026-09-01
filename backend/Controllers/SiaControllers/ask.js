@@ -18,8 +18,6 @@ const { isSiaReady } = require("../../sia/readiness");
 const { buildGroundingSnapshot } = require("../../sia/groundingService");
 const { isValidObjectId } = require("mongoose");
 // Semantic routing extends the established deterministic intent path. It
-// receives no financial data and can only produce a locally validated,
-// allowlisted QueryPlan.
 const { runSemanticPipeline } = require("../../sia/semanticPipeline");
 const { buildFinancialSnapshot } = require("../../sia/financialSnapshotService");
 const { answerDirectly } = require("../../sia/directAnswerService");
@@ -203,9 +201,6 @@ const RISK_SYSTEM_PROMPT =
   "non-judgmental.";
 
 // Scopes the model to exactly the one figure CURRENT_SPENDING_SUMMARY's
-// context carries -- summary.totalSpent. A deliberately narrow prompt: no
-// comparison, trend, category, forecast, or transaction-level detail was
-// ever supplied, so none may be invented.
 const CURRENT_SPENDING_SUMMARY_SYSTEM_PROMPT =
   "You are SIA, BALENISA's read-only financial explanation assistant. " +
   "Answer the user's question about their current month's total spending " +
@@ -334,13 +329,6 @@ async function finalizeAnswer({ req, reservation, activeSession, intent, answer,
 }
 
 // Workstream 1 -- runs the EXISTING, UNCHANGED deterministic-intent
-// pipeline (buildContext -> askLlm -> validateGroundedAnswer) for one of
-// the four analytics explanation intents, on behalf of a QueryPlan the
-// semantic router resolved to that same intent. Never reinvents this
-// logic with a FactSet -- HEALTH/ANOMALY/FORECAST/RISK keep using
-// contextBuilder.js/Report exactly as they do for the deterministically-
-// classified path above. Returns a small, uniform shape
-// semanticPipeline.js's `existingIntentHandler` contract expects.
 async function answerExplanationIntentForSemanticPath(userId, explanationIntent, question) {
   const contextResult = await buildContext(userId, explanationIntent);
 
@@ -398,9 +386,6 @@ async function answerExplanationIntentForSemanticPath(userId, explanationIntent,
 }
 
 // Bounded, server-authored clarification response -- the client-visible
-// contract for a `clarification`-outcome QueryPlan. `options` are always
-// server-owned and bounded to at most 5 (enforced by
-// sia/queryPlan.js's validator, re-checked here as a defensive slice).
 const MAX_CLARIFICATION_RESPONSE_OPTIONS = 5;
 function formatClarificationResponse(clarification) {
   return {
@@ -413,12 +398,6 @@ function formatClarificationResponse(clarification) {
 }
 
 // The generic, safe-logging-preserving no-data shape for the semantic
-// path -- deliberately does not name a specific intent's message (unlike
-// formatNoDataResponse, which is intent-keyed for the 8 deterministic
-// intents); the semantic path's metric set varies per question, so a
-// single honest "not enough data" message covers every metric/period
-// combination without inventing per-metric copy this milestone doesn't
-// require.
 function formatSemanticNoDataResponse() {
   return {
     success: true,
@@ -428,9 +407,6 @@ function formatSemanticNoDataResponse() {
 }
 
 // Router/model/grounding/query-execution failures are service failures, not
-// user mistakes. Keep the public payload indistinguishable from every other
-// SIA availability failure; only genuine unsupported/prohibited requests
-// receive the semantic 422 response below.
 function isSemanticUnavailableReason(reasonCode) {
   if (typeof reasonCode !== "string") return false;
   return [
@@ -445,14 +421,6 @@ function isSemanticUnavailableReason(reasonCode) {
 }
 
 // Legacy semantic fallback retained for existing stored request recovery.
-// New questions use the model-first direct path below. It tries, in
-// order: (1) a deterministic prohibited-phrase rejection (0 provider
-// calls); (2) the LLM semantic router (1 router call); (3) either a deterministic
-// financialQueryService-backed answer (0 answer calls), a delegated
-// existing-intent explanation (at most 1 answer call), a semantic
-// EXPLAIN/FORECAST/COMPARE prose answer (1 answer call), a clarification
-// (0 answer calls), or unsupported/no-data (0 answer calls) -- see
-// sia/semanticPipeline.js's own header for the full contract.
 async function handleSemanticFallback({ req, res, reservation, activeSession, requestedClientMessageId, trimmedQuestion }) {
   try {
     const previousPlanSummary = activeSession
@@ -473,12 +441,6 @@ async function handleSemanticFallback({ req, res, reservation, activeSession, re
       existingIntentHandler: (explanationIntent) =>
         answerExplanationIntentForSemanticPath(req.userId, explanationIntent, trimmedQuestion),
       // Idempotency checkpoint: persists the plan BEFORE any
-      // answer-generation call is attempted, so a crash/failure after
-      // this point lets a retry with the same clientMessageId skip the
-      // router call entirely (see sia/idempotencyService.js's
-      // saveRoutingCheckpoint()). Best-effort -- its own failure can
-      // never break the actual response (semanticPipeline.js swallows
-      // any rejection from this hook).
       onPlanResolved: reservation
         ? async (plan) => {
             await idempotencyService.saveRoutingCheckpoint({

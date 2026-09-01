@@ -6,18 +6,8 @@ const config = require("./config");
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 // Gemini's official OpenAI-compatible Chat Completions endpoint (see
-// https://ai.google.dev/gemini-api/docs/openai) -- deliberately the plain
-// REST URL called via the existing axios dependency, not the `openai`
-// client library pointed at a custom baseURL. Both approaches are
-// documented as equivalent by Google; calling the REST endpoint directly
-// avoids adding a new dependency for a single POST request.
 const GEMINI_CHAT_COMPLETIONS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 // Groq's own OpenAI-compatible Chat Completions endpoint (see
-// https://console.groq.com/docs/api-reference#chat-create) -- same
-// rationale as Gemini above: the plain REST URL via the existing axios
-// dependency, no Groq SDK. Live-verified separately (HTTP 200,
-// choices[0].message.content returned) before this adapter was written;
-// no real request is made by anything in this file or its tests.
 const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_STRUCTURED_OUTPUT_NAME_LENGTH = 64;
 const STRUCTURED_OUTPUT_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -53,8 +43,6 @@ function isBlank(value) {
 }
 
 // Structured output is opt-in. Text callers keep their existing request and
-// response shapes; router/synthesis callers can request provider-enforced
-// JSON and receive the locally parsed value as `structuredOutput`.
 function normalizeStructuredOutputRequest(value, provider) {
   if (value === undefined || value === null) return null;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -165,13 +153,6 @@ function extractAnswerText(responseData) {
 }
 
 // Extracts the answer text only from the documented Gemini (OpenAI-compatible
-// Chat Completions) response shape: choices[0].message.content, a plain
-// string -- per https://ai.google.dev/gemini-api/docs/openai, whose own
-// Python/JS examples read the answer as `response.choices[0].message` /
-// `response.choices[0].message.content`. Deliberately narrow: only the first
-// choice's message content is ever read; anything else (missing choices,
-// non-array choices, a non-string content, tool-call-only messages with no
-// content) yields null rather than a guessed value.
 function extractGeminiAnswerText(responseData) {
   const choices = responseData && responseData.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
@@ -189,20 +170,6 @@ function extractGeminiAnswerText(responseData) {
 }
 
 // Extracts the answer text only from the documented Groq (OpenAI-compatible
-// Chat Completions) response shape: choices[0].message.content -- see
-// https://console.groq.com/docs/api-reference#chat-create. Identical
-// extraction logic to extractGeminiAnswerText (same response shape family),
-// kept as its own function so each provider owns its full adapter and
-// extractor independently, matching this file's existing convention (only
-// the REQUEST-building helpers -- buildHistoryMessages/
-// buildUserInputContent -- are shared across providers; response
-// extraction is not). Some Groq models (including the openai/gpt-oss-*
-// reasoning models) return an additional `reasoning` or `reasoning_content`
-// field on the SAME message object alongside `content` -- that field is a
-// provider-internal reasoning trace, never the answer. This function reads
-// ONLY `message.content`; `reasoning`/`reasoning_content` are never
-// accessed, so they can never reach the returned answer, a log line, or
-// persisted storage, regardless of whether the response includes them.
 function extractGroqAnswerText(responseData) {
   const choices = responseData && responseData.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
@@ -344,16 +311,6 @@ async function askOpenAi({ systemPrompt, context, question, history, structuredO
 }
 
 // Real Gemini provider adapter, only reached once the provider is confirmed
-// normalized "gemini". Uses Gemini's official OpenAI-compatible Chat
-// Completions endpoint (https://ai.google.dev/gemini-api/docs/openai) via
-// the existing axios dependency -- no Google/OpenAI SDK. Reads
-// GEMINI_API_KEY directly from process.env (mirrors askOpenAi's own
-// OPENAI_API_KEY handling -- never through the shared config object), and
-// sends it ONLY in the server-side Authorization header, never as a query
-// param, body field, or logged value. The request/failure contract
-// (LlmProviderError codes, `{ answer, model, latencyMs }` success shape)
-// is identical to askOpenAi's -- callers (ask.js, responseValidator.js)
-// never need to know which provider actually answered.
 async function askGemini({ systemPrompt, context, question, history, structuredOutput }) {
   if (isBlank(config.model)) {
     throw new LlmProviderError(
@@ -373,12 +330,6 @@ async function askGemini({ systemPrompt, context, question, history, structuredO
   const normalizedStructuredOutput = normalizeStructuredOutputRequest(structuredOutput, "gemini");
 
   // Chat Completions message array: system prompt first (authoritative
-  // instructions, exactly like `instructions` in the OpenAI adapter),
-  // then the SAME bounded history framing askOpenAi uses (ordinary
-  // user/assistant roles only -- never "system" -- so history stays
-  // structurally unable to override the system prompt here either), then
-  // the current question + structured context as the final user turn,
-  // built by the SAME buildUserInputContent() the OpenAI adapter uses.
   const requestBody = {
     model: config.model,
     messages: [
@@ -443,15 +394,6 @@ async function askGemini({ systemPrompt, context, question, history, structuredO
 }
 
 // Real Groq provider adapter, only reached once the provider is confirmed
-// normalized "groq". Uses Groq's own OpenAI-compatible Chat Completions
-// endpoint (https://console.groq.com/docs/api-reference#chat-create) via
-// the existing axios dependency -- no Groq SDK. Reads GROQ_API_KEY
-// directly from process.env (mirrors askOpenAi's/askGemini's own
-// per-adapter credential handling -- never through the shared config
-// object, never falls back to another provider's key), and sends it ONLY
-// in the server-side Authorization header. Request/failure contract is
-// identical to the other two adapters' -- callers never need to know
-// which provider actually answered.
 async function askGroq({ systemPrompt, context, question, history, structuredOutput }) {
   if (isBlank(config.model)) {
     throw new LlmProviderError(
@@ -471,9 +413,6 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
   const normalizedStructuredOutput = normalizeStructuredOutputRequest(structuredOutput, "groq");
 
   // SAME message construction as askGemini: system prompt first, then the
-  // SAME bounded history framing (ordinary user/assistant roles only), then
-  // the current question + structured context as the final user turn, via
-  // the SAME buildUserInputContent() every adapter uses.
   const requestBody = {
     model: config.model,
     messages: [

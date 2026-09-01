@@ -14,17 +14,6 @@ import { useAddExpenseMutation } from '../../hooks/mutations/useAddExpenseMutati
 import { useUpdateExpenseMutation } from '../../hooks/mutations/useUpdateExpenseMutation';
 
 // Category Normalization -- moved to module scope (react-hooks/exhaustive-
-// deps remediation). sanitizeText/normalizeCategory are purely mechanical:
-// each is a function of its own argument only, with no reference to
-// component state, props, refs, or any other hook -- there is nothing here
-// that could ever go stale between renders, so giving them a stable
-// module-level identity (rather than useCallback, which would still need
-// its own -- trivially empty -- dependency array) is both simpler and
-// correctly satisfies the edit-loading effect's exhaustive-deps requirement
-// without suppressing the lint rule. Behavior is byte-identical to the
-// previous in-component definitions: same trim/whitespace-collapse
-// (sanitizeText), same lowercase-then-Title-Case display casing
-// (normalizeCategory) used identically at submit time and edit-load time.
 const sanitizeText = (text = '') => {
     return text
         .trim()
@@ -56,14 +45,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     const programmaticNameRef = useRef(null);
 
     // Phase C -- Expense Mutation Reliability: stable add-expense idempotency
-    // key for this logical "add attempt". Generated lazily on first submit
-    // (not on every render) and deliberately NOT regenerated on a retried
-    // submit of the same attempt -- backend/Controllers/ExpenseControllers/
-    // addexpense.js relies on this id staying the same across a retry so a
-    // lost-response resubmit is recognized as a replay instead of creating a
-    // duplicate expense. Cleared only on committed success or when a new
-    // form session genuinely begins (entering edit mode, or unmounting when
-    // navigating away from /add).
     const addAttemptIdRef = useRef(null);
     const getAddAttemptId = () => {
         if (!addAttemptIdRef.current) {
@@ -172,16 +153,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     programmaticNameRef.current = exp.expenseName || '';
                     setName(exp.expenseName || '');
                     // Category Normalization -- a historical expense's stored
-                    // category may predate/precede the write-time normalization
-                    // now enforced backend-side (or, for a legacy document,
-                    // simply have never been normalized). Applying the SAME
-                    // mechanical cleanup/display casing used on submit here
-                    // means a differently-cased/whitespace-padded value is
-                    // shown normalized in the edit form immediately, rather
-                    // than only being fixed the next time this expense happens
-                    // to be resubmitted. Purely a display/UX aid, exactly like
-                    // normalizeCategory's existing submit-time use -- the
-                    // backend remains the authoritative validator/normalizer.
                     setCategory(exp.expenseCategory ? normalizeCategory(exp.expenseCategory) : '');
                     setAmount(exp.expenseAmount || '');
                     setDate(exp.expenseDate?.split('T')[0] || '');
@@ -205,9 +176,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     }, [isEdit]);
 
     // Phase C -- Expense Mutation Reliability: entering edit mode is a
-    // genuinely new form session for the add flow, so any in-flight add
-    // attempt id is cleared -- a later add (after leaving edit mode) must
-    // not reuse a stale identifier from an abandoned add attempt.
     useEffect(() => {
         if (isEdit.enableEdit) {
             addAttemptIdRef.current = null;
@@ -220,12 +188,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         setIsSpinnerLoading(true);
 
         // Hotfix -- `mlPredictedCategory && ...` short-circuits to the raw
-        // (falsy) LHS value when there is no ML prediction, i.e. the empty
-        // string "", not `false`. That "" was sent as JSON straight through
-        // to the backend, which passed it directly into
-        // `new ExpenseModel({ wasMlCorrected })` -- Mongoose's Boolean
-        // caster rejects "" outright, throwing a ValidationError. Wrapping
-        // in Boolean(...) guarantees a real boolean is always sent.
         const wasMlCorrected = Boolean(mlPredictedCategory) && mlPredictedCategory !== normalizeCategory(expenseCategory);
 
         const payload = {
@@ -242,12 +204,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         const mutationCallbacks = {
             onSuccess: (data) => {
                 // Phase C -- Expense Mutation Reliability: a 2xx here always
-                // means the expense itself (add or edit) committed, whether
-                // or not derived budget/report sync finished yet (see
-                // derivedData.recoveryPending) -- so this always follows the
-                // normal success path below. A pending sync gets calm,
-                // non-alarming wording instead of the default success
-                // message; the user is never told to resubmit.
                 setName('');
                 setCategory('');
                 setAmount('');

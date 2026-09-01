@@ -1,23 +1,4 @@
 // SIA semantic router boundary -- the ONLY module allowed to ask an LLM
-// provider to propose a QueryPlan for a question the deterministic
-// classifier (sia/intentClassifier.js) didn't recognize. Provider-neutral:
-// reuses sia/llmService.js's askLlm() through a narrow, INJECTABLE
-// `routerCall` function (production default below), never duplicating
-// HTTP logic. The payload sent to the provider is minimal and FIXED by
-// this module -- the current question, a static hand-written capability
-// catalog (no financial data), an optional bounded previous-plan summary,
-// and calendar interpretation guidance computed by periodResolver.js
-// (never raw analytics). It NEVER receives financial values, Report
-// sections, DB records, Mongo schema/collection names, prior answer-call
-// prompts, or raw provider history.
-//
-// Every provider response -- however it is shaped, whatever it claims --
-// is parsed and validated LOCALLY against queryPlan.js's strict schema.
-// Unknown keys, invalid enums, oversized arrays, malformed JSON, or any
-// internal exception all fail CLOSED to an unsupported plan; this
-// function NEVER throws. A router-reported "confidence" value is read
-// only far enough to log it (diagnostic-only) -- it is never inspected to
-// decide the returned outcome.
 "use strict";
 
 const { validateQueryPlan } = require("./queryPlan");
@@ -26,10 +7,6 @@ const { askLlm } = require("./llmService");
 const { logSiaEvent, SIA_LOG_EVENTS } = require("./safeLogger");
 
 // Hand-written, static, no financial data -- the full menu of metrics/
-// operations/periods/groupings the router may choose from, with short
-// human descriptions. This is the ONLY "capability" information the
-// provider ever receives; it is a fixed constant, never built from a
-// live Report or database query.
 const CAPABILITY_CATALOG = Object.freeze({
   metrics: Object.freeze([
     { id: "EXPENSE_TOTAL", description: "Total amount spent in a period" },
@@ -81,10 +58,6 @@ const CAPABILITY_CATALOG = Object.freeze({
 });
 
 // Bounds on the optional previous-plan summary a caller may pass in --
-// this module never accepts/forwards a raw prior prompt or provider
-// response, only the same bounded plan-summary shape sessionService.js
-// persists (metrics, operation, resolved period label, grouping,
-// category filter).
 function sanitizePreviousPlanSummary(summary) {
   if (!summary || typeof summary !== "object") return null;
   const out = {};
@@ -99,9 +72,6 @@ function sanitizePreviousPlanSummary(summary) {
 }
 
 // Calendar interpretation guidance: TODAY's resolved date/period labels
-// only (via periodResolver.js), never raw analytics/report data. Gives
-// the router enough to interpret "this month"/"last month"/a bare weekday
-// without ever touching the user's financial figures.
 function buildCalendarContext({ now, timeZone } = {}) {
   const currentMonth = resolvePeriod({ type: "CURRENT_MONTH" }, { now, timeZone });
   const previousMonth = resolvePeriod({ type: "PREVIOUS_MONTH" }, { now, timeZone });
@@ -139,11 +109,6 @@ const ROUTER_SYSTEM_PROMPT =
   "any field not in the QueryPlan schema. Respond with JSON only, no prose, no markdown.";
 
 // This schema enforces a JSON object wrapper at the provider boundary. The
-// QueryPlan itself deliberately remains validated by queryPlan.js below: it
-// has cross-field rules (for example, operation/period combinations) that
-// must stay centralized and are also required for legacy text providers and
-// injected test callers. Keeping the schema narrow avoids duplicating those
-// rules and cannot make a provider response executable by itself.
 const ROUTER_STRUCTURED_OUTPUT = Object.freeze({
   name: "sia_router_response",
   schema: Object.freeze({
@@ -166,10 +131,6 @@ const ROUTER_OUTCOMES = Object.freeze({
 });
 
 // Default production router call -- a thin, narrow wrapper around the
-// EXISTING multi-provider askLlm() adapter (sia/llmService.js), reusing
-// its config/timeout/error handling rather than duplicating HTTP logic.
-// Tests NEVER exercise this function directly -- they inject their own
-// `routerCall` mock into routeQuestion() below.
 async function defaultRouterCall(payload) {
   const result = await askLlm({
     systemPrompt: ROUTER_SYSTEM_PROMPT,
@@ -179,9 +140,6 @@ async function defaultRouterCall(payload) {
     structuredOutput: ROUTER_STRUCTURED_OUTPUT,
   });
   // The provider adapter normally returns the parsed structured payload,
-  // while the stable adapter contract also retains the raw answer text.
-  // Accept either so routing still validates (and fails closed) if a
-  // provider or compatible adapter supplies only the raw JSON response.
   return result.structuredOutput !== undefined ? result.structuredOutput : result.answer;
 }
 
@@ -206,29 +164,12 @@ function routePlanOutcome(planOutcome) {
 }
 
 // Confidence is read ONLY to be logged as a diagnostic value -- it is
-// NEVER inspected by any conditional in this module and never influences
-// the returned outcome. A malformed/missing confidence is simply logged
-// as null; this can never cause a validation failure or a different plan
-// to be returned.
 function extractDiagnosticConfidence(rawResponse) {
   const value = rawResponse && typeof rawResponse === "object" ? rawResponse.confidence : undefined;
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/**
- * Routes one question through the semantic router. Returns
- * `{ ok: true, outcome, plan }` when a well-formed, schema-valid QueryPlan was
- * produced (including `outcome: "unsupported"`/`"clarification"` plans),
- * or `{ ok: false, outcome, reason }` for any parse/validation/call failure --
- * NEVER throws, regardless of what the injected `routerCall` does.
- *
- * @param {object} args
- * @param {string} args.question
- * @param {object} [args.previousPlanSummary] - bounded prior-plan summary only.
- * @param {Date} [args.now]
- * @param {string} [args.timeZone]
- * @param {(payload: object) => Promise<string|object>} [args.routerCall] - injectable for tests.
- */
+/* Routes one question through the semantic router. Returns */
 async function routeQuestion({ question, previousPlanSummary, now, timeZone, routerCall } = {}) {
   if (typeof question !== "string" || question.trim() === "") {
     return routeFailure(ROUTER_OUTCOMES.INVALID_REQUEST, "INVALID_QUESTION");

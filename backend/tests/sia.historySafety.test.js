@@ -1,9 +1,4 @@
 // Batch 2 architecture closure: consolidated proof of the exact stored
-// message allowlist, its exclusions, and the size/count bounds applied
-// before anything reaches the LLM. Complements
-// tests/sia.sessionService.test.js (behavioral proof) and
-// tests/sia.llmService.history.test.js (framing proof) with a direct,
-// structural proof that forbidden fields have no path into storage at all.
 "use strict";
 
 const mongoose = require("mongoose");
@@ -28,20 +23,12 @@ describe("models/SiaMessage -- exact stored field allowlist", () => {
       "metadata.latencyMs",
       "metadata.errorCode",
       // Batch 3F: the answer-grounding transparency snapshot (see
-      // models/SiaMessage.js's siaGroundingSchema/siaGroundingSourceSchema)
-      // -- server-owned keys/labels/optional periods only, never a raw
-      // path, metric value, prompt, or identifier. Explicitly added here,
-      // not a gap in this allowlist.
       "grounding",
       "grounding.sources",
       "grounding.sources.key",
       "grounding.sources.label",
       "grounding.sources.period",
       // Workstream 1 -- the bounded QueryPlan summary (see
-      // models/SiaMessage.js's siaPlanSummarySchema): metrics/operation/
-      // periodLabel/grouping/categoryFilter only, never a raw prompt,
-      // full financial context, or provider response body. Explicitly
-      // added here, not a gap in this allowlist.
       "planSummary",
       "planSummary.metrics",
       "planSummary.operation",
@@ -99,8 +86,6 @@ describe("sia/sessionService.appendTurn -- forbidden fields have no path into st
       answer: "Because X.",
       providerMetadata: { provider: "openai" },
       // Even if a caller mistakenly passed extra fields, appendTurn's own
-      // signature destructuring never reads them -- proven by
-      // asserting the create() calls below never contain them.
     });
 
     for (const call of messageDocs.create.mock.calls) {
@@ -121,8 +106,6 @@ describe("bounded recent-turn window -- deterministic serialized-size ceiling be
   beforeEach(() => {
     jest.resetModules();
     // Undo any jest.doMock registrations left over from the earlier
-    // describe block in this same file (jest.resetModules() clears the
-    // module registry but NOT explicit jest.doMock() registrations).
     jest.dontMock("../models/SiaSession");
     jest.dontMock("../models/SiaMessage");
   });
@@ -160,10 +143,6 @@ describe("bounded recent-turn window -- deterministic serialized-size ceiling be
     jest.doMock("../models/SiaSession", () => ({}));
     jest.doMock("../models/SiaMessage", () => messageDocs);
     // Required only once, after mocking, so this exact instance's
-    // MAX_RECENT_TURNS_FOR_LLM and its internal SiaMessage reference are
-    // both the mocked ones -- requiring it a second time before mocking
-    // (as an earlier version of this test did) caches the REAL module
-    // instead, which doMock cannot retroactively replace.
     const sessionService = require("../sia/sessionService");
     const { MAX_RECENT_TURNS_FOR_LLM } = sessionService;
 
@@ -175,13 +154,6 @@ describe("bounded recent-turn window -- deterministic serialized-size ceiling be
 });
 
 // Batch 3F acceptance remediation -- requirement 3: verify persistence-
-// schema boundaries. Proves, structurally (no live DB required -- Mongoose
-// casts/strips at document construction time), that both grounding-bearing
-// schemas (models/SiaMessage.js and models/SiaRequest.js) can never persist
-// an `_id`, `__v`, unknown property, raw metric, or internal identifier on
-// a grounding source, that only the approved key/label/period fields ever
-// survive, and that a legacy document with no grounding at all remains
-// valid.
 describe("models/SiaMessage + models/SiaRequest -- grounding exact-shape persistence boundary (Batch 3F)", () => {
   it("SiaMessage.grounding and its nested source subdocuments declare _id: false", () => {
     const groundingPath = SiaMessage.schema.path("grounding");
@@ -216,9 +188,6 @@ describe("models/SiaMessage + models/SiaRequest -- grounding exact-shape persist
       "grounding.sources.label",
       "grounding.sources.period",
       // Workstream 1 -- the semantic-routing plan CHECKPOINT (see
-      // models/SiaRequest.js's field comment): a validated, closed-schema
-      // QueryPlan (sia/queryPlan.js), never the raw prompt/context/
-      // provider response. Explicitly added here, not a gap.
       "planCheckpoint",
       "responseStatus",
       "responsePayload",
@@ -304,10 +273,6 @@ describe("models/SiaMessage + models/SiaRequest -- grounding exact-shape persist
 
   it("an unrecognized client-supplied property alongside a valid grounding source is dropped, not merely ignored on the wire", () => {
     // Simulates the exact "client-supplied grounding is ignored" scenario
-    // (backend/tests/sia.ask.groundingTransparency.test.js proves the route
-    // never uses client input at all) at the schema layer itself: even if
-    // something forged ever reached a document constructor, the schema is
-    // still the last line of defense.
     const doc = new SiaMessage({
       session: new mongoose.Types.ObjectId(),
       user: new mongoose.Types.ObjectId(),
@@ -348,17 +313,6 @@ describe("models/SiaMessage + models/SiaRequest -- grounding exact-shape persist
 });
 
 // Batch 3F pre-commit remediation: exact grounding-shape persistence.
-//
-// The acceptance audit proved a real inconsistency: `period` was declared
-// `default: null` on both grounding source subdocuments, so a snapshot
-// generated WITHOUT a period (the only kind groundingService.js currently
-// produces) came back out of persistence carrying `period: null`. The
-// fresh /sia/ask response therefore returned `{key, label}` while session
-// history and answer-ready resume returned `{key, label, period: null}` --
-// violating the requirement that the IDENTICAL snapshot survive every
-// path. The defaults were removed; these tests lock that in using REAL
-// Mongoose construction and serialization rather than handwritten plain
-// objects, so a reintroduced default would fail here immediately.
 describe("grounding exact-shape equivalence through real Mongoose serialization (Batch 3F pre-commit remediation)", () => {
   // The genuine, freshly generated snapshot -- produced by the real
   // production module, not a fixture transcribed by hand.

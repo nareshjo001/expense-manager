@@ -3,11 +3,6 @@ import { FiMic, FiSquare } from "react-icons/fi";
 import { SIA_RECORDER_STATE } from "./useSiaVoiceRecorder";
 
 // Workstream 3, part C -- the accessible mic/timer/Stop/Cancel cluster
-// rendered beside SiaPanel.js's existing composer. Pure presentation: all
-// state comes from the `recorder` object (useSiaVoiceRecorder.js), and
-// every click here calls straight through to that hook's own start/stop/
-// cancel -- this component never touches the composer's text, the ask
-// mutation, or clientMessageId generation.
 const ACTIVE_RECORDING_STATES = new Set([
   SIA_RECORDER_STATE.RECORDING,
   SIA_RECORDER_STATE.STOPPING,
@@ -26,9 +21,6 @@ const ERROR_STATES = new Set([
 ]);
 
 // Never communicated by color alone -- this exact text is what the
-// aria-live region below announces, and it is also shown visibly (see
-// SiaPanel.js's rendering of recorder.errorMessage/this same text next to
-// the control).
 export function announcementForState(state) {
   switch (state) {
     case SIA_RECORDER_STATE.REQUESTING_PERMISSION:

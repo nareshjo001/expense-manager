@@ -8,9 +8,6 @@ const { analyze } = require("../analytics/analyzers/expenseAnomalyAnalyzer");
 const { anomaly: RULES } = require("../analytics/analyzers/scores/expenseAnomalyRules");
 
 // Analysis month: August 2026, local time -- matches this repository's own
-// month-boundary convention (analytics/dataProvider.js's
-// `new Date(year, month, 1)`), constructed explicitly and never derived
-// from `new Date()`.
 const CURRENT_MONTH_START = new Date(2026, 7, 1);
 const CURRENT_MONTH_MID = new Date(2026, 7, 15);
 const BASELINE_START = new Date(2025, 7, 1); // exactly 12 months before CURRENT_MONTH_START
@@ -37,14 +34,9 @@ const makeBaselineRecords = (category, amounts, date = SAFE_BASELINE_DATE) =>
   }));
 
 // A clean 10-record baseline with median=500, MAD=250 -- MAD is large
-// relative to the median, so the amountRatio (>=2.0) condition is already
-// satisfied well before modifiedZ reaches 3.5. Used to isolate the
-// modifiedZ boundary.
 const MODIFIED_Z_BASELINE_AMOUNTS = [50, 150, 250, 350, 450, 550, 650, 750, 850, 950];
 
 // A clean 10-record baseline with median=1000, MAD=30 -- MAD is small
-// relative to the median, so modifiedZ is already far past 3.5 well before
-// amountRatio reaches 2.0. Used to isolate the amountRatio boundary.
 const AMOUNT_RATIO_BASELINE_AMOUNTS = [950, 960, 970, 980, 990, 1010, 1020, 1030, 1040, 1050];
 
 // A degenerate-MAD baseline (every record identical) -- exercises the
@@ -177,15 +169,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
     });
 
     // Rewritten for the category-normalization fix: case/whitespace/alias
-    // variants of the SAME category are now intended to share one baseline
-    // (see analytics.expenseAnomaly.test.js's "category normalization"
-    // describe block below), so a "different-case category never
-    // contributes" expectation would directly contradict that fix. What
-    // must still hold -- and what this test now proves instead -- is that
-    // there is still no overall-user or cross-CATEGORY fallback: a
-    // genuinely unrelated canonical category's abundant history can never
-    // satisfy a different category's insufficient baseline, no matter how
-    // much of it exists in the same pool.
     it("does not fall back to an unrelated canonical category's baseline -- 'Food' stays below the minimum even with plentiful 'Rent' history in the same pool", () => {
       const recentExpensePool = [
         ...makeBaselineRecords("Food", [500, 510, 490]), // only 3 -- below minBaselineSampleSize (10)
@@ -419,8 +402,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       );
       const candidate = makeCandidate({ _id: "self-contaminate", expenseAmount: 3500 });
       // The exact same expense (same id, same category, same date) also
-      // appears in the historical pool, as if a caller mistakenly passed
-      // overlapping arrays.
       const duplicateOfCandidateInPool = {
         _id: candidate._id,
         expenseCategory: candidate.expenseCategory,
@@ -467,10 +448,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
 
   describe("modified-z detection (MAD > 0)", () => {
     // Baseline: median=500, MAD=250 -- amountRatio (>=2.0) is comfortably
-    // satisfied throughout this range, isolating the modifiedZ boundary at
-    // 3.5. Boundary amounts were derived from the analyzer's own formula
-    // and confirmed with Node's actual double-precision arithmetic, so the
-    // "at" case genuinely sits on the true >=3.5 transition.
     const recentExpensePool = makeBaselineRecords("Food", MODIFIED_Z_BASELINE_AMOUNTS);
 
     it("does not flag just below the modifiedZ threshold (amount 1797.25, z < 3.5)", () => {
@@ -780,8 +757,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
 
   describe("ordering and the ten-result cap", () => {
     // Twelve distinct, all-flagged candidates in one eligible category, each
-    // producing a strictly distinct thresholdMultiple so ranking is
-    // unambiguous.
     const recentExpensePool = makeBaselineRecords("Food", MAD_ZERO_BASELINE_AMOUNTS); // median=500, MAD=0
 
     const buildTwelveFlagged = () =>
@@ -947,8 +922,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
   });
 
   // Phase 1 remediation: coverage added for the accepted code-review
-  // findings (safe amount coercion, safe identifier serialization, and the
-  // frozen rules contract). All tests above this point are unmodified.
   describe("remediation: safe amount coercion", () => {
     it("skips a candidate whose amount is a Symbol instead of crashing (Number(Symbol) throws)", () => {
       const recentExpensePool = makeBaselineRecords("Food", MODIFIED_Z_BASELINE_AMOUNTS);
@@ -1104,16 +1077,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
 
   describe("remediation: prototype-pollution-shaped category names", () => {
     // Updated for the shared normalizer's own prototype-pollution fix
-    // (utils/categoryNormalization.js's CATEGORY_ALIASES is now a
-    // null-prototype lookup): the analyzer's `category` output is the
-    // CANONICAL grouping value, not a raw pass-through, so a prototype-
-    // shaped input no longer necessarily round-trips to its own original
-    // spelling -- exactly the same "unknown category -> Title-Cased
-    // display string" fallback every other unknown category already goes
-    // through (see categoryNormalization.test.js's own dedicated
-    // prototype-pollution suite for the normalizer-level proof). Expected
-    // values are hardcoded literals here, not computed by calling the
-    // production normalizer inside the assertion.
     it.each([
       ["__proto__", "__proto__"],
       ["constructor", "Constructor"],
@@ -1134,8 +1097,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
         expect(typeof result.anomalies[0].category).toBe("string");
         expect(result.anomalies[0].category).toBe(expectedCanonicalCategory);
         // Confirms no leakage into/from Object.prototype internals: an
-        // unrelated category must still be evaluated independently, and
-        // Object.prototype itself is never touched by analysis.
         expect(Object.prototype.toString.call({})).toBe("[object Object]");
       }
     );
@@ -1163,19 +1124,10 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
   describe("remediation: sort order uses the unrounded thresholdMultiple, not the rounded public field", () => {
     it("orders two candidates from different categories correctly even though their public (rounded) thresholdMultiple values tie", () => {
       // Category A: median=500 (MAD=0), amount=4001 -> raw thresholdMultiple
-      // = 4001/500/4 = 2.0005, which rounds (round2) to the same public
-      // value as category B below.
       const categoryA = "RemediationA";
       const amountA = 4001;
 
       // Category B: median=100 (MAD=0), amount=800.5 -> raw thresholdMultiple
-      // = 800.5/100/4 = 2.00125. This is numerically greater than A's raw
-      // 2.0005, so B must sort ahead of A -- even though B's raw amount
-      // (800.5) is far smaller than A's (4001), and even though both
-      // candidates' public detection.thresholdMultiple round to the same
-      // displayed value. This proves the sort key is the true unrounded
-      // thresholdMultiple, not the rounded field also present on the output,
-      // and that it is not simply following amount order.
       const categoryB = "RemediationB";
       const amountB = 800.5;
 
@@ -1200,8 +1152,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       expect(result.anomalies[0].detection.thresholdMultiple).toBe(4);
       expect(result.anomalies[1].detection.thresholdMultiple).toBe(4);
       // ...but B (the true higher raw multiple) must be ranked first, ahead
-      // of A, and specifically not in raw-amount order (A's raw amount is
-      // larger).
       expect(result.anomalies.map((a) => a.expenseId)).toEqual(["candidate-b", "candidate-a"]);
     });
   });
@@ -1289,10 +1239,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
   });
 
   // Category normalization fix: candidate and historical-baseline categories
-  // now both go through utils/categoryNormalization.js's
-  // normalizeCategoryForGrouping() -- the same shared utility
-  // forecastInputAggregator.js already uses -- instead of an exact raw
-  // string comparison. All tests above this point are unmodified.
   describe("category normalization (candidate + baseline)", () => {
     it("1. merges case-variant categories ('Food'/'food'/'FOOD') into one baseline", () => {
       const recentExpensePool = [
@@ -1352,9 +1298,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       const fragmentB = makeBaselineRecords("food", [550, 650, 750, 850, 950]);
 
       // A lone 5-record fragment is genuinely insufficient on its own --
-      // this is not a normalization question, just the existing
-      // minBaselineSampleSize gate, asserted here as the baseline this test
-      // then shows the MERGE overcomes.
       const loneFragment = analyze({
         currentMonthExpenses: [makeCandidate({ expenseCategory: "Food", expenseAmount: 3500 })],
         recentExpensePool: fragmentA,
@@ -1410,10 +1353,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
         ...makeBaselineRecords("Rent", MAD_ZERO_BASELINE_AMOUNTS),
       ];
       // One candidate per category (categoryStats is only ever computed for
-      // categories a current-month candidate actually needs), each using
-      // lowercase/uppercase input on the candidate side to prove
-      // normalization still resolves each to its OWN distinct canonical
-      // category rather than merging them together.
       const result = analyze({
         currentMonthExpenses: [
           makeCandidate({ _id: "food-candidate", expenseCategory: "food", expenseAmount: 3500 }),
@@ -1441,8 +1380,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
       });
 
       // Identical to the pre-existing "candidate eligibility"/output-contract
-      // assertions elsewhere in this file for the same canonical input --
-      // the fix changes nothing when the input was already canonical.
       expect(result.hasData).toBe(true);
       expect(result.flaggedCount).toBe(1);
       expect(result.anomalies[0].category).toBe("Food");
@@ -1452,9 +1389,6 @@ describe("backend/analytics/analyzers/expenseAnomalyAnalyzer", () => {
 
     it("9. threshold boundary, MAD-zero fallback, severity, and flag/no-flag behaviour are unchanged when routed through normalization", () => {
       // Reuses the exact MAD==0 fixture and boundary values from the
-      // "MAD == 0 fallback" / "severity boundaries" describe blocks above,
-      // now with lowercase historical input and an all-caps candidate, to
-      // prove the fix changes nothing about the surrounding rules.
       const recentExpensePool = makeBaselineRecords("rent", MAD_ZERO_BASELINE_AMOUNTS);
 
       const atThreshold = analyze({

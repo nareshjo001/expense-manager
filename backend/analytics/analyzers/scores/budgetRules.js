@@ -15,17 +15,13 @@ module.exports = {
       { min: 0, score: 0, label: "None" },
     ],
  
-    // Penalty scales with HOW BAD the projected overspend is (as a % of budget), not a flat deduction. 
-    // This keeps the penalty meaningful whether the user's budget is ₹5,000 or ₹5,00,000.
-    // penalty = min(maxPenalty, (projectedOverspendPercent / 100) * penaltyScale)
+    // Penalty scales with HOW BAD the projected overspend is (as a % of budget), not a flat deduction.
     projectedOverspendPenalty: {
       maxPenalty: 20,
       penaltyScale: 40,
     },
  
     // Sum of best-case tier scores. Kept as an explicit constant (not
-    // derived at runtime) so normalizedScore stays stable even if tiers
-    // are re-tuned later without someone remembering to update a formula.
     maxScore: 50,
   },
 }; 

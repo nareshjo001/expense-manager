@@ -1,18 +1,4 @@
 // Recurring-State Authority and Crash-Recovery Remediation -- frontend contract.
-//
-// Covers ExpenseItem.js's recurring toggle: button label/title reflects the
-// authoritative expense.isRecurring (now server-derived via
-// annotateRecurringState, not a stale mirror), handleRecurring always sends
-// the exact { expenseId, isRecurring: !isRecurring } desired-state payload,
-// a successful response toasts success, and 401/429/409 errors are
-// deliberately NOT re-toasted (already surfaced by the shared axios
-// interceptor) while other errors are.
-//
-// useUpdateRecurringMutation is mocked directly (its own cache-reconciliation
-// contract is covered separately in
-// src/hooks/mutations/useUpdateRecurringMutation.test.js) so every mutation
-// outcome here is driven by manually invoking the exact onSuccess/onError
-// callbacks ExpenseItem.js passed to mutate().
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ExpenseItem from "./ExpenseItem";
@@ -28,8 +14,6 @@ jest.mock("../alertsEffects/toastMessages", () => ({
 }));
 
 // Fully hand-mocked, same rationale as AddExpense.test.js: ExpenseItem.js
-// only calls useNavigate(), and this project's Jest setup cannot resolve the
-// real react-router-dom v7 package.
 const mockNavigate = jest.fn();
 jest.mock(
   "react-router-dom",

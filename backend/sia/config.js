@@ -43,13 +43,6 @@ function normalizeTimeoutMs(rawValue) {
 }
 
 // The application's canonical IANA time zone for calendar/period
-// resolution (sia/periodResolver.js) -- deliberately NEVER the server
-// process's own host/local time zone, since that is an unrelated
-// deployment detail. Defaults to "Asia/Kolkata" (documented default, per
-// BALENISA's primary user base) when unset/blank/invalid. Validated with
-// Intl.DateTimeFormat itself (no new dependency) -- an unsupported/
-// malformed zone name falls back to the default rather than throwing
-// later, deep inside period resolution.
 const DEFAULT_APP_TIME_ZONE = "Asia/Kolkata";
 
 function normalizeAppTimeZone(rawValue) {
@@ -59,8 +52,6 @@ function normalizeAppTimeZone(rawValue) {
   const trimmed = rawValue.trim();
   try {
     // Throws a RangeError for an unrecognized IANA zone name -- the only
-    // validation Node's built-in Intl support can give us without a new
-    // dependency, but sufficient to reject typos/garbage.
     new Intl.DateTimeFormat("en-US", { timeZone: trimmed });
     return trimmed;
   } catch (_err) {
@@ -69,16 +60,6 @@ function normalizeAppTimeZone(rawValue) {
 }
 
 // ---------------------------------------------------------------------
-// Voice input (SIA speech-to-text) -- additive, independent of the text
-// SIA_LLM_* surface above. Unlike SIA_LLM_PROVIDER/SIA_LLM_MODEL (which
-// default to null so an unconfigured text provider fails loudly and
-// explicitly), SIA_STT_PROVIDER/SIA_STT_MODEL default to a real,
-// documented provider+model ("groq"/"whisper-large-v3-turbo") so voice
-// input has a sensible out-of-the-box configuration once SIA_VOICE_ENABLED
-// is turned on -- readiness.js's isVoiceReady() is still the sole gate on
-// whether a request may actually be served (it additionally requires a
-// real credential), exactly mirroring isSiaReady()'s separation of
-// "configured" from "ready".
 const DEFAULT_STT_PROVIDER = "groq";
 const DEFAULT_STT_MODEL = "whisper-large-v3-turbo";
 const DEFAULT_STT_TIMEOUT_MS = 30000;
@@ -113,8 +94,6 @@ function normalizeSttTimeoutMs(rawValue) {
 }
 
 // Accepts only a finite, strictly positive byte ceiling -- anything else
-// (missing, blank, non-numeric, zero, negative) falls back to the
-// documented 5 MiB default rather than disabling the size check.
 function normalizeSttMaxBytes(rawValue) {
   if (typeof rawValue !== "string" || rawValue.trim() === "") {
     return DEFAULT_STT_MAX_BYTES;
@@ -146,9 +125,6 @@ const config = {
   model: normalizeModel(process.env.SIA_LLM_MODEL),
   appTimeZone: normalizeAppTimeZone(process.env.APP_TIME_ZONE),
   // Voice input (Workstream 2) -- additive fields only, read the same
-  // fail-safe way as everything above: importing with none of these
-  // SIA_VOICE_*/SIA_STT_* variables set is always safe and yields the
-  // documented defaults, never a thrown error.
   voiceEnabled: normalizeEnabled(process.env.SIA_VOICE_ENABLED),
   sttProvider: normalizeSttProvider(process.env.SIA_STT_PROVIDER),
   sttModel: normalizeSttModel(process.env.SIA_STT_MODEL),

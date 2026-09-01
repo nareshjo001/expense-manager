@@ -1,8 +1,4 @@
 // Unit tests for backend/sia/idempotencyService.js's additive
-// saveRoutingCheckpoint() -- the Workstream 1 plan-checkpoint mechanism
-// that lets a retry skip re-paying the semantic router's provider cost.
-// Same models/SiaRequest.js mocking convention as
-// tests/sia.idempotencyService.test.js -- no real MongoDB connection.
 "use strict";
 
 const MODEL_PATH = "../models/SiaRequest";

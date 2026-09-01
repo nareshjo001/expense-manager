@@ -60,8 +60,6 @@ const generateReport = async (userId) => {
   });
 
   // Anomaly detection V1: pure analyzer, fed only provider/context data
-  // (never raw DB access, never SIA/LLM). recentExpensePool and
-  // currentMonthStart are both already computed by analyticsContext.
   const anomalyReport = expenseAnomalyAnalyzer.analyze({
     currentMonthExpenses: analyticsContext.currentMonthExpenses,
     recentExpensePool: analyticsContext.recentExpensePool,
@@ -70,17 +68,6 @@ const generateReport = async (userId) => {
   });
 
   // Forecasting V2: pure, deterministic, explicitly-statistical analyzer.
-  // Architecture-closure correction: forecastAnalyzer.js is deliberately
-  // NOT given recentExpensePool/currentMonthExpenses (transaction-shaped,
-  // includes _id/expenseName/expenseCategory/userId) -- only the bounded,
-  // aggregate-only series analyticsContext.js's forecastInputAggregator.js
-  // boundary already computed. No new database query either way. Never a
-  // trained model, never a fabricated accuracy figure (see
-  // analytics/analyzers/scores/forecastRules.js).
-  // Prediction Layer V1 adds the per-category breakdown, the descriptive
-  // data-quality summary and the forecast-vs-target-month budget risk --
-  // all fed from the SAME aggregate-only boundary, still with no new
-  // database query and still no raw expense record reaching the analyzer.
   const retainedForecastReport = forecastAnalyzer.analyze({
     monthlySeries: analyticsContext.forecastMonthlySeries,
     currentPartialMonthTotal: analyticsContext.forecastCurrentPartialMonthTotal,

@@ -4,10 +4,6 @@ import { format } from "date-fns";
 import SetBudget from "./SetBudget";
 
 // Phase C.2 -- proves SetBudget threads useBudgetSummary's
-// `isCurrentMonthStale` signal through to BudgetBar so a user viewing their
-// current month's budget while a mutation's derived-data recovery is still
-// pending sees a calm "Budget is refreshing" note rather than silently
-// treating a possibly-stale `.spent` value as an ordinary fresh one.
 const CURRENT_MONTH = format(new Date(), "MMM yyyy");
 
 let mockSummary;

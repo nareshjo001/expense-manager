@@ -37,9 +37,6 @@ app.get("/", (req, res) => {
 
 app.get("/ping", async (req, res) => {
   // Firebase/push is an optional capability -- its status is reported
-  // alongside the existing checks but never flips the overall success/status
-  // code, since push notifications being unavailable does not make the
-  // rest of the application unavailable (unrelated routes are unaffected).
   const push = isFirebaseAvailable() ? "up" : "down";
 
   try {

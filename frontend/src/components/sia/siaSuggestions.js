@@ -1,8 +1,4 @@
 // Starter questions shown when a conversation is empty.
-//
-// These prompts are interpreted by SIA's LLM semantic router. The router
-// may choose only from the backend's validated, read-only financial-data
-// capability catalog; suggestions must not be phrased around regex rules.
 export const SIA_SUGGESTIONS = [
   {
     id: "spending-current",

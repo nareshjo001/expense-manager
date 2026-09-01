@@ -1,28 +1,4 @@
 // BALENISA Budget Derived-Spent Authority and Crash-Recovery Remediation.
-//
-// Phase 2 defect reproduction: these assertions encode the CORRECT,
-// required behavior and are run FIRST against current (unmodified)
-// production code, where they FAIL -- proving the defect is real. After
-// the fix they pass and this file also serves as Phase 4's regression
-// coverage; no assertion is weakened after the fix lands.
-//
-// getbudgets.js established a "repair-on-read" convention: it calls
-// syncRecoveryService.repairIfPending(userId) BEFORE reading BudgetModel's
-// stored `spent` field, specifically because that value can be stale after
-// a crash left durable-but-unrepaired PendingSync evidence
-// (getbudgets.js:25-32). Services/ChartServices/chart.service.js's
-// getBudgetComparison() -- consumed by GET /bar/barchartbymonth (year
-// mode) and GET /pie/comparison (month mode, via
-// Controllers/PieChartControllers/getcomparisonforpie.js) -- read
-// BudgetModel directly (chart.service.js:79-106) with NO such repair step.
-// Since repairIfPending() is the only mechanism that resolves a pending
-// repair marker outside of the next expense mutation for the SAME month, a
-// user who never happens to call GET /api/getbudgets could see stale
-// `spent`/`remaining` on these two chart endpoints indefinitely.
-//
-// Mocks only ../Services/syncRecoveryService, ../config/Schemas, and
-// ../Controllers/GetExpenseControllers/fetchExpenses -- never touches
-// MongoDB, Redis, or the network.
 "use strict";
 
 const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";

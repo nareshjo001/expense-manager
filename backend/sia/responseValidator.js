@@ -12,8 +12,6 @@ const FINANCIAL_RISK_EXPLANATION = "FINANCIAL_RISK_EXPLANATION";
 const CURRENT_SPENDING_SUMMARY = "CURRENT_SPENDING_SUMMARY";
 
 // Matches the persisted assistant-message/request ceiling. Enforcing the
-// bound before a response leaves SIA prevents an oversized provider output
-// from reaching the client when persistence is unavailable or best-effort.
 const MAX_ANSWER_LENGTH = 4000;
 
 // All eight SIA-supported intents receive the shared generic checks (leaked identifiers, raw field tokens, echoed JSON, unsupported currency figures); the intent-specific checks below (fraud/certainty/advice/comparison/category/forecast/transaction-detail language) stay scoped to only the intents they've always applied to -- deliberately not extended further, since broad keyword matching risks rejecting valid explanations.
@@ -48,8 +46,6 @@ const RAW_FIELD_TOKENS = [
 const JSON_KEY_FRAGMENT_PATTERN = /"[a-zA-Z_][a-zA-Z0-9_]*"\s*:/;
 
 // Only currency-MARKED numbers are extracted as "financial claims" --
-// this is what keeps the check from being a brittle "reject every digit"
-// filter. A bare "3" (a count) is never touched.
 const CURRENCY_AMOUNT_PATTERN = /(?:₹|\$|Rs\.?|INR)\s?(-?[\d,]+(?:\.\d{1,2})?)/gi;
 
 // A percentage framed as a chance/likelihood/certainty -- risk's real contract never carries a calibrated probability, so this framing is always unsupported.
@@ -80,10 +76,6 @@ const NO_RISK_CLAIM_PATTERNS = [
 ];
 
 // CURRENT_SPENDING_SUMMARY's context carries exactly one figure --
-// summary.totalSpent -- and nothing else: no prior-month comparison, no
-// category breakdown, no forecast, no transaction-level detail. Each
-// pattern below is narrow and gated to only this intent, mirroring the
-// existing reason-code-scoped guardrails above.
 const SUMMARY_COMPARISON_CLAIM_PATTERN =
   /\b(increased|decreased|higher than|lower than|more than last|less than last|compared to|compared with|change[ds]? from|vs\.?\s+last|versus last)\b/i;
 const SUMMARY_CATEGORY_CLAIM_PATTERN = /\bcategor(?:y|ies)\b/i;
@@ -154,15 +146,7 @@ function extractCurrencyAmounts(text) {
   return amounts;
 }
 
-/**
- * @param {object} input
- * @param {string} input.intent
- * @param {string} input.answer - the provider's raw answer text.
- * @param {object} input.contextFields - the exact `fields` object
- *   sia/contextBuilder.js supplied for this turn -- the only source of
- *   truth a currency claim is checked against.
- * @returns {{ valid: true } | { valid: false, reasonCode: string }}
- */
+/* @param {object} input */
 function validateGroundedAnswer({ intent, answer, contextFields }) {
   if (!VALIDATED_INTENTS.has(intent)) {
     return { valid: true };
@@ -189,13 +173,6 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
   }
 
   // Generic across all eight validated intents, not just
-  // CURRENT_SPENDING_SUMMARY: none of contextBuilder.js's per-intent
-  // projections for any intent ever carry merchant/receipt/line-item/
-  // transaction-id detail, so a hallucinated claim of that kind is always
-  // unsupported regardless of which intent produced it. Found via
-  // Workstream 5's adversarial review -- previously only checked for
-  // CURRENT_SPENDING_SUMMARY, leaving the other seven intents without a
-  // deterministic backstop against a fabricated transaction-level claim.
   if (SUMMARY_TRANSACTION_DETAIL_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "UNSUPPORTED_TRANSACTION_DETAIL" };
   }
@@ -264,8 +241,6 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
 
   const contextNumbers = collectNumericValues(contextFields, new Set());
   // Narrow, exact-field-path addition -- see collectKnownStringAmounts()
-  // above. A no-op for every intent/context other than
-  // BUDGET_STATUS_EXPLANATION's `{ budget: { budget, spent } }` shape.
   collectKnownStringAmounts(contextFields, contextNumbers);
   const claimedAmounts = extractCurrencyAmounts(answer);
   for (const amount of claimedAmounts) {
@@ -278,15 +253,6 @@ function validateGroundedAnswer({ intent, answer, contextFields }) {
 }
 
 // ---- Workstream 1: FactSet citation/claim validation ---------------------
-//
-// Extends this module (rather than duplicating its patterns) to validate
-// an LLM explanation answer produced from a bounded FactSet
-// (sia/factSet.js) instead of a full contextBuilder.js context -- the
-// semantic-routing EXPLAIN/FORECAST/COMPARE path (ask.js). Reuses every
-// existing pattern constant above that already covers a rule
-// (PERSISTENCE_LANGUAGE_PATTERN, DECLINE_LANGUAGE_PATTERN,
-// FRAUD_LANGUAGE_PATTERN, ADVICE_LANGUAGE_PATTERN, MONGO_ID_PATTERN,
-// RAW_FIELD_TOKENS, JSON_KEY_FRAGMENT_PATTERN) instead of duplicating them.
 
 // A comparison claim ("higher than", "compared to last month", etc.) is
 // only supportable when the plan's operation is genuinely a comparison.
@@ -299,8 +265,6 @@ const FORECAST_CLAIM_PATTERN =
   /\b(forecast(?:ed|ing)?|predict(?:ed|ion)?|projected|projection|next month|next quarter|next year|will spend|expected to spend|estimate[d]?\s+(?:you'll|you will))\b/i;
 
 // Light, generic advice-language guardrail (mirrors
-// SUMMARY_ADVICE_CLAIM_PATTERN's shape) -- applies to every FactSet-cited
-// answer regardless of intent/metric.
 const GENERIC_ADVICE_CLAIM_PATTERN = /\b(you should|i recommend|i suggest|consider (?:cutting|reducing|saving|spending))\b/i;
 
 function round2Cited(value) {
@@ -308,26 +272,11 @@ function round2Cited(value) {
 }
 
 // Extracts currency-marked amounts from an answer -- identical contract to
-// the private extractCurrencyAmounts() above, exported here (additively,
-// non-breaking) so a sibling caller/test can reuse the exact same
-// extraction rule instead of re-implementing it.
 function extractCurrencyAmountsFromAnswer(text) {
   return extractCurrencyAmounts(text);
 }
 
-/**
- * Validates an LLM explanation answer generated from a bounded FactSet
- * (sia/factSet.js) rather than a full contextBuilder.js context.
- *
- * @param {object} input
- * @param {string} input.answer
- * @param {string[]} input.citedFactIds
- * @param {{facts: object[]}} input.factSet
- * @param {{operation?: string, metrics?: string[], queries?: object[]}} [input.plan] - the
- *   QueryPlan this answer was generated for, used only to decide whether
- *   comparison/forecast framing is supportable.
- * @returns {{ valid: true } | { valid: false, reasonCode: string }}
- */
+/* Validates an LLM explanation answer generated from a bounded FactSet */
 function validateCitedAnswer({ answer, citedFactIds, factSet, plan }) {
   if (typeof answer !== "string" || answer.trim() === "") {
     return { valid: false, reasonCode: "EMPTY_OR_MALFORMED_ANSWER" };
@@ -348,8 +297,6 @@ function validateCitedAnswer({ answer, citedFactIds, factSet, plan }) {
     return { valid: false, reasonCode: "RAW_FIELD_LEAKAGE" };
   }
   // Same generic backstop as validateGroundedAnswer's -- a FactSet never
-  // carries merchant/receipt/line-item/transaction-id detail either, for
-  // any metric.
   if (SUMMARY_TRANSACTION_DETAIL_PATTERN.test(answer)) {
     return { valid: false, reasonCode: "UNSUPPORTED_TRANSACTION_DETAIL" };
   }
@@ -367,8 +314,6 @@ function validateCitedAnswer({ answer, citedFactIds, factSet, plan }) {
   const citedFacts = citedIds.map((id) => factsById.get(id));
 
   // Every currency-marked figure in the answer must belong to a fact that
-  // was actually cited -- an invented amount, or a genuine-but-uncited
-  // fact value being quoted, both fail here.
   const citedCurrencyValues = new Set(
     citedFacts.filter((f) => f.unit === "INR" && typeof f.value === "number").map((f) => round2Cited(f.value))
   );
@@ -437,8 +382,6 @@ module.exports = {
   validateGroundedAnswer,
   validateCitedAnswer,
   // Additive exports -- reused by validateCitedAnswer above and available
-  // to any future sibling validator so existing rules are never
-  // duplicated.
   MONGO_ID_PATTERN,
   RAW_FIELD_TOKENS,
   JSON_KEY_FRAGMENT_PATTERN,

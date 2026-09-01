@@ -1,40 +1,4 @@
 // Phase C.3 requirement #2 -- atomic Redis revision fencing.
-//
-// Confirmed problem: cache/reportCache.js's set() used to be a bare,
-// unconditional Redis SET -- ordinary GET-then-SET (or even a plain SET
-// with no prior GET at all) is NOT atomic across concurrent writers. The
-// exact race the brief calls out: Refresh A applies its Mongo write at
-// revision 10, then pauses (scheduling, GC, network) AFTER the Mongo write
-// succeeds but BEFORE its own Redis SET runs. Refresh B, for the SAME
-// user, applies its Mongo write at revision 11 and successfully stores it
-// in Redis. A then resumes and performs its own SET -- silently
-// overwriting B's newer cached report with A's older one, with no error or
-// signal anywhere that this happened.
-//
-// This file proves two things, both against the REAL cache/reportCache.js
-// module (never mocked here -- only its one dependency, config/redis's
-// redisClient, is faked):
-//   1. reportCache.js's own set()/invalidate() functions correctly refuse
-//      to apply an older-revisioned write/delete over a newer-revisioned
-//      cached entry, and correctly DO apply when the incoming revision is
-//      not older, or when nothing is cached yet.
-//   2. The exact A/B interleaving above, driven through the REAL
-//      Services/reportService.js (also never mocked), asserting the FINAL
-//      cached payload and revision -- not mock call counts -- with A
-//      paused at exactly the post-Mongo/pre-Redis boundary via an explicit
-//      deferred-promise gate on the fake redisClient's own eval() call
-//      (never a real timer/sleep).
-//
-// There is no real Redis server in this test environment (consistent with
-// every other test file in this suite -- see
-// Services/syncRecoveryService.js's own doc comment on why no real Mongo
-// connection is established either). The fake redisClient below
-// faithfully re-implements the SAME revision-comparison decision the real
-// Lua CAS scripts in cache/reportCache.js encode (GET current value,
-// compare revisions, conditionally SET/DEL) against a real in-memory
-// keyspace -- this exercises reportCache.js's actual public contract
-// (exact arguments passed to eval(), and the resulting stored/not-stored
-// outcome) rather than merely asserting a mocked function was called.
 "use strict";
 
 const REDIS_CONFIG_PATH = "../config/redis";
@@ -57,12 +21,6 @@ function deferred() {
 }
 
 // A real in-memory Redis keyspace, with an eval() that mirrors
-// cache/reportCache.js's CAS_SET_SCRIPT/CAS_DEL_SCRIPT decision logic
-// exactly (GET current entry, compare `.revision`, conditionally
-// SET/DEL) -- not a mock of "was set() called", a real stand-in store.
-// Supports an injectable pause gate on eval() itself so a test can park a
-// caller AFTER its Mongo write (modeled elsewhere) but BEFORE this Redis
-// operation actually executes.
 function makeFakeRedisClient() {
   const store = new Map(); // key -> raw string value
   let evalGate = null;
@@ -221,9 +179,6 @@ describe("Phase C.3 requirement #2 -- the exact A/B Redis race, driven through t
     }));
 
     // Minimal fake FinancialReport model -- real fenced-CAS filter
-    // evaluation (mirrors mutationRecoveryCorrectness.test.js's
-    // casFilterMatches), so the Mongo half of this race is genuinely
-    // resolved for real too, not merely assumed.
     const store = new Map();
     function casFilterMatches(doc, filter) {
       if (!filter.$or) return true;
@@ -282,9 +237,6 @@ describe("Phase C.3 requirement #2 -- the exact A/B Redis race, driven through t
     const reportService = require("../Services/reportService");
 
     // A's Mongo write (revision 10) will succeed immediately (nothing
-    // exists yet) -- A is then paused at exactly its OWN reportCache
-    // eval() call (call index 0), i.e. AFTER Mongo succeeded but BEFORE
-    // Redis is touched.
     const gate = deferred();
     const reachedGate = deferred();
     fakeRedisClient.__armEvalGate(0, gate.promise, () => reachedGate.resolve());
@@ -293,8 +245,6 @@ describe("Phase C.3 requirement #2 -- the exact A/B Redis race, driven through t
     await reachedGate.promise;
 
     // B runs to FULL completion while A is parked -- its OWN Mongo write
-    // (revision 11) wins the CAS (11 > 10, A's already-stamped value) and
-    // its OWN Redis eval() call (index 1, unblocked) stores its result.
     const bResult = await reportService.refreshReport(USER_ID, { fenceRevision: 11 });
     expect(bResult.skipped).toBeUndefined();
     expect(store.get(USER_ID).spending.totalSpent).toBe(2000);
@@ -310,15 +260,9 @@ describe("Phase C.3 requirement #2 -- the exact A/B Redis race, driven through t
     const aResult = await aPromise;
 
     // A's MONGO write itself already succeeded earlier (A got there
-    // first, at revision 10, before B's mutation even began) -- Mongo is
-    // NOT re-checked at the Redis layer, so aResult is not `skipped`.
     expect(aResult.skipped).toBeUndefined();
 
     // THE ASSERTION THAT MATTERS: A's Redis eval() call, now finally
-    // executing with its OLDER revision (10) against B's already-cached
-    // NEWER entry (11), must be REJECTED by the CAS script -- the final
-    // cached payload and revision are asserted directly (not a mock call
-    // count), and must still be B's.
     const finalCached = JSON.parse(fakeRedisClient._store.get(`report:${USER_ID}`));
     expect(finalCached.revision).toBe(11);
     expect(finalCached.payload.spending.totalSpent).toBe(2000);

@@ -28,8 +28,6 @@ function resolveExplicitPeriod(fieldKey, sectionValue) {
 }
 
 // Builds the immutable grounding snapshot for ONE answer, from the exact `contextResult` buildContext() already returned for this turn -- called once, right after context is built and BEFORE the provider is invoked, so this can never be influenced by or parsed out of the LLM's answer text or prompt.
-//
-// Always returns `{ sources: [] }` rather than throwing/null/undefined for any invalid input (no report, no-data, malformed shape) -- an empty snapshot is a valid, honest result, never a fabricated one.
 function buildGroundingSnapshot(contextResult) {
   if (!contextResult || !isPlainObject(contextResult.fields)) {
     return { sources: [] };

@@ -1,7 +1,5 @@
 // backend/tests/sia.financeTools.test.js
-/**
- * Jest tests for finance tool functions exported from financialQueryService.js
- */
+/* Jest tests for finance tool functions exported from financialQueryService.js */
 
 const financialQueryService = require('../sia/financialQueryService');
 

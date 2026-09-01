@@ -92,11 +92,6 @@ const toCandidate = (expense, monthStart, monthEndExclusive) => {
     id,
     name: isNonBlankString(expense.expenseName) ? expense.expenseName : "",
     // Canonical grouping value (categoryNormalization.js), not the raw
-    // stored string -- the isNonBlankString guard above already guarantees
-    // a non-empty string here, so this can never fall back to the
-    // "Uncategorized" read-time marker; it only ever resolves a known
-    // alias to its canonical name or display-cases a genuinely new
-    // category, exactly like forecastInputAggregator.js's own grouping key.
     category: normalizeCategoryForGrouping(expense.expenseCategory),
     normalizedName: normalizeExpenseName(expense.expenseName),
     amount,
@@ -154,14 +149,7 @@ const compareAnomalies = (a, b) => {
   return 0;
 };
 
-/**
- * @param {object} input
- * @param {Array} input.currentMonthExpenses - candidate pool (this analysis month only)
- * @param {Array} input.recentExpensePool - historical pool to draw the baseline from (may
- *   legitimately include current-month records; they are excluded by date, not by identity)
- * @param {Date} input.currentMonthStart - explicit, injectable anchor date (first instant of
- *   the analysis month). This function never calls `new Date()` to discover "now".
- */
+/* @param {object} input */
 const analyze = ({
   currentMonthExpenses = [],
   recentExpensePool = [],

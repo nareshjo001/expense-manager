@@ -1,8 +1,4 @@
 // Batch 2 architecture closure: proves the actual Mongoose index
-// declarations on SiaSession/SiaMessage -- introspected directly via
-// `schema.indexes()`, which works without a live database connection
-// (index specs are just schema metadata until a real connection
-// `syncIndexes()`s them).
 "use strict";
 
 const SiaMessage = require("../models/SiaMessage");

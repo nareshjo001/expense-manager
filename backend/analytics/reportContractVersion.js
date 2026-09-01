@@ -3,12 +3,6 @@
 "use strict";
 
 // Bumped 3->4 for Prediction Layer V1: version 4 is the first contract whose `forecast` section always carries the per-category next-month breakdown, the descriptive `dataQuality` summary, `targetMonth`, and the forecast-vs-target-month `budgetRisk` block -- a stale v3 document is simply regenerated on next read via the same isCurrentReport() gate, no migration needed since models/Report.js stores every section as Mixed.
-// Bumped 4->5 for the Anomaly Detection category-normalization fix: expenseAnomalyAnalyzer.js's candidate/baseline category comparisons now go through normalizeCategoryForGrouping() instead of raw strings, so the CONTENT of `report.anomalies` can differ from a pre-fix report even though its SHAPE is unchanged -- since isCurrentReport() only ever inspects metadata.version (never section content), this bump is what forces that stale content to regenerate on next read, through the same lazy-regeneration path every prior bump relied on.
-// Bumped 5->6 for the backward-compatible currentMonthForecast contract.
-// Older cached reports are regenerated lazily so the redesigned UI never
-// mistakes a missing field for insufficient user history.
-// Bumped 6->7 for the material, coverage-aware unusual-spending contract.
-// Bumped 8->9 to remove the retired Financial Risk Signals report section.
 const CURRENT_REPORT_VERSION = 9;
 
 // True only when `report` carries a numeric metadata.version at least as new as the current contract; anything else (missing report, missing/non-object metadata, missing/non-numeric/older version) is treated as stale and regenerated -- never inferred from `anomalies` or any other section's content.

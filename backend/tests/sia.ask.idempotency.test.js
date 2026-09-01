@@ -1,19 +1,4 @@
 // Batch 3B.1: request-level idempotency regression suite.
-//
-// Batch 3B.0 proved the prior contract was NOT request-idempotent: a
-// sequential retry invoked the provider a second time and returned a
-// newly-generated answer, two concurrent duplicates both reached the
-// provider, and a first-turn retry without a sessionId could not be
-// recovered at all (a second session was created instead). Every test
-// below targets one of those failures directly.
-//
-// The persistence layer (models/SiaRequest.js) is backed here by an
-// in-memory fake that reproduces the two behaviours the real
-// implementation depends on: a UNIQUE (user, clientMessageId) constraint
-// that throws E11000 on a duplicate insert, and atomic
-// findOneAndUpdate compare-and-set semantics. That is deliberately not a
-// "mock that always agrees" -- the concurrency proofs below only hold
-// because the fake actually enforces the constraint.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -23,8 +8,6 @@ const TEST_JWT_SECRET = "sia-ask-idempotency-test-secret";
 const originalJwtSecret = process.env.JWT_SECRET;
 
 // Batch 3E: the controller's readiness gate additionally requires a
-// non-blank provider credential. Obviously-fake placeholder, scoped to this
-// suite and restored afterwards -- readiness checks PRESENCE, never format.
 const FAKE_CREDENTIAL = "test-credential-value-not-a-real-key";
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 
@@ -71,8 +54,6 @@ const healthContext = () => ({
 const QUESTION = "Why is my financial health score low?";
 const OTHER_QUESTION = "Why did my spending increase this month?";
 
-// ---------------------------------------------------------------------
-// In-memory SiaRequest fake with a REAL unique constraint.
 // ---------------------------------------------------------------------
 function createSiaRequestFake() {
   const docs = [];
@@ -158,9 +139,6 @@ function loadApp({
     askLlmImpl ||
       (async () => ({
         // A DIFFERENT answer each call, on purpose: if the provider were
-        // ever invoked twice, the two responses could not be identical, so
-        // any "both responses identical" assertion below is a genuine
-        // proof that it was invoked exactly once.
         answer: `Answer #${++answerCounter}`,
         model: "mock-model",
         latencyMs: 5,
@@ -169,8 +147,6 @@ function loadApp({
   jest.doMock("../sia/llmService", () => ({ askLlm: askLlmMock, LlmProviderError: RealLlmProviderError }));
 
   // POST /sia/ask now uses the direct financial-snapshot path. Keep this
-  // suite's idempotency assertions at the provider boundary, but adapt the
-  // historic answer fixtures to the direct service's { ok, answer } result.
   const buildFinancialSnapshotMock = jest.fn(async () => ({
     ok: true,
     snapshot: { period: { label: "this month" }, analytics: {}, income: {} },
@@ -237,8 +213,6 @@ const post = (app, token, body) =>
   request(app).post("/sia/ask").set("Authorization", `Bearer ${token}`).send(body);
 
 // ---------------------------------------------------------------------
-// 1. Sequential established-session duplicate
-// ---------------------------------------------------------------------
 describe("POST /sia/ask -- sequential duplicate on an established session", () => {
   it("invokes the LLM exactly once, returns byte-identical responses, and appends exactly one turn", async () => {
     const { app, askLlmMock, appendTurnMock } = loadApp();
@@ -256,8 +230,6 @@ describe("POST /sia/ask -- sequential duplicate on an established session", () =
   });
 });
 
-// ---------------------------------------------------------------------
-// 2. Concurrent duplicates
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- concurrent duplicates", () => {
   it("only one request reaches the LLM; the follower never processes independently", async () => {
@@ -288,8 +260,6 @@ describe("POST /sia/ask -- concurrent duplicates", () => {
 
     const statuses = [a.status, b.status].sort();
     // The follower either replayed the owner's stored response, or (if the
-    // bounded wait expired) received the deterministic in-progress 409.
-    // It must never have produced an independent answer.
     expect(statuses[0]).toBe(200);
     expect([200, 409]).toContain(statuses[1]);
 
@@ -304,15 +274,6 @@ describe("POST /sia/ask -- concurrent duplicates", () => {
   });
 
   // Batch 3G narrow regression: the same race as above, but staged in the
-  // ANSWER_READY window instead of the PROCESSING window -- gating
-  // appendTurn (session/message persistence, which runs AFTER
-  // markAnswerReady() has already committed the validated answer and
-  // renewed the lease) rather than gating askLlm. Before the
-  // idempotencyService.js fix, a duplicate arriving in exactly this window
-  // could take over the live ANSWER_READY lease and call
-  // createSession/appendTurn a SECOND time for the same first turn. With
-  // the fix, the duplicate must see IN_PROGRESS and never independently
-  // create a session or append a turn.
   it("a duplicate arriving while the owner is still finalizing an ANSWER_READY answer never starts a second finalizer", async () => {
     let releasePersistence;
     const gate = new Promise((resolve) => {
@@ -330,16 +291,11 @@ describe("POST /sia/ask -- concurrent duplicates", () => {
 
     const inFlight = Promise.all([post(app, token, body), post(app, token, body)]);
     // Let the owner get all the way through askLlm + validation +
-    // markAnswerReady (a fast, synchronous-ish path in this test's mocks)
-    // and reach the gated appendTurn call before the follower is dispatched.
     await new Promise((resolve) => setTimeout(resolve, 60));
     releasePersistence();
     const [a, b] = await inFlight;
 
     // The decisive proof: the provider and session persistence were each
-    // entered exactly once, even though two requests targeting the same
-    // first turn were in flight simultaneously through the ANSWER_READY
-    // window.
     expect(askLlmMock).toHaveBeenCalledTimes(1);
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
     expect(createSessionMock).toHaveBeenCalledTimes(1);
@@ -362,8 +318,6 @@ describe("POST /sia/ask -- concurrent duplicates", () => {
 });
 
 // ---------------------------------------------------------------------
-// 3. First turn with no sessionId, then a same-payload retry
-// ---------------------------------------------------------------------
 describe("POST /sia/ask -- first-turn retry with no sessionId", () => {
   it("recovers the original session and answer, creating one session and calling the LLM once", async () => {
     const { app, askLlmMock, createSessionMock } = loadApp();
@@ -384,8 +338,6 @@ describe("POST /sia/ask -- first-turn retry with no sessionId", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// 4 & 5. Conflict cases
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- idempotency key conflicts", () => {
   it("the same key with a DIFFERENT question returns 409 with no new LLM call or persistence", async () => {
@@ -447,8 +399,6 @@ describe("POST /sia/ask -- idempotency key conflicts", () => {
 });
 
 // ---------------------------------------------------------------------
-// 6. Completed replay skips the entire pipeline
-// ---------------------------------------------------------------------
 describe("POST /sia/ask -- completed replay", () => {
   it("skips the classifier, context builder, LLM, validator and appendTurn entirely", async () => {
     const { app, askLlmMock, buildContextMock, classifyIntentMock, appendTurnMock, createSessionMock } = loadApp();
@@ -468,17 +418,10 @@ describe("POST /sia/ask -- completed replay", () => {
     expect(askLlmMock).toHaveBeenCalledTimes(1);
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
     // Batch 3G remediation (closing an explicit coverage gap): REPLAY_COMPLETED
-    // returns the stored response before finalizeAnswer() -- and therefore
-    // before any title derivation -- ever runs. This request targeted an
-    // ALREADY-EXISTING session (VALID_SESSION_ID), so no session creation
-    // of any kind should ever occur on either the original request or the
-    // replay.
     expect(createSessionMock).not.toHaveBeenCalled();
   });
 });
 
-// ---------------------------------------------------------------------
-// 7. Recovery from answer_ready
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- recovery from a stored answer", () => {
   it("completes persistence from the stored answer without another LLM call", async () => {
@@ -511,18 +454,6 @@ describe("POST /sia/ask -- recovery from a stored answer", () => {
   });
 
   // Batch 3G remediation: closes the audit's explicitly identified coverage
-  // gap. The prior test above proves RESUME_ANSWER_READY recovers the
-  // stored answer without a second LLM call, but never inspected
-  // createSessionMock's call arguments -- so nothing here previously proved
-  // that a brand-new-session resume derives its title from the SAME
-  // originally-validated question (rather than, say, an empty string, the
-  // stale/retried request's raw body, or no argument at all). sessionService
-  // itself is mocked in this file (title derivation is proven directly
-  // against the real deriveSessionTitle()/createSession() in
-  // sia.sessionTitle.test.js and sia.sessionService.test.js) -- what this
-  // test proves is that ask.js's controller-level RESUME_ANSWER_READY path
-  // feeds that helper the correct input exactly once, never supplies a
-  // title itself, and a same-key retry after recovery can never diverge.
   it("RESUME_ANSWER_READY for a brand-new session creates exactly one session with the original validated question, and a same-key retry cannot diverge", async () => {
     const requestFake = createSiaRequestFake();
     const { fingerprintQuestion } = jest.requireActual("../sia/idempotencyService");
@@ -548,17 +479,11 @@ describe("POST /sia/ask -- recovery from a stored answer", () => {
     expect(askLlmMock).not.toHaveBeenCalled();
 
     // Exactly one new session, created with exactly the original validated
-    // question and NOTHING else (no controller-supplied title, no request
-    // metadata) -- this is the sole input sessionService.createSession()'s
-    // real deriveSessionTitle() helper ever receives on this path.
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     expect(createSessionMock).toHaveBeenCalledWith("user-resume-title-1", QUESTION);
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
 
     // A second arrival under the SAME clientMessageId (now status
-    // "completed") must be a pure REPLAY_COMPLETED: no additional session,
-    // no additional append, byte-identical response -- so the title/session
-    // this request resolved to can never diverge on a retry.
     const retry = await post(app, token, body);
     expect(retry.status).toBe(200);
     expect(retry.body).toEqual(res.body);
@@ -596,16 +521,12 @@ describe("POST /sia/ask -- recovery from a stored answer", () => {
     expect(askLlmMock).not.toHaveBeenCalled();
     expect(findOwnedSessionMock).toHaveBeenCalled();
     // The decisive proof: resuming an ANSWER_READY record that already
-    // pointed at an existing session never creates a second one -- the
-    // existing session is reused (and therefore never re-titled).
     expect(createSessionMock).not.toHaveBeenCalled();
     expect(appendTurnMock).toHaveBeenCalledTimes(1);
     expect(res.body.sessionId).toBe(VALID_SESSION_ID);
   });
 });
 
-// ---------------------------------------------------------------------
-// 8. Failure paths
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- failures leave the key safely retryable", () => {
   it("a provider failure creates no empty session and allows a later successful retry with the same key", async () => {
@@ -654,8 +575,6 @@ describe("POST /sia/ask -- failures leave the key safely retryable", () => {
 });
 
 // ---------------------------------------------------------------------
-// 9. No-data retry
-// ---------------------------------------------------------------------
 describe("POST /sia/ask -- direct-answer replay", () => {
   it("replays the same 200 without a second direct-answer call or a new session", async () => {
     const { app, askLlmMock, createSessionMock } = loadApp({
@@ -675,8 +594,6 @@ describe("POST /sia/ask -- direct-answer replay", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// 10. Input validation
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- clientMessageId and sessionId validation", () => {
   it.each([
@@ -726,8 +643,6 @@ describe("POST /sia/ask -- clientMessageId and sessionId validation", () => {
 });
 
 // ---------------------------------------------------------------------
-// 11. Session store unavailable with a supplied key
-// ---------------------------------------------------------------------
 describe("POST /sia/ask -- keyed request without a usable coordination store", () => {
   it("returns 503 BEFORE invoking the LLM rather than running an unprotected keyed request", async () => {
     const { app, askLlmMock } = loadApp({ sessionStoreAvailable: false });
@@ -741,8 +656,6 @@ describe("POST /sia/ask -- keyed request without a usable coordination store", (
   });
 });
 
-// ---------------------------------------------------------------------
-// 12. Backward compatibility for unkeyed requests
 // ---------------------------------------------------------------------
 describe("POST /sia/ask -- existing no-key behaviour is unchanged", () => {
   it("a request with no clientMessageId still succeeds and creates no idempotency record", async () => {

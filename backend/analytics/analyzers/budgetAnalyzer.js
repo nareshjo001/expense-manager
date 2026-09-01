@@ -29,9 +29,6 @@ const calculateBudgetUtilization = ({ budget = 0, spent = 0 } = {}) => {
 };
 
 // Ordered ascending — first tier whose `max` the utilization falls under wins.
-// NOTE: this ordering only decides the *status* field. Insight priority
-// (which message wins when multiple things are true) is decided in
-// generateBudgetInsights, not here.
 const STATUS_THRESHOLDS = [
   { max: 70, status: "Safe" },
   { max: 90, status: "Warning" },
@@ -184,9 +181,5 @@ module.exports = {
   calculateBudgetProjection,
   analyze,
   // Exported (Prediction Layer V1) purely so the forecast-vs-budget risk
-  // mapper (analyzers/forecastBudgetRisk.js) can derive its tiers from
-  // THESE thresholds instead of restating the same numbers a second time.
-  // Read-only for that consumer; nothing in this module's own behavior
-  // changed by exposing it.
   STATUS_THRESHOLDS,
 };

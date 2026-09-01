@@ -28,11 +28,6 @@ const forecast = {
   methodVersion: "ROBUST_TREND_MEDIAN_V2",
 
   // Current-month nowcast. The point estimate always starts with every
-  // expense already logged this month; these rules only control how much
-  // historical/current spending is allowed to influence the estimate for
-  // the days that remain. An automatically detected one-off is capped at
-  // the robust upper boundary rather than deleted, protecting legitimate
-  // but rare costs from disappearing completely.
   currentMonth: {
     methodVersion: "CURRENT_MONTH_ROBUST_NOWCAST_V1",
     minHistoryMonths: 3,
@@ -49,8 +44,6 @@ const forecast = {
   },
 
   // --- category-level breakdown -------------------
-  //
-  // Each category is forecast from its OWN monthly history using exactly the same Theil-Sen `fitRobustTrend` function the overall forecast uses (not a second, divergent method), then every category prediction is reconciled so rounded category amounts sum EXACTLY to the already-published overall estimate. Categories are always discovered dynamically from the user's own data.
   category: {
     // A category needs at least this many ALIGNED months on the canonical completed-month timeline (buildCompletedMonthCategorySeries) before its own trend is fitted -- since every category is zero-filled against that timeline, this is effectively a check on overall history depth.
     minMonthsForOwnTrend: 3,
@@ -72,8 +65,6 @@ const forecast = {
   },
 
   // --- data-quality summary ------------------------
-  //
-  // Purely descriptive: reports what history actually exists, never gates or alters any estimate (the per-horizon minHistoryMonthsFor* rules remain the only gates). `sufficient` deliberately uses the same 6-month bar as minHistoryMonthsForNextYear, so "sufficient" never claims more confidence than the horizon gates themselves do.
   dataQuality: {
     sufficientCompletedMonths: 6,
     statuses: {
@@ -89,9 +80,6 @@ const forecast = {
   },
 
   // --- forecast-vs-budget risk ---------------------
-  //
-  // Deliberately NOT a second set of budget thresholds: numeric tier boundaries are imported at use time from budgetAnalyzer.js's own STATUS_THRESHOLDS (forecastBudgetRisk.js), so this module never restates them and the two can't silently drift -- only the forecast-specific status *names* live here.
-  // The target-month budget lookup is exact-match only: this repository's budget model is keyed per calendar month with no recurring/reusable concept, so a next-month budget exists ONLY if the user already created one for that exact month; when none exists the status is `no_budget` -- the current month's budget is never substituted.
   budgetRisk: {
     statuses: {
       safe: "safe",

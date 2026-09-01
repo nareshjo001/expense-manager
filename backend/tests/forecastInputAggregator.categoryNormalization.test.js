@@ -1,21 +1,4 @@
 // Category Normalization -- final bounded correction.
-//
-// Confirmed production gap (completion-verification review):
-// analytics/forecastInputAggregator.js's buildCompletedMonthCategorySeries()
-// built its grouping key with trim-only handling
-// (`record.expenseCategory.trim()`), so historical variants of the SAME
-// category ("Food"/"food"/"FOOD", or the approved alias pair
-// "Medical"/"healthcare"/"Health") each became a SEPARATE forecast
-// category. Because every emitted category then gets its own trend fit and
-// its own share of the reconciled published total, that fragmentation
-// distorted the per-category forecast breakdown rather than merely
-// mislabelling it.
-//
-// These tests exercise the REAL production module (no mocks, no stubbed
-// analyzer) against a fixed anchor date, and prove the grouping key now
-// comes from the shared backend normalizer while every other property of
-// this aggregation boundary -- window, ordering, output shape, skip rules
-// for invalid dates/amounts -- is unchanged.
 "use strict";
 
 const {
@@ -110,8 +93,6 @@ describe("forecastInputAggregator -- category normalization (3) unknown categori
     const series = buildCompletedMonthCategorySeries(pool, MONTH_START);
 
     // "Pet Care" merges with its own casing variant but is NEVER folded
-    // into "Others" or any existing canonical bucket, and stays separate
-    // from the other unknown category.
     expect(series.map((e) => e.category)).toEqual(["Crypto Trading", "Food", "Pet Care"]);
     expect(categoryTotal(series.find((e) => e.category === "Pet Care"))).toBe(100);
     expect(categoryTotal(series.find((e) => e.category === "Crypto Trading"))).toBe(25);
@@ -130,16 +111,6 @@ describe("forecastInputAggregator -- category normalization (3) unknown categori
   });
 
   // Casing-correction fix -- formerly a KNOWN LIMITATION here: an
-  // all-caps unknown category ("PET CARE") did not merge with its
-  // mixed-case twin ("Pet Care"), because the shared normalizer's
-  // unknown-category pass-through Title-Cased only each word's leading
-  // letter and left the rest of the string's case untouched. That is now
-  // fixed in utils/categoryNormalization.js's toTitleCase() (lowercases the
-  // cleaned value before Title-Casing, exactly matching AddExpense.js's own
-  // normalizeCategory), so this boundary now merges as required. KNOWN
-  // categories and approved aliases were never affected -- they resolve
-  // through the case-insensitive alias table (see the Food/FOOD and
-  // Medical/Health cases above).
   it("merges 'Pet Care', 'PET CARE', and 'pet care' into ONE canonical 'Pet Care' series (formerly a known limitation)", () => {
     const pool = [
       expense(1, 70, "Pet Care"),
@@ -221,8 +192,6 @@ describe("forecastInputAggregator -- category normalization (5) counts and monet
     );
 
     // This is the conservation property the previous trim-only skip broke:
-    // an unusable-category record's amount counted toward the overall total
-    // but belonged to no category, so the breakdown could not reconcile.
     expect(grandTotal(categories)).toBe(overallTotal);
     expect(overallTotal).toBe(315.75);
   });
@@ -277,8 +246,6 @@ describe("forecastInputAggregator -- category normalization (6) output structure
     expect(series.map((e) => e.category)).toEqual(["Food", "Travel"]);
 
     // Canonical-timeline alignment preserved: every category is emitted
-    // against the SAME completed-month keys, oldest-first, with explicit
-    // zeros for months it recorded nothing in.
     const canonicalKeys = buildCompletedMonthSeries(pool, MONTH_START).map((p) => p.monthKey);
     expect(canonicalKeys).toEqual(["2026-4", "2026-5", "2026-6"]);
     series.forEach((entry) => {

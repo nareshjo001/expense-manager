@@ -1,10 +1,6 @@
 "use strict";
 
 // Category Normalization -- single implementation pass, required test
-// scenarios #1-6 (direct unit tests of the shared normalizer) plus #13-14
-// (read-time grouping helper correctness), per the user's explicit
-// instruction: "Add a focused backend/tests/categoryNormalization.test.js
-// for direct utility tests."
 const {
   CATEGORY_ALIASES,
   UNCATEGORIZED,
@@ -30,8 +26,6 @@ describe("categoryNormalization: normalizeCategory", () => {
     expect(normalizeCategory("newsubcategory")).toBe("Newsubcategory");
     expect(normalizeCategory("NEWSUBCATEGORY")).toBe("Newsubcategory");
     // Multi-word unknown category, fully mixed case -- every casing variant
-    // must converge on the same string (see the dedicated casing-correction
-    // tests below for the full matrix).
     expect(normalizeCategory("nEwSuBcAtEgOrY tWo")).toBe("Newsubcategory Two");
   });
 
@@ -50,10 +44,6 @@ describe("categoryNormalization: normalizeCategory", () => {
   });
 
   // Casing-correction fix: proves known aliases/canonical names are
-  // UNAFFECTED by the toTitleCase lowercase-first fix -- they resolve
-  // through the case-insensitive alias-table lookup (a separate code path
-  // from the unknown-category pass-through toTitleCase() touches) and were
-  // already fully case-insensitive before this fix.
   it("known aliases still map exactly as before regardless of arbitrary mixed casing", () => {
     expect(normalizeCategory("HEALTHCARE")).toBe("Health");
     expect(normalizeCategory("hEaLtHcArE")).toBe("Health");
@@ -63,8 +53,6 @@ describe("categoryNormalization: normalizeCategory", () => {
   });
 
   // Scenario #4: unknown-category pass-through (never rejected, never
-  // folded into an existing bucket -- aliases are compatibility metadata,
-  // not an allowlist)
   it("passes through unknown, non-empty categories as their own distinct, cleaned value", () => {
     expect(normalizeCategory("Pet Supplies")).toBe("Pet Supplies");
     expect(normalizeCategory("pet supplies")).toBe("Pet Supplies");
@@ -74,18 +62,6 @@ describe("categoryNormalization: normalizeCategory", () => {
   });
 
   // Casing-correction fix: unknown-category casing variants that differ in
-  // NON-LEADING character casing must converge on the identical string.
-  // Confirmed defect (forecast-aggregation verification): the previous
-  // implementation Title-Cased only each word's leading letter and left the
-  // rest of the string untouched, so "PET CARE" normalized to "PET CARE"
-  // (not "Pet Care") and "crypto TRADING" normalized to "Crypto TRADING"
-  // (not "Crypto Trading") -- two variants of the SAME category producing
-  // two DIFFERENT canonical strings, fragmenting it across storage,
-  // idempotency comparison, analytics grouping, and forecasting. The fix
-  // lowercases the cleaned value before Title-Casing (matching
-  // AddExpense.js's own normalizeCategory exactly), so every casing variant
-  // of an unknown category now converges on one deterministic display-cased
-  // string.
   it("normalizes unknown-category casing variants (including non-leading-character casing) to the identical string", () => {
     expect(normalizeCategory("PET CARE")).toBe("Pet Care");
     expect(normalizeCategory("pet care")).toBe("Pet Care");
@@ -125,8 +101,6 @@ describe("categoryNormalization: normalizeCategory", () => {
       "Others",
       "gifts",
       // Casing-correction fix: mixed-case unknown-category inputs must
-      // also be idempotent -- the first pass's lowercased-then-Title-Cased
-      // output must be a fixed point of a second pass.
       "PET CARE",
       "crypto TRADING",
       "pET cARE",
@@ -164,9 +138,6 @@ describe("categoryNormalization: normalizeCategoryForGrouping", () => {
   });
 
   // Scenario #14 (part 1): invalid legacy data groups as Uncategorized,
-  // never silently as "Others". Unaffected by the casing-correction fix --
-  // invalid input never reaches toTitleCase() at all (normalizeCategory
-  // returns null for it before any casing logic runs).
   it("falls back to the explicit Uncategorized marker for invalid/missing input, never 'Others'", () => {
     expect(normalizeCategoryForGrouping("")).toBe(UNCATEGORIZED);
     expect(normalizeCategoryForGrouping("   ")).toBe(UNCATEGORIZED);
@@ -212,9 +183,6 @@ describe("categoryNormalization: groupByCategoryHelper (read-time grouping corre
   });
 
   // Casing-correction fix: proves the fix reaches this real read-path
-  // consumer, not just the underlying normalizeCategory() unit -- "Pet
-  // Care", "PET CARE" and "pet care" must merge into ONE bucket instead of
-  // silently fragmenting into three.
   it("merges unknown-category casing variants (including non-leading-character casing) into a single bucket", () => {
     const expenses = [
       { id: 1, expenseCategory: "Pet Care", expenseAmount: 20 },
@@ -249,23 +217,9 @@ describe("categoryNormalization: groupByCategoryHelper (read-time grouping corre
 });
 
 // Security correction: CATEGORY_ALIASES's bracket lookup previously walked
-// Object.prototype for any key not explicitly configured -- an
-// attacker/user-controlled category string such as "__proto__" or
-// "constructor" could resolve an INHERITED property instead of a real
-// alias, and normalizeCategory() would return that non-string value as-is.
-// Fixed by giving CATEGORY_ALIASES a null prototype (Object.create(null)),
-// plus a defensive typeof guard at the lookup site. Expected values below
-// are hardcoded literals (never computed by calling normalizeCategory
-// itself), per the requirement that this regression suite verify the
-// documented fallback contract independently of the implementation under
-// test.
 describe("categoryNormalization: prototype-pollution / inherited-property safety", () => {
   it("1. __proto__, constructor, and hasOwnProperty each normalize to a deterministic primitive string, never an inherited object/function", () => {
     // "__proto__": collapseWhitespace is a no-op (no whitespace), toLowerCase
-    // is a no-op (no letters), and the Title-Case regex's word-boundary match
-    // only touches the leading underscore (itself unaffected by
-    // toUpperCase()) -- the whole run of underscores/letters is one
-    // contiguous \w sequence, so the string passes through unchanged.
     expect(normalizeCategory("__proto__")).toBe("__proto__");
     // "constructor": one contiguous word -- only the leading letter is
     // Title-Cased, exactly like any other unknown single-word category.

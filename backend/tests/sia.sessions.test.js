@@ -1,11 +1,4 @@
 // Route/controller tests for the Batch 2 SIA session endpoints:
-// GET /sia/sessions, GET /sia/sessions/:sessionId/messages,
-// DELETE /sia/sessions/:sessionId (backend/Controllers/SiaControllers/sessions.js,
-// backend/Routes/sia.routes.js).
-//
-// backend/sia/sessionService.js is fully mocked per test -- no real
-// MongoDB is ever touched. Mirrors tests/sia.ask.test.js's exact
-// module-reset + local-JWT-signing isolation pattern.
 "use strict";
 
 const jwt = require("jsonwebtoken");

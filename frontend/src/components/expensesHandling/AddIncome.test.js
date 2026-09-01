@@ -1,27 +1,4 @@
 // Final correctness pass -- AddIncome's idempotency key now belongs to one
-// normalized OUTBOUND PAYLOAD, tracked as `{ id, fingerprint }`
-// (activeAttemptRef), not merely to "the form being open". This replaces
-// the PREVIOUS design (a single lazily-minted id, reused unconditionally
-// until success, mirroring AddExpense.js's addAttemptIdRef) which was
-// confirmed unacceptable: after an ambiguous failure, a user who changed
-// source/amount/date and resubmitted kept reusing the SAME id for a
-// materially different payload, so every subsequent manual resubmission
-// stayed permanently stuck on an incompatible key once the backend
-// (Controllers/IncomeControllers/addincome.js's isSameIncomePayload)
-// rejected it with 409 IDEMPOTENCY_KEY_CONFLICT.
-//
-// New policy (tested below):
-//   - no active attempt, or the normalized payload's fingerprint differs
-//     from the active attempt's -- mint a NEW id;
-//   - fingerprint UNCHANGED from the active attempt -- reuse the SAME id
-//     (a genuine retry of an ambiguous/network/5xx failure);
-//   - committed success clears the active attempt (next submission, even
-//     with identical field values, gets a new id);
-//   - a definitive backend 409 also clears the active attempt (the next
-//     explicit submit gets a new id instead of retrying under a
-//     permanently-doomed key) -- no automatic resubmit is ever triggered;
-//   - re-rendering alone (e.g. a fresh `mutate` identity) never mints or
-//     discards an id.
 import React from "react";
 import fs from "fs";
 import path from "path";
@@ -31,9 +8,6 @@ import { useAddIncomeMutation } from "../../hooks/mutations/useAddIncomeMutation
 import { expenseAddSuccessToast, expenseAddErrorToast } from "../alertsEffects/toastMessages";
 
 // Explicit factories (not bare jest.mock(path) auto-mocking), mirroring
-// AddExpense.test.js's own rationale: the real hook transitively imports
-// ../../api/axios, and this project's pinned axios version ships an
-// ESM-only entry this CRA/Jest 27 setup does not parse.
 jest.mock("../../hooks/mutations/useAddIncomeMutation", () => ({
   useAddIncomeMutation: jest.fn(),
 }));
@@ -80,11 +54,6 @@ describe("AddIncome -- payload-scoped idempotency id ({ id, fingerprint } per at
   });
 
   // 1. First submission creates exactly one id, sent under the exact
-  // backend contract field name `id` (backend/Middlewares/AuthValidation.js's
-  // addIncomeValidation requires `id: Joi.string().required()`;
-  // backend/Controllers/IncomeControllers/addincome.js reads req.body.id as
-  // the idempotency key -- never `idempotencyKey` or any other name at the
-  // HTTP boundary).
   it("1. a single submission calls mutate exactly once with a request field literally named `id`", () => {
     renderAddIncome();
     fillRequiredFields();
@@ -109,8 +78,6 @@ describe("AddIncome -- payload-scoped idempotency id ({ id, fingerprint } per at
   });
 
   // 2. Unchanged retry after a lost/ambiguous response reuses the same id
-  // (simulated here as a lost-response resubmit -- no callback has fired
-  // yet -- and separately as an explicit ambiguous 500 failure below).
   it("2a. reuses the same id across a retried submit while the form stays open (lost-response retry)", () => {
     renderAddIncome();
     fillRequiredFields();
@@ -154,8 +121,6 @@ describe("AddIncome -- payload-scoped idempotency id ({ id, fingerprint } per at
   });
 
   // 3. A source change after an ambiguous failure mints a NEW id on the
-  // next explicit submission -- this replaces the old "policy" test that
-  // treated a changed-payload/same-id conflict as acceptable.
   it("3. a source change after an ambiguous failure mints a new id on the next explicit submission", () => {
     renderAddIncome();
     fillRequiredFields({ source: "Salary" });
@@ -212,9 +177,6 @@ describe("AddIncome -- payload-scoped idempotency id ({ id, fingerprint } per at
   });
 
   // 6. Re-rendering the component does not create a new id for an active
-  // attempt (e.g. a fresh `mutate` function identity from a re-derived
-  // useAddIncomeMutation() call), even under the new fingerprint-based
-  // design.
   it("6. does not regenerate the id merely because the component rerenders with a new mutate identity", () => {
     const { rerender } = renderAddIncome();
     fillRequiredFields();
@@ -244,8 +206,6 @@ describe("AddIncome -- payload-scoped idempotency id ({ id, fingerprint } per at
     });
 
     // Identical field values to the first submission -- proves the id
-    // change is driven by the cleared attempt, not merely by a changed
-    // fingerprint.
     fillRequiredFields();
     fireEvent.submit(document.querySelector("form.add-expense"));
     const second = mockAddMutate.mock.calls[1][0];
@@ -364,11 +324,6 @@ describe("AddIncome -- existing form/success/error behavior is unchanged", () =>
   });
 
   // Client-side validation failure (the form is simply never submitted --
-  // the browser's native `required` gate blocks the submit event from ever
-  // reaching handleSubmit) never consumes an id, since id-minting only
-  // happens inside handleSubmit after e.preventDefault() runs. Verified
-  // here by never firing the submit event at all and confirming mutate is
-  // never called.
   it("a form that never reaches handleSubmit (client-side validation gate) never calls mutate, so no id is minted", () => {
     renderAddIncome();
     // Deliberately leave required fields empty -- no fireEvent.submit call
@@ -379,10 +334,6 @@ describe("AddIncome -- existing form/success/error behavior is unchanged", () =>
 
 describe("AddIncome -- no frontend service credential is introduced", () => {
   // 13. Static source check -- the component file itself never embeds an
-  // API key, bearer token, or other secret literal. The only credential
-  // AddIncome.js ever touches is the user's own session token, read at
-  // request time via the shared axios interceptor (src/api/axios.js's
-  // `localStorage.getItem("token")`), never hardcoded here.
   it("AddIncome.js source contains no hardcoded credential/secret literal", () => {
     const source = fs.readFileSync(path.join(__dirname, "AddIncome.js"), "utf8");
     const forbidden = [
@@ -395,8 +346,6 @@ describe("AddIncome -- no frontend service credential is introduced", () => {
       expect(pattern.test(source)).toBe(false);
     }
     // The only "token" reference anywhere in this component's own tree is
-    // the shared mutation hook / axios instance reading the user's own
-    // already-issued session token -- never a service-level credential.
     expect(source.includes("ML_OPERATIONS_TOKEN")).toBe(false);
     expect(source.includes("process.env.OPENAI")).toBe(false);
   });

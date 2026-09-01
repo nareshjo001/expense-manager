@@ -1,17 +1,4 @@
 // Unit tests for backend/sia/intentClassifier.js.
-//
-// Pure function, no dependencies -- no mocking needed, no network, no
-// MongoDB, Redis, ML service, or provider call is possible.
-//
-// M2-2 scope: extends this suite to also cover SPENDING_CHANGE_EXPLANATION
-// -- the exact identifier already established by
-// backend/sia/contextBuilder.js's M1-2 implementation -- while every M2-1
-// HEALTH_EXPLANATION case above stays exactly as it was (unchanged
-// assertions, just relocated within this describe block).
-// M2-3 scope: extends this suite to also cover BUDGET_STATUS_EXPLANATION
-// -- the exact identifier already established by
-// backend/sia/contextBuilder.js's M2-3A implementation -- while every
-// M2-1/M2-2 case above stays exactly as it was.
 "use strict";
 
 const { classifyIntent } = require("../sia/intentClassifier");
@@ -90,12 +77,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // M2-4B deliberate contract correction (approved): a question whose
-  // primary subject is a CATEGORY now belongs to
-  // CATEGORY_SPENDING_EXPLANATION, because only that context carries
-  // category-level aggregates and categoryGrowth -- the spending-change
-  // context has no category breakdown at all (see responseFormatter.js).
-  // The non-category half of this original test is unchanged: a
-  // contribution question that names no category stays spending-change.
   it("routes a category-contribution question to the category intent, while a non-category contribution question stays spending-change", () => {
     expect(classifyIntent("Which category contributed most to my spending increase?")).toBe(
       "CATEGORY_SPENDING_EXPLANATION"
@@ -113,13 +94,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // CURRENT_SPENDING_SUMMARY intentional contract change (see the
-  // dedicated describe block below): "How much did I spend this month?" is
-  // a genuine current-month total lookup -- spending topic + current-period
-  // phrase + "how much" lookup -- and now correctly resolves to the new
-  // CURRENT_SPENDING_SUMMARY intent instead of remaining unsupported,
-  // exactly the gap this batch was written to close. A lookup with no
-  // current-period phrase and no lookup word ("Show my expenses.",
-  // "List my spending.") stays null -- unaffected, still no intent claims it.
   it("rejects a plain spending/expense lookup with no explanation, change, or current-period-total concept", () => {
     expect(classifyIntent("Show my expenses.")).toBeNull();
     expect(classifyIntent("List my spending.")).toBeNull();
@@ -133,11 +107,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // Batch 2 intentional contract change (same reasoning as the
-  // "Predict my expenses next month." case above): a prediction question
-  // was never SPENDING_CHANGE_EXPLANATION's territory (no change/increase/
-  // decrease verb is present), so this line only ever proved it correctly
-  // stayed OUT of spending-change. It now correctly resolves to the new
-  // SPENDING_FORECAST_EXPLANATION intent instead of remaining unsupported.
   it("Batch 2: 'Predict my spending next month.' is not spending-change, and now resolves to SPENDING_FORECAST_EXPLANATION", () => {
     expect(classifyIntent("Predict my spending next month.")).toBe("SPENDING_FORECAST_EXPLANATION");
   });
@@ -206,12 +175,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // The plain topic+verb gate alone would wrongly recognize these, because
-  // each one contains a recognized verb ("explain"/"why"/"status") that
-  // ALSO happens to appear in a genuine mutation or advice request. The
-  // BUDGET_ACTION_EXCLUSION_PATTERN vetoes exactly this shape: a
-  // mutation/advice verb (set/create/update/edit/increase/decrease/raise/
-  // lower/delete/remove/modify/change/spend/invest) governing "budget" as
-  // its direct object.
   it("rejects mutation requests phrased with a recognized explanation verb (why/explain/status)", () => {
     expect(classifyIntent("Explain how to increase my budget.")).toBeNull();
     expect(classifyIntent("Why should I change my budget?")).toBeNull();
@@ -226,9 +189,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // The exclusion above must be narrow: it only vetoes a mutation/advice
-  // verb appearing BEFORE "budget" (governing it as a direct object). A
-  // verb describing something the report already computed, appearing
-  // AFTER "budget", must remain recognized.
   it("does not over-exclude legitimate explanations of a reported budget change", () => {
     expect(classifyIntent("Why did my budget status change?")).toBe("BUDGET_STATUS_EXPLANATION");
     expect(classifyIntent("Explain why my budget utilization increased.")).toBe(
@@ -256,14 +216,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // Batch 2 intentional contract change: "Predict my expenses next month."
-  // was unsupported (null) before Forecasting V1 existed. It is not
-  // BUDGET_STATUS_EXPLANATION's territory being stolen -- it was never
-  // classified as budget-status even before this batch (no
-  // BUDGET_STATUS_VERB_PATTERN trigger word is present) -- it now
-  // correctly resolves to the new SPENDING_FORECAST_EXPLANATION intent
-  // instead of remaining unsupported. See
-  // "backend/sia/intentClassifier -- Batch 2 new intents" below for full
-  // forecast-intent coverage.
   it("Batch 2: a general forecasting question now resolves to SPENDING_FORECAST_EXPLANATION instead of null", () => {
     expect(classifyIntent("Predict my expenses next month.")).toBe("SPENDING_FORECAST_EXPLANATION");
   });
@@ -302,8 +254,6 @@ describe("backend/sia/intentClassifier", () => {
 
   it("incidental use of health/spending/status/change wording inside a budget question does not cross-classify it away from budget", () => {
     // Contains "status" (a HEALTH-adjacent-sounding word) but the topic is
-    // explicitly budget, not "financial health"/"financial risk" -- must
-    // stay BUDGET_STATUS_EXPLANATION, not HEALTH_EXPLANATION.
     expect(classifyIntent("Explain my current budget status.")).toBe("BUDGET_STATUS_EXPLANATION");
   });
 
@@ -337,10 +287,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // -- M2-4B: CATEGORY_SPENDING_EXPLANATION -----------------------------------
-  // Grounded exclusively in backend/sia/contextBuilder.js's M2-4A context
-  // (topCategory, leastCategory, categoryDistribution, concentrationIndex,
-  // top3Concentration, categoryGrowth) -- no concept is recognized here
-  // that the context cannot actually answer.
 
   it("recognizes category ranking and identity questions", () => {
     expect(classifyIntent("Which category am I spending the most on?")).toBe(
@@ -409,8 +355,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // Precedence: these all satisfy the broad spending topic+verb gate too,
-  // but a clear category focus must win, because only the category context
-  // carries category-level aggregates.
   it("gives a clearly category-focused question precedence over the broad spending-change branch", () => {
     expect(classifyIntent("Which category contributed most to my spending increase?")).toBe(
       "CATEGORY_SPENDING_EXPLANATION"
@@ -501,11 +445,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // -- M2-4B remediation: trailing-category share questions ------------------
-  // The category name TRAILS the phrase here ("...of my spending is
-  // Groceries"), so the possessive patterns above cannot see it. Without a
-  // dedicated shape these fell through to the spending-change branch and
-  // were answered from a context with no category breakdown, even though
-  // categoryDistribution's own percentages are exactly what they ask for.
 
   it("recognizes share/percentage questions whose category trails the phrase", () => {
     expect(classifyIntent("What percentage of my spending is Groceries?")).toBe(
@@ -529,8 +468,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // Nearby shapes that look similar but are NOT category-share questions.
-  // Each asserts the exact deterministic result the classifier already
-  // produced before this remediation -- not a loose "is not category" check.
   it("does not treat nearby non-category share/percentage shapes as category questions", () => {
     // Overall spending change that merely mentions a percentage.
     expect(classifyIntent("What percentage did my overall spending increase?")).toBe(
@@ -545,8 +482,6 @@ describe("backend/sia/intentClassifier", () => {
   });
 
   // -- M2-4B remediation: full month names are never category names ----------
-  // A month scopes a question in time; the category context has no time
-  // dimension, so these must stay with the spending-change intent.
 
   it("does not treat a full month name as a category name", () => {
     expect(classifyIntent("Why is my January spending high?")).toBe(
@@ -627,10 +562,6 @@ describe("backend/sia/intentClassifier -- Batch 2 new intents", () => {
 
     it("does not fire on a bare time-horizon mention with no spending topic (falls through to budget-status once a real trigger word is present)", () => {
       // "for next month" alone has no SPENDING_TOPIC_PATTERN match, so
-      // isForecastQuestion() correctly does not fire; the sentence must
-      // still contain one of BUDGET_STATUS_VERB_PATTERN's own existing
-      // trigger words ("remaining" here) to classify as budget-status at
-      // all -- this was already true before Batch 2 and is unchanged.
       expect(classifyIntent("How much budget do I have remaining for next month?")).toBe(
         "BUDGET_STATUS_EXPLANATION"
       );
@@ -668,8 +599,6 @@ describe("backend/sia/intentClassifier -- Batch 2 new intents", () => {
   describe("ambiguity, adversarial phrasing, and mixed intents", () => {
     it("a genuinely mixed-domain question stays unclassified rather than guessing one intent", () => {
       // Names a category, budget, AND uses prediction language -- this is
-      // exactly the existing CATEGORY_AMBIGUOUS cross-domain/prediction
-      // exclusion path, unaffected by the new intents.
       expect(classifyIntent("Predict my highest spending category next month to stay under budget.")).toBeNull();
     });
 
@@ -685,8 +614,6 @@ describe("backend/sia/intentClassifier -- Batch 2 new intents", () => {
     it("rejects overly long input the same explicit way as any other unmatched input (classifier itself has no length limit; length is enforced by the controller)", () => {
       const veryLong = "unusual ".repeat(200);
       // Still classifies (the classifier has no length cap of its own --
-      // Controllers/SiaControllers/ask.js's MAX_QUESTION_LENGTH is the
-      // actual bound, tested separately) -- but must not throw.
       expect(() => classifyIntent(veryLong)).not.toThrow();
     });
 
@@ -698,12 +625,6 @@ describe("backend/sia/intentClassifier -- Batch 2 new intents", () => {
 });
 
 // -- CURRENT_SPENDING_SUMMARY -------------------------------------------
-// Grounded exclusively in backend/sia/contextBuilder.js's bounded
-// summary.totalSpent context -- a bare "what's my current-month total?"
-// lookup, distinct from every explanation/comparison/forecast/advice
-// question the other seven intents already own. Checked strictly LAST in
-// the classifier, so every test in this block also proves the seven
-// existing intents keep first claim on any overlapping wording.
 describe("backend/sia/intentClassifier -- CURRENT_SPENDING_SUMMARY", () => {
   it("recognizes the exact production question", () => {
     expect(classifyIntent("What is my current month's total spent ?")).toBe(
@@ -826,10 +747,6 @@ describe("backend/sia/intentClassifier -- CURRENT_SPENDING_SUMMARY", () => {
 });
 
 // -- All eight suggested-question examples from
-// frontend/src/components/sia/siaSuggestions.js still match their
-// documented intent (read-only reference -- that file is not edited by
-// this batch). CURRENT_SPENDING_SUMMARY has no frontend suggestion yet,
-// so only the existing seven are asserted here.
 describe("backend/sia/intentClassifier -- frontend SIA_SUGGESTIONS stay correctly classified", () => {
   it.each([
     ["Why is my financial health score what it is?", "HEALTH_EXPLANATION"],

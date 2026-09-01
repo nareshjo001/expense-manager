@@ -2,13 +2,6 @@ import { renderHook } from "@testing-library/react";
 import { useBudgetSummary } from "./useBudgetSummary";
 
 // Phase C.2 -- GET /api/getbudgets additively returns `recoveryPending`
-// (boolean) and `staleMonths` (month-key strings) whenever a prior
-// mutation's budget recalculation is still catching up (see
-// Controllers/BudgetControllers/getbudgets.js). These tests prove
-// useBudgetSummary -- the single funnel every budget-spend display goes
-// through -- correctly derives `recoveryPending`/`isCurrentMonthStale` from
-// that response, and never throws on older/mocked shapes that omit the
-// fields entirely.
 jest.mock("./useBudgetsQuery", () => ({
   useBudgetsQuery: jest.fn(),
 }));

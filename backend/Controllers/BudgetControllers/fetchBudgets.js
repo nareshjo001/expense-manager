@@ -14,17 +14,6 @@ const sortByMonthKey = (a, b) => {
 };
 
 // Pure read: fetchBudgets() is consumed by backend/analytics/dataProvider.js's
-// getAllBudgets(), which feeds analyticsContext.js during report generation
-// (reportService -> reportGenerator -> analyticsContext -> dataProvider ->
-// fetchBudgets). Report generation must consume already-repaired data, not
-// trigger a NEW repair mid-generation -- repairIfPending() belongs at the
-// entry points that decide to read Budget.spent (getbudgets.js,
-// chart.service.js's getBudgetComparison, and reportService's own
-// repair-on-read before it kicks off generation), not inside this internal
-// data-loading helper. Calling repairIfPending() here re-entered the sync
-// recovery machinery from within report generation itself, which is the
-// architectural defect a previous pass introduced while only fixing the
-// require-cycle crash -- removed entirely, not just deferred.
 const fetchBudgets = async (userId) => {
     const budgets = await BudgetModel.find(
         { userId },

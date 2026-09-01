@@ -1,7 +1,4 @@
 // Unit tests for backend/sia/responseValidator.js -- Batch 2 architecture
-// closure: real, deterministic grounded-response validation, not just a
-// system-prompt instruction. No LLM calls anywhere here -- plain strings
-// in, plain verdicts out.
 "use strict";
 
 const { validateGroundedAnswer, MAX_ANSWER_LENGTH } = require("../sia/responseValidator");
@@ -31,20 +28,11 @@ const anomalyContext = {
 };
 
 // Batch 3D: real contextFields shapes for the four newly-validated
-// intents, mirroring backend/sia/contextBuilder.js's actual output exactly
-// (matched to the same fixtures tests/sia.ask.test.js already uses for
-// these intents, so a currency-figure claim here proves the check works
-// against the real production shape, not a simplified stand-in). Each one
-// deliberately nests its monetary values at least one level deep (inside
-// an object or an array) to prove collectNumericValues' recursion, not
-// just top-level presence.
 const healthContext = {
   financialHealth: {
     overall: 75,
     risk: { label: "Low", color: "green" },
     // Mirrors healthSignals.js's generateSignals() shape: an array of
-    // {type, id, metric, value, message} records, `value` carrying the
-    // real number (see backend/analytics/analyzers/scores/healthSignals.js).
     signals: [
       { type: "weakness", id: "BUDGET_EXCEEDED", metric: "exceededBy", value: 250, message: "Current month's budget has been exceeded." },
     ],
@@ -112,8 +100,6 @@ describe("sia/responseValidator -- answer size boundary", () => {
 });
 
 // Batch 3D: table-driven proof that all four newly-covered intents are now
-// really validated (not the old blanket `{valid:true}` bypass), against
-// their real, intent-specific context shapes.
 describe("sia/responseValidator -- Batch 3D: newly validated intents", () => {
   const cases = [
     {
@@ -184,8 +170,6 @@ describe("sia/responseValidator -- Batch 3D: newly validated intents", () => {
       const result = validateGroundedAnswer({ intent: c.intent, answer: c.nestedAnswer, contextFields: c.contextFields });
       expect(result).toEqual({ valid: true });
       // Sanity: the nested amount really is currency-marked in the answer,
-      // so a passing result here is a genuine proof of nested-value
-      // recognition, not an accident of having no currency claim at all.
       expect(c.nestedAnswer).toContain(c.nestedAmount);
     }
   );
@@ -201,26 +185,8 @@ describe("sia/responseValidator -- Batch 3D: newly validated intents", () => {
 });
 
 // Batch 3D correction: budgetAnalyzer.js's `budget`/`spent` fields are
-// passed through UNCHANGED from the stored Budget document (confirmed --
-// `budget: currentMonth.budget, spent: currentMonth.spent`, no
-// toSafeNumber()/round2() coercion, unlike every other derived budget or
-// category value in this same context). They are therefore the only two
-// fields anywhere in the seven intents' real context shapes not
-// type-guaranteed to be a JS `number`.
-//
-// The FIRST version of this fix widened collectNumericValues() itself to
-// treat any clean numeric-string leaf, anywhere in the context, as a
-// supported value -- too broad, since the function has no notion of which
-// field it is looking at. This corrected version instead adds a separate,
-// narrowly-scoped collectKnownStringAmounts() that reads exactly
-// `contextFields.budget.budget` and `contextFields.budget.spent` -- no
-// other field, in no other intent's context -- ever gets numeric-string
-// coercion. collectNumericValues() itself is back to numbers-only, exactly
-// as it was before this correction.
 describe("sia/responseValidator -- Batch 3D correction: budget/spent numeric strings, narrowly scoped", () => {
   // Same shape as `budgetContext` above, except `budget`/`spent` arrive as
-  // strings -- reproducing the real, disclosed upstream contract gap
-  // rather than a hypothetical.
   const budgetContextWithStringAmounts = {
     budget: {
       budget: "5000",
@@ -261,16 +227,6 @@ describe("sia/responseValidator -- Batch 3D correction: budget/spent numeric str
   });
 
   // Requirement 3: a numeric-looking string in a NON-monetary field
-  // (category, status, period, description, or another realistic field)
-  // must never authorize the same currency claim. Two proofs: (a) within
-  // BUDGET_STATUS_EXPLANATION's own `budget` object, a numeric-looking
-  // value placed on `status` (a real field on this exact object,
-  // deliberately NOT `budget.budget`/`budget.spent`) is ignored -- proving
-  // collectKnownStringAmounts() reads by exact field path, not "any string
-  // on the budget object"; (b) within CATEGORY_SPENDING_EXPLANATION's
-  // context, a numeric-looking category NAME is ignored -- proving the
-  // mechanism is scoped to BUDGET_STATUS_EXPLANATION's shape at all, not
-  // every intent's strings.
   it("does not authorize a currency claim from a numeric-looking value on an unrelated field of the SAME budget object (status)", () => {
     const contextWithNumericStatus = {
       budget: { ...budgetContextWithStringAmounts.budget, status: "700" },
@@ -331,10 +287,6 @@ describe("sia/responseValidator -- Batch 3D correction: budget/spent numeric str
   });
 
   // Requirement 5: existing nested genuine-number handling is unchanged --
-  // a real number nested elsewhere in the SAME context (projectedSpent,
-  // three levels of object nesting away from budget/spent) still passes,
-  // proving the two mechanisms (number recursion + narrow string coercion)
-  // coexist correctly rather than one displacing the other.
   it("still recognizes a genuine nested number in the same context alongside string-typed budget/spent", () => {
     const result = validateGroundedAnswer({
       intent: "BUDGET_STATUS_EXPLANATION",
@@ -346,13 +298,6 @@ describe("sia/responseValidator -- Batch 3D correction: budget/spent numeric str
 });
 
 // Batch 3D: proves the shared generic leakage checks (leaked ObjectId, raw
-// internal field token, echoed JSON-key fragment) are active across ALL
-// seven supported intents -- not just the three Batch 2 covered. One
-// representative context per intent is enough: these checks are answer-text
-// pattern checks that do not depend on the specific context shape, so a
-// per-intent matrix (rather than re-deriving every context/answer
-// combination already covered above) is the non-duplicative way to prove
-// they are wired for every intent.
 describe("sia/responseValidator -- Batch 3D: shared leakage checks across all seven intents", () => {
   const allIntentContexts = [
     ["HEALTH_EXPLANATION", healthContext],
@@ -514,11 +459,6 @@ describe("sia/responseValidator -- monetary figures not distinguishing harmless 
 });
 
 // Semantic-accuracy remediation: reason-code-name overstatement guardrails.
-// Fixed, deterministic fixtures mirroring backend/sia/contextBuilder.js's
-// real FINANCIAL_RISK_EXPLANATION shape exactly -- one risk context per
-// signal under test, so each check's conditional gating (intent AND, for
-// risk, the specific signal actually present) is proven against the real
-// production contract, not a simplified stand-in.
 const riskContextForecastPressure = {
   risk: {
     hasData: true,
@@ -747,8 +687,6 @@ describe("sia/responseValidator -- semantic-accuracy remediation: zero-signal re
 
   it("does NOT reject 'no financial risk' phrasing outside a zero-signal result (a genuine active signal is present)", () => {
     // Sanity: this check is scoped to the zero-signal case only -- an
-    // (unrealistic, but defensively tested) answer using this phrase while
-    // real signals exist is not this check's concern.
     const result = validateGroundedAnswer({
       intent: "FINANCIAL_RISK_EXPLANATION",
       answer: "Your budget is already overspent by $200.",
@@ -761,13 +699,6 @@ describe("sia/responseValidator -- semantic-accuracy remediation: zero-signal re
 describe("sia/responseValidator -- semantic-accuracy remediation: conversation history cannot override these checks", () => {
   it("validateGroundedAnswer's signature accepts no history parameter -- extraneous history data has no effect either way", () => {
     // Structural proof: the function destructures only {intent, answer,
-    // contextFields}. Conversation history is injected into the LLM call
-    // by sia/llmService.js's buildHistoryMessages() as ordinary user/
-    // assistant turns (see ask.js), never passed to this validator at all
-    // -- there is no code path by which prior-turn content, however
-    // adversarial, could alter this check. A compliant answer passes and a
-    // non-compliant answer is rejected purely based on the answer text
-    // itself, regardless of what an extraneous "history" property claims.
     const compliant = validateGroundedAnswer({
       intent: "FINANCIAL_RISK_EXPLANATION",
       answer: "Projected spending for this month may reach or exceed the configured budget.",
@@ -876,10 +807,6 @@ describe("sia/responseValidator -- valid grounded paraphrases pass", () => {
 });
 
 // CURRENT_SPENDING_SUMMARY -- a bare current-month total lookup. Its real
-// contextBuilder.js context is exactly `{ summary: { totalSpent } }` (see
-// sia/contextBuilder.js's CURRENT_SPENDING_SUMMARY branch), so this fixture
-// mirrors the exact production shape, matching the pattern the other
-// per-intent fixtures at the top of this file already use.
 const currentSpendingSummaryContext = {
   summary: { totalSpent: 4321.55 },
 };

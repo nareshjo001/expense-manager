@@ -4,9 +4,6 @@ import SiaAskButton from "./SiaAskButton";
 import { useSiaLauncher } from "./SiaLauncherContext";
 
 // Unit-level: useSiaLauncher() is mocked so this file proves SiaAskButton's
-// OWN contract in isolation (what it renders, what it calls, when it
-// renders nothing) -- the real end-to-end open/prefill/focus behavior is
-// covered by SiaLauncherContext.test.js against the real provider stack.
 jest.mock("./SiaLauncherContext", () => ({
   useSiaLauncher: jest.fn(),
 }));
@@ -74,13 +71,6 @@ describe("SiaAskButton", () => {
   });
 
   // Batch 3G remediation (dark-theme contrast blocker): the runtime
-  // appearance-selection contract. A genuine computed-style/contrast
-  // assertion is not meaningful under Jest's CSS transform (no real
-  // stylesheet cascade is applied in jsdom), so this proves the class the
-  // component actually applies at runtime for each tone -- the static
-  // cascade trace for why that class is readable in both themes lives in
-  // SiaAskButton.css's comment and the audit report. Final visual/contrast
-  // confirmation is reserved for the Windows build check.
   it('applies the "sia-ask-btn--light-surface" class when tone="light-surface" is supplied', () => {
     useSiaLauncher.mockReturnValue({ openSiaWithQuestion: jest.fn() });
     render(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" tone="light-surface" />);

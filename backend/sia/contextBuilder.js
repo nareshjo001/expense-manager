@@ -199,11 +199,6 @@ async function buildContext(userId, intent) {
   }
 
   // CURRENT_SPENDING_SUMMARY: context foundation only, sourced exclusively from
-  // summary.totalSpent -- the same authoritative current-month total
-  // SPENDING_CHANGE_EXPLANATION and FINANCIAL_RISK_EXPLANATION already carry. This
-  // is the smallest bounded context of any supported intent: no trends, no
-  // category breakdown, no forecast, no risk signals -- a bare total lookup
-  // question can only ever be grounded on the one figure it asked for.
   if (intent === "CURRENT_SPENDING_SUMMARY") {
     const totalSpent = summary.totalSpent;
 
@@ -296,8 +291,6 @@ async function buildContext(userId, intent) {
   }
 
   // CATEGORY_SPENDING_EXPLANATION: context foundation only, sourced exclusively from report.categories.monthly (categoryAnalyzer.js's canonical output). summary.topCategory is NOT used -- a lossy derived alias whose "N/A" fallback conflates "no data" with a real category literally named "N/A" -- the canonical monthly {category, total} object is preferred. report.categories.yearly is deliberately excluded: gating on both monthly and yearly independently having hasData would spuriously no-data a user with full current-month data but, e.g., a first year of app usage; left to a future milestone to scope. Excluded fields: biggestJump/biggestDrop (genuinely nullable even in the hasData:true branch, e.g. when every category is brand new, so not provable the way the fields below are); no pre-written insights/advisory text exists in categoryAnalyzer.js's output at all (unlike budgetAnalyzer.js).
-  //
-  // Every nested record below is validated against its exact analyzer contract (not just checked for top-level presence) and copied into a newly-constructed object -- an earlier draft returned records by direct reference into the stored Report, so a malformed nested record could reach the success context and a caller mutating the returned context could silently corrupt the cached Report.
 
   // True only for a genuine finite number (Number.isFinite never coerces, unlike global isFinite) -- accepts legitimate zero/negative/decimal values, matching categoryAnalyzer.js's real ranges (refunds can be negative).
   function isFiniteNumber(value) {

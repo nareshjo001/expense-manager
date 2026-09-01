@@ -1,17 +1,4 @@
 // Unit tests for the real Groq provider adapter inside
-// backend/sia/llmService.js.
-//
-// axios is fully mocked BEFORE llmService.js is ever required, in every
-// test in this file -- no real HTTP request is possible (Groq's live
-// endpoint was already verified separately outside this test suite; no
-// test here makes or needs a real network call). backend/sia/config is
-// also mocked, the same isolation style as
-// tests/sia.llmService.openai.test.js and tests/sia.llmService.gemini.test.js
-// (this file's direct siblings -- Groq is the third implemented provider,
-// OpenAI's and Gemini's adapters are untouched). Only GROQ_API_KEY is a
-// real (test-controlled) environment variable, because llmService.js
-// deliberately reads it directly from process.env rather than through the
-// shared config module.
 "use strict";
 
 const ORIGINAL_GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -36,9 +23,6 @@ afterAll(() => {
 const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // Loads a brand-new backend/sia/config mock and a brand-new mocked axios
-// module, then a brand-new llmService module, for a single test. Returns the
-// axios post mock alongside askLlm/LlmProviderError so callers can both
-// exercise the service and assert on the exact request axios received.
 function loadLlmServiceWithMockedAxios({ configOverrides = {}, axiosPostMock } = {}) {
   jest.resetModules();
 
@@ -60,11 +44,6 @@ function loadLlmServiceWithMockedAxios({ configOverrides = {}, axiosPostMock } =
 }
 
 // The documented Groq (OpenAI-compatible) Chat Completions response shape:
-// choices[0].message.content -- see
-// https://console.groq.com/docs/api-reference#chat-create. Live-verified
-// separately: HTTP 200, choices[0].message.content === "OK" for
-// openai/gpt-oss-120b. This helper never performs that call; it only
-// constructs the SAME documented shape for a mocked axios response.
 function chatCompletionResponse(content, overrides = {}) {
   return {
     data: {
@@ -300,9 +279,6 @@ describe("backend/sia/llmService -- Groq provider adapter", () => {
   describe("provider reasoning fields are ignored", () => {
     it("never returns a sibling `reasoning` field on the message, even when the provider includes one", async () => {
       // Some Groq models (openai/gpt-oss-*) return an extra `reasoning`
-      // field on the SAME message object as `content`. The adapter must
-      // read only `content` -- the reasoning text must never reach the
-      // returned answer.
       const postMock = jest.fn().mockResolvedValue({
         data: {
           choices: [

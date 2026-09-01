@@ -22,14 +22,7 @@ function budgetStatusForUtilization(utilization) {
   return tier ? tier.status : null;
 }
 
-/**
- * @param {object} input
- * @param {number|null} input.predictedTotal - published next-month point estimate; null/non-finite if forecast unavailable.
- * @param {{budget?: number}|null} input.targetMonthBudget - the target month's own budget document, or null if none created.
- * @returns {{status: string, budgetAmount: number|null,
- *   predictedUtilizationPercentage: number|null,
- *   predictedRemaining: number|null}}
- */
+/* @param {object} input */
 function evaluate({ predictedTotal, targetMonthBudget } = {}) {
   const statuses = RULES.budgetRisk.statuses;
 

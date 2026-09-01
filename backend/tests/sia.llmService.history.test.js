@@ -1,7 +1,4 @@
 // Unit tests for sia/llmService.js's buildHistoryMessages() -- the exact
-// mechanism that keeps prior conversation history structurally unable to
-// override the system prompt (every history turn becomes an ordinary
-// "user"/"assistant" role input message, never the `instructions` field).
 "use strict";
 
 const { buildHistoryMessages } = require("../sia/llmService");

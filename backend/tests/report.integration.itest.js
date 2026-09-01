@@ -1,15 +1,4 @@
 // M0-2 integration suite for the real, authenticated GET /report workflow.
-//
-// Requires a dedicated test MongoDB + Redis target (TEST_MONGO_CONN,
-// TEST_REDIS_URL, TEST_JWT_SECRET) validated and mapped by
-// tests/setup/integrationEnv.js (a Jest `setupFiles` module -- see that
-// file for the full safety-guard rationale). Run via:
-//   npm run test:integration
-// Never picked up by `npm test` (see jest.integration.config.js).
-//
-// Every test below is fully independent: its own fresh ObjectIds, its own
-// MongoDB documents, its own Redis keys, its own cleanup in afterEach. No
-// test depends on another test's execution order or leftover state.
 "use strict";
 
 const request = require("supertest");
@@ -70,15 +59,6 @@ describe("GET /report (integration)", () => {
       await tracker.createBudget(userA, { budget: 10000, spent: 0 });
 
       // A previous-month expense for User A. Without this, User A has zero
-      // previous-month spend, and trendAnalyzer.comparePeriods() correctly
-      // returns percentageChange: null for a zero-baseline comparison (see
-      // analytics/analyzers/trendAnalyzer.js's "new spending" branch --
-      // dividing by a zero previous total is mathematically undefined, not
-      // 0% or 100%). That's the real, intentional production contract, not
-      // a defect -- but it made comparePastMonth non-deterministic for this
-      // test (null, whose typeof is "object"). Seeding a known previous-
-      // month amount makes the comparison fall through to the normal,
-      // deterministic percentage-change branch instead.
       await tracker.createExpense(userA, {
         expenseCategory: "M0-2-USER-A-PREV-CATEGORY",
         expenseAmount: 1000,
@@ -143,19 +123,10 @@ describe("GET /report (integration)", () => {
       expect(Array.isArray(res.body.financialHealth.signals)).toBe(true);
 
       // summary: only the fields the live pipeline actually populates
-      // correctly today. Two known-broken fields are excluded entirely
-      // (per the M0-2 known-bug policy) rather than asserted in any form
-      // -- not asserted present, not asserted absent, not asserted a
-      // particular value. See the M0-2 design report for the underlying
-      // defect; this suite makes no claim about it either way.
       expect(typeof res.body.summary.totalSpent).toBe("number");
       expect(typeof res.body.summary.transactionCount).toBe("number");
       expect(typeof res.body.summary.dailyAverage).toBe("number");
       // Deterministic from the seeded fixtures: current-month total 4321
-      // (4000 + 321) vs. previous-month total 1000 -> amountChange 3321 ->
-      // percentageChange round2(3321 / 1000 * 100) = 332.1. Asserting the
-      // exact value (not just typeof "number") is only valid because the
-      // previous-month fixture above makes this comparison deterministic.
       expect(res.body.summary.comparePastMonth).toBe(332.1);
       expect(typeof res.body.summary.topCategory).toBe("string");
       expect(typeof res.body.summary.budgetUtilization).toBe("number");
@@ -185,8 +156,6 @@ describe("GET /report (integration)", () => {
     tracker.trackRedisKey(cacheKey, testServices.redisClient);
 
     // Confirm no stale key exists before the request (a fresh ObjectId
-    // should never collide, but this is an explicit, scoped check, not an
-    // assumption).
     const existedBefore = await testServices.redisClient.exists(cacheKey);
     expect(existedBefore).toBe(0);
 

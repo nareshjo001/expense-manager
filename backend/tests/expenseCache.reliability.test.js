@@ -1,17 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-//
-// Proves the exact claim Services/syncRecoveryService.js's header comment
-// and Controllers/ExpenseControllers/*.js's inline comments both rely on:
-// utils/expenseCache.js's own functions already self-catch every Redis
-// error and never reject, for any of the three real Redis client methods
-// they call (set/multi, get, sMembers+del). This is why "Redis invalidation
-// failure" / "Redis cache-write failure" are not scenarios that ever reach
-// the pending-marker/derivedData logic in production -- they are validated
-// directly here instead of being simulated (inaccurately) as a rejecting
-// mock in a controller test.
-//
-// Runs under the default backend/jest.config.js (npm test) -- mocks only
-// ../config/redis's redisClient; never touches a real Redis connection.
 "use strict";
 
 const REDIS_CONFIG_PATH = "../config/redis";

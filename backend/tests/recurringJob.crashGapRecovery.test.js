@@ -1,70 +1,4 @@
 // Remediation Workstream D -- recurring-expense crash-gap recovery, extended
-// to also close the REPORT-SYNCHRONIZATION crash window identified in
-// follow-up review:
-//
-//   expense inserted -> process crashes before report synchronization ->
-//   next run sees E11000 replay -> schedule advances -> replay skips
-//   synchronization -> report/cache permanently stale despite the expense
-//   existing.
-//
-// Root causes closed here:
-//   1. (original) nextDueDate advanced BEFORE ExpenseModel.create() ran --
-//      a create() failure permanently lost the occurrence. Fixed by a
-//      deterministic occurrence id (sha256 of recurring._id + due instant)
-//      and insert-before-advance ordering.
-//   2. (this file's extension) the cron previously called
-//      recalculateBudget/refreshReport DIRECTLY, with no reserve()/
-//      PendingSync involvement at all -- a crash between a successful
-//      insert and those calls left ZERO durable evidence sync was ever
-//      needed. Fixed by taking a reserve() BEFORE the insert (durable
-//      Tier-2 evidence) and replacing the raw calls with
-//      synchronizeAfterMutation() (confirm-then-recompute-then-persist,
-//      the SAME mechanism addexpense.js/editExpense.js/addincome.js use).
-//   3. (2nd follow-up, reservation-ownership correction) the E11000 replay
-//      branch ORIGINALLY called abandon() on its own reservation tokens,
-//      then repairIfPending(). Under the field design at the time
-//      (reservedReport/reservedUserWide as SINGLE-object fields on
-//      PendingSync), that combination was unsafe: a later reserve() call's
-//      token silently OVERWROTE an earlier, still-unconfirmed reservation's
-//      token in that SAME field with no record the overwrite happened, and
-//      abandon() unconditionally cleared that field to null with no check
-//      that the current value still matched the token it was releasing.
-//      Chained together, a crashed run's own reservation could be silently
-//      overwritten and then deleted with no substitute Tier-1 marker ever
-//      recorded -- permanently losing the recovery signal even though the
-//      expense is durably committed. Fixed by NEVER calling abandon() on
-//      this path -- the replay instead drives ONE real reconciliation via
-//      synchronizeAfterMutation() using ITS OWN (definitely-current) token,
-//      whose first action (confirm()) atomically upgrades Tier-2 evidence
-//      into durable Tier-1 evidence in the SAME write that releases the
-//      token, so evidence is only ever replaced, never merely deleted.
-//      (System-wide reservation-ownership correction, reassessed here) --
-//      reservedReport/reservedUserWide have since been replaced with
-//      owned-token ARRAYS (reservedReports/reservedUserWideReservations, see
-//      models/PendingSync.js and Services/syncRecoveryService.js), which
-//      closes the underlying overwrite hazard for EVERY caller, not just
-//      this one -- but this file's own choice to never call abandon() on
-//      the replay path remains correct and unchanged for the separate
-//      reason documented at the call site in cron/recurringJob.js: this run
-//      has no standing to retire a token it does not own. See
-//      tests/recurringJob.reservationOwnership.test.js for a proof against
-//      the REAL syncRecoveryService.js + a real-CAS-semantics fake
-//      PendingSync model (not a fully mocked service) that this exact
-//      interleaving cannot lose R1's evidence.
-//
-// This file mocks Services/syncRecoveryService.js itself (reserve,
-// synchronizeAfterMutation) rather than the lower-level budget.service/
-// reportService modules -- syncRecoveryService's OWN internal correctness is
-// already proven by tests/syncRecoveryService.test.js,
-// tests/mutationRecoveryCorrectness.test.js, and (for the reservation-
-// ownership question specifically) tests/recurringJob.reservationOwnership.
-// test.js. This file's job is narrower and different: prove
-// cron/recurringJob.js itself calls into that already-proven machinery at
-// the right moments, with the right arguments, in the right order.
-// `abandon`/`repairIfPending` are still provided by loadCronJob()'s mock
-// factory below (harmless -- cron/recurringJob.js no longer imports either)
-// purely so a future regression that reintroduces a call to either is
-// immediately visible as an unexpected mock invocation in these tests.
 "use strict";
 
 const crypto = require("crypto");
@@ -103,17 +37,6 @@ function occurrenceIdFor(recurringId, nextDueDate) {
 }
 
 // `createBehavior` optionally overrides ExpenseModel.create's behavior:
-//   undefined                -> normal, always succeeds
-//   { throwOnce: "11000" }   -> first create() call throws a duplicate-key
-//                               error (code 11000), simulating an already-
-//                               inserted occurrence
-//   { throwOnce: "generic" } -> first create() call throws a generic error
-//
-// `syncBehavior` optionally overrides synchronizeAfterMutation's/
-// repairIfPending's return values/throwing behavior:
-//   { synchronizeResult }         -> synchronizeAfterMutation resolves with this
-//   { synchronizeThrows: true }   -> synchronizeAfterMutation rejects
-//   { repairResult }              -> repairIfPending resolves with this
 function loadCronJob({ dueExpenses, createBehavior, existingExpenseForDedupe, syncBehavior = {} } = {}) {
   jest.resetModules();
 
@@ -363,13 +286,6 @@ describe("Remediation Workstream D (follow-up): report/cache synchronization cra
     await harness.runCronCallback();
 
     // reserve() happened before create() (asserted above in test 4/6/7) --
-    // this is the exact durable Tier-2 PendingSync evidence that survives a
-    // crash between the insert committing and synchronizeAfterMutation()
-    // ever being reached. No in-memory-only bookkeeping is used anywhere in
-    // this file -- reserve()/synchronizeAfterMutation()/repairIfPending()
-    // are the only report/cache-affecting calls, and all three are backed
-    // by Services/syncRecoveryService.js's real, Mongo-persisted
-    // PendingSync model in production.
     expect(harness.reserveMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: USER_ID, reserveReport: true })
     );
@@ -380,16 +296,6 @@ describe("Remediation Workstream D (follow-up): report/cache synchronization cra
     const occurrenceId = occurrenceIdFor(recurring._id, recurring.nextDueDate);
 
     // Simulates: a PRIOR run's insert committed (the expense exists) but
-    // that run crashed before ever reaching synchronizeAfterMutation() --
-    // its own reservation is now orphaned. Under the current owned-token
-    // ARRAY design (reservedReports/reservedUserWideReservations), THIS
-    // run's own reserve() call no longer overwrites that orphaned entry --
-    // both coexist -- see tests/recurringJob.reservationOwnership.test.js
-    // for that exact proof against real PendingSync semantics. THIS run
-    // rediscovers the same due recurring definition, hits E11000 on its own
-    // insert attempt, and
-    // must recover the deferred sync WITHOUT ever calling abandon() (which
-    // would risk deleting evidence with nothing durable substituted).
     const harness = loadCronJob({
       dueExpenses: [recurring],
       createBehavior: { throwOnce: "11000" },
@@ -401,13 +307,9 @@ describe("Remediation Workstream D (follow-up): report/cache synchronization cra
     // 3. Next run encounters the deterministic duplicate.
     expect(harness.createdExpenses).toHaveLength(0);
     // Reservation-ownership correction: abandon() is NEVER called on this
-    // path anymore -- see the file header comment for the exact defect this
-    // closes.
     expect(harness.abandonMock).not.toHaveBeenCalled();
     expect(harness.repairIfPendingMock).not.toHaveBeenCalled();
     // 5. The report is (eventually) synchronized -- via ONE
-    // synchronizeAfterMutation() call using THIS run's own reservation
-    // tokens (the same tokens reserve() returned to it above).
     expect(harness.synchronizeAfterMutationMock).toHaveBeenCalledTimes(1);
     expect(harness.synchronizeAfterMutationMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: USER_ID, budgetTokens: ["budget-token-1"], reportToken: "report-token-1" })
@@ -427,16 +329,6 @@ describe("Remediation Workstream D (follow-up): report/cache synchronization cra
     const occurrenceId = occurrenceIdFor(recurring._id, recurring.nextDueDate);
 
     // synchronizeAfterMutation rejecting entirely (the worst case -- e.g. a
-    // transient DB error mid-recompute) is the scenario this test targets:
-    // the replay path wraps its own synchronizeAfterMutation() call in a
-    // .catch() specifically so an ambiguous-failure recompute on the rare
-    // crash-replay path can never crash the whole cron batch or be mistaken
-    // for a reason to duplicate/re-abandon the occurrence. confirm() (run
-    // as synchronizeAfterMutation's own first, unconditional action) has
-    // already durably written the Tier-1 marker before any recompute is
-    // attempted, so that marker -- not this test -- is what proves the
-    // "retryable" half of the invariant; this test proves the CRON itself
-    // survives and does not duplicate anything when the recompute fails.
     const harness = loadCronJob({
       dueExpenses: [recurring],
       createBehavior: { throwOnce: "11000" },
@@ -487,10 +379,6 @@ describe("Remediation Workstream D (follow-up): report/cache synchronization cra
     expect(harness.createdExpenses).toHaveLength(1);
     expect(harness.findOneAndUpdateMock).toHaveBeenCalledTimes(1);
     // synchronizeAfterMutation's own confirm()-first design (see
-    // syncRecoveryService.js) already wrote a durable Tier-1 marker before
-    // reporting recoveryPending:true here -- the cron does not need (and
-    // does not perform) any additional bookkeeping; a later replay's
-    // repairIfPending(), or any user-facing report/budget read, repairs it.
     expect(harness.synchronizeAfterMutationMock).toHaveBeenCalledTimes(1);
     // Notification/push still proceed for the genuinely-new occurrence --
     // a pending sync is not treated as an insert failure.
@@ -505,11 +393,6 @@ describe("Remediation Workstream D (follow-up): report/cache synchronization cra
     });
 
     // The per-recurring-item work is not wrapped in its own try/catch for
-    // synchronizeAfterMutation, so this proves the OUTER cron-level catch
-    // (Recurring cron failed) contains the failure without an unhandled
-    // rejection -- and, critically, that the expense itself and the
-    // schedule advancement already committed beforehand and are therefore
-    // never rolled back or duplicated by this failure.
     await expect(harness.runCronCallback()).resolves.not.toThrow();
     expect(harness.createdExpenses).toHaveLength(1);
     expect(harness.findOneAndUpdateMock).toHaveBeenCalledTimes(1);

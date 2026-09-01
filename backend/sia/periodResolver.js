@@ -1,12 +1,4 @@
 // SIA timezone-aware period resolver -- turns a QueryPlan period
-// descriptor (sia/queryPlan.js's PERIOD_TYPES) into exact start-inclusive/
-// end-exclusive UTC instant boundaries plus a human-readable label,
-// resolved against the application's configured IANA time zone
-// (config.appTimeZone, default "Asia/Kolkata") -- NEVER the server
-// process's own host/local time zone. Pure and deterministic: accepts an
-// optional `now` (defaulting to `new Date()`) so every caller/test can
-// inject a fixed clock instead of relying on the real wall clock. Uses
-// only Node's built-in Intl support -- no new dependency.
 "use strict";
 
 const config = require("./config");
@@ -44,8 +36,6 @@ function zonedParts(date, timeZone) {
 }
 
 // The timeZone's offset from UTC (in ms, positive = ahead of UTC) AT the
-// given instant -- computed by formatting that instant in the zone and
-// comparing against the instant's own UTC digits.
 function offsetMsAt(instant, timeZone) {
   const p = zonedParts(instant, timeZone);
   const asIfUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
@@ -53,9 +43,6 @@ function offsetMsAt(instant, timeZone) {
 }
 
 // Converts a desired LOCAL wall-clock date/time in `timeZone` into the
-// corresponding UTC Date instant. Deliberately tolerant of day/month
-// overflow (e.g. day 32) since Date.UTC() itself normalizes it -- this is
-// relied on for "start of tomorrow" style arithmetic throughout this file.
 function zonedTimeToUtc(year, month, day, hour, minute, second, timeZone) {
   const guess = Date.UTC(year, month - 1, day, hour, minute, second);
   const offset = offsetMsAt(new Date(guess), timeZone);
@@ -105,16 +92,7 @@ function monthLabel(year, month) {
 
 const MAX_LAST_N_MONTHS = 12;
 
-/**
- * Deterministic "most recent non-future occurrence" rule for a bare month
- * name with no year: if `month` has already started in the current zoned
- * year (month <= current zoned month), use the current year; otherwise
- * the month hasn't happened yet this year, so use last year. Exposed so a
- * caller (e.g. semanticRouter.js) MAY use it for safeInterpretation
- * metadata -- callers are free to prefer returning a clarification outcome
- * instead for this specific ambiguous case, which is this milestone's
- * documented default posture for a bare month with no year.
- */
+/* Deterministic "most recent non-future occurrence" rule for a bare month */
 function resolveMostRecentMonthOccurrence(month, { now, timeZone } = {}) {
   const zone = timeZone || config.appTimeZone;
   const clock = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
@@ -126,13 +104,7 @@ function resolveMostRecentMonthOccurrence(month, { now, timeZone } = {}) {
   return { ok: true, year, month };
 }
 
-/**
- * Resolves a QueryPlan period descriptor into
- * `{ ok: true, start: Date, end: Date, label: string }` (start-inclusive,
- * end-exclusive) or `{ ok: false, reason: string }`. Never throws, never
- * reads the server host time zone -- only `opts.timeZone` (default
- * config.appTimeZone) and `opts.now` (default `new Date()`).
- */
+/* Resolves a QueryPlan period descriptor into */
 function resolvePeriod(periodSpec, opts = {}) {
   try {
     const timeZone = opts.timeZone || config.appTimeZone;
@@ -159,10 +131,6 @@ function resolvePeriod(periodSpec, opts = {}) {
 
       case "CURRENT_WEEK": {
         // Monday-start week, matching analyticsContext.js's existing
-        // weekStartsOn=1 convention. Local (zoned) day-of-week is read via
-        // Intl directly -- never Date.prototype.getDay()/getUTCDay(),
-        // which reflect the SERVER host time zone / UTC respectively, not
-        // the configured application zone.
         const localDow = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
         const DOW_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
         const dow = DOW_INDEX[localDow];

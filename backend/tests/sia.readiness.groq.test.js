@@ -1,21 +1,4 @@
 // Groq-provider readiness regression suite -- sia/readiness.js's
-// isSiaReady() extended to a third provider. Companion to
-// tests/sia.readiness.test.js (OpenAI, unmodified) and
-// tests/sia.readiness.gemini.test.js (Gemini, unmodified); this file
-// proves:
-//   1. Groq readiness with and without GROQ_API_KEY.
-//   2. OpenAI and Gemini readiness are provably unaffected by the Groq
-//      addition (no cross-contamination between any of the three
-//      credential env vars).
-//   3. IMPLEMENTED_PROVIDERS now includes "groq" without dropping "openai"
-//      or "gemini".
-//   4. GET /sia/status still never leaks a provider name, model, or
-//      credential for any provider.
-//
-// Same isolation style as the two sibling files: sia/config.js is
-// re-mocked per test via jest.doMock + jest.resetModules(), and all three
-// credential env vars are saved/restored around every test so no real
-// value ever leaks between tests or into a later suite.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -67,9 +50,6 @@ function signToken(userId) {
 }
 
 // Workstream 2 -- voice-input config defaults (see
-// tests/sia.readiness.test.js's identical constant for the full rationale).
-// This whole file is about the TEXT (isSiaReady) surface; voice readiness
-// is covered separately by tests/sia.readiness.voice.test.js.
 const VOICE_CONFIG_DEFAULTS = {
   voiceEnabled: false,
   sttProvider: "groq",
@@ -328,8 +308,6 @@ describe("GET /sia/status -- never leaks provider/model/credential for any of th
   }
 
   // Workstream 2 -- the additive capabilities.voiceInput block every
-  // GET /sia/status response now carries; voiceEnabled is unset/false
-  // throughout this file, so voiceInput.available is always false here.
   const EXPECTED_VOICE_CAPABILITIES = {
     voiceInput: {
       available: false,
@@ -340,12 +318,6 @@ describe("GET /sia/status -- never leaks provider/model/credential for any of th
   };
 
   // NOTE on the explicit 60000ms third argument below (Workstream 2): this
-  // sandbox pays a large one-time-per-call cost for jest.resetModules() +
-  // require("../app") -- each call here has been observed taking up to
-  // ~55s in this environment, well past Jest's default 5000ms per-test
-  // timeout, even though the request itself resolves correctly. This
-  // mirrors the documented, narrowly-scoped fix in tests/sia.ask.test.js
-  // (a per-test timeout, not a suite-wide jest.setTimeout()).
   it(
     "returns exactly { success: true, available: true, capabilities } when ready with provider=groq",
     async () => {

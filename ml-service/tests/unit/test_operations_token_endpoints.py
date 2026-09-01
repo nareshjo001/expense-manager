@@ -30,12 +30,6 @@ WRONG_TOKEN = "not-the-configured-token"
 
 def _get_http_exception_class(app_module):
     # app_module.HTTPException is already the exception class itself under
-    # BOTH the real FastAPI (fastapi.HTTPException) and
-    # tests/support/fake_dependencies.py's fake (FakeHTTPException) -- no
-    # instantiation is needed (or safe: FastAPI's real HTTPException treats
-    # its first positional argument as status_code, so calling it with a
-    # non-status-code string like "x" raises ValueError, not a usable
-    # instance).
     exception_class = app_module.HTTPException
     assert isinstance(exception_class, type)
     assert issubclass(exception_class, BaseException)
@@ -70,8 +64,6 @@ class _NoOpThread:
 
     def start(self):
         # Deliberately does NOT invoke self._target -- this test only proves
-        # the auth gate + the run record was created, not the retraining
-        # pipeline itself (covered elsewhere).
         pass
 
 

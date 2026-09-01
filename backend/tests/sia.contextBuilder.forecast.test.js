@@ -1,13 +1,4 @@
 // Prediction Layer V1: SIA forecast-grounding regression suite.
-//
-// Proves that the forecast context SIA sends to the provider carries the
-// new structured fields (categories, budget risk, data quality, target
-// month) and that it still carries NOTHING transaction-shaped: no expense
-// records, no merchant/expense names, no ids, no raw monthly history series.
-//
-// Mirrors tests/sia.contextBuilder.batch2.test.js's isolation harness
-// exactly (jest.doMock on reportService, contextBuilder loaded fresh per
-// test) -- no real MongoDB/Redis/report generation.
 "use strict";
 
 const REPORT_SERVICE_PATH = "../Services/reportService";
@@ -51,8 +42,6 @@ const baseReport = (overrides = {}) => ({
       warnings: [],
     },
     // LEGACY field carries a deliberately DIFFERENT value throughout this
-    // suite, so any assertion below that reads 12500 proves the true
-    // next-calendar field was used and the legacy one was not.
     nextMonthForecast: {
       hasData: true,
       reasonCode: null,
@@ -247,9 +236,6 @@ describe("SIA forecast grounding -- structured fields (Prediction Layer V1)", ()
   });
 
   // Prediction Layer V1 remediation: the decisive conflicting-value proof.
-  // The legacy `nextMonthForecast` field projects the CURRENT, in-progress
-  // month despite its name, so grounding a "next month" answer on it would
-  // silently answer a different question.
   it("grounds on the TRUE next-calendar forecast and never sends the conflicting legacy value", async () => {
     const forecast = await forecastContextFor(baseReport());
 

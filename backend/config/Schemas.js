@@ -121,10 +121,6 @@ const budgetSchema = new Schema({
         required: true
     },
     // Phase C.2 -- atomic write-fencing generation stamp, mirrors
-    // models/Report.js's own syncRevision field. See
-    // Services/BudgetServices/budget.service.js's recalculateBudget for
-    // how the actual write is conditioned on this field so an older,
-    // slower recomputation can never overwrite a newer one.
     syncRevision: {
         type: Number,
         default: 0
@@ -164,11 +160,6 @@ const MlFeedbackSchema = new mongoose.Schema({
     },
 
     // --- Feedback lifecycle (Phase A) ---
-    // Explicit lifecycle state for the retraining pipeline. Deliberately has
-    // no schema-level default of "pending" — a document only becomes
-    // "pending" when the server has confirmed a genuine ML correction
-    // occurred. Ordinary accepted-prediction records are left with
-    // status: null so they are never mistaken for training-eligible feedback.
     status: {
         type: String,
         enum: {
@@ -179,17 +170,12 @@ const MlFeedbackSchema = new mongoose.Schema({
     },
 
     // Will reference an ML training-run record once training-run persistence
-    // exists (Phase B). Stored as ObjectId, consistent with how every other
-    // cross-document reference in this schema file (userId, ref: "users") is
-    // represented, rather than as a free-form string.
     trainingRunId: {
         type: Schema.Types.ObjectId,
         default: null
     },
 
     // Number of times this document has been reserved by a training run
-    // that did not end in "trained". Used by later phases to detect
-    // chronically-failing feedback and route it to "needs_review".
     attempts: {
         type: Number,
         default: 0,
@@ -197,8 +183,6 @@ const MlFeedbackSchema = new mongoose.Schema({
     },
 
     // Short description of the most recent failure/rejection reason for
-    // this document, if any (e.g. an unmapped category). Null when there
-    // has been no failure.
     lastError: {
         type: String,
         default: null
@@ -245,12 +229,6 @@ const IncomeSchema = new mongoose.Schema({
         required: true
     },
     // Remediation Workstream B -- client-generated idempotency key for
-    // income CREATION only (mirrors expenseSchema's own `id` field/unique
-    // index, the established idempotency pattern in this codebase). Not
-    // `required` and has no schema-level default: legacy income documents
-    // created before this field existed simply never have it set, and must
-    // remain valid/queryable exactly as before -- see the partial unique
-    // index below for why that is safe.
     idempotencyKey: {
         type: String,
         default: undefined
@@ -263,25 +241,6 @@ const IncomeSchema = new mongoose.Schema({
 IncomeSchema.index({ userId: 1, incomeDate: 1 });
 
 // Remediation Workstream B -- durable database-level uniqueness for income
-// creation, not just an application-level check. A PARTIAL index (not a
-// plain unique index) is required here: a plain `unique: true` index on
-// `{ userId, idempotencyKey }` would treat every document that lacks the
-// field as `idempotencyKey: null` for indexing purposes, and MongoDB's
-// unique index enforcement then rejects a SECOND missing-field document per
-// userId as a duplicate of the first -- exactly the "every legacy missing
-// value treated as the same key" trap. `partialFilterExpression` scopes this
-// index to ONLY documents that actually have the field set, so existing
-// income records created before this remediation (which have no
-// idempotencyKey at all) are entirely excluded from the index and remain
-// valid and unaffected, while every new income creation (which always sets
-// this field, see Controllers/IncomeControllers/addincome.js) is protected.
-//
-// Exported as a single named spec (rather than inlined only here) so that
-// backend/scripts/ensureIncomeIdempotencyIndex.js -- the deployment-time
-// index-bootstrap script required because server startup does not await
-// background index creation, see that script's header comment -- creates
-// EXACTLY this index and nothing else, with zero risk of the two definitions
-// drifting apart over time.
 const INCOME_IDEMPOTENCY_INDEX = {
     key: { userId: 1, idempotencyKey: 1 },
     options: {

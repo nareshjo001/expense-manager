@@ -1,9 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-//
-// deleteSuccessToast(isPending) gained an optional parameter (default
-// false, preserving every existing no-argument call site's exact prior
-// text) to surface calm, non-alarming wording when a delete committed but
-// derived budget/report sync is still catching up.
 import { toast } from "react-toastify";
 import { deleteSuccessToast } from "./toastMessages";
 

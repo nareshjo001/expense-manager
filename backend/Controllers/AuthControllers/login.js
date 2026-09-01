@@ -3,8 +3,6 @@ const { UserModel } = require('../../config/Schemas');
 // Password utility function for comparing
 const { comparePassword } = require('../../Services/AuthServices/password.service');
 // Remediation Workstream E -- centralized, bounded-expiration token issuance.
-// See Services/AuthServices/token.service.js's own doc comment for why this
-// replaced a direct `jwt.sign(...)` call with no `expiresIn`.
 const { issueAccessToken } = require('../../Services/AuthServices/token.service');
 
 const login = async (req, res) => {
@@ -30,8 +28,6 @@ const login = async (req, res) => {
         }
 
         // Generate JWT for authenticated session -- now issued with a bounded
-        // expiration (JWT_EXPIRES_IN, see token.service.js) instead of never
-        // expiring.
         const token = issueAccessToken({ email: user.email, _id: user._id });
 
         // Successful login response with auth token and user data

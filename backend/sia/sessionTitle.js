@@ -74,14 +74,7 @@ function truncateForTitle(text) {
   return truncated + ELLIPSIS;
 }
 
-/**
- * Derive a deterministic, local session title from the first successfully
- * answered user question. Returns null when no meaningful title can be
- * derived (non-string input, or whitespace/control-only content).
- *
- * @param {unknown} question
- * @returns {string|null}
- */
+/* Derive a deterministic, local session title from the first successfully */
 function deriveSessionTitle(question) {
   if (typeof question !== "string") {
     return null;

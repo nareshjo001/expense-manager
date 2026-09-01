@@ -20,12 +20,6 @@ const calculateHabitScore = (habits = {}) => {
   }
 
   // Resolve amountSharePercentage first, falling through to
-  // transactionSharePercentage only when amountSharePercentage itself is
-  // not a usable value -- checked per-field with an explicit finite test,
-  // not a single nullish-coalesce over both fields. `??` only skips
-  // null/undefined, so a NaN or Infinity amountSharePercentage would
-  // otherwise "win" the coalesce and silently discard a perfectly valid
-  // transactionSharePercentage fallback.
   const isFiniteShare = (value) =>
     typeof value === "number" && Number.isFinite(value);
 
@@ -33,8 +27,6 @@ const calculateHabitScore = (habits = {}) => {
   const transactionRaw = habits.impulseSpending?.transactionSharePercentage;
 
   // Distinguish "no evaluable impulse share" from a genuine evaluated
-  // 0% — an absent/non-finite value must not fall into the same
-  // LowImpulse tier a real, confirmed zero would earn.
   let impulseValue;
   if (isFiniteShare(amountRaw)) {
     impulseValue = Number(amountRaw);

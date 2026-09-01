@@ -23,8 +23,6 @@ const calculateTrendScore = (trendAnalysis = {}) => {
 
   if (points === undefined) {
     // Unknown direction label — e.g. analyzer and rules config drifted
-    // out of sync after an edit. Fail safe instead of silently
-    // returning 0, which would look like a real (bad) score.
     return emptyResult(REASONS.UNKNOWN_DIRECTION);
   }
 

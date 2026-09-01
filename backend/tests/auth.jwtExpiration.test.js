@@ -1,11 +1,4 @@
 // Remediation Workstream E -- JWT expiration.
-//
-// Root cause: Controllers/AuthControllers/login.js called
-// `jwt.sign({ email, _id }, process.env.JWT_SECRET)` with no `expiresIn` --
-// an issued token had no `exp` claim and never expired. Fixed by
-// centralizing issuance through Services/AuthServices/token.service.js's
-// issueAccessToken(), which applies a bounded, configurable (JWT_EXPIRES_IN)
-// expiration to every token.
 "use strict";
 
 const jwt = require("jsonwebtoken");

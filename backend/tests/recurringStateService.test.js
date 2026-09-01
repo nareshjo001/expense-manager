@@ -1,10 +1,4 @@
 // Recurring-state authority remediation -- unit coverage for
-// Services/RecurringServices/recurringStateService.js, the single
-// centralized helper that overwrites isRecurring on returned expense
-// objects using RecurringExpenseModel existence (never the possibly-stale
-// stored mirror). Mocks only models/RecurringExpense.js, with a stateful
-// fake that records every query issued so batching (never N+1) can be
-// asserted directly.
 "use strict";
 
 const RECURRING_MODEL_PATH = "../models/RecurringExpense";

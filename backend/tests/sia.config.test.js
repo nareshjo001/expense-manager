@@ -1,12 +1,4 @@
 // Unit tests for backend/sia/config.js and backend/sia/index.js.
-//
-// Pure environment-variable parsing -- no network, MongoDB, Redis,
-// ML-service, or provider calls of any kind. Picked up by the default
-// backend/jest.config.js (`npm test`), same as tests/report.route.smoke.test.js.
-//
-// Each case resets Jest's module registry and re-requires config.js, so it
-// re-reads process.env fresh -- mirroring how a real process only reads its
-// configuration once, at load time.
 "use strict";
 
 const ENV_KEYS = ["SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_TIMEOUT_MS", "SIA_LLM_MODEL", "APP_TIME_ZONE"];
@@ -78,8 +70,6 @@ describe("backend/sia/config", () => {
   });
 
   // Workstream 1 -- APP_TIME_ZONE, sia/periodResolver.js's timezone
-  // source, added additively following this module's existing
-  // safe-default/fail-closed pattern.
   describe("appTimeZone", () => {
     it("defaults to Asia/Kolkata when APP_TIME_ZONE is absent", () => {
       delete process.env.APP_TIME_ZONE;

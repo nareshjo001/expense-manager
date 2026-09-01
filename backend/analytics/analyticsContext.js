@@ -34,16 +34,6 @@ const createAnalyticsContext = async (userId, { analysisDate } = {}) => {
     const safeBudgetHistory = asArray(budgetHistory);
 
     // Recurring-state authority (analytics closure): the four ranges above
-    // overlap in expense _ids near month/year boundaries (e.g. currentYear
-    // fully contains currentMonth; previousMonth can fall in previousYear
-    // across a Jan 1st boundary), so annotating each range separately would
-    // issue redundant RecurringExpenseModel queries for the same
-    // definitions. Concatenating first and annotating ONCE lets
-    // annotateRecurringState's internal _id Set collapse all duplicates
-    // into a single batched query (zero queries if every range is empty),
-    // scoped to this userId. Slicing back preserves each range's original
-    // order/length and every other field (annotateRecurringState only ever
-    // overwrites isRecurring).
     const mergedForAnnotation = [
         ...rawCurrentMonth,
         ...rawPreviousMonth,
@@ -123,50 +113,19 @@ const createAnalyticsContext = async (userId, { analysisDate } = {}) => {
     };
 
     // CRITICAL FIX: `yesterday`, `previousWeek`, and `previousQuarter` can
-    // all fall in the PREVIOUS calendar year (any date near Jan 1st).
-    // Filtering only against `currentYearExpenses` silently returns an
-    // empty array for those periods near year boundaries, which then
-    // looks like "₹0 spent last quarter" and manufactures a bogus 100%+
-    // spike in the trend report. Pool both years before filtering.
     const recentExpensePool = [...safePreviousYear, ...safeCurrentYear];
 
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Forecasting V2 (architecture-closure correction): forecastAnalyzer.js
-    // never receives `recentExpensePool` (transaction-shaped, includes
-    // _id/expenseName/expenseCategory/userId) directly -- this is the
-    // aggregation boundary that reduces it to a bounded, aggregate-only
-    // `{ monthKey, totalAmount }` series and a single scalar partial-month
-    // total before either ever reaches the analyzer. recentExpensePool
-    // itself remains available below for anomaly detection only.
     const forecastMonthlySeries = buildCompletedMonthSeries(recentExpensePool, currentMonthStart);
     const forecastCurrentPartialMonthTotal = computeCurrentPartialMonthTotal(safeCurrentMonth);
 
     // Prediction Layer V1: the per-category equivalent of the series above,
-    // plus a single descriptive active-day count. Both cross the SAME
-    // aggregate-only boundary -- forecastAnalyzer.js and
-    // categoryForecastAllocator.js still never receive a raw expense
-    // record. No new database query: both are derived from the
-    // already-fetched recentExpensePool.
     const forecastCategorySeries = buildCompletedMonthCategorySeries(recentExpensePool, currentMonthStart);
     const forecastActiveDays = countActiveDays(recentExpensePool, currentMonthStart);
 
     // Prediction Layer V1 (corrected): the budget the user has explicitly
-    // created for the forecast's TARGET month -- the NEXT calendar month
-    // after `currentMonthStart`, which is what
-    // forecastAnalyzer.nextCalendarMonthForecast actually predicts. The
-    // CURRENT month's budget is deliberately never used here: comparing a
-    // next-month projection against this month's limit would be a
-    // substitution the user never authorised.
-    //
-    // Built with Date arithmetic so December -> January year rollover is
-    // handled by the platform, then matched EXACTLY against the
-    // already-fetched budget history using this file's existing
-    // `"MMM YYYY"` key convention -- no new query. config/Schemas.js's
-    // budget model is per-calendar-month with no recurring/reusable
-    // concept, so when the user has not created that specific month's
-    // budget the forecast reports `no_budget` rather than borrowing
-    // another month's figure.
     const forecastTargetMonthStart = new Date(
         currentMonthStart.getFullYear(),
         currentMonthStart.getMonth() + 1,
@@ -178,10 +137,6 @@ const createAnalyticsContext = async (userId, { analysisDate } = {}) => {
         safeBudgetHistory.find((entry) => entry?.month === forecastTargetMonthKey) ?? null;
 
     // Current-month nowcast input. Raw expense records stop at this
-    // aggregation boundary; the analyzer receives only bounded totals,
-    // completion ratios and explainable one-off adjustments. The current
-    // month budget is intentionally separate from the retained next-month
-    // budget field above.
     const currentMonthForecastInput = buildCurrentMonthForecastInput({
         recentExpensePool,
         currentMonthExpenses: safeCurrentMonth,
@@ -211,17 +166,9 @@ const createAnalyticsContext = async (userId, { analysisDate } = {}) => {
         trendData,
         daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
         // Anomaly detection (V1): recentExpensePool already pools the full
-        // previous + current calendar year (see the CRITICAL FIX note
-        // above), which always fully contains any "preceding 12 complete
-        // calendar months" window ending at the first instant of any month
-        // within the current year -- so no new database query is needed
-        // here, only exposing this already-computed pool and the shared
-        // month anchor.
         recentExpensePool,
         currentMonthStart,
         // Forecasting V2's only inputs -- aggregate-only, bounded, never
-        // transaction-shaped. forecastAnalyzer.js must never be passed
-        // recentExpensePool/currentMonthExpenses directly.
         forecastMonthlySeries,
         forecastCurrentPartialMonthTotal,
         // Prediction Layer V1 -- all aggregate-only, all derived from data

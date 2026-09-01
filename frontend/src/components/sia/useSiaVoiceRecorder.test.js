@@ -12,12 +12,6 @@ jest.mock("../../api/siaVoiceApi", () => ({
 }));
 
 // ---------------------------------------------------------------------
-// A jsdom-compatible MediaRecorder/getUserMedia mock. Real browsers fire
-// `stop`/`dataavailable` asynchronously; this mock mirrors that by
-// resolving on a microtask (queueMicrotask), NOT a macrotask, so it works
-// correctly under Jest fake timers (which only control macrotasks) without
-// needing `jest.advanceTimersByTime` to observe recording-stop effects.
-// ---------------------------------------------------------------------
 class MockTrack {
   constructor() {
     this.stop = jest.fn();

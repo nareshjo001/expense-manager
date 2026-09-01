@@ -72,8 +72,6 @@ const calculateWeekendVsWeekday = (expenses = []) => {
   const hasWeekdayData = weekdayDays.size > 0;
  
   // null (not 0) when a bucket has no data at all — 0 would look like
-  // "confirmed zero spending," which is a different, stronger claim
-  // than "we have no weekend transactions to measure."
   const weekendAverage = hasWeekendData ? round2(weekendSpent / weekendDays.size) : null;
   const weekdayAverage = hasWeekdayData ? round2(weekdaySpent / weekdayDays.size) : null;
  
@@ -174,10 +172,6 @@ const calculateImpulseSpending = (expenses = [], config = {}) => {
   const categoryTotals = {};
   for (const expense of impulseExpenses) {
     // Every item in impulseExpenses already matched a normalized category
-    // above, so normalizeCategory(...) here is guaranteed non-null --
-    // grouping by the normalized value (not the raw stored string) keeps
-    // this breakdown consistent with the same collapsing behavior
-    // groupByCategoryHelper applies elsewhere.
     const category = normalizeCategory(expense?.expenseCategory);
     categoryTotals[category] = round2(
       (categoryTotals[category] || 0) + toSafeNumber(expense?.expenseAmount)
@@ -197,9 +191,6 @@ const calculateImpulseSpending = (expenses = [], config = {}) => {
     transactionCount: impulseExpenses.length,
     totalSpent: impulseAmount,
     // Two different questions, kept separate on purpose: how much of
-    // your ACTIVITY is impulse-category vs how much of your MONEY is.
-    // A user with many small impulse buys and one huge rent payment
-    // would look very different on these two numbers.
     transactionSharePercentage:
       list.length === 0 ? 0 : round2((impulseExpenses.length / list.length) * 100),
     amountSharePercentage: totalSpent === 0 ? 0 : round2((impulseAmount / totalSpent) * 100),
@@ -225,8 +216,6 @@ const calculateSubscriptionPattern = (expenses = []) => {
         );
  
   // Grouped by name/category instead of returning the raw expense
-  // array — more directly useful ("Netflix: ₹500, Spotify: ₹199") and
-  // avoids handing back full transaction records where a summary will do.
   const subscriptionsBreakdown = {};
   for (const sub of subscriptions) {
     const key = sub?.expenseName || sub?.expenseCategory || "Unknown";
@@ -275,10 +264,7 @@ const calculateShoppingFrequency = (expenses = []) => {
   };
 };
  
-/**
- * @param {Array} expenses
- * @param {{microSpending?: object, impulseSpending?: object}} config - passed through to sub-calculators
- */
+/* @param {Array} expenses */
 const analyze = (expenses = [], config = {}) => {
   const list = Array.isArray(expenses) ? expenses : [];
  

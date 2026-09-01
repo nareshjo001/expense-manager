@@ -1,10 +1,4 @@
 // Unit tests for backend/sia/safeLogger.js (M3-3).
-//
-// console.log is spied (not real stdout parsing) so every assertion reads
-// exactly what was written. No network, MongoDB, Redis, or OpenAI call is
-// possible from this module. No timer, interval, or async transport exists
-// in safeLogger.js, so there is nothing to clean up beyond restoring the
-// console spy after each test.
 "use strict";
 
 const { logSiaEvent, SIA_LOG_EVENTS } = require("../sia/safeLogger");

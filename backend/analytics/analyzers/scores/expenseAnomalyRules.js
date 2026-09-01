@@ -1,13 +1,9 @@
 // Centralized, frozen thresholds for expenseAnomalyAnalyzer.js -- robust
-// median/MAD upper-tail detection against matching-name history when possible,
-// otherwise the normalized category, followed by a monthly materiality gate.
 const anomaly = {
   // A category is only evaluated once it has at least this many valid, same-category, in-window historical records -- below this, dispersion estimates aren't defensible, and there is no overall-user fallback.
   minBaselineSampleSize: 10,
 
   // Prefer a narrower comparison against the same normalized expense name
-  // when it has enough history. This prevents broad categories such as
-  // Food from comparing every restaurant meal with every snack.
   minNameBaselineSampleSize: 4,
 
   // How far back (in complete calendar months, ending the instant before
@@ -31,8 +27,6 @@ const anomaly = {
 
   materiality: Object.freeze({
     // Only surface the portion above the usual amount when that excess is
-    // meaningful relative to this month's budget, or the user's median
-    // active-month spending when no budget exists.
     minExcessToMonthlyReferenceRatio: 0.05,
   }),
 

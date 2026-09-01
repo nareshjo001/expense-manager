@@ -81,12 +81,7 @@ async function takeOverRequest(existing, expectedStatus) {
   return taken ? { record: taken, ownerToken } : null;
 }
 
-/**
- * Atomically reserves (userId, clientMessageId) BEFORE any session is
- * created and BEFORE the provider is called.
- *
- * @returns {Promise<{outcome: string, record?: object, ownerToken?: string}>}
- */
+/* Atomically reserves (userId, clientMessageId) BEFORE any session is */
 async function reserveRequest({ userId, clientMessageId, question, requestedSessionId }) {
   const questionFingerprint = fingerprintQuestion(question);
 
@@ -200,15 +195,6 @@ async function markCompleted({ requestId, ownerToken, responseStatus, responsePa
 }
 
 // Workstream 1 -- persists a semantic-routing plan CHECKPOINT for an
-// OWNED reservation that is still `processing` (never on a completed/
-// answer_ready request) -- called by sia/semanticPipeline.js's
-// `onPlanResolved` hook immediately after a successful router call,
-// BEFORE any financialQueryService execution or answer-generation call
-// is attempted. Renews the processing lease (same CAS discipline as
-// takeOverRequest()) so this write can never itself extend a reservation
-// past its owner's actual right to hold it. Best-effort by design (the
-// caller swallows any rejection) -- a failed checkpoint write only means
-// a subsequent retry re-pays the router cost, never a correctness issue.
 async function saveRoutingCheckpoint({ requestId, ownerToken, planCheckpoint }) {
   return SiaRequest.findOneAndUpdate(
     { _id: requestId, ownerToken, status: REQUEST_STATUS.PROCESSING },

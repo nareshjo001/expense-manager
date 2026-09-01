@@ -1,34 +1,4 @@
 // BALENISA Final Recurring Authority Closure for Analytics.
-//
-// habitAnalyzer.js reads `.isRecurring` directly off whatever expense
-// objects it's handed (analytics/analyzers/habitAnalyzer.js:212) and is
-// deliberately never given database access -- analyzers must stay pure and
-// deterministic. Tracing the real call chain (report.controller.js ->
-// reportService.js -> analytics/reportGenerator.js -> analyticsContext.js
-// -> dataProvider.js) shows dataProvider.js's four getters ultimately call
-// fetchExpenses.js's fetchExpenseRaw + this file's own combined
-// annotateRecurringState pass -- so habitAnalyzer already receives
-// authoritative isRecurring values, corrected in exactly one place upstream
-// of every analyzer, before this remediation even started (fetchExpenses.js
-// already annotated the standalone HTTP endpoints; dataProvider.js/
-// analyticsContext.js reused that same primitive).
-//
-// What was NOT yet true: dataProvider.js's four getters each called the
-// *annotating* fetchExpense (one RecurringExpenseModel query per
-// collection), and the four date ranges genuinely overlap in expense _ids
-// near month/year boundaries (currentYear fully contains currentMonth;
-// previousMonth can fall inside previousYear across a Jan 1st boundary) --
-// so up to 4 redundant queries were issued for overlapping definition sets
-// on every single report generation. This suite proves the fix: dataProvider
-// now uses the raw (unannotated) fetch, and analyticsContext.js merges all
-// four ranges and annotates ONCE before slicing back into the four named
-// collections every analyzer (habitAnalyzer included) consumes.
-//
-// Mocks only `./dataProvider` (so no real Mongo ExpenseModel/date-math is
-// exercised -- that's dataProvider's own concern) and
-// `../models/RecurringExpense` (stateful fake recording every query, same
-// convention as recurringStateService.test.js) -- never touches a real
-// Mongoose connection.
 "use strict";
 
 const DATA_PROVIDER_PATH = "../analytics/dataProvider";
@@ -171,8 +141,6 @@ describe("analyticsContext -- recurring-state authority closure", () => {
     const ctx = await createAnalyticsContext(USER_ID);
 
     // exp-1's definition belongs to a different user -- for USER_ID it must
-    // remain false (the stale mirror said false too, so this also doubles
-    // as an already-agreeing/no-op case).
     expect(ctx.currentMonthExpenses[0].isRecurring).toBe(false);
   });
 
@@ -202,10 +170,6 @@ describe("analyticsContext -- recurring-state authority closure", () => {
     const habitRules = require("../analytics/analyzers/scores/habitRules");
 
     // habitAnalyzer.js is unmodified by this change; it still does nothing
-    // but read `.isRecurring` off whatever it's handed
-    // (analyzers/habitAnalyzer.js:212) -- proving it now sees `true` for
-    // exp-1/exp-3 confirms the annotation genuinely reaches the analyzer,
-    // not just the analyticsContext return value.
     const monthlyHabitReport = habitAnalyzer.analyze(ctx.currentMonthExpenses, habitRules.habits);
     expect(monthlyHabitReport).toBeDefined();
 

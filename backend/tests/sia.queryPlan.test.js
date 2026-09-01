@@ -197,11 +197,6 @@ describe("backend/sia/queryPlan -- validateQueryPlan", () => {
   });
 
   // Found while diagnosing the semantic-router controller-test failures:
-  // FORECAST is only a real capability for SPENDING_FORECAST_EXPLANATION
-  // (forecastAnalyzer.js) -- nothing else has a forecasting model. Without
-  // this rule a router-proposed plan like "predict my top category next
-  // month" (TOP_CATEGORY + FORECAST) would validate and let an LLM author
-  // an unsupported category-level prediction.
   describe("FORECAST metric x operation capability contract", () => {
     it("rejects FORECAST paired with a deterministic (non-forecast) metric", () => {
       const plan = {

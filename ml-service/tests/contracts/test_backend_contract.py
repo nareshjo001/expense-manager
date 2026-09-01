@@ -92,10 +92,6 @@ class TestRetrainModelContractStatic:
         assert "retrain-model" in src
 
         # Whitespace-tolerant match of the real, multi-line axios.post call
-        # -- deliberately structural (argument order/shape), not a loose
-        # collection of unrelated substring checks, so a regression that
-        # moves headers into the body position (or drops
-        # buildMlServiceUrl/mlOperationsHeaders) cannot pass.
         call_pattern = re.compile(
             r"axios\.post\(\s*"
             r"buildMlServiceUrl\(\s*[\"']\/retrain-model[\"']\s*\)\s*,\s*"

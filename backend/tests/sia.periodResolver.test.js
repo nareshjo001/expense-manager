@@ -1,7 +1,4 @@
 // Unit tests for backend/sia/periodResolver.js -- timezone-aware period
-// resolution. Every test injects a fixed `now` (never the real wall
-// clock) so results are fully deterministic regardless of when/where the
-// suite runs.
 "use strict";
 
 const { resolvePeriod, resolveMostRecentMonthOccurrence } = require("../sia/periodResolver");
@@ -120,11 +117,6 @@ describe("backend/sia/periodResolver", () => {
     it("still produces IST-correct month boundaries even when process.env.TZ is UTC", () => {
       process.env.TZ = "UTC";
       // 2026-08-01T00:00:00Z is 05:30 IST on Aug 1st -- if this module
-      // mistakenly used the server's local/UTC time zone instead of the
-      // configured Asia/Kolkata zone, "current month" would be computed
-      // against UTC's Aug 1 00:00:00, not IST's Aug 1 00:00:00 (which is
-      // 2026-07-31T18:30:00Z) -- these two instants are 5.5 hours apart,
-      // enough to prove the distinction.
       const now = new Date("2026-08-01T02:00:00.000Z"); // 07:30 IST on Aug 1
       const result = resolvePeriod({ type: "CURRENT_MONTH" }, { now, timeZone: "Asia/Kolkata" });
       expect(result.ok).toBe(true);

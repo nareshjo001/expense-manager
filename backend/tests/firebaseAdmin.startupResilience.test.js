@@ -1,20 +1,4 @@
 // BALENISA Firebase Startup Resilience and Environment-Contract Hardening.
-//
-// config/firebaseAdmin.js used to call admin.initializeApp() unguarded at
-// top-level require() time -- a missing, malformed, or structurally
-// invalid FIREBASE_SERVICE_ACCOUNT threw synchronously, and because
-// server.js requires the cron jobs (which require Services/push.service.js,
-// which requires this file) before app.listen(), that throw crashed the
-// ENTIRE application, not just push notifications. This suite proves the
-// guarded replacement: initialization is lazy, guarded, singleton (at most
-// once per process), and every failure mode degrades to
-// isFirebaseAvailable() === false instead of throwing -- with no
-// credential/secret content ever reaching a log line or thrown error
-// message.
-//
-// Mocks only the `firebase-admin` SDK itself (never touches a real
-// Firebase project/network) so initializeApp()/credential.cert() call
-// counts and thrown-error behavior can be asserted directly.
 "use strict";
 
 const FIREBASE_ADMIN_MODULE_PATH = "../config/firebaseAdmin";
@@ -124,9 +108,6 @@ describe("firebaseAdmin -- startup resilience", () => {
     const { isFirebaseAvailable, getAdmin, initializeApp } = loadFirebaseAdmin();
 
     // ensureInitialized() is fully synchronous (no `await`), so repeated /
-    // "concurrent" calls from any caller can never interleave into a second
-    // init attempt -- the first call always runs to completion before any
-    // other JS (including another call to this same function) can execute.
     isFirebaseAvailable();
     isFirebaseAvailable();
     getAdmin();

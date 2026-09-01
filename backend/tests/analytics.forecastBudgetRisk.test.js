@@ -1,13 +1,4 @@
 // Prediction Layer V1: forecast-vs-budget risk regression suite.
-//
-// The central guarantees under test:
-//   1. The tier boundaries are NOT a second copy -- they are derived from
-//      budgetAnalyzer.js's own exported STATUS_THRESHOLDS, so the two can
-//      never silently drift. The final test here fails the moment someone
-//      changes a boundary in one place only.
-//   2. A next-month forecast is NEVER compared against a budget the user
-//      did not create for that month (this repository's budget model has no
-//      recurring/reusable monthly budget).
 "use strict";
 
 const forecastBudgetRisk = require("../analytics/analyzers/forecastBudgetRisk");
@@ -87,9 +78,6 @@ describe("forecastBudgetRisk -- status tiers", () => {
 describe("forecastBudgetRisk -- threshold reuse (drift guard)", () => {
   it("derives its tiers from budgetAnalyzer's own exported thresholds", () => {
     // Not a restatement of the numbers: this walks budgetAnalyzer's real
-    // exported table and asserts the forecast status agrees with the
-    // budget status at every boundary it defines. Changing a boundary in
-    // budgetAnalyzer.js alone will fail this test.
     const expectedForecastStatus = {
       Safe: STATUSES.safe,
       Warning: STATUSES.watch,

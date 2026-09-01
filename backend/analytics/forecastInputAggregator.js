@@ -25,15 +25,7 @@ const round2 = (value) => Number(Number(value).toFixed(2));
 // `YYYY-M` bucket key from a Date's local calendar fields -- matches this repository's established local-time convention.
 const monthKeyOf = (date) => `${date.getFullYear()}-${date.getMonth()}`;
 
-/**
- * Builds the bounded, aggregate-only completed-month series forecasting consumes. Malformed records are silently skipped, never thrown. The current in-progress month is never included. A month with a recorded expense total of exactly 0 still appears as an explicit entry; a month with NO recorded expenses at all has no entry (genuinely absent from history, not zero-filled) -- these two cases are indistinguishable from stored data alone, so this module only counts months it has direct evidence for.
- *
- * @param {Array} expensePool - raw expense records (e.g. recentExpensePool).
- * @param {Date} monthStart - the first instant of the current, in-progress
- *   month; the aggregation window is the `RULES.maxHistoryMonths` complete
- *   calendar months strictly before this date.
- * @returns {Array<{monthKey: string, totalAmount: number}>} oldest first.
- */
+/* Builds the bounded, aggregate-only completed-month series forecasting consumes. Malformed records are silently skipped, never thrown. The current in-progress month is never included. A month with a recorded expense total of exactly 0 still appears as an explicit entry; a month with NO recorded expenses at all has no entry (genuinely absent from history, not zero-filled) -- these two cases are indistinguishable from stored data alone, so this module only counts months it has direct evidence for. */
 function buildCompletedMonthSeries(expensePool, monthStart) {
   if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) {
     return [];
@@ -85,13 +77,7 @@ function computeCurrentPartialMonthTotal(currentMonthExpenses) {
   return round2(total);
 }
 
-/**
- * Per-category equivalent of buildCompletedMonthSeries() -- the only place transaction-level `expenseCategory` is read for forecasting, emitting aggregate-only entries. Categories are discovered entirely from the data (no fixed list); the grouping key is the shared normalizer's output (utils/categoryNormalization.js), so case/whitespace/alias variants of the same category ("Food"/"food", "Medical"/"Health") merge into one entry instead of fragmenting the trend fit. A record with a missing/blank category groups under the explicit `Uncategorized` marker rather than being skipped, so category amounts still sum to the published total. Every category is aligned against the canonical completed-month timeline buildCompletedMonthSeries() emits: a month on that timeline with nothing recorded for this category becomes an explicit 0 rather than a gap, which is what prevents an intermittent category's sparse history from over-predicting its trend.
- *
- * @param {Array} expensePool - raw expense records (e.g. recentExpensePool).
- * @param {Date} monthStart - first instant of the current, in-progress month.
- * @returns {Array<{category: string, monthlySeries: Array<{monthKey: string, totalAmount: number}>}>}
- */
+/* Per-category equivalent of buildCompletedMonthSeries() -- the only place transaction-level `expenseCategory` is read for forecasting, emitting aggregate-only entries. Categories are discovered entirely from the data (no fixed list); the grouping key is the shared normalizer's output (utils/categoryNormalization.js), so case/whitespace/alias variants of the same category ("Food"/"food", "Medical"/"Health") merge into one entry instead of fragmenting the trend fit. A record with a missing/blank category groups under the explicit `Uncategorized` marker rather than being skipped, so category amounts still sum to the published total. Every category is aligned against the canonical completed-month timeline buildCompletedMonthSeries() emits: a month on that timeline with nothing recorded for this category becomes an explicit 0 rather than a gap, which is what prevents an intermittent category's sparse history from over-predicting its trend. */
 function buildCompletedMonthCategorySeries(expensePool, monthStart) {
   if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) {
     return [];

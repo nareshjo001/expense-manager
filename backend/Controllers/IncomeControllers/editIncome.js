@@ -3,17 +3,6 @@ const { UserModel, IncomeModel } = require('../../config/Schemas');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
 
 // Remediation Workstream B -- report/cache synchronization. Edit is left
-// with its existing, simpler idempotency contract: a retried
-// `PUT /income/edit` with the same { incomeId, newAmount } naturally
-// produces the same end state (an atomic `$set` on the same document, not
-// an insert) -- no evidence of a concrete duplication risk equivalent to
-// income CREATION's (see addincome.js), so no idempotency key was added
-// here. What WAS missing is that a successful edit never advanced the
-// user's derived-data revision, invalidated any cache entry, or triggered a
-// report refresh at all -- a cached/stored report could understate or omit
-// an edited income amount indefinitely. This now uses the exact same
-// reserve()/write/synchronizeAfterMutation() reliability lifecycle
-// addexpense.js/editExpense.js already use for expenses.
 const editIncome = async (req, res) => {
   let ownerUserId = null;
   let reportReservation = null;
@@ -36,15 +25,10 @@ const editIncome = async (req, res) => {
     }
 
     // Reserve BEFORE the primary write -- durable pre-write evidence that
-    // survives a process crash between the write committing and the
-    // post-write confirm() call inside synchronizeAfterMutation().
     const reserved = await reserve({ userId: user._id, reserveReport: true });
     reportReservation = reserved.reportReservation;
 
     // Update the caller's own income record atomically. writeStatus flips to
-    // "dispatched-ambiguous" IMMEDIATELY BEFORE this call -- if it rejects,
-    // that does not prove the update never landed (see editExpense.js's
-    // identical writeStatus doc comment).
     writeStatus = "dispatched-ambiguous";
     let income;
     try {

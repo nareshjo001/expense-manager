@@ -4,10 +4,6 @@ import { format } from "date-fns";
 import BudgetBar from "./BudgetBar";
 
 // Phase C.2 -- proves BudgetBar's calm "Budget is refreshing" indicator
-// (added so a possibly-stale `.spent` figure, surfaced via
-// useBudgetSummary's `isCurrentMonthStale`, is never shown as an ordinary
-// fresh value with no signal at all) renders only when explicitly told to,
-// and never replaces or blocks the existing best-available figures.
 const CURRENT_MONTH = format(new Date(), "MMM yyyy");
 
 afterEach(() => {

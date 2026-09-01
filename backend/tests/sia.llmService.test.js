@@ -1,12 +1,4 @@
 // Unit tests for backend/sia/llmService.js.
-//
-// backend/sia/config.js is fully mocked -- these tests never depend on real
-// process.env state. No network, MongoDB, Redis, ML service, or real
-// provider call is ever made; this stub cannot make one anyway (see
-// llmService.js). Follows the same module-reset isolation style as
-// tests/sia.config.test.js and tests/sia.contextBuilder.test.js: each test
-// loads a fresh module registry and a fresh config mock, so no mock state
-// leaks between tests.
 "use strict";
 
 // Loads a brand-new backend/sia/config mock and a brand-new llmService
@@ -170,9 +162,6 @@ describe("backend/sia/llmService", () => {
     });
 
     // Object.freeze + "use strict" in llmService.js means any attempted
-    // mutation of `request` or its nested `context` throws instead of
-    // silently succeeding, which would otherwise surface as a rejection
-    // this test doesn't expect (LlmProviderError specifically).
     await expect(askLlm(request)).rejects.toBeInstanceOf(require("../sia/llmService").LlmProviderError);
   });
 
@@ -208,12 +197,6 @@ describe("backend/sia/llmService", () => {
 
   it("does not implicitly recognize any specific provider name as supported (openai, gemini, and groq are the only implemented adapters)", async () => {
     // "gemini" and "groq" intentionally excluded from this list -- both are
-    // now real implemented adapters (see tests/sia.llmService.gemini.test.js
-    // and tests/sia.llmService.groq.test.js), so neither belongs among the
-    // deliberately-unsupported names asserted here. "OpenAI"/"Gemini"/"Groq"
-    // (capitalized) stay in this list: normalization trims whitespace but
-    // never case-folds, so these remain explicit unsupported names distinct
-    // from the real lowercase provider identifiers.
     const candidateProviders = [
       "anthropic",
       "azure-openai",

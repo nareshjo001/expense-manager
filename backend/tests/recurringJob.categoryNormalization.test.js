@@ -1,35 +1,4 @@
 // Category Normalization -- single implementation pass, required test
-// scenario #16 ("cron-created recurring expenses normalized").
-//
-// backend/cron/recurringJob.js constructs a brand-new ExpenseModel document
-// DIRECTLY inside its node-cron callback, entirely bypassing
-// Controllers/ExpenseControllers/addexpense.js and its normalization. This
-// test proves the defensive, independent normalizeCategory() call added at
-// that exact write site (see recurringJob.js's own doc comment) actually
-// takes effect: a due RecurringExpense whose stored category is a
-// case/whitespace/alias variant is normalized to its canonical form before
-// the auto-logged Expense document is created, and a RecurringExpense with
-// a missing/invalid category never blocks the auto-logger -- it falls back
-// to the explicit "Uncategorized" marker instead.
-//
-// node-cron is mocked so `cron.schedule(...)`'s callback is captured rather
-// than actually scheduled -- this test invokes that captured callback
-// directly and deterministically, never waiting on a real cron tick.
-//
-// Test-boundary isolation fix: recurringJob.js imports only `reserve` and
-// `synchronizeAfterMutation` from Services/syncRecoveryService (verified
-// against its current top-level require) -- the real syncRecoveryService is
-// mocked at that exact boundary below, so this category-focused test never
-// reaches the real reserve()/synchronizeAfterMutation() implementations and
-// therefore never reaches the real PendingSync.findOneAndUpdate() Mongoose
-// call those implementations would otherwise issue (which previously hung
-// for 10s waiting on a test database connection that does not exist here).
-// budget.service and reportService were previously given partial/real
-// mocks to satisfy syncRecoveryService's OWN transitive dependencies
-// (getMonthAnchor, refreshReport); with syncRecoveryService itself now
-// mocked wholesale, neither module is reachable from this test at all, so
-// both mocks are removed as obsolete rather than kept to work around a
-// transitive call that is now isolated at the correct boundary.
 "use strict";
 
 const RECURRING_EXPENSE_PATH = "../models/RecurringExpense";
@@ -43,8 +12,6 @@ const CRON_JOB_PATH = "../cron/recurringJob";
 const USER_ID = "64f1a2b3c4d5e6f7a8b9c0aa";
 
 // Deterministic tokens returned by the mocked reserve() below, asserted
-// against the mocked synchronizeAfterMutation() call to prove the exact
-// same reservation flows through to synchronization.
 const TEST_BUDGET_TOKEN = "test-budget-reservation-token";
 const TEST_REPORT_TOKEN = "test-report-reservation-token";
 
@@ -96,15 +63,6 @@ function loadCronJob({ dueExpenses }) {
   }));
 
   // Mocks the public syncRecoveryService boundary itself -- recurringJob.js
-  // never reaches the real reserve()/synchronizeAfterMutation()
-  // implementations (and therefore never reaches PendingSync/Mongoose) from
-  // this test. Shapes mirror the real return contracts exactly:
-  // reserve() -> { budgetReservations, reportReservation, userWideReservation }
-  // (see Services/syncRecoveryService.js's reserve()), synchronizeAfterMutation()
-  // -> { status, budget, report, recoveryPending } (see that function's own
-  // return statement). abandon() is provided as a non-throwing resolved
-  // mock for failure paths, even though these happy-path scenarios never
-  // call it.
   const reserveMock = jest.fn(async ({ budgetDates = [], reserveReport = false } = {}) => ({
     budgetReservations: budgetDates.map(() => ({ token: TEST_BUDGET_TOKEN, reservedAt: new Date() })),
     reportReservation: reserveReport ? { token: TEST_REPORT_TOKEN, reservedAt: new Date() } : null,
@@ -144,11 +102,6 @@ const dueRecurring = (overrides = {}) => ({
 });
 
 // Shared post-conditions every successful scenario below must satisfy,
-// beyond its own category assertion: exactly one reserve() call (with the
-// expected user and a report reservation requested), exactly one
-// synchronizeAfterMutation() call carrying the same user, the created
-// expense's own date, and the exact tokens reserve() returned, and no
-// abandon() call on this successful path.
 function expectSuccessfulSyncFlow({ createdExpenses, reserveMock, abandonMock, synchronizeAfterMutationMock }) {
   expect(reserveMock).toHaveBeenCalledTimes(1);
   expect(reserveMock).toHaveBeenCalledWith({

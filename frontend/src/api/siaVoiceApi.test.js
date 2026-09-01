@@ -2,29 +2,6 @@ import api from "./axios";
 import { transcribeSiaAudio } from "./siaVoiceApi";
 
 // Matches this repository's existing convention (see siaApi.test.js): the
-// shared axios instance is fully mocked so no real HTTP request or
-// interceptor logic runs, and -- critically in THIS repo's Jest setup --
-// axios itself (which ships as ESM) is never imported through the module
-// graph, since CRA's Jest config does not transform node_modules and a
-// direct `require("axios")`/`jest.requireActual("axios")` fails with
-// "Cannot use import statement outside a module" (verified while writing
-// this file). That means this suite cannot exercise axios's REAL
-// browser-boundary-computation for a multipart body end to end; instead it
-// proves the two things this repository's code controls directly:
-//   1. The per-request config sent to `api.post` never carries a static
-//      "application/json" Content-Type for this call (it is explicitly
-//      unset), so it can never collide with/override whatever real
-//      Content-Type axios/the browser computes for the FormData body.
-//   2. The `transformRequest` hook this file installs actively strips any
-//      leftover Content-Type key it is handed (covering both axios v1's
-//      AxiosHeaders `.delete()` API and a plain-object headers shape), and
-//      passes the FormData body through completely unchanged -- never
-//      JSON.stringify'd, which is what would actually produce an
-//      "application/json" body.
-// Real end-to-end proof that the resulting wire request is
-// "multipart/form-data; boundary=..." requires a real browser or a network-
-// level mock (e.g. MSW) and is called out explicitly as unverified in this
-// sandbox in the final report.
 jest.mock("./axios", () => ({
   __esModule: true,
   default: { post: jest.fn() },
@@ -53,9 +30,6 @@ describe("frontend/src/api/siaVoiceApi transcribeSiaAudio Content-Type contract"
 
     const [, , config] = api.post.mock.calls[0];
     // Explicitly unset, not the shared instance's default string -- this is
-    // the actual fix under test (see axios.js's static
-    // Content-Type: application/json default this must never inherit for
-    // a FormData body).
     expect(config.headers["Content-Type"]).toBeUndefined();
     expect("Content-Type" in config.headers).toBe(true);
     expect(config.headers["Content-Type"]).not.toBe("application/json");

@@ -1,10 +1,4 @@
 // Unit tests for backend/sia/semanticPipeline.js -- the orchestration
-// layer ask.js falls back to once the existing deterministic
-// classifyIntent() returns null. Every external effect (router call,
-// askLlm, financialQueryService, existing-intent delegate) is injected;
-// NO test in this file ever reaches a real database or a live provider.
-// These tests are the authoritative proof of the provider-call-budget
-// contract this milestone requires.
 "use strict";
 
 const { runSemanticPipeline } = require("../sia/semanticPipeline");
@@ -267,8 +261,6 @@ describe("backend/sia/semanticPipeline -- provider-call budgets", () => {
 
     const result = await runSemanticPipeline({
       // Deliberately NOT a clearly-prohibited phrase (no mutation/raw-list/
-      // advice-request shape) so this genuinely exercises the router path,
-      // which itself decided the question was unsupported.
       question: "How many pets do I have?",
       userId: "user-1",
       now: NOW,
@@ -308,8 +300,6 @@ describe("backend/sia/semanticPipeline -- provider-call budgets", () => {
 
   it("deterministic direct lookup = 0 LLM calls even when a router mock is supplied but never invoked (prohibited path)", async () => {
     // Documents the deterministic-classifier floor's own budget for
-    // comparison: a prohibited/deterministic-only path here never touches
-    // the router either.
     const routerCall = jest.fn();
     const result = await runSemanticPipeline({
       question: "List all my transactions",

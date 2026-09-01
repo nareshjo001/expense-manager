@@ -1,6 +1,4 @@
 // Unit tests for backend/sia/semanticRouter.js -- the provider-neutral
-// routing boundary. The LLM adapter is mocked, so no test in this file
-// can call a live provider.
 "use strict";
 
 jest.mock("../sia/llmService", () => ({ askLlm: jest.fn() }));
@@ -298,13 +296,6 @@ describe("backend/sia/semanticRouter -- routeQuestion", () => {
       ).resolves.not.toThrow();
 
       // Every fixture's adversarial payload carries either an unknown key
-      // (collection/rawQuery/includeUserId/mutate), an invalid category
-      // filter ($where), or an unsupported metric (STOCK_RECOMMENDATION,
-      // or too many metrics) -- queryPlan.js's closed schema rejects all
-      // of them, so routing must fail closed (ok:false) here. Even in the
-      // hypothetical case a fixture's plan were schema-valid, it must
-      // never carry a raw query/collection/mutation field -- asserted
-      // below regardless of `ok`.
       expect(result.ok).toBe(false);
       if (result.plan) {
         const serialized = JSON.stringify(result.plan);

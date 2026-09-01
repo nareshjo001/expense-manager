@@ -61,13 +61,6 @@ const financialReportSchema = new mongoose.Schema(
     },
 
     // Phase C.2 -- atomic write-fencing generation stamp. Set to the
-    // PendingSync.revision value that was authoritative at the moment this
-    // exact document content was computed. The write that persists this
-    // document is REQUIRED to be conditioned on this field (see
-    // Services/reportService.js's persistAndCache) so that an older,
-    // slower synchronization attempt can never overwrite a newer one --
-    // the guard lives in the write's own filter, not in a separate
-    // check-then-write step (which is not atomic and was proven racy).
     syncRevision: {
       type: Number,
       default: 0,

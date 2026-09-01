@@ -24,10 +24,6 @@ jest.mock("../../api/siaVoiceApi", () => ({
 }));
 
 // ---------------------------------------------------------------------
-// Browser mocks -- same shape as useSiaVoiceRecorder.test.js's, kept local
-// to this file since SiaPanel exercises the REAL useSiaVoiceRecorder hook
-// (not mocked) to prove the actual UI wiring end to end.
-// ---------------------------------------------------------------------
 class MockTrack {
   constructor() {
     this.stop = jest.fn();
@@ -138,8 +134,6 @@ function renderPanel(conversation, props = {}) {
 const composer = () => screen.getByLabelText(/your question/i);
 
 // ---------------------------------------------------------------------
-// A: voice UI visibility / accessibility
-// ---------------------------------------------------------------------
 describe("SiaPanel -- voice controls visibility", () => {
   it("renders no mic control at all when voiceCapabilities is not supplied (typed chat fully usable)", () => {
     renderPanel(makeConversation());
@@ -188,8 +182,6 @@ describe("SiaPanel -- voice controls visibility", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// A/C: recording lifecycle through the panel
 // ---------------------------------------------------------------------
 describe("SiaPanel -- recording lifecycle", () => {
   it("clicking the mic (a direct user gesture) requests permission, then shows Stop/Cancel and a timer while recording", async () => {
@@ -330,8 +322,6 @@ describe("SiaPanel -- recording lifecycle", () => {
 });
 
 // ---------------------------------------------------------------------
-// E: Escape precedence
-// ---------------------------------------------------------------------
 describe("SiaPanel -- Escape precedence", () => {
   it("Escape while recording cancels the recording and leaves the panel open (onClose not called)", async () => {
     installVoiceSupport();
@@ -369,8 +359,6 @@ describe("SiaPanel -- Escape precedence", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// D: clarification rendering + focus management
 // ---------------------------------------------------------------------
 describe("SiaPanel -- clarification rendering", () => {
   const clarificationMessage = {
@@ -424,8 +412,6 @@ describe("SiaPanel -- clarification rendering", () => {
 });
 
 // ---------------------------------------------------------------------
-// D: interpretation trust label
-// ---------------------------------------------------------------------
 describe("SiaPanel -- interpretation trust label", () => {
   it("renders a human-readable 'Using {periodLabel}' label near the answer", () => {
     const conversation = makeConversation({
@@ -476,20 +462,12 @@ describe("SiaPanel -- interpretation trust label", () => {
 });
 
 // ---------------------------------------------------------------------
-// F: Listen/Stop speech synthesis
-// ---------------------------------------------------------------------
 describe("SiaPanel -- Listen/Stop speech synthesis", () => {
   const originalSpeechSynthesis = window.speechSynthesis;
   const originalUtterance = window.SpeechSynthesisUtterance;
 
   afterEach(() => {
     // Unmounts (running SiaSpeakButton's own cleanup effects, which call
-    // window.speechSynthesis.cancel()) BEFORE the mock installed by this
-    // describe block is torn down -- Jest runs a describe-scoped afterEach
-    // before the file-level one below, so without this explicit call here
-    // the file-level `cleanup()` would run against an already-restored
-    // (real, speechSynthesis-less jsdom) `window`, throwing from inside
-    // the unmounting component's own cleanup effect.
     cleanup();
     window.speechSynthesis = originalSpeechSynthesis;
     window.SpeechSynthesisUtterance = originalUtterance;
@@ -586,8 +564,6 @@ describe("SiaPanel -- Listen/Stop speech synthesis", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// Regression: existing SiaPanel behaviour is unaffected
 // ---------------------------------------------------------------------
 describe("SiaPanel -- Workstream 3 regression guard", () => {
   it("typed submission still works exactly as before with no voiceCapabilities supplied", () => {

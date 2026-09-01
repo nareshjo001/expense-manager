@@ -16,20 +16,10 @@ const REPORT_GENERATOR_PATH = "../analytics/reportGenerator";
 const CURRENT_MONTH_START = new Date(2026, 7, 1);
 
 // Loads a fresh module registry with every reportGenerator collaborator
-// EXCEPT expenseAnomalyAnalyzer and reportAssembler mocked -- so the real
-// analyzer and the real assembler run, proving genuine end-to-end anomaly
-// behavior, while every other analyzer stays a cheap, deterministic stub.
 function loadHarnessWithRealAnomalyAnalyzer({ recentExpensePool = [], currentMonthExpenses = [] } = {}) {
   jest.resetModules();
 
   // jest.resetModules() clears the module registry but NOT an explicit
-  // jest.doMock(EXPENSE_ANOMALY_ANALYZER_PATH, ...) registration made by an
-  // earlier loadHarnessWithMockedAnomalyAnalyzer() call in this same file --
-  // that factory stays registered for the rest of the file (same behavior
-  // documented in tests/report.contract.test.js's
-  // loadAppWithMockedServiceDependencies()). Without this, a "real analyzer"
-  // harness loaded after a "mocked analyzer" harness would silently still
-  // resolve the mock.
   jest.dontMock(EXPENSE_ANOMALY_ANALYZER_PATH);
 
   jest.doMock(ANALYTICS_CONTEXT_PATH, () => ({
@@ -79,9 +69,6 @@ function loadHarnessWithRealAnomalyAnalyzer({ recentExpensePool = [], currentMon
 }
 
 // Loads a fresh module registry with expenseAnomalyAnalyzer itself mocked
-// (a spy), so we can assert exactly what reportGenerator.js passes into it,
-// without needing real expense fixtures to produce a specific detection
-// outcome.
 function loadHarnessWithMockedAnomalyAnalyzer({ recentExpensePool = [], currentMonthExpenses = [] } = {}) {
   jest.resetModules();
 
@@ -194,8 +181,6 @@ describe("reportGenerator: expenseAnomalyAnalyzer wiring (A)", () => {
     const report = await generateReport("user-1");
 
     // The real (unmocked) reportAssembler is used here, so this proves the
-    // exact object expenseAnomalyAnalyzer.analyze() returned flows straight
-    // through to the assembled report's `anomalies` field, untouched.
     expect(report.anomalies).toBe(ANOMALY_RESULT_MARKER);
   });
 
@@ -335,9 +320,6 @@ describe("reportGenerator + real expenseAnomalyAnalyzer: no raw data leakage (D)
 describe("reportGenerator + real expenseAnomalyAnalyzer: normalized category output (E)", () => {
   it("preserves a category-variant-merged anomaly's canonical category", async () => {
     // Baseline fragmented across case variants ("Food" / "food"), exactly
-    // the scenario the category-normalization fix merges into one 10-record
-    // baseline (see analytics.expenseAnomaly.test.js's own coverage of this
-    // same fixture shape).
     const recentExpensePool = [
       ...makeBaselineRecords("Food", [50, 150, 250, 350, 450]),
       ...makeBaselineRecords("food", [550, 650, 750, 850, 950]),

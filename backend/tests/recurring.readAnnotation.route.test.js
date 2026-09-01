@@ -1,10 +1,4 @@
 // Recurring-state authority remediation -- proves the authoritative
-// isRecurring annotation actually reaches real HTTP responses on the
-// endpoints ExpenseItem.js's data ultimately comes from (GET /expense/search
-// -> getbycustom.js -> fetchExpenses.js) and on the single-expense edit-data
-// endpoint (GET /expense/expense-edit-data -> geteditexpense.js), using a
-// stateful fake ExpenseModel + RecurringExpenseModel rather than
-// hand-scripted per-test responses.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -47,9 +41,6 @@ function loadApp({ expenses, recurringDefinitions }) {
   jest.resetModules();
 
   // ExpenseModel: only find()/findOne() are needed by the endpoints under
-  // test here; findOne returns a document-shaped object with .toObject()
-  // so geteditexpense.js's own `.toObject()` call behaves like a real
-  // Mongoose document.
   const ExpenseModelMock = {
     find: (query) => ({
       lean: async () =>

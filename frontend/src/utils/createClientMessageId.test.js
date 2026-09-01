@@ -1,8 +1,6 @@
 import { createClientMessageId } from "./createClientMessageId";
 
 // The key must be collision-resistant: a duplicate would make the backend
-// (which treats (userId, clientMessageId) as the request identity) replay
-// the wrong stored answer.
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe("frontend/src/utils/createClientMessageId", () => {
@@ -50,10 +48,6 @@ describe("frontend/src/utils/createClientMessageId", () => {
   });
 
   // The two tests below set a real random source explicitly rather than
-  // relying on whatever the jsdom version happens to expose -- this
-  // environment's `crypto` provides neither randomUUID nor
-  // getRandomValues, so depending on it would make these assertions test
-  // the test environment instead of the code.
   it("stays within the backend's 100-character maximum", () => {
     setCrypto({ getRandomValues: (bytes) => bytes.map(() => Math.floor(Math.random() * 256)) });
 

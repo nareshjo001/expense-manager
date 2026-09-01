@@ -1,18 +1,4 @@
 // Batch 3E: SIA runtime-readiness + GET /sia/status regression suite.
-//
-// Two layers, both proved here:
-//   1. sia/readiness.js's isSiaReady() in isolation -- table-driven across
-//      every configuration permutation that matters.
-//   2. GET /sia/status end-to-end through the real Express app, proving the
-//      minimal public contract, the authentication boundary, and (crucially)
-//      that the endpoint performs NO side effects.
-//
-// Every case isolates configuration safely: sia/config.js snapshots
-// process.env at require() time, so each scenario re-mocks the config module
-// rather than mutating a shared object, and OPENAI_API_KEY is saved and
-// restored around every single test. No real credential exists anywhere in
-// this file -- the placeholder below is obviously fake and is never asserted
-// against a response body.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -23,8 +9,6 @@ const originalJwtSecret = process.env.JWT_SECRET;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 
 // Deliberately not a realistic key shape: readiness checks PRESENCE only and
-// must never depend on a prefix/length/format, so a value like this must be
-// accepted exactly as a real one would be.
 const FAKE_CREDENTIAL = "test-credential-value-not-a-real-key";
 
 beforeAll(() => {
@@ -43,8 +27,6 @@ function setCredential(value) {
 
 afterEach(() => {
   // Restore the credential env var after EVERY case, then reset the module
-  // registry so the next test's jest.doMock("../sia/config") takes effect
-  // against a freshly-required readiness module.
   if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = originalOpenAiKey;
   jest.resetModules();
@@ -55,12 +37,6 @@ function signToken(userId) {
 }
 
 // Workstream 2 -- voice-input config defaults, added to every config mock
-// in this file so GET /sia/status's additive capabilities.voiceInput block
-// always has real maxBytes/maxDurationSeconds values (matching the real
-// config.js defaults) rather than `undefined`. voiceEnabled is
-// deliberately left false/unset everywhere in this file -- this suite is
-// about the TEXT (isSiaReady) surface only; voice readiness is covered by
-// tests/sia.readiness.voice.test.js.
 const VOICE_CONFIG_DEFAULTS = {
   voiceEnabled: false,
   sttProvider: "groq",
@@ -85,8 +61,6 @@ function loadReadiness({ enabled, provider, model, credential }) {
   return require("../sia/readiness");
 }
 
-// ---------------------------------------------------------------------
-// 1-5. Readiness rules, table-driven.
 // ---------------------------------------------------------------------
 describe("sia/readiness -- isSiaReady()", () => {
   const READY = { enabled: true, provider: "openai", model: "gpt-test", credential: FAKE_CREDENTIAL };
@@ -145,8 +119,6 @@ describe("sia/readiness -- isSiaReady()", () => {
 
   it("only claims local configuration readiness -- it performs no network call of any kind", () => {
     // Proven structurally: readiness.js requires exactly one module (its own
-    // config) and no HTTP client. If it ever grew an axios/http dependency
-    // this assertion would need to change, which is the point.
     jest.resetModules();
     const axios = require("axios");
     const axiosGet = jest.spyOn(axios, "get").mockImplementation(() => {
@@ -166,8 +138,6 @@ describe("sia/readiness -- isSiaReady()", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// 6-8. GET /sia/status -- contract, authentication, and no side effects.
 // ---------------------------------------------------------------------
 describe("GET /sia/status", () => {
   // Mocks every expensive/stateful collaborator so a call to ANY of them is
@@ -230,10 +200,6 @@ describe("GET /sia/status", () => {
   const READY = { enabled: true, provider: "openai", model: "gpt-test", credential: FAKE_CREDENTIAL };
 
   // Workstream 2 -- the additive capabilities.voiceInput block every
-  // GET /sia/status response now carries. voiceEnabled is unset/false
-  // throughout this whole file (this suite is about the TEXT surface),
-  // so voiceInput.available is always false here -- the size/duration
-  // ceilings mirror VOICE_CONFIG_DEFAULTS above.
   const EXPECTED_VOICE_CAPABILITIES = {
     voiceInput: {
       available: false,
@@ -244,13 +210,6 @@ describe("GET /sia/status", () => {
   };
 
   // NOTE on the explicit timeout third arguments below (Workstream 2): this
-  // sandbox pays a large one-time-per-call cost for jest.resetModules() +
-  // require("../app") -- each call here has been observed taking up to
-  // ~55s in this environment, well past Jest's default 5000ms per-test
-  // timeout, even though the request itself resolves correctly. This
-  // mirrors the documented, narrowly-scoped fix already used for the very
-  // first test in tests/sia.ask.test.js (a per-test timeout, not a
-  // suite-wide jest.setTimeout()) rather than masking a real hang.
   it(
     "returns exactly { success: true, available: true, capabilities } for a ready, authenticated request",
     async () => {
@@ -287,12 +246,6 @@ describe("GET /sia/status", () => {
   );
 
   // Split into one `it()` per override case (rather than one test looping
-  // over all four) so each is independently addressable/timeoutable --
-  // this sandbox's per-call budget makes four sequential
-  // jest.resetModules()+require("../app") cold loads inside a SINGLE test
-  // (as this originally read) exceed even a generous per-test timeout, even
-  // though each individual case resolves correctly on its own. Same
-  // assertions as before, just no longer bundled into one test.
   it.each([
     ["a ready/available case", {}],
     ["SIA disabled", { enabled: false }],

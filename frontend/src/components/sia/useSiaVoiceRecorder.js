@@ -2,15 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { transcribeSiaAudio } from "../../api/siaVoiceApi";
 
 // SIA voice-input recorder state machine (Workstream 3, part A).
-//
-// Owns exactly one recording attempt at a time: requesting microphone
-// permission, recording, auto-stopping at the server-advertised maximum
-// duration, uploading for transcription, and holding the resulting
-// transcript for the caller to insert into the composer -- this hook NEVER
-// inserts it and NEVER submits a question itself. `clientMessageId`/the ask
-// mutation are never touched anywhere in this file.
-//
-// Every documented state is reachable and nothing else is emitted.
 export const SIA_RECORDER_STATE = Object.freeze({
   IDLE: "idle",
   REQUESTING_PERMISSION: "requesting_permission",
@@ -30,9 +21,6 @@ export const SIA_RECORDER_STATE = Object.freeze({
 });
 
 // Preference order this milestone requires -- checked via
-// MediaRecorder.isTypeSupported, first match wins. A browser lacking all
-// four simply gets `undefined`, and MediaRecorder is created with no
-// explicit mimeType (the browser's own default), never a crash.
 const MIME_TYPE_PREFERENCE = [
   "audio/webm;codecs=opus",
   "audio/mp4",
@@ -64,9 +52,6 @@ export function isVoiceRecordingSupported() {
 }
 
 // Maps a getUserMedia rejection to one of this hook's documented states.
-// Names follow the DOM spec (MediaDevices.getUserMedia() exceptions);
-// anything unrecognized falls back to NO_MICROPHONE rather than silently
-// leaving the machine in REQUESTING_PERMISSION forever.
 function mapGetUserMediaError(error) {
   const name = error && error.name;
   if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
@@ -82,8 +67,6 @@ function mapGetUserMediaError(error) {
 }
 
 // Maps a rejected transcription request (axios error) to one of this
-// hook's documented states, mirroring backend/Controllers/SiaControllers/
-// transcribe.js's documented status codes exactly.
 function mapTranscriptionError(error) {
   if (error && (error.code === "ERR_CANCELED" || error.name === "CanceledError")) {
     return SIA_RECORDER_STATE.CANCELLED;
@@ -98,14 +81,7 @@ function mapTranscriptionError(error) {
 
 const DEFAULT_MAX_DURATION_SECONDS = 60;
 
-/**
- * @param {object} args
- * @param {number} [args.maxDurationSeconds] - from GET /sia/status's
- *   capabilities.voiceInput.maxDurationSeconds (read by the caller, e.g.
- *   SiaEntryPoint's existing useSiaStatusQuery -- this hook does not fetch
- *   status itself).
- * @param {string} [args.languageHint]
- */
+/* @param {object} args */
 export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_SECONDS, languageHint } = {}) {
   const [state, setState] = useState(SIA_RECORDER_STATE.IDLE);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -126,10 +102,6 @@ export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_
   }, []);
 
   // The SINGLE cleanup path called from every exit -- success, error,
-  // cancel, and unmount. Stops every MediaStreamTrack exactly once (a
-  // second call after streamRef is already null is a no-op, never a
-  // double-stop), clears both timers, and clears the chunk buffer so no
-  // audio bytes linger after this recording attempt ends.
   const cleanup = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -152,8 +124,6 @@ export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_
     return () => {
       isMountedRef.current = false;
       // Abort any in-flight transcription upload and release the
-      // microphone -- an unmounted panel (close/new-chat/history-nav/
-      // logout) must never keep recording or keep an upload running.
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -200,11 +170,6 @@ export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_
   );
 
   // Finishes a recording that reached its natural or requested end:
-  // combines the collected chunks into one Blob, releases the microphone,
-  // and either discards everything (a cancel raced the stop) or hands the
-  // Blob to transcription. The Blob reference itself is never retained
-  // beyond this function -- it is passed to runTranscription and not
-  // stored on the hook.
   const finishRecording = useCallback(() => {
     const chunks = chunksRef.current;
     const mimeType = mediaRecorderRef.current && mediaRecorderRef.current.mimeType;
@@ -231,9 +196,6 @@ export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_
   }, [state, finishRecording, safeSetState]);
 
   // Safe to call unconditionally from any caller (e.g. SiaPanel wiring this
-  // into New chat/history-nav/close) -- a no-op when there is nothing
-  // active to cancel, so it never stomps an idle/already-settled machine
-  // into a spurious "cancelled" announcement.
   const cancel = useCallback(() => {
     const activeStates = [
       SIA_RECORDER_STATE.REQUESTING_PERMISSION,
@@ -295,8 +257,6 @@ export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_
     } catch (err) {
       if (!isMountedRef.current) return;
       // A cancel that arrived WHILE permission was being requested already
-      // settled the machine into CANCELLED -- a late rejection must never
-      // overwrite that back to e.g. permission_denied.
       if (cancelledRef.current) return;
       const mapped = mapGetUserMediaError(err);
       setErrorMessage(
@@ -351,8 +311,6 @@ export function useSiaVoiceRecorder({ maxDurationSeconds = DEFAULT_MAX_DURATION_
     }, 1000);
 
     // Auto-stop at the server-advertised ceiling -- momentarily surfaces
-    // TOO_LONG so the UI can announce it, then proceeds through the exact
-    // same stop -> transcribe path a manual Stop press uses.
     maxDurationTimeoutRef.current = setTimeout(() => {
       safeSetState(SIA_RECORDER_STATE.TOO_LONG);
       const activeRecorder = mediaRecorderRef.current;

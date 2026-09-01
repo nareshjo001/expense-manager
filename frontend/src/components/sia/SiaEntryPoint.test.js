@@ -5,27 +5,6 @@ import SiaEntryPoint from "./SiaEntryPoint";
 import { getSiaStatus, getSiaSessions, getSiaSessionMessages, deleteSiaSession } from "../../api/siaSessionsApi";
 
 // Batch 3C: SiaEntryPoint now owns the conversation state (see
-// useSiaConversation), which uses TanStack Query, so a provider is
-// required. The API layer is mocked so nothing here can reach the network.
-//
-// Batch 3E: SiaEntryPoint additionally owns the runtime availability query,
-// so siaSessionsApi is mocked here too -- both to keep this file free of
-// network access and because the real module imports the shared axios
-// instance, which ships as ESM and is not transformed by CRA's Jest config.
-// This file remains a pure flag-gating/open-close wiring test: availability
-// behaviour itself is covered by SiaAvailability.test.js.
-//
-// Batch 3E pre-commit fix: CRA's Jest config hardcodes `resetMocks: true`
-// (react-scripts/scripts/utils/createJestConfig.js), which runs
-// `jest.resetAllMocks()` before EVERY test -- including the very first one.
-// That strips the implementations given to these jest.fn()s below back to a
-// no-arg, no-op mock that returns `undefined`. When the status query is
-// enabled (every "true"-flag test in this file), useSiaStatusQuery's
-// queryFn then resolves `undefined`, which TanStack Query rejects with
-// "Query data cannot be undefined" (query-core's Query#fetch, the runtime
-// guard right before setData). The mocks below are therefore declared bare
-// and reinstalled in `beforeEach`, exactly like the equivalent mocks in
-// SiaAvailability.test.js already do for the same reason.
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 jest.mock("../../api/siaSessionsApi", () => ({
   getSiaStatus: jest.fn(),
@@ -34,10 +13,6 @@ jest.mock("../../api/siaSessionsApi", () => ({
   deleteSiaSession: jest.fn(),
 }));
 // Workstream 3: this component now transitively renders SiaPanel ->
-// SiaVoiceRecorderControls -> useSiaVoiceRecorder -> siaVoiceApi.js, which
-// imports the shared axios instance -- mocked for the same ESM-import
-// reason as the mock above. No test in this file exercises voice
-// recording (see SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js).
 jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 beforeEach(() => {
@@ -57,16 +32,6 @@ const render = (ui) => {
 };
 
 // M4-4: SiaEntryPoint now uses hooks (useState/useContext), so the flag is
-// read fresh on every render (see SiaEntryPoint.js) instead of being cached
-// as a module-level constant loaded via jest.resetModules(). This lets every
-// test in this file use one single, static top-level import of React and of
-// SiaEntryPoint -- resetting Jest's module registry would also reload React
-// itself, risking a second React instance and "Invalid hook call" errors.
-// Tests only ever mutate process.env directly and re-render.
-//
-// SiaPanel is mocked here so this file stays a pure ownership/wiring test
-// (open/close state, onOpen callback, flag gating) -- SiaPanel's own
-// question/answer/error/retry contract is covered by SiaPanel.test.js.
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
 const originalValue = process.env[ENV_KEY];
 
@@ -89,9 +54,6 @@ function setFlag(value) {
 const mockPanelMountSpy = jest.fn();
 
 // isAvailable/isCheckingAvailability are surfaced as data-attributes (not
-// consumed by the earlier open/close tests) purely so the regression test
-// below can deterministically `waitFor` the status query to settle, instead
-// of racing it with an arbitrary delay.
 jest.mock("./SiaPanel", () => {
   const ReactForMock = require("react");
   return function MockSiaPanel({ onClose, isAvailable, isCheckingAvailability }) {
@@ -211,10 +173,6 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   });
 
   // Batch 3C: the PANEL is still genuinely remounted (it is pure
-  // presentation), but the conversation state it renders now lives in
-  // SiaEntryPoint, so remounting no longer discards the transcript. That
-  // retention is proven end-to-end in SiaConversation.test.js; this file
-  // continues to prove the mount/unmount wiring itself.
   it("reopening creates a fresh panel instance (a real mount, not a retained one)", () => {
     setFlag("true");
     render(<SiaEntryPoint />);
@@ -238,13 +196,6 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
   });
 
   // Batch 3E pre-commit fix regression test. Spies on console.error WITHOUT
-  // mockImplementation, so real console.error output is never suppressed or
-  // filtered -- this only lets the test additionally inspect what was
-  // logged. Opens the panel (the state in which the status query is
-  // enabled) and waits for the query to actually settle -- proven by the
-  // mock panel's own data-checking attribute flipping to "false" -- rather
-  // than a fixed delay, so this test fails loudly instead of flaking if
-  // settling ever gets slower.
   it("the status query settles without ever logging TanStack's 'data cannot be undefined' warning", async () => {
     const errorSpy = jest.spyOn(console, "error");
     setFlag("true");

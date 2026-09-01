@@ -1,25 +1,7 @@
 // Unit tests for backend/sia/contextBuilder.js.
-//
-// reportService.getReport is fully mocked -- no MongoDB, Redis, ML service,
-// HTTP route, or external network is ever touched. Follows the same
-// module-reset isolation style as tests/sia.config.test.js: each test loads
-// a fresh module registry and a fresh mock, so no mock call history or
-// mock implementation can leak between tests.
-//
-// M1-2 production-contract correction (Option A): the real report shape
-// never populates summary.healthScore/summary.riskLevel -- confirmed by
-// tracing healthAnalyzer.js -> reportGenerator.js -> Report.js. The real
-// source values are report.financialHealth.overall and
-// report.financialHealth.risk.label. This fixture reflects that real shape
-// (no summary.healthScore/summary.riskLevel by default, matching
-// tests/fixtures/reportFixtures.js's buildFakeCachedReport), and a
-// dedicated test below proves decoy values planted at those broken
-// locations are never read.
 "use strict";
 
 // Loads a brand-new reportService mock and a brand-new contextBuilder module
-// for a single test, so `getReport`'s call history and resolved/rejected
-// value are always specific to the test that set them up.
 function loadContextBuilder() {
   jest.resetModules();
   jest.doMock("../Services/reportService", () => ({
@@ -31,12 +13,6 @@ function loadContextBuilder() {
 }
 
 // A structurally complete, production-shaped Report fixture. Every field a
-// real FinancialReport document could carry is present, so "unrelated
-// fields are excluded" and "raw data is excluded" tests have real
-// extraneous data to prove is actually dropped -- not just absent by
-// coincidence. Deliberately does NOT include summary.healthScore or
-// summary.riskLevel, because a real generated report never has them (see
-// the M1-2 contract-gap verification).
 function buildFixtureReport(overrides = {}) {
   return {
     metadata: {
@@ -56,16 +32,6 @@ function buildFixtureReport(overrides = {}) {
     },
     spending: { hasData: true, byDay: {} },
     // A structurally complete backend/analytics/analyzers/budgetAnalyzer.js
-    // `analyze()` output (plus `budgetInsights`, which
-    // analytics/reportGenerator.js spreads in alongside it as
-    // `budgets: { ...budgetReport, budgetInsights }`). Deliberately uses
-    // non-round numbers so a test asserting an exact value proves the field
-    // was passed through unmodified rather than recalculated/re-rounded.
-    // Like the top-level `...overrides` spread at the end of this function,
-    // a test that passes `overrides.budgets` replaces this whole object
-    // (the same full-replacement convention `financialHealth`/`summary`
-    // already follow below) -- tests below that only need to change one or
-    // two fields do so with an intentionally minimal `budgets` override.
     budgets: {
       hasData: true,
       budget: 5000,
@@ -94,21 +60,6 @@ function buildFixtureReport(overrides = {}) {
       },
     },
     // A structurally complete backend/analytics/analyzers/categoryAnalyzer.js
-    // `analyze()` output for both the monthly and yearly branches
-    // (analytics/reportAssembler.js's `categories: { monthly:
-    // monthlyCategoryReport, yearly: yearlyCategoryReport }`, both produced
-    // by the exact same analyzer function). Deliberately arithmetically
-    // INCONSISTENT (percentages that don't sum to 100, a `change` that
-    // doesn't equal `current - previous`, amounts unrelated to
-    // concentrationIndex/top3Concentration) -- proof that contextBuilder.js
-    // must pass these through completely unmodified rather than
-    // recalculating any of them; a builder that summed, ranked, or
-    // recomputed anything would visibly disturb these deliberately "wrong"
-    // sentinel values. Also includes categoryAnalyzer.js's real
-    // biggestJump/biggestDrop fields (which contextBuilder.js's
-    // CATEGORY_SPENDING_EXPLANATION branch excludes) so a dedicated test
-    // below can prove they are actually dropped, not merely absent by
-    // coincidence.
     categories: {
       monthly: {
         hasData: true,
@@ -190,8 +141,6 @@ function buildFixtureReport(overrides = {}) {
     },
     forecast: {},
     // Deliberately not a real Report field -- stands in for "some raw
-    // array that must never leak through" so the exclusion tests below
-    // have something concrete to prove is dropped.
     rawExpenses: [{ expenseAmount: 4000 }, { expenseAmount: 321 }],
     ...overrides,
   };
@@ -407,9 +356,6 @@ describe("backend/sia/contextBuilder", () => {
   it("ignores decoy/broken summary.healthScore and summary.riskLevel values and never reads them", async () => {
     const { buildContext, reportService } = loadContextBuilder();
     // Simulates a stale or otherwise-broken report where summary carries
-    // leftover healthScore/riskLevel values that do NOT match
-    // financialHealth.overall/.risk.label. The correct output must come
-    // from financialHealth only.
     const report = buildFixtureReport({
       summary: { healthScore: 999, riskLevel: "DECOY-RISK" },
       financialHealth: { overall: 75, risk: { label: "Low", color: "green" } },
@@ -474,15 +420,11 @@ describe("backend/sia/contextBuilder", () => {
     reportService.getReport.mockResolvedValue(report);
 
     // Object.freeze + "use strict" in contextBuilder.js means any attempted
-    // mutation of `report` (or any nested object within it) throws instead
-    // of silently succeeding.
     await expect(buildContext("user-p", "HEALTH_EXPLANATION")).resolves.toBeDefined();
     await expect(buildContext("user-p", "SPENDING_CHANGE_EXPLANATION")).resolves.toBeDefined();
   });
 
   // -- M2-3A: BUDGET_STATUS_EXPLANATION -------------------------------------
-  // Context foundation only -- no classifier, prompt, controller, or
-  // response-formatting behavior exists yet for this intent.
 
   it("BUDGET_STATUS_EXPLANATION is a supported intent (reaches reportService, unlike an unsupported intent)", async () => {
     const { buildContext, reportService } = loadContextBuilder();
@@ -583,8 +525,6 @@ describe("backend/sia/contextBuilder", () => {
   it("every returned budget field maps to the exact report.budgets source path it was read from", async () => {
     const { buildContext, reportService } = loadContextBuilder();
     // Distinct, unmistakable per-field values so a mismatched mapping
-    // (e.g. accidentally reading the wrong source field) would fail this
-    // exact-equality check rather than passing by coincidence.
     const report = buildFixtureReport({
       budgets: {
         hasData: true,
@@ -788,9 +728,6 @@ describe("backend/sia/contextBuilder", () => {
     const { buildContext, reportService } = loadContextBuilder();
     const report = buildFixtureReport({
       // Decoy field, like the top-level `rawExpenses` fixture field --
-      // Report has no real `income` field at all (confirmed in
-      // backend/models/Report.js), but this proves it would be dropped if
-      // present.
       income: [{ amount: 50000, source: "Salary" }],
     });
     reportService.getReport.mockResolvedValue(report);
@@ -916,12 +853,6 @@ describe("backend/sia/contextBuilder", () => {
   });
 
   // -- M2-4A: CATEGORY_SPENDING_EXPLANATION ---------------------------------
-  // Context foundation only -- no classifier, prompt, controller, or
-  // response-formatting behavior exists yet for this intent. Sourced from
-  // report.categories.monthly, the canonical
-  // analytics/analyzers/categoryAnalyzer.js `analyze()` output for the
-  // user's current month (see the top-of-file audit note in
-  // backend/sia/contextBuilder.js for the full contract trace).
 
   it("CATEGORY_SPENDING_EXPLANATION is a supported intent (reaches reportService, unlike an unsupported intent)", async () => {
     const { buildContext, reportService } = loadContextBuilder();
@@ -1004,9 +935,6 @@ describe("backend/sia/contextBuilder", () => {
   it("every returned category field maps to the exact report.categories.monthly source path it was read from", async () => {
     const { buildContext, reportService } = loadContextBuilder();
     // Distinct, unmistakable per-field values so a mismatched mapping (e.g.
-    // accidentally reading report.categories.yearly, or report.summary
-    // duplicates) would fail this exact-equality check rather than passing
-    // by coincidence.
     const report = buildFixtureReport({
       categories: {
         monthly: {
@@ -1242,12 +1170,6 @@ describe("backend/sia/contextBuilder", () => {
   });
 
   // -- M2-4A reconciliation remediation: nested record contract validation --
-  // The outer monthly-object checks above are not enough on their own --
-  // categoryAnalyzer.js's exact nested {category, total} /
-  // {category, amount, percentage} / {category, previous, current, change,
-  // growthPercentage, isNewCategory, trend} contracts must also be
-  // enforced record-by-record, or a malformed/stale stored Report could
-  // leak invalid data into the success context.
 
   it("returns the no-data result when topCategory or leastCategory is missing category, missing total, has the wrong field type, or is not a plain object", async () => {
     const validTop = { category: "Groceries", total: 100 };
@@ -1517,19 +1439,13 @@ describe("backend/sia/contextBuilder", () => {
     const { categories } = result.fields;
 
     // Sentinel: these percentages deliberately do NOT sum to 100 and are
-    // deliberately NOT consistent with the amounts. If the builder
-    // recalculated shares, these exact "wrong" numbers could not survive.
     expect(categories.categoryDistribution.map((c) => c.percentage)).toEqual([999.99, 1.11, 50]);
     const percentageSum = categories.categoryDistribution.reduce((sum, c) => sum + c.percentage, 0);
     expect(percentageSum).not.toBe(100);
     // Sentinel: concentrationIndex/top3Concentration are arbitrary values
-    // unrelated to categoryDistribution's actual percentages -- passed
-    // through as-is, not recomputed from the distribution.
     expect(categories.concentrationIndex).toBe(37.77);
     expect(categories.top3Concentration).toBe(12.34);
     // Sentinel: Groceries' `change` (999.99) deliberately does not equal
-    // `current - previous` (1234.567 - 1000 = 234.567). A month-over-month
-    // recompute would have produced 234.567, not 999.99.
     const groceriesGrowth = categories.categoryGrowth.find((c) => c.category === "Groceries");
     expect(groceriesGrowth.change).toBe(999.99);
     expect(groceriesGrowth.change).not.toBe(groceriesGrowth.current - groceriesGrowth.previous);
@@ -1727,12 +1643,6 @@ describe("backend/sia/contextBuilder", () => {
   });
 
   // -- M2-4A reconciliation remediation: defensive-copy proof --
-  // The test above only proves buildContext doesn't THROW while reading a
-  // frozen fixture -- a read-only branch would never throw regardless of
-  // whether it shares references with the source, so that alone cannot
-  // prove non-aliasing. The two tests below prove it directly: first by
-  // reference inequality, then by actually mutating the returned context
-  // and checking the original fixture is untouched.
 
   it("returns category context objects/arrays that are new instances, not the same references as the Report's", async () => {
     const { buildContext, reportService } = loadContextBuilder();
@@ -1758,17 +1668,12 @@ describe("backend/sia/contextBuilder", () => {
     const { buildContext, reportService } = loadContextBuilder();
     const report = buildFixtureReport();
     // Snapshot the original values BEFORE any mutation via a separate
-    // plain-JSON copy -- not the same object graph as `report` -- so this
-    // comparison cannot be fooled by the very aliasing bug this test
-    // exists to catch.
     const originalSnapshot = JSON.parse(JSON.stringify(report.categories.monthly));
     reportService.getReport.mockResolvedValue(report);
 
     const result = await buildContext("user-category-mutate", "CATEGORY_SPENDING_EXPLANATION");
 
     // Mutate every returned mutable value: both top-level objects, both
-    // arrays (via push, which would corrupt a shared array's length too),
-    // and a nested record inside each array.
     result.fields.categories.topCategory.category = "MUTATED";
     result.fields.categories.topCategory.total = -999999;
     result.fields.categories.leastCategory.category = "MUTATED";

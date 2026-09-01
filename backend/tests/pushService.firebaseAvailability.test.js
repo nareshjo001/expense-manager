@@ -1,21 +1,4 @@
 // BALENISA Firebase Startup Resilience -- push.service.js contract.
-//
-// sendPush() is the ONLY production caller of firebaseAdmin.js's exports
-// (confirmed by an exhaustive grep of backend/ -- app.js's /ping capability
-// check is the only other caller, and it only calls isFirebaseAvailable()).
-// sendPush() is itself called only by cron jobs (recurringJob.js,
-// retryPush.js, insightsPush.js), never by an HTTP request handler -- there
-// is no client-facing "bill-upload" or other route in this codebase that
-// depends on Firebase (confirmed by grepping Controllers/BillControllers
-// and Services/BillServices for any Firebase reference: none exist; bill
-// upload is local filesystem + OCR only). This suite proves sendPush()
-// fails closed (returns {success:false}, never throws) when Firebase is
-// unavailable, reusing the exact {success:boolean} contract every caller
-// already handles (schedule a retry / mark failed) -- so none of the cron
-// files need to change.
-//
-// Mocks only ../config/firebaseAdmin and ../models/DeviceToken -- never
-// touches a real Firebase project, network, or MongoDB.
 "use strict";
 
 const FIREBASE_ADMIN_PATH = "../config/firebaseAdmin";
@@ -119,15 +102,6 @@ describe("push.service.sendPush -- Firebase availability", () => {
 });
 
 // Security correction: err.message and the raw Error object must never be
-// logged for an FCM send failure -- provider error messages are not
-// guaranteed to be secret-safe and can echo back the registration token or
-// fragments of the notification payload. push.service.js now logs a single
-// static, content-free message instead. These tests use an adversarial
-// error whose .message embeds sentinel values standing in for a private-key
-// fragment, an FCM registration token, and a payload value, and prove none
-// of those sentinels -- nor the raw Error object, nor err.message itself --
-// ever reaches console.log/console.error/console.warn in any form,
-// including after JSON serialization.
 describe("push.service.sendPush -- FCM send-failure logging is fully sanitized", () => {
   const SENTINEL_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----SENTINEL_KEY_MATERIAL-----END PRIVATE KEY-----";
   const SENTINEL_TOKEN = "SENTINEL_FCM_REGISTRATION_TOKEN_abc123";

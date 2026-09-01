@@ -5,16 +5,6 @@ import icons from '../../imports/iconsImport';
 import { FetchingLoader } from '../../alertsEffects/FetchingLoader';
 
 // Progress bar showing the current month's budget usage, with an animated fill and over-budget alert state.
-//
-// Phase C.2 -- `isStale` (from useBudgetSummary's `isCurrentMonthStale`)
-// indicates the `.spent` figure shown below may still reflect a mutation
-// whose budget recalculation is pending recovery (see
-// Controllers/BudgetControllers/getbudgets.js's `recoveryPending`/
-// `staleMonths`). Rather than hiding or blocking on this, the existing
-// value is still shown (best-available data) alongside a calm, explicit
-// "still refreshing" note -- consistent with the wording already used
-// elsewhere for pending derived-data recovery (see
-// alertsEffects/toastMessages.js's deleteSuccessToast).
 const BudgetBar = ({ monthlyBudgets, isStale = false }) => {
   const currentMonth = format(new Date(), 'MMM yyyy');
 

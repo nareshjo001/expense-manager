@@ -1,35 +1,4 @@
 // Final correctness pass -- legacy PendingSync backward compatibility.
-//
-// Confirmed gap (follow-up review, AFTER the system-wide reservation-
-// ownership correction in tests/syncRecoveryService.reservationOwnership.
-// test.js): that fix renamed the single-object `reservedReport`/
-// `reservedUserWide` fields to owned-token arrays (`reservedReports`/
-// `reservedUserWideReservations`) and declared the two legacy field names
-// permanently inert -- but a document written by an OLD-version process
-// BEFORE this deploy can still have a legacy `reservedReport`/
-// `reservedUserWide` object sitting in MongoDB, representing a mutation
-// that DID commit but whose confirm() never ran before the process
-// crashed. The new array-based code never read or wrote those two field
-// names, so that surviving evidence was permanently invisible to repair --
-// not merely delayed, LOST.
-//
-// Fix: models/PendingSync.js re-declares `reservedReport`/`reservedUserWide`
-// as explicit, READ-AND-CLEAR-ONLY legacy fields. Services/
-// syncRecoveryService.js's repairIfPending() gained a "Pass 0" that
-// atomically promotes a STALE legacy reservation into modern Tier-1
-// evidence (reportPending / pendingBudgetMonths) in the SAME write that
-// clears the legacy field, CAS'd on the legacy field's own token for
-// idempotency. A non-stale legacy reservation is left completely
-// untouched and remains represented in `stillPending`.
-//
-// This file uses the REAL, unmocked Services/syncRecoveryService.js against
-// a stateful, real-CAS-semantics fake models/PendingSync (same pattern as
-// tests/syncRecoveryService.reservationOwnership.test.js), extended to
-// support `$unset` and dot-path (`"reservedReport.token"`) filter matching
-// -- the two new update/filter shapes repairIfPending()'s legacy pass
-// actually issues (verified against Services/syncRecoveryService.js's exact
-// update documents). Every assertion inspects the actual fake document
-// state, never merely a mocked call count.
 "use strict";
 
 const PENDING_SYNC_PATH = "../models/PendingSync";
@@ -63,9 +32,6 @@ function makeFakePendingSyncModel() {
       reservedReports: [],
       reservedUserWideReservations: [],
       // Deliberately NO reservedReport/reservedUserWide by default -- a
-      // brand-new document created by this version of the code never gets
-      // one (see models/PendingSync.js's `default: undefined`). Tests that
-      // need a legacy document seed it explicitly via `_store.set(...)`.
     };
   }
 
@@ -128,9 +94,6 @@ function makeFakePendingSyncModel() {
   }
 
   // Real Mongo CAS filter matching for every filter key BEYOND `user`
-  // (`revision`, or a dot-path like `"reservedReport.token"`) -- a filter
-  // that does not match the CURRENT document's value returns null,
-  // exactly like a real findOneAndUpdate whose filter no longer matches.
   function filterMatches(doc, filter) {
     for (const [key, value] of Object.entries(filter)) {
       if (key === "user") continue;
@@ -233,10 +196,6 @@ describe("Legacy PendingSync compatibility -- stale legacy reservedReport", () =
     const result = await svc.repairIfPending(USER_ID);
 
     // Promotion is proved through persisted document state and invoked
-    // reconciliation below, not through a dedicated return-contract field
-    // (repairIfPending()'s public return object intentionally stays at its
-    // previously-stable 5 fields -- see syncRecoveryService.js's own doc
-    // comment on the return statement).
     expect(result.attempted).toBe(true);
     expect(refreshReportMock).toHaveBeenCalledTimes(1);
 
@@ -281,9 +240,6 @@ describe("Legacy PendingSync compatibility -- non-stale legacy reservations", ()
     const result = await svc.repairIfPending(USER_ID);
 
     // Not promoted -- proved by the legacy field surviving completely
-    // untouched below (promotion is the ONLY code path that ever clears
-    // reservedReport/reservedUserWide) and refreshReport never being
-    // invoked.
     expect(refreshReportMock).not.toHaveBeenCalled();
     expect(result.stillPending).toBe(true);
 
@@ -337,8 +293,6 @@ describe("Legacy PendingSync compatibility -- failure/retry durability", () => {
     expect(afterFailure.reportPending).toBe(true);
 
     // A later retry (no `now` override needed -- this is now an ordinary
-    // Tier-1 marker, not gated by the legacy age-gate anymore) completes
-    // and clears the state.
     const retryResult = await svc.repairIfPending(USER_ID);
     expect(retryResult.reportRepairFailed).toBe(false);
     expect(refreshReportMock).toHaveBeenCalledTimes(2);
@@ -365,10 +319,6 @@ describe("Legacy PendingSync compatibility -- idempotent promotion", () => {
     void first;
 
     // Second call: the legacy field is already gone (cleared by the first
-    // call's atomic promotion), so the CAS filter on the old token can
-    // never match again -- this must be a correct, safe no-op for the
-    // legacy pass specifically (no duplicate $addToSet, no duplicate
-    // revision bump from THIS pass).
     await svc.repairIfPending(USER_ID);
 
     const doc = pendingSyncModel._store.get(USER_ID);
@@ -399,8 +349,6 @@ describe("Legacy PendingSync compatibility -- coexistence with new array reserva
 
     const doc = pendingSyncModel._store.get(USER_ID);
     // Legacy evidence promoted/cleared -- both fields undefined (the ONLY
-    // code path that clears them) and reportPending fully reconciled by
-    // the same call's Tier-1 pass (default recompute stubs succeed).
     expect(doc.reservedReport).toBeUndefined();
     expect(doc.reservedUserWide).toBeUndefined();
     expect(doc.reportPending).toBe(false);

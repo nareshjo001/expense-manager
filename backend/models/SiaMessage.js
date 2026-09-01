@@ -25,12 +25,6 @@ const siaGroundingSchema = new mongoose.Schema(
 );
 
 // Workstream 1 -- bounded QueryPlan-summary sub-schema (see field comment
-// below for what this is/is not). `_id: false` and no top-level default
-// object literal, mirroring siaGroundingSchema's own pattern exactly, so
-// an assistant message that answered via the EXISTING (non-semantic)
-// pipeline stores no planSummary field at all rather than a hollow
-// object -- verified by the same `default: undefined` discipline
-// siaGroundingSchema's header comment documents.
 const siaPlanSummarySchema = new mongoose.Schema(
   {
     metrics: { type: [String], default: undefined },
@@ -98,14 +92,6 @@ const siaMessageSchema = new mongoose.Schema(
     grounding: { type: siaGroundingSchema, default: undefined },
 
     // Workstream 1 -- a bounded, server-owned QueryPlan SUMMARY
-    // (sia/queryPlan.js), stored on an assistant message that answered via
-    // the new semantic-routing path, so a later follow-up turn
-    // ("what about last month?") can be interpreted against the prior
-    // turn's metrics/operation/period/grouping/category filter WITHOUT
-    // ever persisting the raw prompt, full financial context, or provider
-    // response body. Deliberately NOT the full QueryPlan (no
-    // responseMode/safeInterpretation/comparisonPeriod) -- only what a
-    // follow-up interpretation genuinely needs.
     planSummary: { type: siaPlanSummarySchema, default: undefined },
   },
   {

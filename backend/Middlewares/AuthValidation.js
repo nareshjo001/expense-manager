@@ -93,11 +93,6 @@ const addIncomeValidation = (req, res, next) => {
 
     const schema = Joi.object({
         // Remediation Workstream B -- required client-generated idempotency
-        // key, matching expenseValidation's own `id: Joi.string().required()`
-        // convention for the add-expense route. The controller
-        // (addincome.js) performs its own additional trim/length/replay
-        // validation on top of this -- this Joi check only guarantees a
-        // string is present at all before the controller is ever reached.
         id: Joi.string().required(),
         incomeSource: Joi.string().trim().min(1).required(),
         incomeAmount: Joi.number().positive().required(),

@@ -3,16 +3,6 @@ const syncRecoveryService = require('../../Services/syncRecoveryService');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 
 // Budget Derived-Spent Authority remediation -- this route used to call
-// recalculateBudget() directly with NO fenceRevision: an unconditional
-// `$set` completely outside syncRecoveryService's reserve/confirm/repair
-// architecture (unlike every expense-mutation controller). That left two
-// gaps: (1) a crash between the budget-amount write and the recompute left
-// no durable PendingSync evidence, so repairIfPending() could never find
-// or fix it; (2) the unfenced write could silently overwrite a
-// concurrently fenced, fresher expense-mutation repair for the same
-// user+month with no CAS protection. This now follows the exact same
-// reserve -> primary write -> synchronizeAfterMutation (fenced) pattern
-// addexpense.js/editExpense.js/deleteExpense.js already use.
 const updatebudget = async (req, res) => {
     try {
         // Check if the authenticated user exists in the database
@@ -73,13 +63,9 @@ const updatebudget = async (req, res) => {
         });
 
         // Fetch the current document for the response -- synchronizeAfterMutation
-        // returns only derived-sync status, not the document itself; this is a
-        // single lightweight findOne (not another aggregation).
         const updatedBudget = await BudgetModel.findOne({ userId: user._id, month: currentMonthYear }).lean();
 
         // Send successful response with budget data -- existing fields
-        // (`message`, `data`, `success`) unchanged; `derivedData` is new and
-        // purely additive.
         res.status(200).json({ message: 'Success', data: updatedBudget, success: true, derivedData });
 
       } catch(err) {

@@ -45,8 +45,6 @@ const FINANCIAL_RISK_EXPLANATION_GROUNDING_PATHS = [
 ];
 
 // CURRENT_SPENDING_SUMMARY: contextBuilder.js's `fields` carry exactly one
-// leaf, summary.totalSpent -- the same real, populated report field
-// SPENDING_CHANGE_EXPLANATION already grounds part of its answer on.
 const CURRENT_SPENDING_SUMMARY_GROUNDING_PATHS = ["summary.totalSpent"];
 
 const GROUNDING_PATHS_BY_INTENT = {

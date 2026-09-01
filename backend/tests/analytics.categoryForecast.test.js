@@ -62,11 +62,6 @@ describe("forecastInputAggregator -- category series (Prediction Layer V1)", () 
   });
 
   // Category Normalization -- updated for the deliberate behaviour change
-  // in buildCompletedMonthCategorySeries: a blank/non-string category is no
-  // longer SKIPPED, it groups under the explicit `Uncategorized` marker, so
-  // its amount is still counted somewhere (it already counted toward the
-  // overall completed-month total this breakdown reconciles against). The
-  // date/amount skip rules below are unchanged and still drop those records.
   it("groups blank/non-string categories under Uncategorized and still skips malformed records without throwing", () => {
     const pool = [
       expense(1, 100, "Food"),
@@ -83,8 +78,6 @@ describe("forecastInputAggregator -- category series (Prediction Layer V1)", () 
     expect(series.map((entry) => entry.category)).toEqual(["Food", "Uncategorized"]);
 
     // Only the two records with a valid date AND amount but an unusable
-    // category land in Uncategorized (10 + 10); the invalid-date and
-    // uncoercible-amount records are still dropped entirely.
     const uncategorized = series.find((entry) => entry.category === "Uncategorized");
     const uncategorizedTotal = uncategorized.monthlySeries.reduce((sum, p) => sum + p.totalAmount, 0);
     expect(uncategorizedTotal).toBe(20);
@@ -315,10 +308,6 @@ describe("forecastAnalyzer -- category integration (Prediction Layer V1)", () =>
   });
 
   // Corrected: `targetMonth` is the NEXT calendar month after the anchor,
-  // which is what nextCalendarMonthForecast actually predicts. The anchor
-  // month (2026-08) is what the LEGACY nextMonthForecast projects, and that
-  // field keeps its own unchanged behavior -- see
-  // tests/analytics.nextCalendarForecast.test.js for both.
   it("labels the target month as the next calendar month after the anchor", () => {
     expect(analyzeWith(6).targetMonth).toBe("2026-09");
   });

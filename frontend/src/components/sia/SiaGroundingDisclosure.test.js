@@ -7,10 +7,6 @@ afterEach(() => {
 });
 
 // Batch 3F acceptance remediation: `period` here is a component-level test
-// fixture proving SiaGroundingDisclosure renders a period WHEN one is
-// present in `grounding` -- `period` remains an optional part of this
-// component's contract. It does not imply backend/sia/groundingService.js
-// currently populates one (it does not -- see backend/tests/sia.grounding.test.js).
 const ONE_SOURCE = { sources: [{ key: "financialHealth", label: "Financial health analysis", period: "2026-08-09" }] };
 const TWO_SOURCES = {
   sources: [
@@ -44,11 +40,6 @@ describe("SiaGroundingDisclosure -- isValidGrounding()", () => {
   });
 
   // Batch 3F pre-commit remediation: the backend schemas no longer default
-  // `period` to null, so newly written documents omit it entirely. Rows
-  // persisted while that default WAS in effect can still carry
-  // `period: null`, and no migration or backfill is performed -- so null
-  // tolerance here is deliberate, load-bearing compatibility handling, not
-  // incidental leniency.
   it("accepts a source whose period is explicitly null (legacy rows written under the old schema default)", () => {
     expect(isValidGrounding({ sources: [{ key: "x", label: "X", period: null }] })).toBe(true);
   });
@@ -112,9 +103,6 @@ describe("SiaGroundingDisclosure -- rendering", () => {
     expect(toggle.tagName).toBe("BUTTON");
     expect(toggle).toHaveAttribute("type", "button");
     // jsdom's fireEvent.click is the faithful proxy for a native <button>'s
-    // Enter/Space activation (browsers dispatch the same click event) --
-    // the real behavioural guarantee under test is that this control is a
-    // real <button>, not a div/span with a synthetic onClick.
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
@@ -170,22 +158,11 @@ describe("SiaGroundingDisclosure -- rendering", () => {
   });
 
   // Batch 3F acceptance remediation -- requirement 4: verify accessible
-  // disclosure IDs never collide, even across two assistant answers whose
-  // grounding sources happen to share the exact same source keys (e.g. two
-  // separate HEALTH_EXPLANATION turns in the same transcript, both grounded
-  // in financialHealth+summary). The production concern under test is
-  // whether the disclosure container id is ever DERIVED FROM the grounding
-  // source keys -- if it were, two instances with identical grounding would
-  // collide on the same DOM id, breaking aria-controls' uniqueness
-  // requirement and, in a browser, causing getElementById-based assistive
-  // tech to resolve to the wrong (first) element for both toggles.
   it("two disclosures rendered with IDENTICAL grounding (same source keys) get distinct aria-controls/content-element ids", () => {
     const SAME_GROUNDING_A = {
       sources: [{ key: "financialHealth", label: "Financial health analysis", period: "2026-08-09" }],
     };
     // A structurally identical second grounding object (same keys, same
-    // labels) -- a fresh object reference, exactly as two separate API
-    // responses for two separate turns would each produce.
     const SAME_GROUNDING_B = {
       sources: [{ key: "financialHealth", label: "Financial health analysis", period: "2026-08-09" }],
     };

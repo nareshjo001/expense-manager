@@ -41,8 +41,6 @@ const calculateCategoryScore = (categoryAnalysis = {}) => {
       tier: tier.label,
       points: tier.score,
       // Beyond top-1: lets the assistant say something like "your top
-      // category alone isn't extreme, but your top 3 combined are 88%
-      // of spend" — a genuinely different, useful insight.
       top3Concentration: categoryAnalysis.top3Concentration ?? null,
       concentrationIndex: categoryAnalysis.concentrationIndex ?? null,
     },

@@ -3,8 +3,6 @@ import { askSia } from "../../api/siaApi";
 import { useSiaAskMutation } from "./useSiaAskMutation";
 
 // Both TanStack Query's useMutation and the askSia API function are mocked
-// here -- never the network. No real HTTP request, QueryClient, or cache is
-// ever involved in this test file.
 jest.mock("@tanstack/react-query", () => ({
   useMutation: jest.fn(),
 }));

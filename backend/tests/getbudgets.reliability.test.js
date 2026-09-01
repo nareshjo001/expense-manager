@@ -1,18 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-//
-// GET /api/getbudgets is the OTHER read-time repair trigger (alongside
-// GET /report) -- see Controllers/BudgetControllers/getbudgets.js. Unlike
-// the report (whose analytics/analyticsContext.js live-sums the CURRENT
-// month's spend even when stale), this endpoint returns BudgetModel's own
-// stored `spent` value directly for every month including the current one,
-// so it is the read path most exposed to a prior mutation's failed
-// recalculateBudget() call.
-//
-// Runs under the default backend/jest.config.js (npm test) -- never
-// touches MongoDB, Redis, or the network. Mocks only ../config/Schemas
-// (BudgetModel/UserModel) and ../Services/syncRecoveryService; the real
-// app, real rate limiter, real route, real verifyToken, and the real
-// controller all execute for real -- mirrors tests/report.contract.test.js.
 "use strict";
 
 const jwt = require("jsonwebtoken");

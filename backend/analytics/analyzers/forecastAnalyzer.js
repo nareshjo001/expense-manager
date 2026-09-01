@@ -138,18 +138,7 @@ function buildDataQuality({ completedMonths, activeDays, points }) {
   };
 }
 
-/**
- * @param {object} input
- * @param {Array<{monthKey: string, totalAmount: number}>} input.monthlySeries -
- *   already-aggregated, bounded completed-month totals, re-sorted by real calendar-month
- *   ordinal regardless of input order. Never a raw expense record array.
- * @param {number} input.currentPartialMonthTotal - the current in-progress month's total so far; never merged into history, only surfaced separately as `currentPartialMonth`.
- * @param {Date} input.currentMonthStart - explicit, injectable anchor date. Never discovers "now" via `new Date()`.
- * @param {Array<{category: string, monthlySeries: Array}>} [input.categorySeries] -
- *   aggregate-only per-category history. Optional -- omitting it yields no category breakdown, never an error.
- * @param {number} [input.activeDays] - descriptive count of distinct days with recorded activity.
- * @param {{budget?: number}|null} [input.targetMonthBudget] - the budget for the forecast TARGET month (never the current month's). Null yields `no_budget`, never a substituted comparison.
- */
+/* @param {object} input */
 const analyze = ({
   monthlySeries = [],
   currentPartialMonthTotal = 0,

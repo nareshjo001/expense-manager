@@ -22,9 +22,6 @@ import {
 import "./SiaPanel.css";
 
 // Workstream 3, part A: recorder states in which a recording or an
-// in-flight transcription upload is actually active -- used both to gate
-// Escape's cancel-first precedence and to decide whether New chat/history
-// navigation/close should cancel the recorder before proceeding.
 const VOICE_ACTIVE_STATES = new Set([
   SIA_RECORDER_STATE.REQUESTING_PERMISSION,
   SIA_RECORDER_STATE.RECORDING,
@@ -34,8 +31,6 @@ const VOICE_ACTIVE_STATES = new Set([
 ]);
 
 // The legacy semantic path returns one `periodLabel`; the grounded v2 path
-// returns `periodLabels` because a single answer may compare periods. Keep
-// the UI label deliberately compact and never expose metrics or plan details.
 function getPlanSummaryLabel(planSummary) {
   if (!planSummary || typeof planSummary !== "object") return null;
   if (typeof planSummary.periodLabel === "string" && planSummary.periodLabel.trim() !== "") {
@@ -58,20 +53,6 @@ function getInterpretationLabel(interpretation) {
 
 
 // Presentation only. Every piece of conversation state lives in
-// SiaEntryPoint's useSiaConversation() hook, so unmounting this component
-// on close never loses the transcript, the active session, or an in-flight
-// request.
-//
-// Assistant answers use a small, safe Markdown renderer. Raw HTML is never
-// interpreted, so provider content cannot execute in the page.
-// Batch 3E availability props (all optional, so any existing caller/test
-// that renders SiaPanel without them keeps working):
-//   isAvailable            -- backend confirmed SIA can answer a new question
-//   isCheckingAvailability -- the status request is still in flight
-//   onRetryAvailability    -- refetches status after a failure/unavailability
-//
-// Both flags default to a FAIL-CLOSED posture at the point of use below:
-// submission is enabled only on an explicit `isAvailable === true`.
 const SiaPanel = ({
   onClose,
   conversation,
@@ -81,12 +62,6 @@ const SiaPanel = ({
   focusRequestVersion,
   lastHandledFocusRequestVersionRef,
   // Workstream 3: GET /sia/status's additive `capabilities.voiceInput`
-  // block (see backend/Controllers/SiaControllers/status.js), passed
-  // through unchanged from whatever already reads SIA status
-  // (SiaEntryPoint's useSiaStatusQuery). Optional -- every existing caller
-  // that renders SiaPanel without it (including this file's own tests)
-  // simply never shows voice controls, exactly like the unsupported-browser
-  // case.
   voiceCapabilities,
 }) => {
   const {
@@ -121,20 +96,11 @@ const SiaPanel = ({
   const [voiceInsertError, setVoiceInsertError] = useState(null);
 
   // Workstream 3, part A/C: fail-closed exactly like the text-availability
-  // gate above -- voice controls render only once the backend has
-  // confirmed voice input is actually ready, never optimistically while
-  // capabilities are still loading or absent.
   const voiceAvailable = voiceCapabilities?.available === true;
   const voiceRecorder = useSiaVoiceRecorder({
     maxDurationSeconds: voiceCapabilities?.maxDurationSeconds,
   });
   // Batch 3G remediation: fallback acknowledgement store for callers that
-  // render SiaPanel directly without the owner-supplied ref (e.g. older
-  // tests) -- SiaPanel itself still unmounts/remounts in that case, so this
-  // local ref does NOT survive close/reopen on its own, matching the
-  // pre-remediation behavior for exactly those callers. Whenever
-  // SiaEntryPoint renders this component (the only production caller), the
-  // real prop below is used instead, and THAT ref survives unmounts.
   const localLastHandledFocusRequestVersionRef = useRef(0);
   const lastHandledRef = lastHandledFocusRequestVersionRef || localLastHandledFocusRequestVersionRef;
   const queryClient = useQueryClient();
@@ -144,9 +110,6 @@ const SiaPanel = ({
   const messagesQuery = useSiaSessionMessagesQuery(selectedHistorySessionId);
 
   // A failed load (typically a 404 for a session deleted elsewhere) returns
-  // the user to the history list with an understandable message and
-  // refreshes that list -- the existing local transcript is never touched,
-  // because hydration only ever happens on success.
   useEffect(() => {
     if (!selectedHistorySessionId || !messagesQuery.isError) return;
     setHistoryLoadError("That conversation could not be opened. It may have been deleted.");
@@ -155,8 +118,6 @@ const SiaPanel = ({
   }, [selectedHistorySessionId, messagesQuery.isError, selectHistorySession, queryClient]);
 
   // Hydrate exactly once per successful load, and only for the session
-  // still selected -- the reducer itself re-checks, so a slow response for
-  // an abandoned selection can never overwrite a newer conversation.
   useEffect(() => {
     if (!selectedHistorySessionId || !messagesQuery.isSuccess) return;
     const loadedSessionId = messagesQuery.data?.sessionId || selectedHistorySessionId;
@@ -165,9 +126,6 @@ const SiaPanel = ({
   }, [selectedHistorySessionId, messagesQuery.isSuccess, messagesQuery.data, hydrate]);
 
   // Opening the mobile panel must not summon the virtual keyboard. Keep the
-  // focus inside the dialog for keyboard/screen-reader users, but use the
-  // Close control until the user deliberately taps the composer. Desktop
-  // retains the established composer autofocus behavior.
   useEffect(() => {
     if (mode !== PANEL_MODE.CONVERSATION) return;
     if (isMobile) {
@@ -178,9 +136,6 @@ const SiaPanel = ({
   }, [mode, isMobile]);
 
   // The scroll-to-top control is mounted outside the authenticated app tree,
-  // so it cannot receive SIA state as a prop. Mark the document only while
-  // this full-screen mobile panel is mounted; the cleanup restores the
-  // control immediately on close or when the viewport becomes desktop-sized.
   useEffect(() => {
     if (!isMobile || typeof document === "undefined") return undefined;
     document.body.classList.add("sia-mobile-panel-open");
@@ -196,12 +151,6 @@ const SiaPanel = ({
   }, [messages.length, pending]);
 
   // Workstream 3, part C: the SINGLE place a voice transcript is ever
-  // inserted into the composer -- fires exactly once per completed
-  // recording, because `voiceRecorder.reset()` immediately flips
-  // `voiceRecorder.state` away from REVIEW_READY again, which is this
-  // effect's own dependency, so a re-render can never re-run it for the
-  // same transcript. Never auto-submits: only setInput/focus, never
-  // submitQuestion.
   useEffect(() => {
     if (voiceRecorder.state !== SIA_RECORDER_STATE.REVIEW_READY) return;
 
@@ -211,8 +160,6 @@ const SiaPanel = ({
       setInput(result.value);
     } else {
       // The composer's existing draft is left completely untouched -- only
-      // an inline, accessible notice is shown so the user can decide what
-      // to do next.
       setVoiceInsertError(result.error);
     }
     voiceRecorder.reset();
@@ -221,8 +168,6 @@ const SiaPanel = ({
   }, [voiceRecorder.state]);
 
   // A fresh recording attempt (mic pressed again) clears any previous
-  // insert-rejected notice so it never lingers describing a now-irrelevant
-  // attempt.
   useEffect(() => {
     if (voiceRecorder.state === SIA_RECORDER_STATE.RECORDING) {
       setVoiceInsertError(null);
@@ -230,8 +175,6 @@ const SiaPanel = ({
   }, [voiceRecorder.state]);
 
   // Workstream 3, part E: focuses the first clarification option as soon
-  // as one is rendered -- guarded by message id so this never re-steals
-  // focus on an unrelated re-render of the same transcript.
   useEffect(() => {
     const last = messages[messages.length - 1];
     const isNewClarification =
@@ -247,18 +190,10 @@ const SiaPanel = ({
   }, [messages]);
 
   // Batch 3E: the single fail-closed gate every submission route consults.
-  // Explicit `=== true` rather than truthiness, and an undefined prop (an
-  // older caller, or a test rendering the panel bare) therefore reads as
-  // NOT submittable only when a status was actually requested -- see
-  // canAttemptSubmission below for how that is kept backward compatible.
   const isAvailabilityKnown = isAvailable !== undefined || isCheckingAvailability !== undefined;
   const blockedByAvailability = isAvailabilityKnown && (isCheckingAvailability === true || isAvailable !== true);
 
   // Guards EVERY path that can start a new question -- the form's submit
-  // event, the Enter key, and the suggestion buttons all funnel through
-  // here, so a disabled attribute alone is never the only defence. This
-  // also stops a stale UI state (e.g. a suggestion click dispatched in the
-  // same tick availability flipped) from reaching submitQuestion().
   const attemptSubmit = () => {
     if (blockedByAvailability) return;
     submitQuestion();
@@ -272,11 +207,6 @@ const SiaPanel = ({
   };
 
   // Workstream 3, part E: Escape closes the panel UNLESS a recording is
-  // actively in progress, in which case Escape cancels the recording FIRST
-  // and leaves the panel open -- a second Escape press (nothing active
-  // anymore) then closes it normally. stopPropagation prevents any outer
-  // modal/router-level Escape handler from also firing on the same
-  // keypress.
   const handlePanelKeyDown = (event) => {
     if (event.key !== "Escape") return;
     if (VOICE_ACTIVE_STATES.has(voiceRecorder.state)) {
@@ -303,9 +233,6 @@ const SiaPanel = ({
 
   const handleSuggestion = (text) => {
     // Populates the composer and focuses it -- never submits on the user's
-    // behalf, so the question can still be edited. Blocked entirely while
-    // unavailable so it cannot populate a composer the user then cannot
-    // send from.
     if (blockedByAvailability) return;
     setInput(text);
     if (composerRef.current) composerRef.current.focus();
@@ -331,38 +258,10 @@ const SiaPanel = ({
   const showSuggestions = messages.length === 0 && !pending && !failed && mode === PANEL_MODE.CONVERSATION;
 
   // Batch 3E: the composer is disabled while a request is in flight (the
-  // pre-existing isBusy rule) OR while availability is unknown/false. The
-  // Ask button additionally keeps its existing canSubmit rules.
   const composerDisabled = isBusy || blockedByAvailability;
   const submitDisabled = !canSubmit || blockedByAvailability;
 
   // Batch 3G: the explicit contextual-launch focus signal (see
-  // SiaEntryPoint.js's openWithSuggestion, which increments this prop on
-  // every valid contextual click). The mode-keyed effect above does NOT
-  // reliably refire here -- a contextual click on an already-open panel
-  // that is already in conversation mode never changes `mode` at all, and
-  // neither does a second click on a different contextual button while the
-  // first click's prefilled text is still showing. `focusRequestVersion` is
-  // a value that changes on every single valid contextual launch
-  // specifically so this effect can key on it directly, independent of
-  // whatever else did or didn't change.
-  //
-  // `focusRequestVersion` starts at 0/undefined and is otherwise untouched
-  // by hydration, message updates, or availability refetches -- so this
-  // never fires on ordinary mount, session restoration, or unrelated
-  // re-renders, only on a genuine contextual launch.
-  //
-  // Batch 3G remediation: a version is only ever processed once. Without
-  // this guard, closing the panel (which unmounts SiaPanel) and then
-  // reopening it ordinarily (via the plain "Ask SIA" button, not a new
-  // contextual click) would re-run this effect on the fresh mount with the
-  // SAME already-consumed `focusRequestVersion` value still in
-  // SiaEntryPoint's state, incorrectly replaying the contextual focus
-  // behavior for a plain open. `lastHandledRef` (see above) survives that
-  // unmount/remount when SiaEntryPoint supplies it, so a version already
-  // acknowledged is never processed twice. Marking the version handled
-  // BEFORE focusing (rather than after) means a synchronous re-render
-  // triggered by the focus call itself can never re-enter this branch.
   useEffect(() => {
     if (!focusRequestVersion) return;
     if (focusRequestVersion <= lastHandledRef.current) return;
@@ -370,9 +269,6 @@ const SiaPanel = ({
 
     if (composerDisabled) {
       // The composer itself cannot take focus while disabled -- prefer the
-      // Retry control when one is actually being offered, otherwise fall
-      // back to the panel's own close control rather than a disabled
-      // element.
       if (isCheckingAvailability !== true && retryButtonRef.current) {
         retryButtonRef.current.focus();
       } else if (closeButtonRef.current) {
@@ -385,9 +281,6 @@ const SiaPanel = ({
   }, [focusRequestVersion]);
 
   // Exactly one of these ever renders, and only when a status is actually
-  // being tracked. Deliberately generic: no provider, model, env-var name,
-  // or reason code is available to this component in the first place (the
-  // server never sends one), so there is nothing here that could leak.
   const availabilityNotice = !isAvailabilityKnown
     ? null
     : isCheckingAvailability === true
@@ -397,8 +290,6 @@ const SiaPanel = ({
     : null;
 
   // Workstream 3, part A: New chat and switching to History both leave the
-  // panel mounted (unlike Close), so an active recording/upload would
-  // otherwise keep running silently behind the now-reset/hidden composer.
   const handleNewChat = () => {
     voiceRecorder.cancel();
     newChat();

@@ -1,8 +1,4 @@
 // Unit tests for backend/sia/audioContainerSignature.js -- POST
-// /sia/transcriptions's real magic-byte detection. Every fixture below is a
-// minimal, synthetic buffer built purely to exercise the byte-signature
-// logic -- none of it is real decodable audio, and no network/provider
-// call is possible in this file.
 "use strict";
 
 const {
@@ -64,8 +60,6 @@ describe("sia/audioContainerSignature -- detectContainerType()", () => {
 
   it("returns null for a MIME-header lie -- bytes that don't match their claimed container", () => {
     // Genuinely a text buffer, but a caller might have paired it with a
-    // claimed Content-Type of audio/webm -- this module never looks at
-    // that header at all, only the bytes themselves.
     const fakedBuffer = Buffer.from("Content-Type says audio/webm but I am not.", "utf8");
     expect(detectContainerType(fakedBuffer)).toBeNull();
   });

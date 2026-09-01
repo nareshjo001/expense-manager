@@ -1,17 +1,4 @@
 // Prediction Layer V1 remediation: true next-calendar-month forecast,
-// legacy parity, and corrected category-timeline alignment.
-//
-// Two defects are guarded here:
-//   A) Intermittent categories were built from ONLY the months they
-//      appeared in, so 3 scattered observations across a 12-month active
-//      timeline were treated as a complete category history.
-//   B) The legacy `nextMonthForecast` field projects the CURRENT,
-//      in-progress month despite its name. Prediction Layer V1 promises a
-//      NEXT-calendar-month figure, so a distinct field was added rather
-//      than the legacy one being relabelled.
-//
-// Legacy expectations below are STABLE FIXTURES captured from the
-// committed d3f0011 behavior -- no test here shells out to Git.
 "use strict";
 
 const {

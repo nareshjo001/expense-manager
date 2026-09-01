@@ -1,33 +1,4 @@
-/**
- * backfillFeedbackStatus.js
- *
- * One-time Phase-A migration for existing `mlfeedbacks` documents, backfilling
- * the new lifecycle fields (status, attempts, trainingRunId, lastError,
- * reservedAt, trainedAt) introduced alongside the legacy `corrected` boolean.
- *
- * Migration rules:
- *   - corrected:true, no valid `status` yet
- *       -> status:"pending", attempts:0, trainingRunId:null, lastError:null,
- *          reservedAt:null, trainedAt:null
- *   - corrected:false
- *       -> left untouched. Never assigned "trained" by this script — Phase A
- *          has no training-run record that could prove these documents were
- *          ever actually used in a successful retrain.
- *   - Any document that already carries a valid `status`
- *       -> left untouched, never overwritten.
- *
- * Idempotency: the migration filter only matches documents whose `status` is
- * NOT already one of the four valid lifecycle values. After the first
- * successful run, every affected document has status:"pending", so a second
- * run matches zero documents and performs no writes.
- *
- * This script does NOT run automatically. It must be invoked manually:
- *
- *   node backend/scripts/backfillFeedbackStatus.js
- *   node backend/scripts/backfillFeedbackStatus.js --dry-run
- *
- * It is intentionally not required/imported by server.js or any startup path.
- */
+/* backfillFeedbackStatus.js */
 
 require('dotenv').config();
 const mongoose = require('mongoose');

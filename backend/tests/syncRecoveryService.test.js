@@ -1,22 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-// Phase C.1 -- Mutation Recovery Correctness Gate.
-//
-// Isolated unit coverage for Services/syncRecoveryService.js: the durable
-// pending-synchronization marker + read-time repair, PLUS (as of C.1) the
-// pre-write reservation tier (reserve/confirm) that closes the crash gap,
-// and the fenceRevision plumbing that stops a stale recompute from
-// clobbering fresher derived data. Runs under the default
-// backend/jest.config.js (npm test) -- never touches MongoDB, Redis, or the
-// network. Three seams are mocked:
-//   - ../models/PendingSync (the marker document itself)
-//   - ../Services/BudgetServices/budget.service (only recalculateBudget is
-//     mocked; getMonthAnchor/getMonthKey are left as their real,
-//     pure/DB-free implementations via jest.requireActual so month
-//     de-duplication logic is exercised for real)
-//   - ../Services/reportService (only refreshReport is mocked)
-//
-// Every test calls jest.resetModules() and re-requires
-// Services/syncRecoveryService.js fresh.
 "use strict";
 
 const PENDING_SYNC_MODEL_PATH = "../models/PendingSync";
@@ -42,14 +24,6 @@ function loadService({
     findOneImpl || (() => ({ lean: jest.fn().mockResolvedValue(null) }))
   );
   // Phase C.4 -- repairIfPending()'s Tier-1/Tier-2 passes now call
-  // allocateRepairRevision() (an atomic $inc via THIS SAME findOneAndUpdate
-  // seam) before fencing any recompute, whenever there is actual repair
-  // work to do. A bare `async () => null` default would make that $inc call
-  // resolve `record.revision` against `null` and throw -- every test in
-  // this file that reaches a repair pass without its own
-  // findOneAndUpdateImpl now needs a non-null default with SOME numeric
-  // revision on it. `{ revision: 1 }` is an arbitrary, harmless default;
-  // tests that care about the exact fenced value supply their own impl.
   const findOneAndUpdateMock = jest.fn(findOneAndUpdateImpl || (async () => ({ revision: 1 })));
   const updateOneMock = jest.fn(updateOneImpl || (async () => ({})));
 
@@ -86,20 +60,6 @@ function loadService({
 }
 
 // A small stateful PendingSync fake, adapted from the proven pattern in
-// tests/syncRecoveryService.reservationOwnership.test.js's own
-// makeFakePendingSyncModel(). repairIfPending()'s Pass 0 (legacy
-// compatibility) added two additional sequential getPendingSync() calls
-// BEFORE the pre-existing Tier-1 read -- a fixed-count
-// mockResolvedValueOnce() chain silently desynchronizes the moment the
-// production read sequence changes at all (which is exactly what happened
-// to several tests below when Pass 0 was added). A stateful fake sidesteps
-// this class of breakage entirely: every read simply reflects whatever the
-// fake's single stored document currently contains, exactly like real
-// MongoDB would, regardless of how many reads happen or in what order.
-// Applies $set/$unset/$addToSet/$push/$pull and the relevant CAS filter
-// (a generic dot-path equality match, e.g. `{ revision: 6 }` or
-// `"reservedReport.token"`) to its stored document, same as the real
-// PendingSync collection would.
 function makeStatefulPendingSyncModel(seedDoc) {
   let doc = seedDoc ? { ...seedDoc } : null;
 
@@ -167,8 +127,6 @@ function makeStatefulPendingSyncModel(seedDoc) {
   }
 
   // Generic dot-path CAS/equality filter match (e.g. `revision: 6` or
-  // `"reservedReport.token": "abc"`) -- `user` is always treated as
-  // matching since this fake only ever stores one user's document.
   function matchesFilter(candidate, filter) {
     if (!candidate) return false;
     for (const [key, value] of Object.entries(filter)) {
@@ -252,16 +210,6 @@ const USER_ID = "sync-recovery-user";
 const JAN_2026 = new Date("2026-01-15T00:00:00.000Z");
 const FEB_2026 = new Date("2026-02-03T00:00:00.000Z");
 // Real production code only ever stores ANCHORED (first-of-month) values in
-// pendingBudgetMonths (markPending()/confirm() both run every incoming date
-// through dedupeMonthAnchors() before writing). The stateful-fake tests
-// below seed pendingBudgetMonths directly (bypassing confirm()), so they
-// must seed the SAME anchored form clearIfRevisionMatches's own internal
-// dedupeMonthAnchors(repairedBudgetMonths) will compute when it builds the
-// $pull filter -- otherwise a real (non-mocked) $pull correctly fails to
-// match an unanchored seed value, which is a test-fixture inaccuracy, not a
-// production defect. Computed via the REAL, unmocked getMonthAnchor (a pure
-// function, safe to call directly here).
-// eslint-disable-next-line global-require
 const { getMonthAnchor: __getMonthAnchorForSeeding } = require(BUDGET_SERVICE_PATH);
 const JAN_2026_ANCHOR = __getMonthAnchorForSeeding(JAN_2026);
 const FEB_2026_ANCHOR = __getMonthAnchorForSeeding(FEB_2026);
@@ -419,16 +367,10 @@ describe("reserve", () => {
 
     const [, update] = findOneAndUpdateMock.mock.calls[0];
     // The array-based reservation design legitimately emits ONLY a $push --
-    // proving the intended invariant does not require an irrelevant $set
-    // object to exist at all. pendingBudgetMonths is not written, reportPending
-    // is not written (there is no $set whatsoever), and Tier-1 revision
-    // state is not incremented.
     expect(update.$set).toBeUndefined();
     expect(update.$addToSet).toBeUndefined();
     expect(update.$inc).toBeUndefined();
     // Only the appropriate Tier-2 reservation arrays are changed: budget
-    // months + report (both requested in this call), never the user-wide
-    // array (not requested here).
     expect(update.$push).toEqual({
       reservedBudgetMonths: { $each: expect.any(Array) },
       reservedReports: { token: expect.any(String), reservedAt: expect.any(Date) },
@@ -548,9 +490,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
     const result = await syncRecoveryService.repairIfPending(USER_ID);
 
     // allocateRepairRevision() issues its own fresh $inc ticket (5 -> 6)
-    // rather than reusing the statically-read `before.revision` (5) --
-    // exactly the Phase C.4 guarantee this test proves, now against a real
-    // atomic $inc instead of a hardcoded mock return value.
     expect(recalculateBudgetMock).toHaveBeenCalledTimes(1);
     expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, JAN_2026_ANCHOR, { fenceRevision: 6 });
     expect(refreshReportMock).toHaveBeenCalledWith(USER_ID, { fenceRevision: 6 });
@@ -586,8 +525,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
       },
       {
         // The marker's allocation advances it to the same revision. This is
-        // a normal concurrent supersession, not a reset revision floor, so
-        // repairIfPending must leave it pending without retrying.
         recalculateBudgetImpl: async () => ({
           skipped: true,
           reason: "superseded",
@@ -599,10 +536,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
     const result = await syncRecoveryService.repairIfPending(USER_ID);
 
     // Phase C.4 -- allocateRepairRevision() now issues its own atomic $inc
-    // through this same seam BEFORE the recompute is even attempted, so
-    // findOneAndUpdate IS called once for that ticket allocation -- even
-    // though the recompute itself is skipped (superseded) and
-    // clearIfRevisionMatches has nothing further to pull/set afterward.
     expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { user: USER_ID },
@@ -684,8 +617,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
     const result = await syncRecoveryService.repairIfPending(USER_ID);
 
     // Phase C.4 -- same rationale as the fence-skipped test above: the $inc
-    // ticket allocation happens once, unconditionally, before the
-    // recompute attempt that then fails.
     expect(findOneAndUpdateMock).toHaveBeenCalledTimes(1);
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { user: USER_ID },
@@ -702,17 +633,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
 
   it("CRITICAL: an older repair does not clear a newer mutation's pending work recorded mid-repair", async () => {
     // Phase C.4 -- this repair attempt now allocates its OWN fresh ticket
-    // (via allocateRepairRevision()'s $inc) rather than reusing the
-    // statically-read `before.revision` -- see syncRecoveryService.js's own
-    // doc comment on allocateRepairRevision() for why. The scenario this
-    // test proves is unchanged in spirit: a mutation confirms NEW pending
-    // work (here, February) STRICTLY AFTER this repair claimed its own
-    // ticket (6, simulating a real atomic $inc from the marker's
-    // pre-repair revision of 5) but BEFORE this repair's own
-    // clearIfRevisionMatches call runs -- bumping the marker to 7. This
-    // repair's clear, CAS'd against its own ticket (6), must then fail to
-    // match (the document is now at 7), so it correctly clears nothing and
-    // the newer mutation's February/reportPending work survives untouched.
     const { syncRecoveryService, findOneAndUpdateMock, getDoc } = loadServiceStateful(
       {
         user: USER_ID,
@@ -724,15 +644,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
       },
       {
         // Simulates a DIFFERENT, concurrent mutation's confirm() landing
-        // strictly between this repair's own ticket allocation (5 -> 6, a
-        // real atomic $inc against the stateful fake below) and this
-        // repair's eventual clearIfRevisionMatches call -- a real atomic
-        // $inc/$addToSet/$set against the SAME stateful store, exactly like
-        // a genuinely concurrent request would issue. Referencing
-        // `findOneAndUpdateMock` here is safe: this callback only actually
-        // runs later, once repairIfPending() reaches the recompute step,
-        // well after loadServiceStateful has returned and the binding below
-        // is initialized.
         recalculateBudgetImpl: async () => {
           await findOneAndUpdateMock(
             { user: USER_ID },
@@ -758,8 +669,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     // Call 3: clearIfRevisionMatches CAS'd against ticket 6 -- the
-    // concurrent mutation (call 2, simulated above) already advanced the
-    // real document to 7, so this exact-match filter finds nothing.
     expect(findOneAndUpdateMock).toHaveBeenNthCalledWith(
       3,
       { user: USER_ID, revision: 6 },
@@ -769,8 +678,6 @@ describe("repairIfPending -- Tier 1 (confirmed pending)", () => {
     expect(result.revisionMatchedOnClear).toBe(false);
     expect(result.stillPending).toBe(true);
     // Assertions inspect actual persisted document state: the concurrent
-    // mutation's February/report evidence survives this older repair's
-    // (correctly failed) clear attempt completely untouched.
     const finalDoc = getDoc();
     expect(finalDoc.revision).toBe(7);
     expect(finalDoc.pendingBudgetMonths.map((d) => new Date(d).getTime())).toEqual(
@@ -822,16 +729,6 @@ describe("repairIfPending -- Tier 2 (age-gated reservation recovery / crash-gap 
 
   it("CRASH-GAP CLOSURE: recomputes (but NEVER releases) a reservation once it is older than RESERVATION_STALE_MS, with no Tier-1 marker ever having existed", async () => {
     // This is the exact scenario the crash gap describes: a process
-    // reserved a month, then crashed before ever calling confirm() -- so
-    // pendingBudgetMonths/reportPending were NEVER set. Only the Tier-2
-    // reservation survives. Once it ages past the threshold, repair must
-    // still find and act on it -- but Phase C.2: a fixed timeout can never
-    // PROVE the owner will not still write later, so this pass only ever
-    // performs a defensive, fence-guarded recompute. It must NEVER pull/
-    // clear the reservation itself -- that is reserved exclusively for the
-    // owner's own confirm()/abandon() (see syncRecoveryService.js's Tier-2
-    // doc comment and the dedicated 7-step interleaving test in
-    // mutationRecoveryCorrectness.test.js).
     const marker = {
       revision: 0,
       pendingBudgetMonths: [],
@@ -844,17 +741,12 @@ describe("repairIfPending -- Tier 2 (age-gated reservation recovery / crash-gap 
     const { syncRecoveryService, recalculateBudgetMock, updateOneMock, findOneAndUpdateMock } = loadService({
       findOneImpl: () => ({ lean: leanMock }),
       // Phase C.4 -- the Tier-2 pass now allocates its own fresh ticket
-      // (via allocateRepairRevision()'s atomic $inc) rather than reusing
-      // the statically re-read `current.revision` -- simulates a real
-      // $inc from the marker's revision 0 to 1.
       findOneAndUpdateImpl: async () => ({ revision: 1 }),
     });
 
     const result = await syncRecoveryService.repairIfPending(USER_ID, { now: NOW });
 
     // The recompute is fenced by a FRESH ticket this repair attempt itself
-    // allocates at the top of the Tier-2 pass, the same atomic-CAS
-    // discipline every other write in this file uses.
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { user: USER_ID },
       { $inc: { revision: 1 } },
@@ -894,11 +786,6 @@ describe("repairIfPending -- Tier 2 (age-gated reservation recovery / crash-gap 
 
   it("HARD-DELETE RECOVERY: an aged reservation is repaired purely from the reservation's own presence, and remains present afterward -- no expense document or timestamp/count evidence is needed", async () => {
     // Simulates a crashed delete: the expense is already gone (hard
-    // delete leaves nothing behind), so recalculateBudget's own aggregate
-    // over the now-smaller expense set is the entire recovery mechanism --
-    // the reservation is only ever evidence that a recompute for this
-    // month is owed, never a value to restore, and is never itself cleared
-    // by this defensive pass.
     const marker = {
       revision: 0,
       pendingBudgetMonths: [],

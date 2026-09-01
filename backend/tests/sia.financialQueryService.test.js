@@ -1,11 +1,4 @@
 // Unit tests for backend/sia/financialQueryService.js -- the sole
-// allowlisted read layer SIA controllers may use for a direct financial
-// lookup/breakdown question. No real MongoDB connection: ExpenseModel/
-// IncomeModel/BudgetModel are replaced (jest.doMock on ../config/Schemas)
-// with a small, GENUINE (not canned) in-memory aggregation engine that
-// interprets the exact $match/$group/$sort/$limit stages this service
-// builds -- so these tests exercise the service's real filter/grouping
-// logic, not a pre-scripted mock response.
 "use strict";
 
 const mongoose = require("mongoose");

@@ -1,27 +1,4 @@
 // SIA transcription service (Workstream 2) -- provider-neutral speech-to-
-// text, mirroring sia/llmService.js's architecture: a stable
-// `{transcript, detectedLanguage, durationMs}` success contract, a
-// normalized TranscriptionProviderError failure class with the same
-// `.code`/`.provider`/`.message` shape philosophy as LlmProviderError, and
-// a provider selected via config.sttProvider (only "groq" implemented;
-// anything else fails with PROVIDER_NOT_IMPLEMENTED, never silently
-// treated as supported).
-//
-// No provider SDK installed; the existing axios dependency calls Groq's
-// REST transcription endpoint directly
-// (https://console.groq.com/docs/api-reference#audio-transcription), the
-// same "plain REST call via axios" pattern llmService.js already uses for
-// every provider. Multipart encoding is real (via the `form-data` package
-// axios already depends on -- see backend/node_modules/axios/package.json
-// -- never a hand-built boundary string).
-//
-// GROQ_API_KEY is read directly from process.env, never through
-// sia/config.js, mirroring askGroq()'s exact pattern in llmService.js so
-// this credential is never exposed via the widely-imported config object.
-// No audio bytes, transcript text, question, or Authorization header is
-// ever logged, returned in an error, or included in a thrown message --
-// every failure (config/network/HTTP/malformed response) normalizes into
-// TranscriptionProviderError with a fixed, generic message.
 "use strict";
 
 const axios = require("axios");
@@ -31,10 +8,6 @@ const config = require("./config");
 const GROQ_TRANSCRIPTIONS_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 // Stable, provider-neutral failure contract -- a caller relies on
-// `.name`/`.code`/`.provider`/`.message` without knowing which provider was
-// involved, and without ever seeing a raw provider exception, secret, audio
-// buffer, or transcript. Deliberately does not invent an HTTP status code --
-// that mapping belongs to Controllers/SiaControllers/transcribe.js.
 class TranscriptionProviderError extends Error {
   constructor(message, { code, provider } = {}) {
     super(message);
@@ -53,23 +26,13 @@ function isBlank(value) {
 }
 
 // Treats null, undefined, and a blank/whitespace-only string as "no
-// provider configured" -- config.js itself no longer produces this state
-// for sttProvider (it defaults to "groq"), but this check stays
-// self-contained and defensive, mirroring llmService.js's
-// isMissingProvider(), rather than trusting upstream normalization.
 function isMissingProvider(provider) {
   return provider === null || provider === undefined || (typeof provider === "string" && provider.trim() === "");
 }
 
 // Normalizes any axios failure (client-initiated abort, timeout, network
-// failure, or a provider 4xx/5xx response) into TranscriptionProviderError
-// -- never includes the raw axios error, response body, or headers.
 function normalizeAxiosError(err, provider) {
   // A client disconnect mid-request aborts the outbound axios call via
-  // AbortController -- axios surfaces this as either a `CanceledError`
-  // (`err.code === "ERR_CANCELED"`) or, on some Node/axios versions, a
-  // DOMException-shaped `AbortError`. Both are treated as a request that
-  // simply never completed, never as a provider failure.
   if (err && (err.code === "ERR_CANCELED" || err.name === "AbortError" || err.name === "CanceledError")) {
     return new TranscriptionProviderError("SIA's request to the transcription provider was aborted.", {
       code: "PROVIDER_REQUEST_ABORTED",
@@ -105,12 +68,6 @@ function normalizeAxiosError(err, provider) {
 }
 
 // Extracts the transcript/language/duration only from the documented Groq
-// (OpenAI-compatible Whisper) verbose_json response shape:
-// { text, language, duration, ... } -- see
-// https://console.groq.com/docs/api-reference#audio-transcription. `text`
-// missing/non-string/blank is treated as no usable output. `language` and
-// `duration` are each individually optional/defensive: a missing or
-// malformed value degrades to "unknown"/null rather than throwing.
 function extractGroqTranscription(responseData) {
   if (!responseData || typeof responseData !== "object") {
     return null;
@@ -143,13 +100,6 @@ function extractGroqTranscription(responseData) {
 }
 
 // Real Groq STT provider adapter, only reached once the provider is
-// confirmed normalized "groq". Reads GROQ_API_KEY directly from
-// process.env (never through the shared config object), and sends it ONLY
-// in the server-side Authorization header, never as a query param, form
-// field, or logged value. `buffer` is used exactly once, synchronously,
-// to build the multipart request body -- this function never persists it
-// (no disk write, no module-level cache, no retained reference after the
-// request settles).
 async function transcribeWithGroq({ buffer, filename, mimeType, languageHint, signal }) {
   if (isBlank(config.sttModel)) {
     throw new TranscriptionProviderError(
@@ -178,8 +128,6 @@ async function transcribeWithGroq({ buffer, filename, mimeType, languageHint, si
   form.append("model", config.sttModel);
   form.append("temperature", "0");
   // verbose_json is the one response_format that carries both `language`
-  // and `duration` alongside `text`, letting detectedLanguage/durationMs
-  // come directly from the provider rather than being guessed locally.
   form.append("response_format", "verbose_json");
   if (typeof languageHint === "string" && languageHint.trim() !== "") {
     form.append("language", languageHint.trim());
@@ -196,8 +144,6 @@ async function transcribeWithGroq({ buffer, filename, mimeType, languageHint, si
       timeout: config.sttTimeoutMs,
       signal,
       // Audio bodies (bounded by SIA_STT_MAX_BYTES upstream, but not yet
-      // known to axios here) must never be truncated by axios's own
-      // default body-size ceiling.
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
     });
@@ -232,9 +178,6 @@ async function transcribeWithGroq({ buffer, filename, mimeType, languageHint, si
 }
 
 // Request shape is the stable public interface callers depend on.
-// `buffer`/`languageHint` are never read, logged, transformed, or included
-// in any error before the provider-configuration check -- an unsupported/
-// unconfigured provider fails before any request could be built or sent.
 async function transcribeAudio({ buffer, filename, mimeType, languageHint, signal } = {}) {
   const provider = config.sttProvider;
 

@@ -1,16 +1,4 @@
 // Remediation Workstream A -- expense-edit amount integrity.
-//
-// Root cause: PUT /update-expense (Routes/expense.routes.js) never applied
-// expenseValidation (or any equivalent) to the edit route, and
-// editExpense.js itself performed no check on `expenseAmount` before
-// persisting it -- an edit could set 0, a negative number, NaN, Infinity,
-// or any other raw req.body value directly into Mongo.
-//
-// Unit-level tests against the controller directly (jest.doMock on its
-// three seams: config/Schemas, Services/syncRecoveryService,
-// utils/expenseCache), proving the full required contract: valid values
-// succeed, every invalid class is rejected before any side effect, and a
-// valid edit still performs the existing synchronization path unchanged.
 "use strict";
 
 const mongoose = require("mongoose");
@@ -76,8 +64,6 @@ function loadEditExpense({ originalExpense, updateResult } = {}) {
   }));
 
   // Recurring-state authority remediation -- editExpense.js now calls
-  // annotateRecurringState, which queries RecurringExpenseModel. No
-  // recurring definitions exist in this file's scenarios.
   jest.doMock(RECURRING_MODEL_PATH, () => ({
     RecurringExpenseModel: { find: () => ({ lean: async () => [] }) },
   }));
@@ -145,8 +131,6 @@ describe("Remediation Workstream A: PUT /update-expense amount validation", () =
       expect.objectContaining({ success: false, errorCode: "INVALID_AMOUNT" })
     );
     // No ML call is possible from this controller at all (editExpense.js
-    // never calls ML), but every database/cache/report side effect must
-    // also be untouched.
     expect(harness.findOneAndUpdateMock).not.toHaveBeenCalled();
     expect(harness.reserveMock).not.toHaveBeenCalled();
     expect(harness.synchronizeAfterMutationMock).not.toHaveBeenCalled();
@@ -185,8 +169,6 @@ describe("Remediation Workstream A: PUT /update-expense amount validation", () =
 
   it("8. the update query remains user-scoped -- another user's expense cannot be edited", async () => {
     // originalExpense lookup is itself scoped to { _id, userId: req.userId }
-    // -- a document owned by a different user is never found, so this
-    // always resolves as a 404, never a cross-user mutation.
     const harness = loadEditExpense({ originalExpense: null });
 
     const req = {

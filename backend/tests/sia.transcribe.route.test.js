@@ -1,27 +1,4 @@
 // Route/controller tests for POST /sia/transcriptions (Workstream 2):
-// backend/Controllers/SiaControllers/transcribe.js,
-// backend/Middlewares/audioUpload.js, backend/Routes/sia.routes.js.
-//
-// backend/sia/config and backend/sia/transcriptionService are mocked --
-// no real environment variable (beyond a placeholder GROQ_API_KEY used
-// ONLY for readiness's presence check), MongoDB, Redis, ML service, or
-// provider call is ever made. Authentication (Middlewares/Auth.js's
-// verifyToken) runs for real via a locally-signed JWT, the same pattern
-// tests/sia.ask.test.js already established.
-//
-// Performance note: unlike several sibling SIA test files (e.g.
-// tests/sia.readiness.groq.test.js), this file uses jest.mock() (hoisted,
-// static, evaluated ONCE) plus a SINGLE require("../app") for the whole
-// file, instead of jest.doMock()+jest.resetModules()+require("../app") per
-// test. Per-test variation (voice-readiness flags, size limits,
-// transcribeAudio's mocked result) is achieved by mutating the shared
-// mocked config object's properties and reconfiguring the shared
-// transcribeAudio jest.fn()'s implementation, restored in afterEach. This
-// sandbox has been observed taking 20-55s for EACH jest.resetModules()+
-// require("../app") cycle (see the dedicated note in
-// tests/sia.readiness.groq.test.js) -- with ~25+ cases in this file, the
-// per-test-cold-load pattern would take this file well past any practical
-// budget. The single-load pattern pays that cost once for the whole file.
 "use strict";
 
 const { EventEmitter } = require("events");
@@ -50,11 +27,6 @@ const DEFAULT_TRANSCRIBE_RESULT = {
   durationMs: 2840,
 };
 
-// ---------------------------------------------------------------------
-// Static, hoisted mocks -- evaluated ONCE for the whole file (see the
-// performance note above). `config` is a single mutable object shared by
-// every test; each test that needs a different shape mutates it directly
-// and afterEach() restores the full default.
 // ---------------------------------------------------------------------
 jest.mock("../sia/config", () => ({
   enabled: false,
@@ -126,8 +98,6 @@ const { buildContext: buildContextMock } = require("../sia/contextBuilder");
 const sessionServiceMock = require("../sia/sessionService");
 
 // The app is required exactly once for the whole file, AFTER every
-// jest.mock() above (jest.mock calls are hoisted above this line by Jest's
-// transform regardless of source order, so this is safe).
 const app = require("../app");
 
 const originalJwtSecret = process.env.JWT_SECRET;
@@ -160,8 +130,6 @@ function signToken(userId) {
   return jwt.sign({ email: "sia-transcribe-test@example.test", _id: userId }, TEST_JWT_SECRET);
 }
 
-// ---------------------------------------------------------------------
-// Fixtures -- minimal synthetic byte buffers, never real audio.
 // ---------------------------------------------------------------------
 function padTo(buffer, length) {
   if (buffer.length >= length) return buffer;
@@ -416,12 +384,6 @@ describe("POST /sia/transcriptions", () => {
   describe("rate limiting -- siaVoiceLimiter is a SEPARATE bucket from siaLimiter", () => {
     it("exhausting the voice limiter's budget does not affect a sibling route guarded by siaLimiter", async () => {
       // A bare, minimal app (not backend/app.js) exercising the REAL
-      // utils/rateLimiter.js exports directly -- proves siaLimiter and
-      // siaVoiceLimiter are two independently-exhaustible rate-limit
-      // instances/stores, without needing a full authenticated round trip
-      // per request, and without touching the shared `app` above (so it
-      // never pollutes that app's own siaVoiceLimiter budget for other
-      // tests in this file).
       const express = require("express");
       const { siaLimiter, siaVoiceLimiter } = jest.requireActual("../utils/rateLimiter");
 
@@ -440,8 +402,6 @@ describe("POST /sia/transcriptions", () => {
       expect(lastVoiceStatus).toBe(429);
 
       // The sibling route, guarded by the DIFFERENT siaLimiter instance,
-      // must still be open -- proving the two limiters do not share a
-      // store/bucket.
       const askGuardedRes = await request(testApp).get("/ask-guarded");
       expect(askGuardedRes.status).toBe(200);
     });
@@ -532,10 +492,6 @@ describe("POST /sia/transcriptions", () => {
       );
       const serviceSource = fs.readFileSync(require.resolve("../sia/transcriptionService.js"), "utf8");
       // Matches only an actual `require("...mlServiceClient...")` /
-      // `require("...ml.router...")` call -- never a plain-English mention
-      // of those module names inside a documentation comment (this file's
-      // own header comments legitimately explain what is NOT imported,
-      // which would otherwise trip a naive whole-source substring check).
       const REQUIRES_ML_SERVICE_CLIENT = /require\(\s*["'][^"']*mlServiceClient[^"']*["']\s*\)/;
       const REQUIRES_ML_ROUTER = /require\(\s*["'][^"']*ml\.router[^"']*["']\s*\)/;
       for (const source of [transcribeSource, serviceSource]) {
@@ -547,34 +503,8 @@ describe("POST /sia/transcriptions", () => {
   });
 
   // Abort lifecycle contract (found by diagnosing a production
-  // PROVIDER_REQUEST_ABORTED failure at ~5-16ms latency -- far too fast
-  // for a real Groq round trip to ever complete). Root cause: Node's `req`
-  // (http.IncomingMessage) fires its 'close' event once the request body
-  // has been FULLY READ -- which happens on every normal request, shortly
-  // after multer finishes parsing the multipart body, regardless of
-  // whether the client is still connected or a response has been sent yet.
-  // The previous implementation treated that event as proof of a
-  // disconnected client and aborted the in-flight Groq call almost
-  // immediately on every request. The corrected contract below is what
-  // Controllers/SiaControllers/transcribe.js must implement:
-  //   - normal upload completion (req 'close' alone) must NOT abort;
-  //   - req 'aborted' MUST abort (a genuine connection-level abort);
-  //   - res 'close' aborts ONLY when res.writableEnded is still false
-  //     (the connection died before the response finished sending);
-  //   - a res 'close' that fires after normal completion must NOT abort;
-  //   - both listeners must be removed once the request settles, so a
-  //     stray late event is always a no-op;
-  //   - the provider timeout (SIA_STT_TIMEOUT_MS, enforced independently
-  //     inside sia/transcriptionService.js's axios call) is unaffected by
-  //     any of this and is exercised by sia.transcriptionService.test.js.
   describe("abort lifecycle: only a genuine client disconnect cancels the in-flight provider call", () => {
     // Both req and res are real EventEmitters (matching Node's actual
-    // http.IncomingMessage/http.ServerResponse) so 'close'/'aborted' can be
-    // emitted deterministically without depending on real socket teardown
-    // timing. `res.writableEnded` mirrors the real flag the corrected
-    // implementation must consult -- false until .json() (standing in for
-    // .end()) has actually been called, exactly like the real response
-    // object.
     function buildReqRes() {
       const req = new EventEmitter();
       req.file = { buffer: webmFixture() };
@@ -600,11 +530,6 @@ describe("POST /sia/transcriptions", () => {
     }
 
     // A provider call that stays pending until either the abort signal
-    // fires (rejects with PROVIDER_REQUEST_ABORTED, mirroring
-    // transcriptionService.js's real axios-abort mapping) or the test
-    // explicitly resolves it via resolveNow() -- lets a single test prove
-    // BOTH "an early event does not touch this call" and "the call still
-    // completes normally afterward".
     function pendingTranscribeMock() {
       let capturedSignal;
       let settle;
@@ -636,8 +561,6 @@ describe("POST /sia/transcriptions", () => {
       expect(getSignal()).toBeDefined();
 
       // Fires on EVERY normal request once the body has been fully read --
-      // well before the response has been produced -- never a disconnect
-      // signal on its own.
       req.emit("close");
       await new Promise((resolve) => setImmediate(resolve));
 
@@ -728,8 +651,6 @@ describe("POST /sia/transcriptions", () => {
       expect(res.writableEnded).toBe(true);
 
       // Node fires 'close' on the response too, once the underlying socket
-      // is done with an ordinary completed response -- must never
-      // retroactively abort anything or throw.
       expect(() => res.emit("close")).not.toThrow();
       expect(getSignal().aborted).toBe(false);
     });

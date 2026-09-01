@@ -44,8 +44,6 @@ const calculateSpendingScore = (spendingAnalysis = {}) => {
       tier: tier.label,
       points: tier.score,
       // Context for the assistant — e.g. "your spending is volatile,
-      // and your largest single transaction was ₹X" gives it something
-      // concrete to point to rather than just a label.
       largestExpense: spendingAnalysis.largestExpense ?? null,
       totalSpent: spendingAnalysis.totalSpent ?? null,
     },

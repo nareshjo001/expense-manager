@@ -7,36 +7,21 @@ import { getSiaSessions, getSiaSessionMessages, deleteSiaSession, getSiaStatus }
 import { SIA_SUGGESTIONS } from "./siaSuggestions";
 
 // Only the API layer is mocked -- the reducer, hooks, TanStack wiring and
-// components under test are all real, so these prove genuine end-to-end
-// frontend behaviour rather than a mock agreeing with itself.
 jest.mock("../../api/siaApi", () => ({ askSia: jest.fn() }));
 jest.mock("../../api/siaSessionsApi", () => ({
   getSiaSessions: jest.fn(),
   getSiaSessionMessages: jest.fn(),
   deleteSiaSession: jest.fn(),
   // Batch 3E: SiaEntryPoint now checks runtime availability before the
-  // composer is usable. Every test in this file is about the CONVERSATION
-  // behaviour of a healthy deployment, so the status call is stubbed as
-  // available below -- the unavailable/degraded paths have their own
-  // dedicated suite (SiaAvailability.test.js). No assertion here was
-  // relaxed to accommodate the new query.
   getSiaStatus: jest.fn(),
 }));
 // Workstream 3: SiaEntryPoint -> SiaPanel now transitively renders
-// SiaVoiceRecorderControls -> useSiaVoiceRecorder -> siaVoiceApi.js, which
-// imports the shared axios instance -- mocked for the same ESM-import
-// reason as the two mocks above. No test in this file exercises voice
-// recording (see SiaPanel.workstream3.test.js/useSiaVoiceRecorder.test.js).
 jest.mock("../../api/siaVoiceApi", () => ({ transcribeSiaAudio: jest.fn() }));
 
 const ENV_KEY = "REACT_APP_SIA_ENABLED";
 const originalFlag = process.env[ENV_KEY];
 
 // This jsdom environment exposes no `crypto` global at all, so a Web
-// Crypto source is installed for the duration of these tests. Every
-// browser the app supports provides this natively over HTTPS -- the shim
-// stands in for the environment, not for the code under test (which is
-// still the real createClientMessageId).
 const originalCrypto = window.crypto;
 beforeAll(() => {
   Object.defineProperty(window, "crypto", {
@@ -62,29 +47,6 @@ afterAll(() => {
 });
 
 // Batch 3F acceptance remediation -- requirement 5.
-//
-// Root cause of the intermittent "not configured to support act(...)"
-// warnings: TanStack Query's notifyManager defers every query-state
-// notification through a `setTimeout(fn, 0)` scheduler
-// (query-core/src/notifyManager.ts's `defaultScheduler`), not a
-// synchronous call. A notification scheduled during one test's
-// synchronous/awaited body can therefore fire AFTER that test's body (and
-// even after RTL's cleanup() has unmounted) has already returned control
-// to Jest, landing inside whichever later test's console-capture window
-// happens to be active at that moment -- which is exactly why the warning
-// was intermittent and order-dependent rather than tied to any one test.
-//
-// notifyManager.setNotifyFunction() is TanStack Query's own documented
-// hook for this (see its source comment: "This can be used to for example
-// wrap notifications with React.act while running tests"). Wrapping every
-// notification in `act()` here means ANY update that fires -- synchronously
-// or via the deferred setTimeout, during this test's body or spilling into
-// a later one -- is always reported to React inside an act() boundary, so
-// React never has cause to warn, regardless of timing. This is a global,
-// file-level fix (not per-test) because the deferred notification that
-// warns is frequently attributable to the PREVIOUS test, not the currently
-// running one -- a per-test wrap cannot reach a callback that fires after
-// that test's own act() block has already closed.
 beforeAll(() => {
   notifyManager.setNotifyFunction((callback) => {
     act(() => {
@@ -99,19 +61,11 @@ beforeAll(() => {
 });
 afterAll(() => {
   // Restored to TanStack Query's own default (a synchronous passthrough --
-  // see query-core/src/notifyManager.ts's createNotifyManager()) so no
-  // other suite's console-warning behaviour is affected by module load
-  // order or by this file running before/after another Jest file in the
-  // same worker.
   notifyManager.setNotifyFunction((callback) => callback());
   notifyManager.setBatchNotifyFunction((callback) => callback());
 });
 
 // Every QueryClient created by renderEntryPoint() below is tracked here so
-// afterEach can clear it -- cleanup() (RTL) unmounts the DOM tree, but it
-// does not clear a QueryClient's own internal query cache/observers/timers,
-// which is a second, independent source of a state update landing after a
-// test has already finished.
 const activeQueryClients = [];
 
 beforeEach(() => {
@@ -125,11 +79,6 @@ beforeEach(() => {
 afterEach(async () => {
   cleanup();
   // Cancel any in-flight queries and clear each QueryClient's cache/
-  // observers before the next test starts, wrapped in act() so any
-  // resulting synchronous notification is itself act()-reported. This
-  // closes the second, independent source of a late state update: a
-  // QueryClient created by an earlier test but never explicitly told to
-  // stop, even after its DOM tree is already unmounted.
   for (const queryClient of activeQueryClients) {
     // eslint-disable-next-line no-await-in-loop
     await act(async () => {
@@ -157,11 +106,6 @@ function renderEntryPoint() {
 }
 
 // Batch 3E: opening the panel now also waits for the runtime availability
-// check to settle. Every test in this file describes a HEALTHY deployment
-// (getSiaStatus is stubbed available in beforeEach), so waiting here simply
-// skips the brief, correct "Checking SIA availability..." state rather than
-// weakening anything -- the checking/unavailable states have their own
-// dedicated suite in SiaAvailability.test.js.
 const openPanel = async () => {
   fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
   await waitFor(() => expect(composer()).not.toBeDisabled());
@@ -190,8 +134,6 @@ function httpError(status, data) {
   return err;
 }
 
-// ---------------------------------------------------------------------
-// Ask and conversation
 // ---------------------------------------------------------------------
 describe("SIA conversation -- asking", () => {
   it("1. a first question renders one user message and one answer", async () => {
@@ -448,8 +390,6 @@ describe("SIA conversation -- asking", () => {
 });
 
 // ---------------------------------------------------------------------
-// Suggestions
-// ---------------------------------------------------------------------
 describe("SIA conversation -- suggestions", () => {
   it("17-18. an empty conversation shows one suggestion per supported intent", async () => {
     renderEntryPoint();
@@ -493,8 +433,6 @@ describe("SIA conversation -- suggestions", () => {
   });
 });
 
-// ---------------------------------------------------------------------
-// History
 // ---------------------------------------------------------------------
 describe("SIA conversation -- history", () => {
   const openHistory = () => fireEvent.click(screen.getByRole("button", { name: "Conversation history" }));
@@ -553,19 +491,6 @@ describe("SIA conversation -- history", () => {
   });
 
   // Batch 3G remediation: closes the audit's frontend title-synchronization
-  // coverage gap. Every other `title`-related test in this file (23c above,
-  // and the ones near "24-26"/grounding/etc.) seeds a mocked getSiaSessions
-  // response with a title already present -- none of them proves that a
-  // BRAND-NEW session's backend-derived title actually becomes visible
-  // through this app's real invalidate/refetch cycle after a live ask. This
-  // test proves exactly that sequence end-to-end, using the SAME
-  // queryKeys.sia.sessions.list() query and the SAME
-  // invalidateQueries()/refetch-on-remount behavior useSiaConversation.js
-  // already has (see its two `queryClient.invalidateQueries(...)` calls) --
-  // no new query key or frontend-side title generation is introduced. The
-  // frontend never derives or optimistically displays a title itself: the
-  // ONLY source of the title text asserted below is the (updated)
-  // getSiaSessions mock response, exactly like a real backend refetch.
   it("23d. a new session's backend-derived title becomes visible via the existing invalidate/refetch cycle, without a page refresh", async () => {
     // 1. Initial session list has no new session yet.
     getSiaSessions.mockResolvedValue({ success: true, sessions: [] });
@@ -587,16 +512,12 @@ describe("SIA conversation -- history", () => {
     expect(screen.getByRole("heading", { name: "Ask SIA" })).toBeInTheDocument();
 
     // 2. User starts/submits a brand-new conversation. The successful
-    // /sia/ask response contains a sessionId but -- exactly like the real
-    // backend contract -- no title field at all.
     await ask("Why is my financial health score low?");
     await screen.findByText("Your score is healthy.");
     expect(askSia.mock.calls[0][0]).not.toHaveProperty("title");
     expect(askSia.mock.calls[0][0]).not.toHaveProperty("sessionTitle");
 
     // 3. The backend now reports this session with its server-derived
-    // title (and, alongside it, an older session with no title at all, to
-    // simultaneously re-confirm the neutral fallback still applies).
     getSiaSessions.mockResolvedValue({
       success: true,
       sessions: [
@@ -611,8 +532,6 @@ describe("SIA conversation -- history", () => {
     });
 
     // 4. Opening history again -- WITHOUT any remount or page refresh --
-    // refetches the existing sessions query and shows the backend-stored
-    // title as the sole source of that text.
     await act(async () => {
       openHistory();
     });
@@ -620,8 +539,6 @@ describe("SIA conversation -- history", () => {
     expect(await screen.findByText("Why is my financial health score low?")).toBeInTheDocument();
     expect(getSiaSessions.mock.calls.length).toBeGreaterThan(1);
     // Null/missing title on the other (pre-existing) session still falls
-    // back to the same neutral label -- this refetch never invented a
-    // title for either session.
     expect(screen.getByText("SIA conversation")).toBeInTheDocument();
     // The panel header is completely unaffected by any of this.
     expect(screen.getByRole("heading", { name: "Ask SIA" })).toBeInTheDocument();
@@ -747,8 +664,6 @@ describe("SIA conversation -- history", () => {
 });
 
 // ---------------------------------------------------------------------
-// Delete
-// ---------------------------------------------------------------------
 describe("SIA conversation -- deleting a session", () => {
   const openHistory = () => fireEvent.click(screen.getByRole("button", { name: "Conversation history" }));
 
@@ -854,8 +769,6 @@ describe("SIA conversation -- deleting a session", () => {
 });
 
 // ---------------------------------------------------------------------
-// Accessibility and keyboard
-// ---------------------------------------------------------------------
 describe("SIA conversation -- accessibility", () => {
   it("37. every control has an accessible name", async () => {
     askSia.mockRejectedValue(httpError(503, { success: false, message: "SIA is temporarily unavailable." }));
@@ -951,14 +864,8 @@ describe("SIA conversation -- accessibility", () => {
 });
 
 // ---------------------------------------------------------------------
-// Batch 3F: answer-grounding transparency
-// ---------------------------------------------------------------------
 describe("SIA conversation -- answer-grounding transparency (Batch 3F)", () => {
   // Batch 3F acceptance remediation: this fixture's `period` is a mocked
-  // API response value used only to prove the component renders a period
-  // WHEN one is present -- it does not assert or imply anything about
-  // backend/sia/groundingService.js's own current behavior, which never
-  // populates `period` today (see backend/tests/sia.grounding.test.js).
   const groundingFixture = (overrides = {}) => ({
     sources: [{ key: "financialHealth", label: "Financial health analysis", period: "2026-08-09" }],
     ...overrides,
@@ -1083,18 +990,6 @@ describe("SIA conversation -- answer-grounding transparency (Batch 3F)", () => {
 });
 
 // ---------------------------------------------------------------------
-// Batch 3F acceptance remediation -- requirement 5 regression
-// ---------------------------------------------------------------------
-// Proves the notifyManager act()-wrapping fix above actually holds, without
-// suppressing or filtering console output (the spy below always calls
-// through to the real console.error, so a genuine warning is still printed
-// to the test run exactly as it would be without this spy in place -- only
-// its call arguments are additionally captured for assertion). Runs a
-// realistic multi-turn, multi-query flow (ask, open history, select a
-// session, delete a session) -- the combination Batch 3F's original
-// acceptance review found the warning under -- inside one test, then
-// asserts afterward that console.error was never called with any
-// React/TanStack Query "not wrapped in act(...)" text.
 describe("SIA conversation -- no React/TanStack Query act() warnings (Batch 3F acceptance remediation, requirement 5)", () => {
   it("a realistic multi-turn, multi-query session produces zero act(...) warnings", async () => {
     const realConsoleError = console.error;

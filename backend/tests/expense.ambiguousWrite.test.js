@@ -1,35 +1,4 @@
 // Phase C.4 requirement #1 -- ambiguous MongoDB write outcomes.
-//
-// Confirmed problem: setting a "the write committed" flag only after an
-// awaited mutation call RESOLVES does not prove that a REJECTED operation
-// never committed. MongoDB can apply a write and then lose the
-// acknowledgement or connection before the driver ever sees success -- a
-// documented behavior, not a hypothetical. The Phase C.3 controllers
-// (addexpense.js/editExpense.js/deleteExpense.js) were fixed to stop
-// abandoning the reservation on every post-dispatch error; this file proves
-// the fix end-to-end, through the REAL Express routes, REAL controllers,
-// REAL Services/syncRecoveryService.js, REAL
-// Services/BudgetServices/budget.service.js, REAL Services/reportService.js,
-// and REAL cache/reportCache.js -- only the model/cache layer beneath them
-// (config/Schemas's ExpenseModel/BudgetModel, models/Report,
-// models/PendingSync, config/redis's redisClient) is faked.
-//
-// The core scenario per fake model, for add/edit/delete:
-//   1. The fake model's write call actually mutates its own in-memory
-//      state (the insert/update/delete genuinely "happens").
-//   2. The SAME call then REJECTS its promise -- simulating a lost
-//      acknowledgement/connection AFTER the write applied.
-//   3. The HTTP request therefore fails (500).
-//   4. The pre-write reservation is NOT abandoned -- it survives as
-//      durable recovery evidence.
-//   5. A later read (repairIfPending, once the reservation is stale)
-//      reconstructs Budget.spent, the FinancialReport, and the Redis cache
-//      entry entirely from the authoritative (already-mutated) expense
-//      data -- proving the "possibly committed" default was the correct
-//      call.
-//
-// A companion suite retains proof that a DEFINITE no-write outcome (E11000
-// for add, a resolved `null` for edit/delete) still safely abandons.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -90,13 +59,6 @@ function casFilterMatches(doc, filter) {
 }
 
 // A REAL, stateful ExpenseModel: `_store` is the actual authoritative
-// expense collection, and `aggregate()` genuinely sums whatever is
-// currently in it (matching budget.service.js's real $match/$group
-// shape) -- so recalculateBudget()'s repair pass reads TRUE post-write
-// data, not a scripted canned value. Each of save()/findOneAndUpdate()/
-// findOneAndDelete() can be indepedently armed to mutate the store and
-// THEN reject -- modeling "the write applied, but this request never saw
-// the acknowledgement."
 function makeExpenseModel(seedDocs = []) {
   const store = new Map();
   for (const doc of seedDocs) {
@@ -132,9 +94,6 @@ function makeExpenseModel(seedDocs = []) {
     }),
     findOne: (filter) => {
       // Supports BOTH the _id-based pre-read (edit/delete) and the
-      // idempotency-key-based lookup (add's own `{ userId, id }` filter --
-      // note this `id` is the client-supplied idempotency field, unrelated
-      // to `_id`).
       let matches = null;
       if (filter._id !== undefined) {
         const doc = store.get(String(filter._id));
@@ -374,9 +333,6 @@ function makeFakeFinancialReportModel() {
 }
 
 // Real-ish Redis keyspace, matching cache/reportCache.js's CAS scripts --
-// same as tests/reportCache.cas.test.js's fake, trimmed to what this file
-// needs (no pause-gate; C.3's reportCache.cas.test.js already proves the
-// exact Redis pause/resume boundary).
 function makeFakeRedisClient() {
   const store = new Map();
   return {
@@ -424,8 +380,6 @@ function loadApp({ seedExpenses = [] } = {}) {
   const findByIdMock = jest.fn(async (id) => ({ _id: id }));
   const expenseModelFns = makeExpenseModel(seedExpenses);
   // ExpenseModel must be callable as `new ExpenseModel(doc)` (addexpense.js)
-  // AND expose the query methods statically (all three controllers) --
-  // bind the constructor's prototype methods onto the shared function.
   const ExpenseModelMock = expenseModelFns._Model;
   ExpenseModelMock.aggregate = expenseModelFns.aggregate;
   ExpenseModelMock.findOne = expenseModelFns.findOne;
@@ -587,10 +541,6 @@ describe("Phase C.4 -- retained proof: a DEFINITE no-write outcome still safely 
   it("ADD: E11000 (this attempt's own insert conclusively never landed) abandons the reservation", async () => {
     const { app, syncRecoveryService } = loadApp();
     // Two concurrent adds with the SAME idempotency id: the first genuinely
-    // inserts; the second's own save() must fail with a real duplicate-key
-    // error (config/Schemas's real unique index behavior is trusted here
-    // via the fake constructor -- we simulate it directly since this fake
-    // ExpenseModel doesn't enforce indexes itself).
     const app2 = app; // same app instance; the mock ExpenseModel is shared per loadApp() call
 
     const first = await request(app2)
@@ -607,10 +557,6 @@ describe("Phase C.4 -- retained proof: a DEFINITE no-write outcome still safely 
     expect(first.status).toBe(201);
 
     // A second add reusing the SAME id but a DIFFERENT payload -- the
-    // idempotency pre-check (findOne) already catches this before save()
-    // is ever dispatched, resolving as a definite conflict without a
-    // reservation ever needing to be abandoned mid-write. This still
-    // proves the "not-dispatched" path never risks a false abandon.
     const second = await request(app2)
       .post("/expense/add-expense")
       .set("Authorization", authHeader())
@@ -626,8 +572,6 @@ describe("Phase C.4 -- retained proof: a DEFINITE no-write outcome still safely 
 
     const pending = await syncRecoveryService.getPendingSync(USER_ID);
     // Only the first (successful) add's Tier-1 work remains -- the second
-    // request never reserved anything at all (it was rejected before
-    // reserve() was ever called), so there is nothing to abandon or leak.
     expect(pending.reservedBudgetMonths).toHaveLength(0);
   });
 
@@ -637,8 +581,6 @@ describe("Phase C.4 -- retained proof: a DEFINITE no-write outcome still safely 
     });
 
     // Delete the expense out from under the edit's own pre-read by issuing
-    // a real delete first (genuine, not simulated) -- the edit's own
-    // findOneAndUpdate below will then resolve null for real.
     const deleteRes = await request(app)
       .delete("/expense/delete-expense")
       .set("Authorization", authHeader())
@@ -653,9 +595,6 @@ describe("Phase C.4 -- retained proof: a DEFINITE no-write outcome still safely 
     expect(editRes.status).toBe(404);
 
     // The edit's own reservation (taken before its own findOneAndUpdate)
-    // was abandoned -- only the delete's own (already confirmed) Tier-1
-    // work remains, no leaked reservedUserWideReservations entry from the
-    // failed edit.
     const pending = await syncRecoveryService.getPendingSync(USER_ID);
     expect(pending.reservedUserWideReservations).toHaveLength(0);
   });

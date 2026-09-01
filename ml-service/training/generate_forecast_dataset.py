@@ -45,11 +45,6 @@ def fit_robust_trend(points):
 
 def generate_spending_history():
     # We will generate 800 personas, each having 12 months of simulated data.
-    # Personas:
-    # 0: Typical worker (salary, bills, normal groceries, occasional dinner/shopping)
-    # 1: Frugal saver (low discretionary spend, strict patterns)
-    # 2: High spender (huge leisure spikes, high category entropy)
-    # 3: Impulsive/Unstable spender (large irregular one-offs, high variance)
     
     data_rows = []
     total_personas = 800

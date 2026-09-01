@@ -79,12 +79,6 @@ const getCategoryBreakdown = async ({ userId, startDate, endDate, type = 'total'
 // Fetch budget versus spent totals for a year or a single month.
 const getBudgetComparison = async ({ userId, mode, year, monthKey }) => {
     // Repair-on-read, matching getbudgets.js's established convention:
-    // best-effort, never throws (repairIfPending self-catches internally);
-    // a failed/no-op repair simply leaves existing stored values in place.
-    // Without this, a pending budget-recompute crash-gap could stay
-    // invisible to these chart endpoints indefinitely -- unlike
-    // GET /api/getbudgets, this was the only read path that never
-    // triggered repair.
     await syncRecoveryService.repairIfPending(userId);
 
     if (mode === 'year') {

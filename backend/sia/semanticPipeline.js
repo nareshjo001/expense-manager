@@ -1,27 +1,4 @@
 // SIA semantic pipeline -- orchestrates the NEW layer ask.js falls back to
-// only after the existing deterministic classifyIntent() returns null.
-// Implements the pipeline order this milestone requires:
-//   1. Deterministic prohibited-phrase rejection (0 provider calls).
-//   2. Semantic router call (1 router call).
-//   3. QueryPlan validation (already done inside semanticRouter.js).
-//   4. `clarification` outcome -> return immediately, 0 answer calls.
-//   5. `unsupported` outcome -> return immediately, 0 answer calls.
-//   6. `supported` + a simple deterministic metric -> execute via
-//      financialQueryService.js, build a FactSet, answer DETERMINISTICALLY
-//      in backend code (0 answer-generation calls) with INR/en-IN
-//      formatting.
-//   7. `supported` + one of the four existing analytics explanation
-//      intents (HEALTH/ANOMALY/FORECAST/RISK) -> delegate to the
-//      CALLER-supplied `existingIntentHandler`, which runs the existing,
-//      UNCHANGED buildContext -> askLlm -> validateGroundedAnswer pipeline
-//      (at most 1 answer call) -- never reinvented here.
-//   8. `supported` + EXPLAIN/FORECAST/COMPARE needing prose -> call
-//      askLlm ONCE with ONLY the minimal FactSet + question, then
-//      validate via responseValidator.js's validateCitedAnswer.
-//
-// Every external effect (the router call, askLlm, financialQueryService,
-// the existing-intent delegate) is INJECTABLE so callers/tests can count
-// invocations precisely and never touch a live provider.
 "use strict";
 
 const { routeQuestion } = require("./semanticRouter");
@@ -268,8 +245,6 @@ function buildPlanSummary(plan, period) {
 }
 
 // The persisted session summary stays in the existing bounded schema. It
-// deliberately records only high-level, server-derived topic continuity --
-// never the full v2 plan, query periods, provider output, or financial facts.
 function buildV2PlanSummary(plan, factSet) {
   const queries = Array.isArray(plan.queries) ? plan.queries : [];
   const unique = (values) => [...new Set(values.filter(Boolean))];
@@ -531,37 +506,7 @@ function renderV2DeterministicAnswer(factSet) {
   return sentences.join(" ");
 }
 
-/**
- * @param {object} args
- * @param {string} args.question
- * @param {string} args.userId
- * @param {object} [args.previousPlanSummary]
- * @param {Date} [args.now]
- * @param {string} [args.timeZone]
- * @param {Function} [args.routerCall] - injected, forwarded to semanticRouter.routeQuestion.
- * @param {Function} [args.askLlmFn] - injected in place of llmService.askLlm.
- * @param {object} [args.financialQueryService] - injected in place of the real service.
- * @param {(explanationIntent: string) => Promise<object>} [args.existingIntentHandler] -
- *   delegate to the EXISTING deterministic-intent pipeline for the 4
- *   analytics explanation intents. Must return
- *   `{ result: <response payload>, usedAnswerCall: boolean }`.
- * @param {object} [args.resumePlan] - an idempotency plan CHECKPOINT
- *   (idempotencyService.js) from a prior attempt whose router call
- *   already succeeded but whose answer generation failed before
- *   completion. When supplied, the router is NEVER called again -- the
- *   checkpointed plan is re-validated (defense in depth) and used
- *   directly, so a retry with the same idempotency key never re-pays the
- *   router's provider cost.
- * @param {(plan: object) => Promise<void>} [args.onPlanResolved] - invoked
- *   ONCE, immediately after a `supported`/`clarification` plan is
- *   obtained (from the router OR from `resumePlan`) and BEFORE any
- *   financialQueryService execution or answer-generation call. The
- *   caller (ask.js) uses this to persist the idempotency plan checkpoint
- *   before risking an answer-generation failure. Errors thrown here are
- *   swallowed -- checkpointing is best-effort and must never break the
- *   actual answer.
- * @returns {Promise<{ kind: string, providerCallsUsed: { router: number, answer: number }, [key: string]: any }>}
- */
+/* @param {object} args */
 async function runSemanticPipeline({
   question,
   userId,
@@ -580,8 +525,6 @@ async function runSemanticPipeline({
 
   if (resumePlan) {
     // A checkpointed plan from a prior attempt -- re-validated defensively
-    // (never half-trusted just because it came from storage) but the
-    // router is deliberately NEVER called again.
     const revalidated = validateQueryPlan(resumePlan);
     if (!revalidated.valid) {
       return { kind: "unsupported", reasonCode: "INVALID_RESUME_PLAN", providerCallsUsed: { router: 0, answer: 0 } };
@@ -633,8 +576,6 @@ async function runSemanticPipeline({
   }
 
   // V2 allows up to five independently validated queries. It is ready for
-  // deterministic multi-fact answers now; prose synthesis is deliberately
-  // added in the next module so a v2 plan never causes an uncited LLM answer.
   if (plan.version === 2) {
     const v2Result = await executeV2PlanToFactSet({ userId, plan, financialQueryService, now, timeZone });
     if (!v2Result.ok) {
@@ -692,9 +633,6 @@ async function runSemanticPipeline({
   }
 
   // Step 7 (checked before the deterministic branch): one of the existing
-  // four analytics explanation intents -- delegate to the CALLER-supplied
-  // handler, which runs the UNCHANGED existing pipeline. Never reinvented
-  // here, never given a FactSet.
   const explanationMetric = plan.metrics.find((m) => EXPLANATION_INTENT_METRICS.has(m));
   if (explanationMetric) {
     if (typeof existingIntentHandler !== "function") {

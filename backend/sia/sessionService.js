@@ -48,9 +48,6 @@ async function getOrCreateSession(userId, sessionId) {
 }
 
 // Persists exactly one completed turn (user message + assistant message) atomically from the caller's point of view: both documents are only created together, after a usable LLM answer already exists -- ask.js never calls this on a failed/unavailable provider path, so a failed request can never leave a half-written history behind.
-//
-// Idempotent when `clientMessageId` is supplied: a repeated request with the same (session, clientMessageId) pair returns the previously-created pair instead of duplicating. Race-safe, not just findOne-then-create: the REAL protection is SiaMessage.js's unique sparse index on (session, clientMessageId) at the database level -- the findOne check below is only a fast-path optimization for the common sequential-retry case. If two requests race past findOne simultaneously, MongoDB's unique index guarantees only one `create()` succeeds; the loser's duplicate-key error (E11000) is caught below and turned into the same "recover the existing pair" result, so a concurrent retry never duplicates messages or re-invokes the LLM provider.
-// `grounding` (optional) is the immutable provenance snapshot for THIS answer (groundingService.js), stored on the assistant document only, written exactly once at creation time and never recomputed later: the user's underlying financial data can change after this turn is stored, so replaying old grounding from CURRENT analytics would misrepresent what actually grounded this specific historical answer.
 async function appendTurn({
   sessionId,
   userId,
@@ -61,11 +58,6 @@ async function appendTurn({
   clientMessageId,
   grounding,
   // Workstream 1 -- bounded QueryPlan summary (see models/SiaMessage.js's
-  // siaPlanSummarySchema), stored on the assistant document only, same
-  // conditional-presence discipline as `grounding` below: only included
-  // in the create() call at all when a real plan summary exists, so a
-  // turn answered via the pre-existing pipeline stores no planSummary
-  // field.
   planSummary,
 }) {
   // The unique index on SiaMessage.js is scoped to (session, clientMessageId) -- a single raw clientMessageId can't be stored on both the user and assistant document of the same turn without colliding, so each role gets its own derived key, reused identically at both storage and lookup time (a prior version derived the assistant key only at storage time but checked the raw key at lookup, so a retry could never find the stored assistant message -- fixed by deriving both keys once, up front). `session` alone (not `session`+`user`) is the index's scope because a session belongs to exactly one user for its lifetime (enforced by getOrCreateSession()'s ownership-checked lookup) -- a clientMessageId can never collide across two users' sessions.
@@ -118,8 +110,6 @@ async function appendTurn({
       // `grounding` is only present on the create() call at all when a real, non-empty snapshot exists -- conditionally spread in, not set to `undefined`, so a no-op computation leaves the write attributes byte-for-byte identical to before this field existed.
       ...(grounding && Array.isArray(grounding.sources) && grounding.sources.length > 0 ? { grounding } : {}),
       // Same conditional-presence discipline as `grounding` immediately
-      // above -- a no-op (no planSummary supplied) leaves the write
-      // attributes byte-for-byte identical to before this field existed.
       ...(planSummary && typeof planSummary === "object" ? { planSummary } : {}),
     });
   } catch (err) {
@@ -201,13 +191,6 @@ async function loadRecentTurns(sessionId, userId, limit = MAX_RECENT_TURNS_FOR_L
 }
 
 // Workstream 1 -- the most recent assistant message's bounded QueryPlan
-// summary (if any) for this owned session, used ONLY to give the
-// semantic router calendar/topic continuity for a follow-up question
-// ("what about last month?") -- NEVER as a source of current financial
-// facts (a follow-up always re-fetches fresh via
-// sia/financialQueryService.js). Returns null for a missing/foreign
-// session or when no prior turn carried a plan summary, same
-// non-disclosing posture as this module's other lookups.
 async function loadLastPlanSummary(sessionId, userId) {
   if (!isValidObjectId(sessionId)) return null;
 

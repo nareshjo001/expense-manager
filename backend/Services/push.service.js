@@ -10,11 +10,6 @@ const sendPush = async (userId, title, body, route = '/') => {
     if (!tokens.length) return { success: false };
 
     // Fail closed -- Firebase is optional and may be unconfigured/invalid.
-    // Every caller of sendPush (recurringJob.js, retryPush.js,
-    // insightsPush.js) already treats {success:false} as an expected,
-    // handled outcome (schedule a retry / mark the notification failed),
-    // so reusing that exact contract here means none of them need to
-    // change to stay crash-safe when Firebase is unavailable.
     if (!isFirebaseAvailable()) {
         return { success: false };
     }
@@ -77,12 +72,6 @@ const sendPush = async (userId, title, body, route = '/') => {
         
         } catch(err) {
             // Sanitized: never log err.message or the raw Error object.
-            // Provider (FCM) error messages are not guaranteed to be
-            // secret-safe -- they can echo back the registration token or
-            // fragments of the payload being sent. A static, content-free
-            // message is logged instead; no error code is retained here,
-            // per the security correction that this phase prefers the
-            // static message over introducing a code allowlist.
             console.log("Push Error: FCM send failed.");
 
             // If token is invalid or expired, remove it from database

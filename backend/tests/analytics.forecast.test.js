@@ -1,15 +1,4 @@
 // Forecasting V2: isolated characterization of the pure, deterministic
-// forecastAnalyzer.analyze() contract.
-//
-// Architecture-closure correction: forecastAnalyzer.js's public input
-// contract changed from raw transaction pools (`recentExpensePool`,
-// `currentMonthExpenses`) to an already-aggregated series (`monthlySeries`,
-// `currentPartialMonthTotal`) -- see analytics/forecastInputAggregator.js
-// and tests/analytics.forecastInputAggregator.test.js for the aggregation
-// boundary itself. These tests prove forecastAnalyzer.js's own math and
-// contract in isolation, using plain `{ monthKey, totalAmount }` series
-// directly -- and separately prove it has no code path capable of reading
-// transaction-shaped fields even if one leaked in.
 "use strict";
 
 const { analyze, fitRobustTrend } = require("../analytics/analyzers/forecastAnalyzer");
@@ -18,19 +7,12 @@ const { forecast: RULES } = require("../analytics/analyzers/scores/forecastRules
 const CURRENT_MONTH_START = new Date(2026, 7, 1); // August 2026, local time
 
 // Real `${year}-${monthIndex}` monthKeys, exactly the shape
-// analytics/forecastInputAggregator.js produces and
-// forecastAnalyzer.js's monthKeyToOrdinal() parses -- required now that
-// the analyzer fits its trend against real calendar-month ordinals rather
-// than array position (see the calendar-gap fix below). `monthsAgo` counts
-// back from CURRENT_MONTH_START (1 = the most recent complete month).
 function monthKeyMonthsAgo(monthsAgo) {
   const d = new Date(CURRENT_MONTH_START.getFullYear(), CURRENT_MONTH_START.getMonth() - monthsAgo, 1);
   return `${d.getFullYear()}-${d.getMonth()}`;
 }
 
 // Builds a chronological (oldest-first), CONTIGUOUS (no calendar gaps)
-// monthlySeries of `count` months, each with `amount` (constant history --
-// "stable spending").
 function stableSeries(count, amount) {
   const entries = [];
   for (let monthsAgo = count; monthsAgo >= 1; monthsAgo -= 1) {
@@ -50,8 +32,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- aggregate-input bounda
   it("has no code path that reads transaction-shaped fields -- a leaked raw record contributes nothing but its numeric totalAmount", () => {
     const leaked = {
       // The exact monthKey stableSeries(3, ...) would have generated for
-      // its 3rd (most recent, monthsAgo=1) entry -- dropped by slice(0, 2)
-      // below and reintroduced here with extra transaction-shaped fields.
       monthKey: monthKeyMonthsAgo(1),
       totalAmount: 1000,
       _id: "should-not-be-read",
@@ -148,10 +128,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- insufficient history",
 });
 
 // fitRobustTrend() now fits against real calendar-month ordinals, not
-// array position -- these "exact math" tests build simple, explicitly
-// contiguous integer-ordinal points (0, 1, 2, ...) so the arithmetic stays
-// easy to hand-verify, while the calendar-gap-specific tests below use
-// real, non-contiguous monthKey-derived ordinals.
 function pointsFromTotals(totals) {
   return totals.map((total, ordinal) => ({ ordinal, total }));
 }
@@ -188,15 +164,11 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- fitRobustTrend exact m
 
   it("CALENDAR-GAP PROOF: January=1000, February MISSING, March=1400 fits the true 200/month rate (2 calendar months apart), not the wrong 400/month an index-based fit would give", () => {
     // Real calendar ordinals: January and March are 2 apart, not 1 --
-    // exactly the January/February(missing)/March example this proof was
-    // requested against.
     const january = { ordinal: 0, total: 1000 };
     const march = { ordinal: 2, total: 1400 }; // February (ordinal 1) has no entry at all
     const { slope, intercept } = fitRobustTrend([january, march]);
 
     // The ONLY two-point slope possible: (1400-1000)/(2-0) = 200, never
-    // (1400-1000)/(1-0) = 400 (which is what treating them as adjacent
-    // array positions would incorrectly produce).
     expect(slope).toBe(200);
     expect(intercept).toBe(1000); // total - slope*ordinal = 1000 - 200*0 = 1000, consistent for both points
   });
@@ -204,11 +176,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- fitRobustTrend exact m
 
 describe("backend/analytics/analyzers/forecastAnalyzer -- calendar-gap end-to-end regression (analyze())", () => {
   // Extends the task's exact example (January=1000, February MISSING,
-  // March=1400, anchor=April) with one earlier point (December=800) so
-  // historyMonthsUsed reaches the 3-month minimum for nextMonthForecast/
-  // nextQuarterForecast to actually compute -- the example alone only has
-  // 2 real data points (Jan, Mar), which correctly reports insufficient
-  // history (proven in the dedicated test below), not a wrong number.
   const ANCHOR_APRIL = new Date(2026, 3, 1); // April 2026, local time
   const seriesWithGap = [
     { monthKey: "2025-11", totalAmount: 800 }, // December 2025 (4 months before anchor)
@@ -246,11 +213,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- calendar-gap end-to-en
 
     expect(result.nextMonthForecast.hasData).toBe(true);
     // Hand-verified: slope=200/month (Theil-Sen on Dec/Jan/Mar's real
-    // calendar ordinals, all three pairwise slopes are exactly 200),
-    // intercept=800, anchor (April) is 4 calendar months after December ->
-    // estimate = 800 + 200*4 = 1600. A naive index-adjacent fit (treating
-    // Dec,Jan,Mar as positions 0,1,2) would instead compute slope=300 and
-    // a wrong estimate of 1700 -- this assertion fails under that bug.
     expect(result.nextMonthForecast.estimate).toBe(1600);
   });
 
@@ -262,8 +224,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- calendar-gap end-to-en
 
   it("6) duplicate records within one month aggregate exactly once before reaching the analyzer (proven at the aggregator boundary -- see tests/analytics.forecastInputAggregator.test.js)", () => {
     // forecastAnalyzer.js itself also defends against a duplicate monthKey
-    // reaching it directly (defense in depth) by summing same-ordinal
-    // entries rather than only keeping one.
     const duplicated = [
       { monthKey: "2026-0", totalAmount: 600 },
       { monthKey: "2026-0", totalAmount: 400 }, // same month, split across two entries
@@ -297,8 +257,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- calendar-gap end-to-en
 
   it("9) future indices begin at the anchor month's own ordinal (April), immediately after the latest POSSIBLE completed month (March) -- not merely after however many data points exist", () => {
     // A gap directly adjacent to the anchor month (March itself missing,
-    // only Dec/Jan/Feb present) must still project starting at April, not
-    // silently slide forward to "one month after the last data point."
     const gapRightBeforeAnchor = [
       { monthKey: "2025-10", totalAmount: 700 }, // November 2025
       { monthKey: "2025-11", totalAmount: 900 }, // December 2025
@@ -311,11 +269,6 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- calendar-gap end-to-en
     expect(result.nextMonthForecast.hasData).toBe(true);
 
     // Structural proof that the projection starts at April (the anchor),
-    // not at "one month after January" (the last data point): compare
-    // against a second series with the identical Nov/Dec/Jan data but a
-    // DIFFERENT anchor month (May instead of April). If the horizon start
-    // tracked "last data point + 1" instead of the real anchor, both
-    // would produce the same nextMonthForecast -- they must not.
     const anchorMay = new Date(2026, 4, 1);
     const resultMay = analyze({ monthlySeries: gapRightBeforeAnchor, currentMonthStart: anchorMay });
     expect(resultMay.nextMonthForecast.estimate).not.toBe(result.nextMonthForecast.estimate);
@@ -349,16 +302,11 @@ describe("backend/analytics/analyzers/forecastAnalyzer -- stable spending", () =
 
 describe("backend/analytics/analyzers/forecastAnalyzer -- directional trend (exact assertions)", () => {
   // Oldest -> newest: 1000, 1200, 1400, 1600, 1800, 2000. Perfectly linear,
-  // so Theil-Sen recovers the exact slope (200/month) and intercept (1000)
-  // -- see the fitRobustTrend exact-math tests above. nextMonthForecast
-  // projects index 6: 1000 + 200*6 = 2200.
   const upwardSeries = seriesFromAmounts([1000, 1200, 1400, 1600, 1800, 2000]);
   // Same six values, reversed chronologically (declining 2000 -> 1000):
   // slope=-200, intercept=2000, index 6: 2000 - 200*6 = 800.
   const downwardSeries = seriesFromAmounts([2000, 1800, 1600, 1400, 1200, 1000]);
   // Flat series at 1500 -- the exact median/mean of the six trend values
-  // above, so this isolates "same central level, no trend" as the
-  // comparison baseline the task requires.
   const flatSameLevelSeries = stableSeries(6, 1500);
 
   it("an upward trend produces the exact expected higher estimate", () => {

@@ -1,10 +1,5 @@
 // backend/tests/sia.followUp.test.js
-/**
- * Jest integration test for the follow‑up flow:
- *   1. An assistant turn persists a `planSummary` via sessionService.appendTurn.
- *   2. The next user turn loads that summary with loadLastPlanSummary.
- *   3. The semantic router receives a sanitized previous‑plan summary.
- */
+/* Jest integration test for the follow‑up flow: */
 
 "use strict";
 

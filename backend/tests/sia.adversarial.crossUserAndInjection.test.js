@@ -1,31 +1,4 @@
 // Adversarial security tests (Workstream 5 review) -- cross-user isolation
-// and semantic-router injection resistance.
-//
-// Scope 1 (cross-user isolation): financialQueryService.js's own unit
-// suite (tests/sia.financialQueryService.test.js) already proves every
-// aggregate/find call scopes on the server-owned userId. This file adds a
-// COMPLEMENTARY layer: it drives the pipeline that actually decides which
-// userId reaches financialQueryService (sia/semanticPipeline.js), with a
-// malicious mocked router response that tries to smuggle a *different*
-// userId/categoryFilter/field path, and asserts the userId
-// financialQueryService.js actually receives is ALWAYS the one
-// runSemanticPipeline() was called with (the authenticated caller's own
-// id) -- never anything from the plan/question/router output.
-//
-// Scope 2 (semantic-router injection): drives semanticRouter.js's real
-// routeQuestion() (queryPlan.js validation included) with a battery of
-// malicious mocked provider responses -- unknown top-level key, a Mongo
-// operator string in categoryFilter, an oversized metrics array, invalid
-// enum values, prototype-pollution-shaped JSON, malformed non-JSON text,
-// and an empty object -- asserting every one fails CLOSED
-// (`{ ok: false }`), never throws, and (via runSemanticPipeline) never
-// reaches financialQueryService.js with attacker-controlled query syntax.
-//
-// financialQueryService.js is INJECTED (jest.doMock) as a lightweight,
-// non-Mongo spy for every test in this file -- this file never loads the
-// real "mongoose" package, mirroring the injectable-dependency contract
-// sia/semanticPipeline.js's own header documents runSemanticPipeline()
-// supports (`financialQueryService` is an explicit injectable parameter).
 "use strict";
 
 const fs = require("fs");
@@ -113,9 +86,6 @@ describe("cross-user isolation through the semantic pipeline", () => {
     });
 
     // A malicious router (mocked) tries to echo back a Mongo-operator-
-    // shaped categoryFilter. queryPlan.js's isValidCategoryFilter must
-    // reject it at validation time -- this plan should never even reach
-    // "supported".
     const routerCall = async () =>
       JSON.stringify({
         plan: {
@@ -134,8 +104,6 @@ describe("cross-user isolation through the semantic pipeline", () => {
     const result = await runSemanticPipeline({ question: "spending on groceries", userId: REAL_USER_ID, routerCall });
 
     // The categoryFilter is malformed (braces/operators) -- queryPlan.js's
-    // validator must reject the WHOLE plan, so financialQueryService is
-    // never called with it.
     expect(result.kind).toBe("unsupported");
     expect(calls).toHaveLength(0);
   });
@@ -146,8 +114,6 @@ describe("cross-user isolation through the semantic pipeline", () => {
     });
 
     // A resumePlan (idempotency checkpoint) has no userId field at all in
-    // its schema (see queryPlan.js's TOP_LEVEL_ALLOWED_KEYS) -- confirming
-    // this path also only ever uses the function-argument userId.
     const resumePlan = {
       version: 1,
       outcome: "supported",
@@ -303,18 +269,11 @@ describe("semantic-router injection resistance (malicious mocked provider respon
 
   it("fails closed on a deeply nested prototype-pollution payload (__proto__)", async () => {
     // JSON.parse never actually assigns to Object.prototype for a literal
-    // "__proto__" key (it becomes an own enumerable property), but this
-    // proves validateQueryPlan() still rejects the shape outright and,
-    // crucially, that global Object.prototype is never polluted as a
-    // side effect of parsing/validating this response.
     const before = ({}).polluted;
     const rawText = '{"plan":{"version":1,"outcome":"supported","metrics":["EXPENSE_TOTAL"],"operation":"LOOKUP","period":{"type":"CURRENT_MONTH"},"grouping":"NONE","responseMode":"DETERMINISTIC","__proto__":{"polluted":"yes"}}}';
     const result = await routeWithRawResponse(rawText);
     expect(({}).polluted).toBe(before); // still undefined -- no pollution occurred
     // The parsed object's own __proto__ key is either swallowed by JSON.parse
-    // (never an enumerable own key) or, if present as an own key on some
-    // engines, is rejected as an unknown top-level key -- either way this
-    // must never validate as a legitimate plan.
     expect(result.ok).toBe(false);
   });
 
@@ -409,17 +368,11 @@ describe("static source review: financialQueryService.js never builds a query dy
 
   it("contains no dynamic object-key field-path access from a parameter (obj[userInput] pattern)", () => {
     // Every $match/$group stage in this file uses a fixed, hand-written
-    // field name (userId, expenseDate, expenseCategory, expenseAmount,
-    // incomeDate, incomeAmount) -- never `doc[someVariable]` or a
-    // template-literal-built Mongo operator key.
     expect(source).not.toMatch(/\[\s*(userId|category|categoryFilter|period|month|year)\s*\]/);
   });
 
   it("categoryFilter is used only as an exact-match equality/regex value, never as an object key", () => {
     // The single legitimate use is inside a RegExp built from an
-    // escapeRegExp()'d, isValidCategoryFilter()-checked string, assigned
-    // as the VALUE of the fixed `expenseCategory` field -- never
-    // `{ [categoryFilter]: ... }`.
     expect(source).toMatch(/expenseCategory:\s*exactPattern/);
     expect(source).not.toMatch(/\[categoryFilter\]/);
   });

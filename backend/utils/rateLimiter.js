@@ -34,13 +34,6 @@ const authLimiter = rateLimit({
 
 
 // SIA limiter (M3-1) -- a dedicated, stricter limiter for POST /sia/ask,
-// separate from apiLimiter's shared 150/15min budget so heavier LLM-backed
-// usage on this one endpoint cannot starve every other authenticated
-// route's quota. Must be applied AFTER verifyToken (see
-// Routes/sia.routes.js) so req.userId is always already set -- the
-// ipKeyGenerator fallback below is defensive only and is not expected to be
-// reached in practice, mirroring apiLimiter's own keying convention. Never
-// keys on the question, financial context, API key, or raw JWT.
 const siaLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
@@ -59,14 +52,6 @@ const siaLimiter = rateLimit({
 });
 
 // SIA voice limiter (Workstream 2) -- a DEDICATED, SEPARATE limiter
-// instance for POST /sia/transcriptions, independent of siaLimiter above.
-// A separate rateLimit() call means a separate internal store/bucket: a
-// caller who exhausts this budget can still use /sia/ask (and vice versa),
-// so heavy voice-upload usage can never starve the text pipeline's quota
-// or trigger its 429, and neither route's usage counts against the
-// other's. Applied AFTER verifyToken (see Routes/sia.routes.js), same
-// convention as siaLimiter -- ipKeyGenerator is a defensive fallback only.
-// Never keys on the audio bytes, transcript, question, or API key.
 const siaVoiceLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 15,

@@ -1,15 +1,4 @@
 // Remediation Workstream B -- REAL route-level idempotency coverage for
-// POST /income/add, mirroring tests/expense.addExpense.idempotency.route.
-// test.js's own established pattern exactly (see that file's header comment
-// for the full rationale of testing against the real Express route with a
-// stateful in-memory model rather than a per-test-scripted stub).
-//
-// Backs the real route (real rate limiter, real verifyToken, real
-// addIncomeValidation Joi middleware, and the real Controllers/
-// IncomeControllers/addincome.js) with a stateful fake IncomeModel that
-// actually enforces the { userId, idempotencyKey } partial unique index
-// (config/Schemas.js) and actually serializes concurrent save() calls per
-// key so a genuine E11000 race is deterministically reproducible.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -58,8 +47,6 @@ const SYNCHRONIZED_RESULT = {
 };
 
 // A stateful, in-memory stand-in for config/Schemas.js's real IncomeModel --
-// enforces the { userId, idempotencyKey } partial unique index and actually
-// tracks inserted documents.
 function makeIncomeModel() {
   const store = new Map(); // key: `${userId}:${idempotencyKey}` -> plain stored doc
   const perKeyChain = new Map();
@@ -305,10 +292,6 @@ describe("POST /income/add -- real route-level idempotency (Remediation Workstre
     const { app, IncomeModelMock } = loadApp();
 
     // Joi's `id: Joi.string().required()` already rejects a non-string at
-    // the middleware layer -- this proves the request never reaches the
-    // controller's own additional normalizeIdempotencyKey() guard with an
-    // object/array payload that could otherwise be used to inject a query
-    // operator into the { userId, idempotencyKey } filter.
     const res = await postAdd(app, USER_ID, validIncomePayload({ id: { $ne: null } }));
 
     expect(res.status).toBe(400);

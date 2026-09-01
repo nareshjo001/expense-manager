@@ -1,6 +1,4 @@
 // Unit tests for backend/sia/responseValidator.js's additive
-// validateCitedAnswer() -- the FactSet-based citation/claim gate for the
-// semantic-routing EXPLAIN/FORECAST/COMPARE answer path.
 "use strict";
 
 const { validateCitedAnswer, MAX_ANSWER_LENGTH } = require("../sia/responseValidator");

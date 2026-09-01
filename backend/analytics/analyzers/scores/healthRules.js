@@ -1,7 +1,5 @@
 module.exports = {
   // Weighted AVERAGE of each module's normalizedScore (0-100) — sums to
-  // 100. "spending" was missing from the original file despite the
-  // module existing; added here.
   weights: {
     budget: 25,
     spending: 15,

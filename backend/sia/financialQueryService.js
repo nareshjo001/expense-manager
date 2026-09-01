@@ -1,16 +1,4 @@
 // SIA financial query service -- the ONLY module SIA controllers may use
-// to read expense/income/budget data directly from MongoDB for a
-// semantically-routed direct lookup/breakdown question. Every exported
-// function requires a server-owned, authenticated `userId` (never a
-// client-supplied identity) and every query is scoped to it. Returns
-// aggregates ONLY -- never a raw record, _id, description, merchant name,
-// or ML field. Dates are always start-inclusive/end-exclusive
-// ($gte start, $lt end), matching periodResolver.js's contract exactly.
-// Deliberately does NOT reuse Services/GetExpenseControllers or
-// fetchBudgets.js-equivalent read paths, does NOT persist any monthly
-// snapshot, and NEVER calls into report.controller.js's
-// recovery/refresh/sync logic -- this is a new, narrow, read-only layer,
-// not a rewrite of existing report generation.
 "use strict";
 
 const mongoose = require("mongoose");
@@ -44,9 +32,6 @@ function withinHistoryCap(period) {
 }
 
 // Escapes every regex metacharacter -- categoryFilter is always matched as
-// a literal, case-insensitive, EXACT string, never interpreted as a
-// pattern. Prevents both ReDoS and any attempt to smuggle a regex/operator
-// through a "category name".
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -62,9 +47,6 @@ function guardCommonInputs(userId, period) {
 // ---- expenses -----------------------------------------------------------
 
 // Aggregates-only total + count for the resolved period. Zero matching
-// expenses is a legitimate, present answer (value: 0), never "no data" --
-// that distinction is reserved for metrics like BUDGET_* where the
-// absence of a configured document is a genuinely different state.
 async function getExpenseTotal(userId, period) {
   const guard = guardCommonInputs(userId, period);
   if (!guard.ok) return { hasData: false, reasonCode: guard.reason, value: null, count: 0 };
@@ -98,8 +80,6 @@ async function getDailySpendingAverage(userId, period) {
 }
 
 // Bounded, aggregate-only per-category totals -- capped at
-// MAX_CATEGORY_RESULTS, largest-first, so a user with many categories can
-// never grow an unbounded result set.
 async function getCategoryBreakdown(userId, period, { maxCategories = MAX_CATEGORY_RESULTS } = {}) {
   const guard = guardCommonInputs(userId, period);
   if (!guard.ok) return { hasData: false, reasonCode: guard.reason, categories: [] };
@@ -131,10 +111,6 @@ async function getTopCategory(userId, period) {
 }
 
 // Category filter is always matched as a literal, case-insensitive, EXACT
-// name -- never a substring/regex/path. `categoryFilter` must already be
-// the queryPlan-validated, bounded, plain-string value (see
-// queryPlan.js's isValidCategoryFilter) -- this function re-validates
-// defensively rather than trusting the caller.
 const { isValidCategoryFilter } = require("./queryPlan");
 
 async function getCategoryTotal(userId, period, categoryFilter) {
@@ -212,17 +188,11 @@ async function getNetCashFlow(userId, period) {
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // budgetSchema.month is a free-form "MMM YYYY" string keyed to a single
-// calendar month (config/Schemas.js) -- this service only supports a
-// budget lookup when the resolved period represents exactly one whole
-// calendar month (periodLabel + explicit year/month passed in), never a
-// multi-month/custom range, which has no single matching budget document.
 function monthKeyFromZonedYearMonth(year, month) {
   return `${MONTH_NAMES[month - 1]} ${year}`;
 }
 
 // Real "no budget configured" vs "0 spent" distinction lives here: a
-// missing BudgetModel document for the resolved month is genuine no-data
-// (hasBudget: false), never coerced to a zero value.
 async function getBudgetSnapshot(userId, { year, month }) {
   const objectId = toObjectId(userId);
   if (!objectId) return { hasData: false, reasonCode: "INVALID_USER_ID" };
@@ -404,10 +374,6 @@ async function getTrendSeries(userId, period, { timeZone } = {}) {
 }
 
 // V2-query execution boundary. This deliberately composes the existing
-// aggregate-only helpers above instead of accepting database fields,
-// pipelines, or transaction selectors from a caller. The semantic pipeline
-// resolves the approved QueryPlan period first; this service only receives
-// that resolved range plus, for budget metrics, its already-derived month.
 async function executeFinancialQuery({ userId, query, period, budgetYearMonth, comparisonPeriod, timeZone } = {}) {
   if (!query || typeof query !== "object" || Array.isArray(query) || typeof query.metric !== "string") {
     return { hasData: false, reasonCode: "INVALID_QUERY" };

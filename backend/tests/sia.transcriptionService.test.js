@@ -1,12 +1,4 @@
 // Unit tests for the Groq STT provider adapter inside
-// backend/sia/transcriptionService.js.
-//
-// axios is fully mocked BEFORE transcriptionService.js is ever required, in
-// every test in this file -- no real HTTP request is possible. backend/sia/config
-// is also mocked, the same isolation style as tests/sia.llmService.groq.test.js.
-// Only GROQ_API_KEY is a real (test-controlled) environment variable, because
-// transcriptionService.js deliberately reads it directly from process.env
-// rather than through the shared config module.
 "use strict";
 
 const ORIGINAL_GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -124,9 +116,6 @@ describe("backend/sia/transcriptionService -- Groq STT provider adapter", () => 
 
       await transcribeAudio(VALID_REQUEST);
       // form-data buffers the multipart body lazily -- assert via the
-      // constructed FormData's internal stream is not practical here, so
-      // this is instead covered end-to-end by the model-not-configured
-      // test below (proving the model IS read from config).
       expect(postMock).toHaveBeenCalledTimes(1);
     });
 

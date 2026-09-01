@@ -3,16 +3,6 @@ const { UserModel, IncomeModel } = require("../../config/Schemas");
 const { synchronizeAfterMutation, reserve, abandon } = require("../../Services/syncRecoveryService");
 
 // Remediation Workstream B -- report/cache synchronization. Delete is left
-// with its existing, simpler contract: a retried
-// `DELETE /income/delete` for an already-deleted record naturally 404s with
-// no further side effect (findOneAndDelete is inherently idempotent in
-// effect -- a second attempt matches no document), so no idempotency key
-// was added here. What WAS missing is that a successful delete never
-// advanced the user's derived-data revision, invalidated any cache entry, or
-// triggered a report refresh -- a cached/stored report could keep counting a
-// deleted income record indefinitely. This now uses the same
-// reserve()/write/synchronizeAfterMutation() reliability lifecycle
-// addexpense.js/editExpense.js/editIncome.js already use.
 const deleteIncome = async (req, res) => {
   let ownerUserId = null;
   let reportReservation = null;
@@ -40,14 +30,10 @@ const deleteIncome = async (req, res) => {
     }
 
     // Reserve BEFORE the primary write -- durable pre-write evidence that
-    // survives a process crash between the write committing and the
-    // post-write confirm() call inside synchronizeAfterMutation().
     const reserved = await reserve({ userId: user._id, reserveReport: true });
     reportReservation = reserved.reportReservation;
 
     // Delete the caller's own income record. writeStatus flips to
-    // "dispatched-ambiguous" IMMEDIATELY BEFORE this call -- if it rejects,
-    // that does not prove the delete never landed.
     writeStatus = "dispatched-ambiguous";
     let deletedIncome;
     try {

@@ -1,11 +1,4 @@
 // Unit tests for backend/sia/sessionService.js -- Batch 2.
-//
-// models/SiaSession.js and models/SiaMessage.js are fully mocked (no real
-// MongoDB connection, consistent with tests/sia.contextBuilder.test.js's
-// reportService-mocking convention) -- these tests prove sessionService.js's
-// own logic: which queries it builds, how it enforces ownership, how it
-// bounds pagination limits, and how it handles the idempotency check --
-// not Mongoose's own query engine.
 "use strict";
 
 const SESSION_MODEL_PATH = "../models/SiaSession";
@@ -13,12 +6,6 @@ const MESSAGE_MODEL_PATH = "../models/SiaMessage";
 const SERVICE_PATH = "../sia/sessionService";
 
 // find()/findOne()/find({...}).sort().limit().lean() chain support -- a
-// single helper used for both findOne(...).lean() (listMessages'
-// ownership check) and find(...).sort().limit().lean() (listSessions,
-// listMessages, loadRecentTurns). Also thenable (a `.then()` that resolves
-// to `resolvedValue`), matching real Mongoose Query objects, which are
-// themselves awaitable directly (e.g. getOrCreateSession's/appendTurn's
-// `await SiaSession.findOne({...})` with no `.lean()` call at all).
 function chainable(resolvedValue) {
   const chain = {
     sort: jest.fn(() => chain),
@@ -70,8 +57,6 @@ describe("sia/sessionService -- getOrCreateSession", () => {
 
     expect(sessionDocs.findOne).not.toHaveBeenCalled();
     // Batch 3G: getOrCreateSession() never receives a question from any
-    // caller, so title stays null -- byte-identical to this call's
-    // pre-3G behavior other than the now-explicit `title` key.
     expect(sessionDocs.create).toHaveBeenCalledWith({ user: "user-1", title: null });
     expect(session._id).toBe(VALID_ID);
   });
@@ -111,9 +96,6 @@ describe("sia/sessionService -- getOrCreateSession", () => {
 });
 
 // Batch 3G: createSession()'s single-write title persistence. All of
-// getOrCreateSession's tests above already prove the no-question path is
-// unaffected (title: null, same as the schema's own default) -- these
-// prove the new optional `firstQuestion` parameter.
 describe("sia/sessionService -- createSession title persistence (Batch 3G)", () => {
   it("derives and includes a title in the SAME create() call when a first question is supplied", async () => {
     const { sessionService, sessionDocs } = loadSessionService();
@@ -310,8 +292,6 @@ describe("sia/sessionService -- appendTurn", () => {
       });
 
       // Both proceeded to create() -- the fast-path lookup is scoped to
-      // `session`, so the same raw clientMessageId in two different
-      // sessions never collides.
       expect(messageDocs.create).toHaveBeenCalledTimes(4);
     });
   });

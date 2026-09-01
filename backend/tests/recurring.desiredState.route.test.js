@@ -1,15 +1,4 @@
 // Recurring-state authority remediation -- REAL route-level coverage for
-// PATCH /api/recurring's redesign into an idempotent desired-state
-// operation, backed by a STATEFUL in-memory fake RecurringExpenseModel that
-// actually enforces the real {userId, expenseId} unique index (including a
-// genuine, deterministically-forced E11000 race via a promise-chain mutex,
-// the same technique tests/expense.addExpense.idempotency.route.test.js
-// uses) rather than a bare call-count stub.
-//
-// Confirmed defect this closes: a crash between the RecurringExpenseModel
-// write and the Expense.isRecurring mirror write left an active,
-// cron-processed schedule with no way to disable it through normal use
-// (retrying the mark request hit E11000 and returned 400 with no repair).
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -51,18 +40,12 @@ const EXPENSE_ID = "64f1a2b3c4d5e6f7a8b9c0cc";
 const OTHER_EXPENSE_ID = "64f1a2b3c4d5e6f7a8b9c0dd";
 
 // A stateful, in-memory stand-in for models/RecurringExpense.js's real
-// RecurringExpenseModel -- actually enforces the {userId, expenseId} unique
-// index and actually tracks documents, rather than a per-test-scripted stub.
 function makeRecurringExpenseModel() {
   const store = new Map(); // key: `${userId}:${expenseId}` -> plain doc
   const perKeyChain = new Map();
   let idCounter = 0;
 
   // Deterministic concurrency control (never a real sleep/timer): when
-  // armed via __armConcurrentUpsertGate(n), every findOneAndUpdate call
-  // blocks until at least n calls have reached this point -- i.e. until
-  // every concurrent request has already begun its own upsert attempt,
-  // exactly like two real concurrent requests racing on the same key.
   let gate = null;
   let callCount = 0;
 
@@ -93,9 +76,6 @@ function makeRecurringExpenseModel() {
       if (store.has(k)) {
         if (!existedBeforeThisTurn && upsert) {
           // Another concurrent call committed its insert while this one was
-          // waiting for its turn -- a genuine race, surfaced as a
-          // real-shaped E11000, exactly the scenario recurring.js's
-          // catch(err.code===11000) branch exists to handle.
           const err = new Error(
             `E11000 duplicate key error collection: test.recurringExpenses index: userId_1_expenseId_1 dup key: { userId: "${filter.userId}", expenseId: "${filter.expenseId}" }`
           );
@@ -299,8 +279,6 @@ describe("PATCH /api/recurring -- idempotent desired-state operation", () => {
 
   it("5. mark replay repairs a stale Expense.isRecurring=false left over from a prior crash", async () => {
     // Simulates the exact confirmed defect: the definition already exists
-    // (from a prior request whose mirror write never landed), but the
-    // Expense document still shows isRecurring:false.
     const { app, RecurringExpenseModelMock, ExpenseModelMock } = loadApp([seedExpense({ isRecurring: false })]);
     RecurringExpenseModelMock.__store.set(`${USER_ID}:${EXPENSE_ID}`, {
       _id: "recdef-precrash",
@@ -419,8 +397,6 @@ describe("PATCH /api/recurring -- idempotent desired-state operation", () => {
     const failed = await patchRecurring(app, USER_ID, { expenseId: EXPENSE_ID, isRecurring: true });
     expect(failed.status).toBe(500);
     // The authoritative definition is already committed despite the
-    // generic failure response -- it must never be undone based on an
-    // ambiguous mirror-write failure.
     expect(RecurringExpenseModelMock.__store.size).toBe(1);
     expect(ExpenseModelMock.__store.get(EXPENSE_ID).isRecurring).toBe(false);
 

@@ -106,16 +106,7 @@ function roundToExactTotal(entries, targetTotal) {
   }));
 }
 
-/**
- * @param {object} input
- * @param {Array<{category: string, monthlySeries: Array<{monthKey: string, totalAmount: number}>}>} input.categorySeries -
- *   aggregate-only per-category history from forecastInputAggregator.js.
- * @param {number|null} input.predictedTotal - the already-published overall next-month estimate this breakdown must reconcile to.
- * @param {number} input.anchorOrdinal - the target month's calendar-month ordinal.
- * @returns {{hasData: boolean, reasonCode: string|null,
- *   categories: Array<{category: string, predictedAmount: number,
- *   sharePercentage: number, method: string}>}}
- */
+/* @param {object} input */
 function allocate({ categorySeries = [], predictedTotal, anchorOrdinal } = {}) {
   const empty = (reasonCode) => ({ hasData: false, reasonCode, categories: [] });
 

@@ -1,13 +1,4 @@
 // Anomaly Detection V1 -- Batch 1 closure: real Mongoose schema
-// serialization/hydration proof for the `anomalies` report section and the
-// report-contract-version staleness check.
-//
-// Uses the real, unmodified models/Report.js Mongoose model directly.
-// Document construction, defaulting, and toObject()/JSON serialization all
-// work without a live database connection (only .save()/queries need one),
-// so this suite proves the actual schema behavior without requiring or
-// introducing any external database -- consistent with
-// tests/report.integration.itest.js remaining the only live-DB suite.
 "use strict";
 
 const mongoose = require("mongoose");
@@ -47,21 +38,9 @@ const baseMetadata = () => ({
 });
 
 // Round-trips a document the same way the real read path does: construct
-// via the real model, then simulate reportCache.js's JSON.stringify/parse
-// (Redis) on top of the Mongoose .toObject() shape a `.lean()` query would
-// actually return (JSON is the strictest of the two -- Dates become
-// strings, undefined keys vanish -- matching real production behavior on
-// both the MongoDB and Redis paths).
 function roundTripThroughSchemaAndCache(attrs) {
   const doc = new FinancialReport(attrs);
   // `{ minimize: false }` matters here: Mongoose's default toObject()
-  // behavior (minimize: true) strips any nested object that serializes to
-  // `{}` -- e.g. a default-applied `anomalies: {}` on a legacy document
-  // would come back as `undefined`, not `{}`. A real `.lean()` query
-  // against a document actually saved to MongoDB does not do this (the
-  // default value was written to disk at save time and is read back
-  // as-is), so `minimize: false` is the closer, correct simulation of the
-  // real `.lean()` read path this repository's reportService.js uses.
   const asLean = doc.toObject({ minimize: false });
   return JSON.parse(JSON.stringify(asLean));
 }
@@ -172,8 +151,6 @@ describe("models/Report.js: anomalies section schema round-trip", () => {
     expect(anomaly).not.toHaveProperty("description");
     expect(anomaly.baseline).not.toHaveProperty("expenses");
     // The stored `user` field is the report owner's id, deliberately
-    // top-level on FinancialReport -- never inside an individual anomaly
-    // record itself.
     expect(anomaly).not.toHaveProperty("user");
   });
 });
@@ -195,14 +172,6 @@ describe("models/Report.js + reportContractVersion.js: legacy-document staleness
     const rehydrated = JSON.parse(JSON.stringify(legacyDoc.toObject({ minimize: false })));
 
     // Proves the exact masking behavior the task described: Mongoose's own
-    // `default: {}` makes the legacy document's `anomalies` key read back
-    // as a truthy, empty object -- indistinguishable from a real
-    // "hasData:false"-shaped current section by truthiness alone. (With
-    // Mongoose's default `minimize: true` toObject() behavior this would
-    // instead vanish to `undefined` entirely -- an even stronger case for
-    // never trusting `anomalies` truthiness/presence as the staleness
-    // signal; `minimize: false` here matches what a real `.lean()` read
-    // of an actually-saved document returns.)
     expect(rehydrated.anomalies).toEqual({});
 
     // Despite that, isCurrentReport() is not fooled, because it checks
@@ -270,14 +239,6 @@ describe("models/Report.js: forecast section schema round-trip (Batch 2)", () =>
   const { analyze: analyzeForecast } = require("../analytics/analyzers/forecastAnalyzer");
 
   // Architecture-closure correction: forecastAnalyzer.js's input contract
-  // is the aggregate-only { monthKey, totalAmount } series (see
-  // analytics/forecastInputAggregator.js), never a raw expense pool. As of
-  // the calendar-gap fix, `monthKey` must be a real, parseable
-  // `${year}-${monthIndex}` calendar key (forecastAnalyzer.js now fits its
-  // trend against real calendar-month ordinals, not array position) -- a
-  // placeholder key like "series-0" would be silently dropped as
-  // unparseable, so this fixture builds real, contiguous calendar keys
-  // ending at the month immediately before CURRENT_MONTH_START.
   const buildStableSeries = (monthsBack, amount) =>
     Array.from({ length: monthsBack }, (_, i) => {
       const monthsAgo = monthsBack - i;
@@ -329,16 +290,9 @@ describe("models/Report.js: forecast section schema round-trip (Batch 2)", () =>
     const rehydrated = JSON.parse(JSON.stringify(batch1Doc.toObject({ minimize: false })));
 
     // A Batch-1 (version 2) document has no forecast section at all,
-    // yet Mongoose's own defaults make them read back as `{}` -- exactly
-    // the same masking scenario as the Batch-1 anomalies case, now for
-    // forecast. isCurrentReport() is still not fooled.
     expect(rehydrated.forecast).toEqual({});
     expect(isCurrentReport(rehydrated)).toBe(false);
     // Prediction Layer V1 bumped the contract from 3 to 4 (the forecast
-    // section now always carries the per-category breakdown, dataQuality,
-    // targetMonth and budgetRisk). A version-3 document is therefore stale
-    // by the same gate -- asserted explicitly below so this is a deliberate
-    // contract change, not an accidental drift.
     expect(isCurrentReport({ metadata: { version: 3 } })).toBe(false);
   });
 

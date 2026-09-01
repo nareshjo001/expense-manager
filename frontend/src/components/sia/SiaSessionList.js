@@ -4,11 +4,6 @@ import { useSiaSessionsQuery } from "../../hooks/queries/useSiaSessionsQuery";
 import { useSiaDeleteSessionMutation } from "../../hooks/mutations/useSiaDeleteSessionMutation";
 
 // Renders only fields the backend actually returns for a session
-// (sessionId, title, messageCount, lastMessageAt, createdAt, updatedAt --
-// see backend/Controllers/SiaControllers/sessions.js). No client-side
-// auto-naming is invented: when the server has no title, a neutral label
-// plus the real timestamp is used instead of guessing one from message
-// content.
 const FALLBACK_TITLE = "SIA conversation";
 
 function formatTimestamp(value) {

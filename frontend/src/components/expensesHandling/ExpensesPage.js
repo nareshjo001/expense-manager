@@ -81,8 +81,6 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   const hasMoreExpenses = visibleExpenseCount < totalExpenseCount;
 
   // Preserve the existing filter/API behavior while keeping the DOM small.
-  // A new result or filter starts from the first batch rather than rendering
-  // every matching card at once.
   useEffect(() => {
     setVisibleExpenseCount(INITIAL_VISIBLE_EXPENSES);
   }, [filter, period, startDate, endDate, expensesQuery.dataUpdatedAt]);

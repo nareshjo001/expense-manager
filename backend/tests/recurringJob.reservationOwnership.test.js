@@ -1,41 +1,4 @@
 // Remediation Workstream D (3rd follow-up) -- proves the ACTUAL, real
-// reservation-ownership semantics behind the recurring cron's crash-gap
-// recovery, against the REAL Services/syncRecoveryService.js and a
-// real-CAS-semantics fake models/PendingSync (not a fully mocked service).
-//
-// tests/recurringJob.crashGapRecovery.test.js mocks syncRecoveryService.js
-// itself, so its assertions ("abandon() was called with these arguments")
-// only prove cron/recurringJob.js CALLS the right functions -- they cannot
-// prove the underlying PendingSync document actually survives a crash, or
-// that a later reserve() call does not silently destroy an earlier one's
-// evidence. This file closes that gap: syncRecoveryService.js is required
-// UNMODIFIED, and models/PendingSync is replaced with a small in-memory
-// store that applies the exact same $set/$push/$pull/$inc/upsert semantics
-// real MongoDB would (adapted from tests/mutationRecoveryCorrectness.
-// test.js's own makeFakePendingSyncModel(), the established pattern for
-// this exact kind of proof in this codebase).
-//
-// The core question (as of the system-wide reservation-ownership
-// correction): reservedReports/reservedUserWideReservations are now OWNED-
-// TOKEN ARRAYS on PendingSync (see models/PendingSync.js), structured
-// identically to reservedBudgetMonths -- every reserve() call pushes its
-// own entry, and confirm()/abandon() only ever pull the exact token they
-// own. Before that correction, these were SINGLE objects, and a second
-// reserve() call's $set silently overwrote an earlier, still-unconfirmed
-// reservation's token in the same field; the original recurring-cron design
-// additionally called abandon() on that (already-overwritten) field after
-// an E11000 replay, which could delete the only evidence of a still-
-// outstanding sync with nothing durable substituted. cron/recurringJob.js
-// no longer calls abandon() on this path at all -- it drives one real
-// reconciliation via synchronizeAfterMutation() instead, using its OWN
-// reservation token. This file proves that correction against real
-// document state, not mocked call assertions, AND proves it remains
-// correct now that reservations are arrays: an earlier crashed run's own
-// orphaned reservation entry is no longer even at risk of being destroyed
-// by a later run -- it simply persists as a separate, independently-owned
-// array entry until it ages out and is defensively (harmlessly) recomputed
-// by a future repairIfPending() call, exactly like any other orphaned
-// Tier-2 entry in this codebase.
 "use strict";
 
 const crypto = require("crypto");
@@ -62,8 +25,6 @@ afterEach(() => {
 
 beforeEach(() => {
   // The fixture is due in August and should advance to September. Pin the
-  // cron clock inside that month so this ownership test remains valid after
-  // the real calendar reaches September.
   jest.useFakeTimers().setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
 });
 
@@ -72,11 +33,6 @@ function occurrenceIdFor(recurringId, nextDueDate) {
 }
 
 // Adapted verbatim (same update semantics) from
-// tests/mutationRecoveryCorrectness.test.js's makeFakePendingSyncModel() --
-// real CAS on `revision`, real $inc/$set/$addToSet/$push/$pull application,
-// real upsert. `_store` is exposed for direct, unmediated introspection of
-// durable state between simulated cron runs (a real crash's only surviving
-// evidence would be exactly this document, unmediated by any mock).
 function makeFakePendingSyncModel() {
   const store = new Map();
 
@@ -190,9 +146,6 @@ function makeFakePendingSyncModel() {
 }
 
 // Fake ExpenseModel -- real uniqueness enforcement on { userId, id } (the
-// same field the real expenseSchema.index({userId:1,id:1},{unique:true})
-// protects), so a second create() for the SAME occurrenceId genuinely
-// throws a real-shaped E11000 error rather than a scripted one-off.
 function makeFakeExpenseModel() {
   const docs = new Map(); // `${userId}:${id}` -> doc
   return {
@@ -218,11 +171,6 @@ function makeFakeExpenseModel() {
 }
 
 // Fake RecurringExpenseModel -- real mutable state (not just a call-count
-// mock), so "the schedule advances exactly once" can be verified against
-// the ACTUAL stored nextDueDate before/after each simulated run, and so a
-// later run's own `find({ nextDueDate: { $lte: now } })` genuinely stops
-// matching a recurring definition once it has actually been advanced --
-// exactly like the real due-date query would.
 function makeFakeRecurringExpenseModel(initial) {
   const doc = { ...initial };
   return {
@@ -276,11 +224,6 @@ function loadRealCronJob({ recurringInitial, recalculateBudgetImpl, refreshRepor
   jest.doMock(EXPENSE_CACHE_PATH, () => ({ clearUserExpenseCache: clearUserExpenseCacheMock }));
 
   // Real syncRecoveryService.js, real budget.service.js's getMonthAnchor/
-  // getMonthAnchorFromKey (via jest.requireActual, exactly like
-  // tests/syncRecoveryService.test.js's own established pattern) -- only
-  // recalculateBudget/refreshReport themselves are replaced, since THEIR
-  // internal correctness is proven elsewhere and is not what this file is
-  // testing.
   const recalculateBudgetMock = jest.fn(recalculateBudgetImpl || (async () => ({ skipped: false })));
   jest.doMock(BUDGET_SERVICE_PATH, () => {
     const actual = jest.requireActual(BUDGET_SERVICE_PATH);
@@ -325,10 +268,6 @@ describe("Remediation Workstream D (3rd follow-up): real reservation ownership s
     const occurrenceId = occurrenceIdFor(recurring._id, recurring.nextDueDate);
 
     // --- Run 1: reserve R1, insert succeeds, then CRASH before schedule
-    // advancement / synchronization. Simulated by making the schedule-
-    // advance call throw on its first invocation -- the very next
-    // statement after a successful insert in cron/recurringJob.js, so this
-    // reproduces "insert committed, then the process died" precisely.
     const harness = loadRealCronJob({ recurringInitial: recurring });
     harness.recurringExpenseModel.findOneAndUpdate.mockImplementationOnce(() => {
       throw new Error("simulated process crash before schedule advancement");
@@ -349,10 +288,6 @@ describe("Remediation Workstream D (3rd follow-up): real reservation ownership s
     expect(harness.recurringExpenseModel._doc.nextDueDate.getTime()).toBe(recurring.nextDueDate.getTime());
 
     // --- Run 2: the next cron tick rediscovers the SAME due recurring
-    // definition (nextDueDate untouched). reserve() is called again for
-    // real -- under the system-wide reservation-ownership correction this
-    // PUSHES a second, independently-owned array entry rather than
-    // overwriting R1's.
     await harness.runCronCallback(); // Run 2
 
     // 4. duplicate occurrence detected -- still exactly one expense document.
@@ -360,27 +295,12 @@ describe("Remediation Workstream D (3rd follow-up): real reservation ownership s
     expect(harness.expenseModel.create).toHaveBeenCalledTimes(2);
 
     // 5/8/9/10. Report reconciliation completed for real: confirm()
-    // (called by synchronizeAfterMutation on the replay path, using R2's
-    // OWN token) durably wrote reportPending:true BEFORE refreshReport
-    // ran, and clearIfRevisionMatches cleared it back to false only AFTER
-    // refreshReport resolved successfully -- both are real writes against
-    // the real fake PendingSync store, not scripted mock returns.
     expect(harness.refreshReportMock).toHaveBeenCalledTimes(1);
     expect(harness.recalculateBudgetMock).toHaveBeenCalledTimes(1);
 
     const finalDoc = harness.pendingSyncModel._store.get(USER_ID);
     expect(finalDoc.reportPending).toBe(false); // pending cleared -- report is current.
     // R2's OWN token was released by confirm() (a $pull naming exactly its
-    // token) -- R1's entry, from the crashed run that never confirmed or
-    // abandoned it, is a SEPARATE array element and is therefore untouched
-    // by that $pull. This is the system-wide fix's key improvement over the
-    // old single-slot design: R1's evidence is never even at risk of being
-    // silently destroyed by R2's activity -- it simply persists as its own
-    // orphaned entry until it ages past RESERVATION_STALE_MS, at which
-    // point a future repairIfPending() call (e.g. from any ordinary
-    // getReport()/getbudgets.js read) treats it as stale and performs one
-    // more harmless, idempotent recompute -- the report is already correct
-    // by then, so that recompute is a no-op in effect, never incorrect.
     expect(finalDoc.reservedReports).toHaveLength(1);
     expect(finalDoc.reservedReports[0].token).toBe(r1ReportToken);
     expect(finalDoc.pendingBudgetMonths).toHaveLength(0);
@@ -417,12 +337,6 @@ describe("Remediation Workstream D (3rd follow-up): real reservation ownership s
 
     const finalDoc = harness.pendingSyncModel._store.get(USER_ID);
     // confirm() already wrote reportPending:true durably BEFORE the failed
-    // refreshReport call; clearIfRevisionMatches is never reached for the
-    // report on a failure path (see synchronizeAfterMutation's own
-    // reportStatus="pending" branch), so this marker survives -- a later
-    // read (next cron tick, or any getReport()/getbudgets.js call) retries
-    // it. This is the exact "if repair fails, pending state remains
-    // retryable" invariant.
     expect(finalDoc.reportPending).toBe(true);
     expect(harness.expenseModel._docs.size).toBe(1); // still no duplicate.
   });
@@ -442,9 +356,6 @@ describe("Remediation Workstream D (3rd follow-up): real reservation ownership s
     const createCallsAfterRun2 = harness.expenseModel.create.mock.calls.length;
 
     // Run 3: nextDueDate is now next month -- the real due-date query
-    // (`nextDueDate <= now`) implemented in the fake's find() must no
-    // longer match this recurring definition, exactly like the real query
-    // wouldn't. No further reserve/create/recompute activity for this user.
     await harness.runCronCallback(); // Run 3
 
     expect(harness.expenseModel.create.mock.calls.length).toBe(createCallsAfterRun2);

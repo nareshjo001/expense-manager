@@ -1,7 +1,4 @@
 // Batch 3F: unit tests for backend/sia/groundingService.js in isolation --
-// no HTTP layer, no app, no mocking framework beyond plain function calls.
-// Complements backend/tests/sia.ask.groundingTransparency.test.js, which
-// proves the same rules end-to-end through POST /sia/ask.
 "use strict";
 
 const { buildGroundingSnapshot, GROUNDING_SOURCE_ALLOWLIST } = require("../sia/groundingService");
@@ -29,8 +26,6 @@ describe("sia/groundingService -- buildGroundingSnapshot()", () => {
       sourceReportGeneratedAt: "2026-08-09T00:00:00.000Z",
     });
     // sourceReportGeneratedAt is the report's generation timestamp, not this
-    // section's reporting period -- it must never appear as `period` (see
-    // resolveExplicitPeriod() in groundingService.js).
     expect(result.sources).toEqual([{ key: "financialHealth", label: "Financial health analysis" }]);
   });
 
@@ -90,11 +85,6 @@ describe("sia/groundingService -- buildGroundingSnapshot()", () => {
 
   it("never derives period from sourceReportGeneratedAt -- that field is a generation timestamp, not a reporting period", () => {
     // Regression for the Batch 3F acceptance defect: an earlier version of
-    // this module relabelled sourceReportGeneratedAt as every source's
-    // `period`. That was factually wrong and has been removed. Since no
-    // allowlisted section currently exposes its own authoritative period
-    // field, `period` must be omitted regardless of what
-    // sourceReportGeneratedAt is set to.
     const result = buildGroundingSnapshot({
       fields: { anomalies: { hasData: true }, forecast: { hasData: true } },
       sourceReportGeneratedAt: "2026-01-15T08:30:00.000Z",

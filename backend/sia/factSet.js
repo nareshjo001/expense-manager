@@ -1,10 +1,4 @@
 // SIA FactSet -- a small, typed, bounded collection of individual facts
-// (never a whole Report section) that financialQueryService.js produces
-// and an LLM explanation call may cite by ID. Each fact is a single
-// already-aggregated value with a stable ID, a metric enum, explicit
-// period boundaries/label, a unit, a source enum, and optional grouping/
-// estimate/reason-code metadata -- never a raw record, identifier, or
-// free-form blob.
 "use strict";
 
 const { METRICS } = require("./queryPlan");
@@ -25,10 +19,7 @@ function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/**
- * Validates and normalizes a single fact's shape. Returns
- * `{ ok: true, fact }` or `{ ok: false, reason }` -- never throws.
- */
+/* Validates and normalizes a single fact's shape. Returns */
 function buildFact({ factId, metric, periodStart, periodEnd, periodLabel, value, unit, source, groupKey, isEstimate, reasonCode }) {
   if (typeof factId !== "string" || factId.trim() === "") return { ok: false, reason: "INVALID_FACT_ID" };
   if (!METRICS.includes(metric)) return { ok: false, reason: "INVALID_METRIC" };
@@ -40,8 +31,6 @@ function buildFact({ factId, metric, periodStart, periodEnd, periodLabel, value,
   }
   if (typeof periodLabel !== "string" || periodLabel.trim() === "") return { ok: false, reason: "INVALID_PERIOD_LABEL" };
   // A fact's value is either a finite number or (for a genuinely absent
-  // metric, e.g. no budget configured) explicitly null -- never
-  // undefined, NaN, or a string.
   if (value !== null && !isFiniteNumber(value)) return { ok: false, reason: "INVALID_VALUE" };
   if (!UNITS.includes(unit)) return { ok: false, reason: "INVALID_UNIT" };
   if (!SOURCES.includes(source)) return { ok: false, reason: "INVALID_SOURCE" };
@@ -73,11 +62,7 @@ function buildFact({ factId, metric, periodStart, periodEnd, periodLabel, value,
   return { ok: true, fact };
 }
 
-/**
- * A small builder that assigns stable, sequential, set-scoped fact IDs
- * ("fact-1", "fact-2", ...) and enforces the bounded-size cap. Never
- * shares identity with any Mongo _id or other internal identifier.
- */
+/* A small builder that assigns stable, sequential, set-scoped fact IDs */
 function createFactSetBuilder() {
   const facts = [];
   let counter = 0;
@@ -100,11 +85,7 @@ function createFactSetBuilder() {
   };
 }
 
-/**
- * Validates a fully-formed FactSet object (e.g. one reconstructed from
- * storage) -- bounded size, every fact individually valid, every factId
- * unique. Never throws.
- */
+/* Validates a fully-formed FactSet object (e.g. one reconstructed from */
 function validateFactSet(factSet) {
   try {
     if (!isPlainObject(factSet) || !Array.isArray(factSet.facts)) {

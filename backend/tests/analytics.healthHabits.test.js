@@ -1,28 +1,4 @@
 // M0-1 coupled health-score habits remediation.
-//
-// Fixes three coupled root causes (see SIA_Implementation_Blueprint.md M0-1
-// and the M0-1 scope-closure audit):
-//   1. analytics/reportGenerator.js passed `monthlyHabits` into
-//      healthAnalyzer.analyze() while healthAnalyzer destructures `habits`,
-//      so healthAnalyzer always scored an empty {} habit report.
-//   2. Neither habitAnalyzer.analyze() call passed the canonical impulse
-//      config that already exists in analytics/analyzers/scores/habitRules.js,
-//      so impulse metrics were always forced to 0 regardless of real
-//      spending.
-//   3. analytics/analyzers/scoreCal/habitScore.js defaulted a missing/
-//      non-finite impulse share to numeric 0, which lands in the BEST
-//      ("LowImpulse") tier -- rewarding unavailable data as good behavior.
-//      Proven quantitatively: applying root cause #1's key fix alone (with
-//      no config) made an impulse-heavy fixture's habit score WORSE, not
-//      better (100/100 vs. today's already-inflated 75/100).
-//
-// Sections A-C exercise the real analytics/reportGenerator.js orchestration
-// function with its collaborators mocked, proving production call wiring.
-// Section D exercises the real, unmocked calculateHabitScore in isolation.
-// Sections E-F exercise the real, unmocked habitAnalyzer -> healthAnalyzer
-// boundary with a deterministic fixture, proving score correction and
-// isolation from raw transaction data. Nothing here passes solely through
-// static source inspection.
 "use strict";
 
 const path = require("path");
@@ -40,9 +16,6 @@ const HABIT_RULES_PATH = "../analytics/analyzers/scores/habitRules";
 const REPORT_GENERATOR_PATH = "../analytics/reportGenerator";
 
 // Loads a brand-new module registry with reportGenerator's collaborators
-// mocked, following the same jest.resetModules/jest.doMock isolation style
-// as tests/sia.contextBuilder.test.js -- so no mock call history leaks
-// between tests, and no test depends on another test's execution order.
 function loadReportGeneratorHarness() {
   jest.resetModules();
 
@@ -164,10 +137,6 @@ describe("reportGenerator: canonical habit configuration wiring (A)", () => {
       loadReportGeneratorHarness();
 
     // structuredClone, not JSON.parse(JSON.stringify(...)) -- habitRules.habits
-    // contains genuine Infinity thresholds (impulseTiers/microSpendingTiers
-    // max: Infinity), and JSON serialization silently converts Infinity to
-    // null, which would produce a false "mutation" failure below even
-    // though nothing was actually mutated.
     const habitRulesBefore = structuredClone(habitRules.habits);
     const monthlyBefore = structuredClone(MONTHLY_HABIT_REPORT);
     const yearlyBefore = structuredClone(YEARLY_HABIT_REPORT);
@@ -362,8 +331,6 @@ describe("habitAnalyzer -> healthAnalyzer: corrected health-score behavior (E)",
   const habitRules = require(path.join("..", "analytics", "analyzers", "scores", "habitRules"));
 
   // 24 expenses: 10 Shopping@900, 8 Entertainment@600, 6 Rent@200. Shopping
-  // and Entertainment are canonical impulse categories in habitRules.habits;
-  // Rent is not. Deterministic under the current canonical rules.
   function buildImpulseHeavyExpenses() {
     const expenses = [];
     for (let i = 0; i < 10; i++) {
@@ -390,10 +357,6 @@ describe("habitAnalyzer -> healthAnalyzer: corrected health-score behavior (E)",
     const correctedScore = calculateHabitScore(report);
 
     // The former production behavior: healthAnalyzer always received {}
-    // (root cause #1) and, under the pre-M0-1 habitScore.js, a missing
-    // impulse share defaulted to numeric 0 -> best tier -> normalizedScore
-    // 75. Both root causes are fixed here, so the corrected score must
-    // differ from that historical figure.
     const FORMER_PRODUCTION_NORMALIZED_SCORE = 75;
     expect(correctedScore.normalizedScore).not.toBe(FORMER_PRODUCTION_NORMALIZED_SCORE);
     expect(correctedScore.normalizedScore).toBe(45);
@@ -442,9 +405,6 @@ describe("habitAnalyzer -> healthAnalyzer: corrected health-score behavior (E)",
     });
 
     // Every other module has no data (hasData:false/hasBudget:false), so
-    // overall is a weighted average of only habit + stability -- both
-    // derived from the same corrected habit report. Deterministic under
-    // the current canonical weights/rules.
     expect(health.overall).toBe(30);
     expect(health.risk.label).toBe("Critical");
     expect(typeof health.risk.color).toBe("string");
@@ -502,18 +462,6 @@ describe("healthAnalyzer boundary: raw-transaction isolation (F)", () => {
 });
 
 // Category Normalization -- single implementation pass, required scenario
-// #15 ("Shopping and impulse analytics recognize historical
-// casing/spacing variants"). Confirmed problem (discovery report):
-// calculateShoppingFrequency's old `e?.expenseCategory === "Shopping"` and
-// calculateImpulseSpending's old `new Set(config.categories).has(...)`
-// were both exact, case-sensitive string comparisons -- a stored category
-// of "shopping", "SHOPPING", or " Shopping " (any variant other than the
-// literal configured string) silently never matched, understating both
-// metrics with no error or signal. These tests prove the fix: real,
-// unmocked habitAnalyzer functions, fed variant-cased/whitespace-padded
-// category strings, must produce results IDENTICAL to canonically-cased
-// input -- and a missing/invalid category must fail the match safely
-// (never throw, never appear as a false match).
 describe("Category Normalization: shopping/impulse analytics recognize historical casing and spacing variants (G)", () => {
   const habitAnalyzer = require(path.join("..", "analytics", "analyzers", "habitAnalyzer"));
   const habitRules = require(path.join("..", "analytics", "analyzers", "scores", "habitRules"));
@@ -549,8 +497,6 @@ describe("Category Normalization: shopping/impulse analytics recognize historica
 
   it("calculateImpulseSpending recognizes alias/casing/whitespace variants of the configured impulse categories", () => {
     // habitRules.habits.impulseSpending.categories includes "Shopping",
-    // "Entertainment", "Food", "Personal Care" -- exercised here with
-    // casing/whitespace variants plus one non-impulse category (Rent).
     const canonical = [
       { expenseCategory: "Shopping", expenseAmount: 200, expenseDate: "2026-08-01" },
       { expenseCategory: "Personal Care", expenseAmount: 150, expenseDate: "2026-08-02" },
@@ -573,9 +519,6 @@ describe("Category Normalization: shopping/impulse analytics recognize historica
 
   it("calculateImpulseSpending recognizes an approved alias ('Medical') as the canonical configured category ('Health') when the rule itself is extended to include it", () => {
     // Uses a LOCAL config (not habitRules.habits, which does not configure
-    // Health as impulsive) purely to prove the alias-awareness of the
-    // comparison itself, without changing which categories the real
-    // business rule considers impulsive.
     const config = { categories: ["Health"] };
     const expenses = [
       { expenseCategory: "Medical", expenseAmount: 80, expenseDate: "2026-08-01" },

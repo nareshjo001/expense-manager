@@ -45,9 +45,6 @@ function dedupeMonthAnchors(dates) {
 }
 
 // PendingSync has existed across server timezone changes. Preserve the exact
-// stored timestamps when clearing a repair result, otherwise normalizing an
-// older UTC month anchor to the current local timezone can leave the original
-// array entry behind forever even though that logical month was repaired.
 function dedupeExactDates(dates) {
   const seen = new Map();
   for (const date of dates || []) {
@@ -388,8 +385,6 @@ async function repairIfPending(userId, options = {}) {
         revision,
         repairedBudgetMonths: repairedMonths,
         // These values came directly from PendingSync. Pull their exact
-        // timestamps as well as their locally-normalized month anchors so
-        // markers written under an older server timezone are retired too.
         repairedStoredBudgetMonthAnchors: repairedMonths,
         reportCleared,
       });
@@ -410,11 +405,6 @@ async function repairIfPending(userId, options = {}) {
       }
 
       // A derived document can legitimately reject an older concurrent
-      // repair. Its writer will also have advanced PendingSync, so that is
-      // not retried here. The exceptional case is a recreated/reset marker:
-      // the stored document's revision is then ahead of the marker itself,
-      // making every future repair lose forever. Raise only that broken
-      // floor and retry once; $max never lowers a concurrent writer's value.
       if (highestSupersedingRevision !== null && !options.revisionFloorRetry) {
         const markerAfterSkip = await getPendingSync(userId);
         const markerRevision = Number(markerAfterSkip && markerAfterSkip.revision);

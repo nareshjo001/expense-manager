@@ -1,8 +1,4 @@
 // Unit tests for backend/sia/sessionService.js's additive
-// planSummary persistence (appendTurn) and loadLastPlanSummary() --
-// Workstream 1's bounded QueryPlan-summary follow-up mechanism. Same
-// fully-mocked models/SiaSession.js + models/SiaMessage.js convention as
-// tests/sia.sessionService.test.js -- no real MongoDB connection.
 "use strict";
 
 const SESSION_MODEL_PATH = "../models/SiaSession";

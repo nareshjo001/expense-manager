@@ -1,39 +1,4 @@
 // BALENISA URGENT PRODUCTION HOTFIX -- POST /expense/add-expense.
-//
-// Confirmed production failure:
-//   ValidationError: expenses validation failed:
-//   wasMlCorrected: Cast to Boolean failed for value "" at path
-//   "wasMlCorrected"
-//
-// Root cause (traced): frontend/src/components/expensesHandling/
-// AddExpense.js's `const wasMlCorrected = mlPredictedCategory && ...` is a
-// JS short-circuit -- when there is no ML prediction, `mlPredictedCategory`
-// is the empty string `""` (falsy), so the WHOLE expression evaluates to
-// `""`, not `false`. That literal "" was sent as JSON straight through to
-// Controllers/ExpenseControllers/addexpense.js, which passed
-// `req.body.wasMlCorrected` directly into `new ExpenseModel({ ...,
-// wasMlCorrected })` -- config/Schemas.js's `wasMlCorrected: { type:
-// Boolean, default: false }` casts "true"/"false" strings but rejects ""
-// outright, throwing the CastError above.
-//
-// Fix: addexpense.js now normalizes the raw value through
-// normalizeOptionalBoolean() at the request boundary (undefined/null/""
-// -> undefined, so the schema default applies; true/"true" -> true;
-// false/"false" -> false; anything else -> a controlled 400) BEFORE ever
-// constructing the ExpenseModel document. The frontend's short-circuit is
-// also wrapped in Boolean(...) so it can never emit "" in the first place.
-//
-// Follows the same real-app/real-route/real-controller isolation
-// convention as tests/expense.mutationReliability.test.js: only
-// ../config/Schemas, ../Services/syncRecoveryService,
-// ../utils/expenseCache, and ../models/RecurringExpense are mocked.
-// ExpenseModelMock below deliberately EMULATES Mongoose's real Boolean-cast
-// behavior (throwing a ValidationError-shaped error for any non-boolean,
-// non-undefined `wasMlCorrected`, and applying the schema's `default:
-// false` when the field is omitted/undefined) so this test proves the
-// normalization actually prevents the document from ever reaching an
-// invalid construction, not merely that some mock was called with some
-// value.
 "use strict";
 
 const jwt = require("jsonwebtoken");
@@ -83,9 +48,6 @@ function loadApp() {
   const constructedDocs = [];
 
   // Emulates config/Schemas.js's real expenseSchema Boolean-cast behavior
-  // for `wasMlCorrected` ONLY (type: Boolean, default: false) -- every
-  // other field is a plain passthrough, matching
-  // expense.mutationReliability.test.js's ExpenseModelMock convention.
   function ExpenseModelMock(doc) {
     const hasField = Object.prototype.hasOwnProperty.call(doc, "wasMlCorrected");
     const rawValue = doc.wasMlCorrected;

@@ -1,15 +1,4 @@
 // Remediation Workstream B -- income edit/delete report/cache
-// synchronization. Before this fix, Controllers/IncomeControllers/
-// editIncome.js and deleteIncome.js never called synchronizeAfterMutation
-// (or any equivalent) at all -- a successful edit/delete never advanced the
-// user's derived-data revision, never invalidated a cache entry, and never
-// triggered a report refresh, so a cached/stored FinancialReport could keep
-// reflecting stale income data indefinitely.
-//
-// Unit-level tests against the controllers directly (jest.doMock on their
-// three seams: config/Schemas, Services/syncRecoveryService), mirroring the
-// existing convention used by tests/recurringJob.categoryNormalization.test.js
-// for a fast, deterministic, non-route-level proof.
 "use strict";
 
 const SCHEMAS_PATH = "../config/Schemas";

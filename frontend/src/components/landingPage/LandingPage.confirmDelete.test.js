@@ -1,18 +1,4 @@
 // Phase C -- Expense Mutation Reliability, Recovery, and Idempotency.
-//
-// Covers LandingPage.js's confirmDeleteHandler change: a committed delete
-// (2xx) always follows the success path -- closing the confirmation modal
-// and toasting -- whether derived budget/report sync finished
-// (synchronized) or is still catching up (pending). A genuine failure or an
-// idempotency conflict must NOT close the modal as if it succeeded.
-//
-// '../imports/Imports' is mocked as a whole so this suite exercises only
-// LandingPage.js's own confirmDeleteHandler logic, not ExpensesPage's real
-// data fetching or DeleteAlert's real markup -- both are replaced with
-// minimal stubs that expose the exact props LandingPage.js passes them.
-// useDeleteExpenseMutation is mocked directly so every outcome is driven by
-// manually invoking the exact onSuccess/onError callbacks passed in --
-// deterministic, no real network.
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import LandingPage from "./LandingPage";
@@ -20,23 +6,11 @@ import { useDeleteExpenseMutation } from "../../hooks/mutations/useDeleteExpense
 import { deleteSuccessToast, deleteErrorToast } from "../imports/Imports";
 
 // An explicit factory (not bare jest.mock(path) auto-mocking) so Jest never
-// needs to load-and-introspect the real hook module -- it transitively
-// imports ../../api/axios, and this project's pinned axios version ships an
-// ESM-only entry that CRA's bundled Jest transform config does not parse
-// (a pre-existing, unrelated environment limitation).
 jest.mock("../../hooks/mutations/useDeleteExpenseMutation", () => ({
   useDeleteExpenseMutation: jest.fn(),
 }));
 
 // Fully hand-mocked (no jest.requireActual, no real Router) -- the real
-// react-router-dom v7 package is not resolvable under this project's
-// bundled CRA/Jest 27 setup (a pre-existing, unrelated environment
-// limitation: react-router-dom v7's ESM-first "exports" map is not resolved
-// by Jest 27's bundled resolver). LandingPage.js only uses Routes/Route/
-// Link/useLocation, none of which need real routing behavior for this
-// suite -- Route ignores `path` and always renders its element so the
-// mocked ExpensesPage (below) is always present, and Link is a plain
-// pass-through anchor.
 jest.mock(
   "react-router-dom",
   () => ({

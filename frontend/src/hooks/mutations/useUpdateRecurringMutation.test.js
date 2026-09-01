@@ -1,16 +1,4 @@
 // Recurring-State Authority and Crash-Recovery Remediation -- frontend contract.
-//
-// Proves useUpdateRecurringMutation's cache reconciliation: onMutate still
-// optimistically patches every cached expense query and snapshots for
-// rollback (unchanged), onError still rolls back to the snapshot (unchanged),
-// and the newly added onSuccess/onSettled reconcile the cache with the
-// backend's authoritative isRecurring (never the client's pre-mutation
-// guess) and then invalidate so every expense-derived view converges.
-//
-// Mirrors expenseMutations.reliability.test.js's convention: mocks
-// @tanstack/react-query's useMutation/useQueryClient directly and asserts on
-// the exact options object passed to it. No real QueryClient, cache, or
-// network is ever involved.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateRecurringStatus } from "../../api/expenseApi";
 import { queryKeys } from "../../query/queryKeys";
