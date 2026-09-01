@@ -5,9 +5,9 @@
 Two levels of the same workflow. Every statement below is traced to the current
 repository implementation.
 
-> **This one request is the entire session.** There is no refresh token, no rotation,
-> and — confirmed by decoding a real signed token — no expiry claim at all. The JWT
-> issued here remains valid until the server's `JWT_SECRET` itself changes.
+> **This one request issues the entire session.** There is no refresh token, rotation,
+> or server-side revocation. `issueAccessToken()` always gives the JWT an `exp` claim:
+> `JWT_EXPIRES_IN` when configured, otherwise a 15-minute default.
 
 ---
 
@@ -70,15 +70,14 @@ credential that `verifyToken` later checks — it cannot itself require one).
 3. `comparePassword(password, user.password)` (bcrypt.compare).
 4. Mismatch → `401 "Invalid Password"`.
 5. `!user.isVerified` → `403 "Account not verified. Sign Up Again"`.
-6. `jwt.sign({ email: user.email, _id: user._id }, process.env.JWT_SECRET)` — **no
-   third argument**, so no `expiresIn`.
+6. `issueAccessToken({ email: user.email, _id: user._id })`, which calls `jwt.sign`
+   with `expiresIn` resolved from `JWT_EXPIRES_IN` (15 minutes when unset).
 
 ## 8. Password/JWT behaviour
 
-Password comparison via bcrypt against the stored hash — no timing-safe wrapper beyond
-what bcrypt itself provides. JWT payload is exactly `{email, _id, iat}`; signing
-algorithm is the `jsonwebtoken` library default (HS256); no `algorithm` option is set
-explicitly on either the signing or verifying side.
+Password comparison uses bcrypt against the stored hash. JWT payload is
+`{email, _id, iat, exp}`; signing uses `jsonwebtoken` defaults (HS256) with a bounded
+`expiresIn`. A non-positive numeric or unparseable configured duration fails closed.
 
 ## 9. Response schema
 
@@ -148,7 +147,8 @@ through `logInErrorToast(data)`, surfacing the backend's own message text direct
 | Initiator | `frontend/src/components/loginSignUp/Login.js` | `Login`, `handleSubmit` | Raw fetch, token storage, auth-state update |
 | Route | `backend/Routes/auth.routes.js` | `router.post('/login', ...)` | `authLimiter` → `loginValidation` → `login` |
 | Validation | `backend/Middlewares/AuthValidation.js` | `loginValidation` | Joi shape check |
-| Controller | `backend/Controllers/AuthControllers/login.js` | `login` | Lookup, compare, verified-gate, sign |
+| Controller | `backend/Controllers/AuthControllers/login.js` | `login` | Lookup, compare, verified-gate, issue token |
+| Token service | `backend/Services/AuthServices/token.service.js` | `issueAccessToken` | Central bounded-expiry issuance |
 | Password | `backend/Services/AuthServices/password.service.js` | `comparePassword` | bcrypt.compare |
 | Model | `backend/config/Schemas.js` | `userSchema` / `UserModel` | source of `email`, `password`, `isVerified` |
 | App gate | `frontend/src/App.js` | `useState(isLoggedIn)`, startup effect | Conditional render for the whole authenticated tree |
@@ -167,10 +167,9 @@ through `logInErrorToast(data)`, surfacing the backend's own message text direct
 
 ### Security
 
-2. **No JWT expiry at all.** `jwt.sign` is called with no options object — verified by
-   decoding a real token and finding no `exp` claim. Combined with no refresh, no
-   rotation, and no server-side revocation, a single issued token is valid
-   indefinitely (barring a `JWT_SECRET` rotation).
+2. **No refresh, rotation, or revocation.** Access tokens now expire according to
+   `JWT_EXPIRES_IN` (15 minutes by default), but the application cannot renew or
+   revoke an otherwise valid token before that expiry.
 
 3. **User enumeration via three distinct error codes.** 404/401/403 each reveal a
    different fact about the target account. A generic "Invalid email or password"
@@ -189,9 +188,5 @@ through `logInErrorToast(data)`, surfacing the backend's own message text direct
 
 ### Maintainability
 
-6. **The two password-related services (`hashPassword`/`comparePassword`) are reused
-   correctly across signup, login and reset**, but the JWT-signing call is inlined
-   directly in `login.js` rather than factored into a shared "issue a session" helper —
-   the only place a token is created, so there is nowhere else that could drift from
-   this one, but no reusable seam exists if a second token-issuing endpoint were ever
-   added.
+6. **Token issuance is centralized.** `login.js` uses `issueAccessToken()`, so the
+   expiry policy is not duplicated at the controller call site.

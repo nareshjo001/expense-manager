@@ -22,7 +22,7 @@ token so the backend's push-notification pipeline (`push.service.js`, driven by
 |---|---|
 | **Method** | `POST` |
 | **Path** | `/api/device-token` |
-| **Mount** | `app.use("/api", apiLimiter, apiRouter)` (`server.js:88`) → `router.post('/device-token', verifyToken, deviceRegistration)` (`api.routes.js`) |
+| **Mount** | `app.use("/api", apiLimiter, apiRouter)` (`app.js`) → `router.post('/device-token', verifyToken, deviceRegistration)` (`api.routes.js`) |
 | **Middleware order** | `apiLimiter` → `verifyToken` → `deviceRegistration` |
 | **Auth** | Required — Bearer JWT |
 | **Rate limiting** | `apiLimiter`, shared with every other `/api` route |
@@ -109,9 +109,11 @@ convention used by every other documented endpoint in this corpus.
 
 Writes to the `DeviceToken` collection (`backend/models/DeviceToken.js`): `userId`
 (`ObjectId`, ref `users`), `token` (`String`, unique), `platform` (`enum: ["web",
-"mobile"]`), plus Mongoose `timestamps`. No expiry, no TTL index — a token is retained
-indefinitely once written, including after the user logs out or uninstalls the app;
-nothing in this codebase deletes a `DeviceToken` document.
+"mobile"]`), plus Mongoose `timestamps`. There is no expiry or TTL index.
+`push.service.js` deletes a token only when FCM reports
+`messaging/registration-token-not-registered` or
+`messaging/invalid-registration-token`; a revoked or uninstalled device remains stored
+until a send produces one of those errors.
 
 ## 10. Frontend consumption
 
@@ -159,7 +161,7 @@ enable/later actions, not by the registration outcome.
 | Cross-user protection | Present — the unique index plus the explicit `11000` handling prevents one user's token silently overwriting another's ownership |
 | Rate limiting | `apiLimiter`, shared and IP/user-keyed like the rest of `/api` |
 | Token format | Untrusted, unvalidated string beyond non-empty — stored as-is |
-| Retention | No expiry or cleanup — stale/uninstalled-app tokens accumulate forever; `retryPush.js`/`push.service.js` will keep attempting delivery to dead tokens indefinitely (any FCM-side "token no longer valid" signal is not consumed anywhere in this codebase) |
+| Retention | No TTL or proactive cleanup. `push.service.js` removes a token after FCM explicitly reports it invalid or unregistered; otherwise stale rows remain until a send attempt reveals that state |
 | Transport | `fetch`, not the shared axios client — bypasses the app's centralized error/interceptor handling, a maintainability and consistency gap rather than a security one |
 
 ## 15. Files involved
@@ -168,7 +170,7 @@ enable/later actions, not by the registration outcome.
 |---|---|---|---|
 | Frontend | `frontend/src/components/hooks/useWebPush.js` | `registerToken`, `useWebPush` | Web push registration |
 | Frontend | `frontend/src/components/hooks/useMobilePush.js` | `useNativePush` | Native/mobile push registration |
-| Server mount | `backend/server.js` | `app.use("/api", apiLimiter, apiRouter)` | Rate limiter ahead of the router |
+| Server mount | `backend/app.js` | `app.use("/api", apiLimiter, apiRouter)` | Rate limiter ahead of the router |
 | Route | `backend/Routes/api.routes.js` | `router.post('/device-token', verifyToken, deviceRegistration)` | Route wiring |
 | Auth | `backend/Middlewares/Auth.js` | `verifyToken` | JWT check |
 | Controller | `backend/Controllers/PushNotifications/deviceRegistration.js` | `deviceRegistration` | Validation, claim/create logic |
@@ -189,11 +191,10 @@ enable/later actions, not by the registration outcome.
 
 ### Security / operational
 
-2. **No token expiry or invalidation path.** Confirmed by inspection of the `DeviceToken`
-   schema and every file that reads it (`push.service.js`): there is no TTL index, no
-   "last seen" field, and no code path anywhere in the repository that deletes a
-   `DeviceToken` document. A user who uninstalls the app or revokes notification
-   permission leaves a permanent row that `push.service.js` will keep targeting.
+2. **No proactive token expiry.** The schema has no TTL index or "last seen" field. The
+   sender does remove tokens after FCM returns either supported invalid-token error code,
+   but an uninstalled app or revoked permission remains stored until a future send reaches
+   that provider response.
 
 ### Reliability
 

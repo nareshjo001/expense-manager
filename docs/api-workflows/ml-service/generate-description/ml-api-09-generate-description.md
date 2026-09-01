@@ -87,7 +87,7 @@ Stateless, no shared mutable state, no model, no lock — safe under unlimited c
 
 ## 14. Security/privacy behaviour
 
-No authentication on this route itself. No sensitive data returned beyond a generated description string.
+This route requires `X-ML-Operations-Token` before it generates a description. The guard fails closed with `503` if the service token is not configured and returns `401` for a missing or invalid token. No sensitive data is returned beyond a generated description string.
 
 ## 15. Files involved
 

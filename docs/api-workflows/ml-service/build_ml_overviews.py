@@ -22,8 +22,7 @@ backend/server.js, and frontend/src/components/expensesHandling/AddExpense.js.
 Nothing here draws a mechanism the repository doesn't have: no scheduler for
 retraining (it is cron-in-the-Node-backend + manual, never an ML-service-internal
 scheduler), no message queue, no model registry, no online learning, no
-user-specific models, no service-to-service authentication on the four endpoints
-the backend actually calls, and no fixed category count (the label set is
+user-specific models, and no fixed category count (the label set is
 whatever training/category_config.py's CANONICAL_CATEGORIES currently is).
 
 Run:  python3 build_ml_overviews.py
@@ -53,8 +52,23 @@ def error_card(o, x, y, w, title, lines):
 
 
 def save(o, svg, name):
-    open(os.path.join(HERE, name), "w", encoding="utf-8").write(svg)
-    print("wrote", name, len(svg))
+    destinations = {
+        "ml-api-01": "health-head", "ml-api-02": "health",
+        "ml-api-03": "health-live", "ml-api-04": "health-ready",
+        "ml-api-05": "ml-status", "ml-api-06": "training-runs-list",
+        "ml-api-07": "training-run", "ml-api-08": "predict-category",
+        "ml-api-09": "generate-description", "ml-api-10": "retrain-model",
+        "ml-flow-01": "flow/prediction", "ml-flow-02": "flow/startup-loading",
+        "ml-flow-03": "flow/dataset-const", "ml-flow-04": "flow/training-eval",
+        "ml-flow-05": "flow/validation-promotion", "ml-flow-06": "flow/persistence-activation",
+        "ml-flow-07": "flow/retraining-lifecycle", "ml-flow-08": "startup-reconciliation",
+        "ml-flow-09": "flow/backend-integration",
+    }
+    directory = next(destination for prefix, destination in destinations.items()
+                     if name.startswith(prefix))
+    path = os.path.join(HERE, directory, name)
+    open(path, "w", encoding="utf-8").write(svg)
+    print("wrote", os.path.relpath(path, HERE), len(svg))
 
 
 def tail_error(o, t, idx, title, lines):
@@ -803,7 +817,7 @@ o = new("Backend <-> ML categorization integration — the full user round trip"
 d, R1 = o.d, o.ROW1
 d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Spans",      "Node/Express backend + Python/FastAPI ML service, no new endpoint", "backend"),
-    ("Auth between services", "None — no shared secret or token on any of the 4 calls", "error"),
+    ("Auth between services", "Operations token on ML calls; /ping remains an unauthenticated probe", "auth"),
     ("ML unavailable", "predict-category: 503 to the frontend; description: silent \"\" fallback", "insights"),
     ("Correction loop", "A user's edit becomes an mlfeedbacks doc, feeding ML-FLOW-03 later", "insights"),
 ])
@@ -831,8 +845,8 @@ t = [
            "Feeds directly into ML-FLOW-07."),
 ]
 o.chain(t, o.R1_CY)
-tail_error(o, t, 7, "No service-to-service auth",
-           ["None of the four backend->ML", "calls carries a header or", "token of any kind."])
+tail_error(o, t, 7, "ML token configuration is required",
+           ["ML calls carry X-ML-Operations-Token.", "If either side lacks the configured", "shared token, protected endpoints fail closed."])
 save(o, o.render(["This is the flow the rules call out explicitly as combined/internal because "
                   "it spans two runtimes and introduces no new HTTP endpoint of its own."],
                  "ML-FLOW-09"),

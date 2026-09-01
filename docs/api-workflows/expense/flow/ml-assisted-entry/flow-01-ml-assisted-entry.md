@@ -2,7 +2,7 @@
 
 A combined workflow, not an endpoint. It spans **two independent requests**: an advisory
 category prediction, and — only if the user submits — the ordinary create call
-([API-05](api-05-create-expense.md)). Nothing is written between them.
+([API-05](../../create/api-05-create-expense.md)). Nothing is written between them.
 
 ## 1. Trigger
 
@@ -18,7 +18,7 @@ if (expenseName.trim().length < 3) return;                 // 2. at least three 
 
 Nothing else triggers prediction. Editing the category, the amount, the date or the
 description never does, and prediction does **not** run on the update path — an edit-loaded
-name is suppressed by the same ref (see [FLOW-02](flow-02-retrieval-assisted-edit.md)).
+name is suppressed by the same ref (see [FLOW-02](../retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md)).
 
 ---
 
@@ -65,7 +65,7 @@ the create mutation's `onSuccess`.
 | Request | Owner | Counted here? |
 |---|---|---|
 | `POST /ml/predict-category` | **ML module** — `backend/Routes/ml.router.js`, proxying to `${ML_ROUTE}/predict-category` | No. Shown as an external dependency |
-| `POST /expense/add-expense` | Expense module | No. Documented as [API-05](api-05-create-expense.md) |
+| `POST /expense/add-expense` | Expense module | No. Documented as [API-05](../../create/api-05-create-expense.md) |
 
 The prediction route is not counted as an Expense API: it lives on the `/ml` mount, its
 purpose is prediction rather than expense management, and its body, model and confidence
@@ -164,7 +164,7 @@ The raw client flag is nonetheless still stored on the *expense* document.
 ## 9. Cache effects
 
 Prediction touches no cache — server-side or client-side. The save carries all of
-[API-05's](api-05-create-expense.md#12-redis-and-frontend-cache-invalidation) invalidation:
+[API-05's](../../create/api-05-create-expense.md#12-redis-and-frontend-cache-invalidation) invalidation:
 `clearUserExpenseCache`, `refreshReport`, and four TanStack Query prefixes.
 
 ## 10. Failure and recovery behaviour
@@ -220,7 +220,7 @@ Retrying a prediction is always safe: it writes nothing.
    `REACT_APP_BACKEND_URL/ml/predict-category`; `ML_ROUTE` stays server-side. Recorded as
    a positive.
 7. **Client telemetry is stored unvalidated** on the expense — see
-   [API-05 §17.9](api-05-create-expense.md#17-current-implementation-observations). The
+   [API-05 §17.9](../../create/api-05-create-expense.md#17-current-implementation-observations). The
    feedback row's verdict is the part that is protected.
 8. **A raw `fetch` bypasses the shared interceptor**, so this one call re-implements the
    401 path by hand. It works, but the 429 and 409 handling that every other call inherits
@@ -242,7 +242,7 @@ Retrying a prediction is always safe: it writes nothing.
 
 ---
 
-**Related:** [API-05 — create](api-05-create-expense.md) ·
-[FLOW-02 — retrieval-assisted edit](flow-02-retrieval-assisted-edit.md) ·
-[BILLS-FLOW-01 — scan to saved expense](../bills/bills-flow-01-scan-to-expense.md) ·
-[consumption map](expense-consumption-map.md)
+**Related:** [API-05 — create](../../create/api-05-create-expense.md) ·
+[FLOW-02 — retrieval-assisted edit](../retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md) ·
+[BILLS-FLOW-01 — scan to saved expense](../../../bills/flow/bills-flow-01-scan-to-expense.md) ·
+consumption map

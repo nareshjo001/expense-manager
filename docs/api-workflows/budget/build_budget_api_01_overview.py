@@ -85,6 +85,6 @@ d.mid.append('<g><rect x="%d" y="458" width="%d" height="98" rx="10" fill="%s" '
 
 svg = o.render(["Budget data is never cached server-side. The only cache in this flow is "
                 "TanStack Query in the browser."], "BUDGET-01")
-open(os.path.join(HERE, "budget-api-01-get-budgets-overview.svg"), "w",
+open(os.path.join(HERE, "get-budgets", "budget-api-01-get-budgets-overview.svg"), "w",
      encoding="utf-8").write(svg)
 print("wrote budget-api-01-get-budgets-overview.svg", len(svg), "bytes")

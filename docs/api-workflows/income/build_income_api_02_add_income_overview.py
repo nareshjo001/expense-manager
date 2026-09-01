@@ -16,9 +16,9 @@ d, R1, R2 = o.d, o.ROW1, o.ROW2
 
 d.facts_panel(34, o.BAND_Y, 836, o.BAND_H, "At a glance", [
     ("Endpoint",  "POST /income/add",                    "response"),
-    ("Body",      "{ incomeSource, incomeAmount, incomeDate }", "backend"),
+    ("Body",      "{ incomeSource, incomeAmount, incomeDate, id }", "backend"),
     ("Validation","Joi middleware, before the controller","auth"),
-    ("Database",  "MongoDB · one insert",                "database"),
+    ("Database",  "MongoDB · idempotent insert",          "database"),
     ("On success","Invalidate income + reports, go home","frontend"),
 ])
 no_redis_box(o, 1238, o.BAND_Y, 336, 168)
@@ -39,9 +39,9 @@ top = [
 ]
 bottom = [
     o.card(5, R2, "database", "save", "07", "Income Insert", "MongoDB",
-           "new IncomeModel(...).save()."),
+           "Unique userId + idempotencyKey insert."),
     o.card(6, R2, "response", "send", "08", "Respond", "201 Created",
-           "Message only — no record returned."),
+           "Returns record, derivedData, replayed flag."),
 ]
 ret = [
     o.card(6, R1, "frontend", "refresh", "09", "Invalidate and Refetch", "TanStack Query",
@@ -64,6 +64,6 @@ d.path([(ret[1].right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (1574, 502)],
        "error", dashed=True)
 
 svg = o.render(["Validation happens in middleware here, so an invalid payload never reaches the controller or the database."], "INCOME-02")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "income-api-02-add-income-overview.svg"),
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "add-income", "income-api-02-add-income-overview.svg"),
      "w", encoding="utf-8").write(svg)
 print("wrote income-api-02-add-income-overview.svg", len(svg))

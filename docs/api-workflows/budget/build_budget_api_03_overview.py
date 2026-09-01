@@ -30,14 +30,14 @@ C, R1, R2 = o.COL, o.ROW1, o.ROW2
 # captions slid clear of the two connectors that pierce the container top
 # edge at x=972 (valid-amount drop) and x=1496 (200 OK riser)
 d.group_box(882, 276, 704, 180, "Server write sequence", "database",
-            note="no transaction spans these writes",
+            note="recovery reservation fences derived-data repair",
             label_x=996, note_x=1180)
 
 d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Endpoint",     "PUT /api/update-budget",               "response"),
     ("Body",         "{ budget } — amount only, no month",   "backend"),
     ("Target month", "Always the current month, server clock", "backend"),
-    ("Writes",       "Budget upsert → spent recalc → report", "database"),
+    ("Writes",       "Reserve → upsert → fenced sync", "database"),
     ("Returns",      "The recalculated budget document",     "response"),
 ])
 
@@ -65,10 +65,10 @@ s11 = o.card(8, R1, "frontend", "refresh", "11", "Invalidate and Refetch",
 
 s7 = o.card(5, R2, "database", "save", "07", "Budget Upsert", "MongoDB",
             "Creates or overwrites this month's row.")
-s8 = o.card(6, R2, "database", "sigma", "08", "Spend Recalculation", "Aggregate",
-            "Sums this month's expenses into spent.")
-s9 = o.card(7, R2, "database", "bolt", "09", "Report Refresh", "Redis + MongoDB",
-            "Drops report:<user>, regenerates, re-caches.")
+s8 = o.card(6, R2, "database", "sigma", "08", "Fenced Synchronization", "syncRecoveryService",
+            "Recalculates spent and refreshes derived data.")
+s9 = o.card(7, R2, "database", "bolt", "09", "Recovery Status", "derivedData",
+            "Reports whether repair remains pending.")
 s10 = o.card(8, R2, "response", "send", "10", "Respond", "200 OK + data",
              "Returns the recalculated document.")
 
@@ -97,6 +97,6 @@ d.mid.append('<g><rect x="%d" y="474" width="%d" height="82" rx="10" fill="%s" '
 svg = o.render(["Functionally near-identical to POST /api/setbudget: same upsert, same "
                 "recalculation, same report refresh. Only the response body differs."],
                "BUDGET-03")
-open(os.path.join(HERE, "budget-api-03-update-budget-overview.svg"), "w",
+open(os.path.join(HERE, "update-budget", "budget-api-03-update-budget-overview.svg"), "w",
      encoding="utf-8").write(svg)
 print("wrote budget-api-03-update-budget-overview.svg", len(svg), "bytes")

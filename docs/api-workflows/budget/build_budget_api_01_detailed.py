@@ -199,6 +199,6 @@ svg = d.render(
         "Heavy arrows are region hand-offs; the cyan one is the HTTP response. Light arrows are steps inside a region. There is no green rail because this route has no Redis.",
         "One request, two independent consumers. The budget panel surfaces load failures; the insights header does not — see E5 and E6.",
     ])
-open(os.path.join(HERE, "budget-api-01-get-budgets-detailed.svg"), "w",
+open(os.path.join(HERE, "get-budgets", "budget-api-01-get-budgets-detailed.svg"), "w",
      encoding="utf-8").write(svg)
 print("wrote budget-api-01-get-budgets-detailed.svg", len(svg), "bytes")

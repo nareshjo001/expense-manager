@@ -153,18 +153,18 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
   });
 
   it("opens the panel and prefills the composer with the exact registered suggestion text when the composer is empty", async () => {
-    renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+    renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
     await settleAvailability();
 
     fireEvent.click(launcherButton("Ask SIA about this trend"));
 
     expect(await screen.findByLabelText(/your question/i)).toHaveValue(
-      "Why did my overall spending change this month?"
+      "Show me my spending trend over the last 3 months."
     );
   });
 
   it("focuses the composer after a valid contextual launch", async () => {
-    renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+    renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(launcherButton("Ask SIA about my budget"));
@@ -174,7 +174,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
   });
 
   it("never replaces an existing non-empty draft (manually typed text survives a contextual click)", async () => {
-    renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+    renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     // Open the base launcher first and type a manual draft.
@@ -187,21 +187,21 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
   });
 
   it("a same-card repeat click is harmless: composer text unchanged, panel stays open, no crash", async () => {
-    renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+    renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(launcherButton("Ask SIA about my budget"));
     await screen.findByLabelText(/your question/i);
 
     expect(() => fireEvent.click(launcherButton("Ask SIA about my budget"))).not.toThrow();
-    expect(composer()).toHaveValue("Explain my current budget status and utilization.");
+    expect(composer()).toHaveValue("Am I on track with my budget?");
   });
 
   it("a second, different-card click does not replace the first suggestion's already-prefilled text", async () => {
     renderProvider(
       <>
-        <SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />
-        <SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />
+        <SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />
+        <SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />
       </>
     );
     await settleAvailability();
@@ -210,11 +210,11 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
     await screen.findByLabelText(/your question/i);
     fireEvent.click(launcherButton("Ask SIA about my budget"));
 
-    expect(composer()).toHaveValue("Why did my overall spending change this month?");
+    expect(composer()).toHaveValue("Show me my spending trend over the last 3 months.");
   });
 
   it("returns to conversation mode when a contextual button is clicked while history mode is showing", async () => {
-    renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+    renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
@@ -224,13 +224,13 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
     fireEvent.click(launcherButton("Ask SIA about this trend"));
 
     expect(await screen.findByLabelText(/your question/i)).toHaveValue(
-      "Why did my overall spending change this month?"
+      "Show me my spending trend over the last 3 months."
     );
   });
 
   it("while SIA is unavailable, the panel opens (so Retry is visible) but the composer is never prefilled", async () => {
     getSiaStatus.mockResolvedValue({ success: true, available: false });
-    renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+    renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(launcherButton("Ask SIA about my budget"));
@@ -242,7 +242,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
 
   it("while SIA is unavailable, focus moves to the Retry control rather than the disabled composer", async () => {
     getSiaStatus.mockResolvedValue({ success: true, available: false });
-    renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+    renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(launcherButton("Ask SIA about my budget"));
@@ -266,7 +266,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
   // contextual launch.
   describe("contextual focus-signal replay (Batch 3G remediation)", () => {
     it("a genuinely new contextual launch (first click) still moves focus to the composer", async () => {
-      renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+      renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
       await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
       fireEvent.click(launcherButton("Ask SIA about this trend"));
@@ -278,8 +278,8 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
     it("a second contextual launch (newer version) still moves focus, even after the panel was closed and reopened in between", async () => {
       renderProvider(
         <>
-          <SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />
-          <SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />
+          <SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />
+          <SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />
         </>
       );
       await settleAvailability();
@@ -301,7 +301,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
 
     it("closing after a contextual launch and then reopening via the ordinary global button does not replay the contextual focus behavior", async () => {
       getSiaStatus.mockResolvedValue({ success: true, available: false });
-      renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+      renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
       await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
       // Contextual launch while blocked: focus correctly moves to Retry
@@ -326,7 +326,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
 
     it("an ordinary (non-contextual) open never forces focus onto the Retry control in the first place", async () => {
       getSiaStatus.mockResolvedValue({ success: true, available: false });
-      renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+      renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
       await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
       fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
@@ -336,7 +336,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
     });
 
     it("further composer/message activity after a contextual request was already handled does not re-trigger the focus effect", async () => {
-      renderProvider(<SiaAskButton suggestionId="budget-status" label="Ask SIA about my budget" />);
+      renderProvider(<SiaAskButton suggestionId="budget-track" label="Ask SIA about my budget" />);
       await settleAvailability();
 
       fireEvent.click(launcherButton("Ask SIA about my budget"));
@@ -351,7 +351,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
       closeBtn.focus();
       expect(input).not.toHaveFocus();
 
-      fireEvent.change(input, { target: { value: "Explain my current budget status and utilization. Please." } });
+      fireEvent.change(input, { target: { value: "Am I on track with my budget? Please." } });
 
       expect(input).not.toHaveFocus();
       expect(closeBtn).toHaveFocus();
@@ -366,7 +366,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
           releaseAsk = resolve;
         })
     );
-    renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+    renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
@@ -389,7 +389,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
 
   it("does not prefill while a failed request is awaiting retry/dismiss, even with an empty composer", async () => {
     askSia.mockRejectedValueOnce({ response: { data: { message: "boom" } } });
-    renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+    renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
@@ -406,7 +406,7 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
 
   it("SiaEntryPoint's own build-flag/open-close behavior is completely unaffected when mounted via the provider", async () => {
     setFlag("false");
-    renderProvider(<SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />);
+    renderProvider(<SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />);
 
     // Disabled build: neither the base launcher nor the contextual button
     // render (SiaAskButton itself checks isSiaEnabled()).
@@ -486,7 +486,7 @@ describe("SiaLauncherContext -- render isolation and Context value stability (Ba
       const countRef = useRef(0);
       countRef.current += 1;
       renderCounts.push(countRef.current);
-      return <SiaAskButton suggestionId="spending-change" label="Ask SIA about this trend" />;
+      return <SiaAskButton suggestionId="spending-trend" label="Ask SIA about this trend" />;
     });
 
     renderProvider(<RenderCountingCard />);

@@ -80,7 +80,7 @@ callers).
      disarms the TTL auto-delete.
    - **True** (reset path): `user.isPasswordReset` stays `true`,
      `user.passwordResetExpiry = getVerificationExpiry(10)` — a fresh 10-minute
-     window for [AUTH-API-06](auth-api-06-reset-password.md).
+     window for [AUTH-API-06](../reset-password/auth-api-06-reset-password.md).
 6. `user.save()`.
 
 ## 8. Password/JWT behaviour
@@ -126,7 +126,7 @@ entered.
   shared `authLimiter` budget and that expiry bound repeated attempts; there is no
   dedicated per-attempt counter.
 - The reset branch's 10-minute authorization window is the sole gate on
-  [AUTH-API-06](auth-api-06-reset-password.md) — no password re-entry is required
+  [AUTH-API-06](../reset-password/auth-api-06-reset-password.md) — no password re-entry is required
   there.
 
 ## 15. Failure paths

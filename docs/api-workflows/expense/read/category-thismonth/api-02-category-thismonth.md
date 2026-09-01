@@ -9,7 +9,7 @@ repository implementation.
 > controller, `getByCategory`, and — under this corpus's coverage rules — exactly one API
 > workflow document: this one. This document covers the `period === 'thismonth'` branch;
 > the else branch is documented separately as a **non-API branch document**,
-> [BRANCH-01](api-03-category-thisyear.md) — not a second API workflow for this route.
+> [BRANCH-01](../category-this-year/api-03-category-thisyear.md) — not a second API workflow for this route.
 > Everything up to the branch point is identical between the two.
 
 ---
@@ -148,7 +148,7 @@ appears.
 ## Files involved
 
 Identical to API-01 except for the rows below; see
-[api-01-last-week.md](api-01-last-week.md#files-involved) for the shared middleware,
+[api-01-last-week.md](../last-week/api-01-last-week.md#files-involved) for the shared middleware,
 axios, query-client and model layers.
 
 | Layer | File | Function / export | Purpose |
@@ -171,7 +171,7 @@ axios, query-client and model layers.
 
 Observations 1–3 (rate limiter ordering, IP-key fallback, `trust proxy`) and the Redis and
 frontend-error-state findings are shared with API-01 and are not repeated in full here —
-see [api-01-last-week.md](api-01-last-week.md#current-implementation-observations).
+see [api-01-last-week.md](../last-week/api-01-last-week.md#current-implementation-observations).
 
 | # | Observation | Classification |
 |---|---|---|

@@ -59,8 +59,23 @@ def finish(d, out, api_id, tail):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=[FOOT, tail])
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
-    print("wrote", out, len(svg))
+    destinations = {
+        "ml-api-01": "health-head", "ml-api-02": "health",
+        "ml-api-03": "health-live", "ml-api-04": "health-ready",
+        "ml-api-05": "ml-status", "ml-api-06": "training-runs-list",
+        "ml-api-07": "training-run", "ml-api-08": "predict-category",
+        "ml-api-09": "generate-description", "ml-api-10": "retrain-model",
+        "ml-flow-01": "flow/prediction", "ml-flow-02": "flow/startup-loading",
+        "ml-flow-03": "flow/dataset-const", "ml-flow-04": "flow/training-eval",
+        "ml-flow-05": "flow/validation-promotion", "ml-flow-06": "flow/persistence-activation",
+        "ml-flow-07": "flow/retraining-lifecycle", "ml-flow-08": "startup-reconciliation",
+        "ml-flow-09": "flow/backend-integration",
+    }
+    directory = next(destination for prefix, destination in destinations.items()
+                     if out.startswith(prefix))
+    path = os.path.join(HERE, directory, out)
+    open(path, "w", encoding="utf-8").write(svg)
+    print("wrote", os.path.relpath(path, HERE), len(svg))
 
 
 def final_region(d, region, specs, note):
@@ -966,10 +981,9 @@ e = final_region(d, r4, [
      "Counts status, not the legacy 'corrected' boolean.", {"step": "04"}),
     ("backend", "send", "RETRAIN CALL", "POST /retrain-model", "no request body, no timeout set",
      "Feeds directly into ML-API-10 and then ML-FLOW-07.", {"step": "05"}),
-], ("No service-to-service authentication anywhere", [
-    "None of the four backend->ML calls (predict-category, generate-description, "
-    "retrain-model, the /ping health check) carries any header, token, or "
-    "credential — confirmed absent across all four call sites.",
+], ("Protected ML calls require the operations token", [
+    "The backend sends X-ML-Operations-Token for predict-category, generate-description, "
+    "retrain-model, and spending forecast. The /ping health probe remains unauthenticated.",
 ], "error"))
 d.handoff(a[-1], b[0], 299); d.handoff(b[-1], c[0], 773); d.handoff(c[-1], e[0], 1247)
 

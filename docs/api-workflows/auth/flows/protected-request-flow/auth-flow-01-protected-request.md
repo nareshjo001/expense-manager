@@ -89,7 +89,7 @@ do return their own `403`s for unrelated business reasons, e.g. Login's
 ## 11. State cleanup
 
 None performed by this flow itself. A `401` response is what triggers
-[AUTH-FLOW-04](auth-flow-04-expired-token.md)'s cleanup, on the frontend side.
+[AUTH-FLOW-04](../expired-token-flow/auth-flow-04-expired-token.md)'s cleanup, on the frontend side.
 
 ## 12. Navigation
 
@@ -124,7 +124,7 @@ an identity override from the request itself.
 - **No type validation on the `_id` claim beyond truthiness.** Verified by execution
   with a forged, non-string `_id` — the middleware passes it through unchanged. This
   is only reachable by someone who already possesses `JWT_SECRET`, since the server's
-  own signing code ([AUTH-API-02](auth-api-02-login.md)) always signs a real Mongoose
+  own signing code ([AUTH-API-02](../../login/auth-api-02-login.md)) always signs a real Mongoose
   `ObjectId`.
 - **No `algorithms` allow-list is explicitly configured** — the codebase relies on the
   `jsonwebtoken` library's own default behaviour (which does correctly reject a

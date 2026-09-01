@@ -5,7 +5,7 @@
 Two levels of the same workflow. Every statement below is traced to the current
 repository implementation.
 
-> **The old password is never checked.** Once [AUTH-API-03](auth-api-03-verify-otp.md)'s
+> **The old password is never checked.** Once [AUTH-API-03](../verify-otp/auth-api-03-verify-otp.md)'s
 > reset branch has opened the 10-minute window, this endpoint asks only for the new
 > password — mailbox possession, proven earlier by OTP, is the sole factor.
 
@@ -69,7 +69,7 @@ client-side.
 3. `!user.isPasswordReset || !user.passwordResetExpiry || user.passwordResetExpiry <
    new Date()` — `403 "Password reset not authorized. Please verify OTP again"`.
 4. `hashPassword(password)` (bcrypt, 10 rounds — the same helper as
-   [AUTH-API-01](auth-api-01-register.md)).
+   [AUTH-API-01](../signup/auth-api-01-register.md)).
 5. `user.password = hashedPassword`, `user.isPasswordReset = false`,
    `user.passwordResetExpiry = undefined`, then `user.save()`.
 
@@ -106,7 +106,7 @@ i.e., the Login screen. No auto-login.
 control before any request is sent; `setIsSpinnerLoad` shows the app's global spinner
 while in flight. A `403` here is treated specially by the frontend: it shows a
 "Verification expired" toast and calls `onBack()`, the same as a generic failure would
-— the user is sent back to restart from [AUTH-API-05](auth-api-05-forgot-password.md)
+— the user is sent back to restart from [AUTH-API-05](../forgot-password/auth-api-05-forgot-password.md)
 rather than being offered a retry in place.
 
 ## 14. Security and privacy behaviour
@@ -148,7 +148,7 @@ rather than being offered a retry in place.
 
 1. **A lapsed window forces a full restart, not a resume.** There is no way to
    re-open the same window without going all the way back to
-   [AUTH-API-05](auth-api-05-forgot-password.md) and completing
-   [AUTH-API-03](auth-api-03-verify-otp.md) again — a deliberate, safe design choice,
+   [AUTH-API-05](../forgot-password/auth-api-05-forgot-password.md) and completing
+   [AUTH-API-03](../verify-otp/auth-api-03-verify-otp.md) again — a deliberate, safe design choice,
    but worth stating precisely since it is the only recovery path available after a
    `403` here.

@@ -8,8 +8,8 @@ flows remain, renumbered AUTH-FLOW-01..04: protected-request JWT validation, fro
 session restoration, client-side logout, and 401/force-reauth handling.
 
 Confirmed, not assumed: there is no AuthContext/provider, no protected-route
-component, no JWT decoding anywhere on the frontend, no refresh token, and no expiry
-on the login JWT at all (jwt.sign is called with no options).
+component, no JWT decoding anywhere on the frontend, no refresh token, and no
+server-side logout/revocation. Login tokens have a bounded, configurable expiry.
 
 Run:  python3 build_auth_overviews.py
 """
@@ -38,8 +38,19 @@ def error_card(o, x, y, w, title, lines):
 
 
 def save(o, svg, name):
-    open(os.path.join(HERE, name), "w", encoding="utf-8").write(svg)
-    print("wrote", name, len(svg))
+    folders = {
+        "auth-api-01": "signup", "auth-api-02": "login",
+        "auth-api-03": "verify-otp", "auth-api-04": "reset-otp",
+        "auth-api-05": "forgot-password", "auth-api-06": "reset-password",
+        "auth-flow-01": os.path.join("flows", "protected-request-flow"),
+        "auth-flow-02": os.path.join("flows", "frontend-session-restore-flow"),
+        "auth-flow-03": os.path.join("flows", "logout-flow"),
+        "auth-flow-04": os.path.join("flows", "expired-token-flow"),
+    }
+    folder = next(folder for prefix, folder in folders.items() if name.startswith(prefix))
+    path = os.path.join(folder, name)
+    open(os.path.join(HERE, path), "w", encoding="utf-8").write(svg)
+    print("wrote", path, len(svg))
 
 
 # ===========================================================================
@@ -106,7 +117,7 @@ d, R1 = o.d, o.ROW1
 d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Endpoint",   "POST /auth/login",                                "auth"),
     ("Rate limit", "authLimiter · 20 req / 15 min",                   "auth"),
-    ("JWT expiry", "NONE — jwt.sign is called with no options",       "error"),
+    ("JWT expiry", "JWT_EXPIRES_IN; 15 min default",                  "auth"),
     ("Token storage", "localStorage, plaintext, key \"token\"",       "frontend"),
     ("Refresh token", "Does not exist",                               "error"),
 ])
@@ -129,8 +140,8 @@ t = [
            "Against the stored hash."),
     o.card(5, R1, "backend", "gears", "06", "Verified Check", "isVerified",
            "403 if the account never completed OTP."),
-    o.card(6, R1, "auth", "key", "07", "JWT Signed", "jwt.sign — no expiresIn",
-           "Payload: { email, _id }. Never expires."),
+    o.card(6, R1, "auth", "key", "07", "JWT Signed", "issueAccessToken()",
+           "Payload: { email, _id }; exp is always set."),
     o.card(7, R1, "response", "send", "08", "200 OK, Token Stored", "localStorage, plaintext",
            "token + email + firstname; no HttpOnly cookie option."),
     o.card(8, R1, "ui", "layout", "09", "Protected App", "isLoggedIn = true",
@@ -138,8 +149,8 @@ t = [
 ]
 o.chain(t, o.R1_CY)
 
-error_card(o, o.COL[8], 460, o.CW, "One session, forever",
-           ["No refresh, no rotation, no", "server-side revocation — logout", "is purely client-side (AUTH-FLOW-03)."])
+error_card(o, o.COL[8], 460, o.CW, "Bounded session, no renewal",
+           ["Tokens expire by configuration;", "there is no refresh, rotation, or", "server-side revocation."])
 d.path([(t[8].right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
        "error", dashed=True)
 
@@ -452,7 +463,7 @@ d, R1 = o.d, o.ROW1
 
 d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Backend endpoint", "None — logout is entirely client-side",                     "error"),
-    ("Server-side revocation", "Does not exist — the JWT remains valid until secret rotation", "error"),
+    ("Server-side revocation", "Does not exist — another copy remains valid until expiry", "error"),
     ("localStorage.clear()", "Wipes everything, not just the token",                  "frontend"),
     ("queryClient.clear()",  "Empties the whole TanStack cache — prevents the next login on this tab from seeing stale data", "insights"),
 ])

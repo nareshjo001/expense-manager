@@ -17,9 +17,9 @@ Diagrams reuse the approved BALENISA design system in
 
 | ID | Type | Purpose | Documented in |
 |---|---|---|---|
-| REPORT-01 | API — `GET /report` | Cache-first read of the whole report | [report-api-01-get-report.md](report-api-01-get-report.md) |
-| FLOW-01 | Internal flow | The Analytics Engine — context, 6 analyzers, 6 score calculators, aggregation | [report-flow-01-analytics-engine.md](report-flow-01-analytics-engine.md) |
-| FLOW-02 | Internal flow | Mutation-triggered synchronous refresh (Expense/Budget writes) | [report-flow-02-mutation-refresh.md](report-flow-02-mutation-refresh.md) |
+| REPORT-01 | API — `GET /report` | Repair-on-read, revision-aware report read | [reference](get-report/report-consumption-map.md#a-report-api-inventory) |
+| FLOW-01 | Internal flow | The Analytics Engine — context, analyzers, score calculators, aggregation | [document](flow/analytics-engine/report-flow-01-analytics-engine.md) |
+| FLOW-02 | Internal flow | Reserved, revision-fenced synchronization after mutations | [document](flow/mutation-refresh/report-flow-02-mutation-refresh.md) |
 
 **That is the complete surface.** One route, no create/update/delete/list endpoints for
 the report itself — the object is always read or written whole.
@@ -28,12 +28,11 @@ the report itself — the object is always read or written whole.
 
 | Workflow | Level 1 | Level 2 | Document |
 |---|---|---|---|
-| REPORT-01 | [overview](report-api-01-get-report-overview.svg) | [detailed](report-api-01-get-report-detailed.svg) | [report-api-01-get-report.md](report-api-01-get-report.md) |
-| FLOW-01 | [overview](report-flow-01-analytics-engine-overview.svg) | [detailed](report-flow-01-analytics-engine-detailed.svg) | [report-flow-01-analytics-engine.md](report-flow-01-analytics-engine.md) |
-| FLOW-02 | [overview](report-flow-02-mutation-refresh-overview.svg) | [detailed](report-flow-02-mutation-refresh-detailed.svg) | [report-flow-02-mutation-refresh.md](report-flow-02-mutation-refresh.md) |
+| REPORT-01 | [overview](get-report/report-api-01-get-report-overview.svg) | [detailed](get-report/report-api-01-get-report-detailed.svg) | [reference](get-report/report-consumption-map.md#a-report-api-inventory) |
+| FLOW-01 | [overview](flow/analytics-engine/report-flow-01-analytics-engine-overview.svg) | [detailed](flow/analytics-engine/report-flow-01-analytics-engine-detailed.svg) | [document](flow/analytics-engine/report-flow-01-analytics-engine.md) |
+| FLOW-02 | [overview](flow/mutation-refresh/report-flow-02-mutation-refresh-overview.svg) | [detailed](flow/mutation-refresh/report-flow-02-mutation-refresh-detailed.svg) | [document](flow/mutation-refresh/report-flow-02-mutation-refresh.md) |
 
-Full inventory tables (frontend consumption, Analytics Engine components, data
-dependencies, cache, cross-module links): [report-consumption-map.md](report-consumption-map.md).
+Full inventory tables are in report-consumption-map.md.
 
 ## Structural facts that hold across the whole module
 
@@ -46,17 +45,17 @@ dependencies, cache, cross-module links): [report-consumption-map.md](report-con
 | ML / SIA dependency | **None** — confirmed absent from every analyzer and score calculator |
 | Ownership | Enforced from the token; no report id is ever accepted from the client |
 | Client cache | TanStack Query, key `["reports"]`, one entry, no parameters |
-| Update strategy | **Invalidation and refetch**, driven by Expense/Budget mutations — no manual refresh control exists |
+| Update strategy | Reservation, revision-fenced refresh, and repair-on-read across Expense, Income, and Budget mutations |
 
 ## Cross-module dependencies
 
-- **Expenses/Budget → Report.** Six call sites (`addexpense`, `editExpense`,
-  `deleteExpense`, `setbudget`, `updatebudget`, `recurringJob`) call `refreshReport`
-  synchronously, inside their own request — see FLOW-02.
+- **Expenses/Income/Budget → Report.** Their mutation controllers reserve report work before
+  the primary write, then call `synchronizeAfterMutation`; a failed derived-data refresh is
+  retained for repair-on-read — see FLOW-02.
 - **Report → Expenses/Budget.** Read-only, via 5 parallel Mongo queries in
   `createAnalyticsContext` — see FLOW-01.
-- **Income → Report.** No relationship. The engine never reads `IncomeModel`; the
-  frontend invalidates `reports.all` on income mutations anyway (harmless no-op).
+- **Income → Report.** Income mutations synchronize the report even though this analytics
+  engine currently derives its sections from expense and budget data.
 - **Charts.** No direct relationship — Charts computes its own aggregations
   independently of the Analytics Engine.
 
@@ -76,12 +75,5 @@ their own file location) and were verified to run from `/tmp`.
 Full findings with consequences live in the per-workflow documents. The three worth
 reading first:
 
-1. **The habit score, the stability bonus, and every habit-derived health signal are
-   computed from an always-empty stub.** `reportGenerator.js` passes `monthlyHabits`;
-   `healthAnalyzer.js` destructures `habits`. Verified by execution.
-2. **`summary.healthScore` and `summary.riskLevel` are always `undefined`** — the real
-   values live at `financialHealth.overall` / `financialHealth.risk`, which no frontend
-   component reads at all.
-3. **Every Expense/Budget mutation's HTTP response blocks on a full Analytics Engine
-   recompute,** and a failure during that recompute reports as a total mutation failure
-   even though the underlying write already committed.
+1. **Derived-data synchronization remains synchronous,** but failures retain durable pending
+   work and are repaired on a later report read rather than silently serving stale data.

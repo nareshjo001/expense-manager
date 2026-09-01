@@ -87,8 +87,19 @@ def finish(d, out, api_id, tail):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=[FOOT, tail])
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
-    print("wrote", out, len(svg))
+    folders = {
+        "auth-api-01": "signup", "auth-api-02": "login",
+        "auth-api-03": "verify-otp", "auth-api-04": "reset-otp",
+        "auth-api-05": "forgot-password", "auth-api-06": "reset-password",
+        "auth-flow-01": os.path.join("flows", "protected-request-flow"),
+        "auth-flow-02": os.path.join("flows", "frontend-session-restore-flow"),
+        "auth-flow-03": os.path.join("flows", "logout-flow"),
+        "auth-flow-04": os.path.join("flows", "expired-token-flow"),
+    }
+    folder = next(folder for prefix, folder in folders.items() if out.startswith(prefix))
+    path = os.path.join(folder, out)
+    open(os.path.join(HERE, path), "w", encoding="utf-8").write(svg)
+    print("wrote", path, len(svg))
 
 
 def final_region(d, region, title_specs, note):
@@ -201,7 +212,7 @@ d, (r1, r2, r3, r4, r5) = base(
     [(20, 272, "User & Login Form", "No client validation, no disabled state", "ui"),
      (306, 272, "Rate Limiter & Validation", "Shared authLimiter budget", "auth"),
      (592, 272, "Credential Verification", "Lookup, compare, verified-gate", "database"),
-     (878, 272, "JWT Signing", "No expiry, no refresh token", "auth"),
+     (878, 272, "JWT Signing", "Bounded expiry, no refresh token", "auth"),
      (1164, 496, "Response, Storage & App Gate", "The entire session in one field", "response")])
 
 a = stack(d, r1, [
@@ -225,10 +236,10 @@ c = stack(d, r3, [
      "\"Account not verified. Sign Up Again.\"", {"step": "05", "tag": "E1"}),
 ])
 e = stack(d, r4, [
-    ("auth", "key", "JWT", "jwt.sign(payload, JWT_SECRET)", "no expiresIn option",
-     "Payload is exactly { email, _id }.", {"step": "06", "tag": "E2"}),
-    ("error", "alert", "NO EXPIRY", "Token Never Expires", "no exp claim",
-     "Confirmed by decoding a real signed token — no exp field present.",
+    ("auth", "key", "JWT", "issueAccessToken(payload)", "JWT_EXPIRES_IN / 15m default",
+     "Payload is { email, _id }; jwt.sign always receives expiresIn.", {"step": "06", "tag": "E2"}),
+    ("auth", "gauge", "EXPIRY", "exp claim", "bounded token lifetime",
+     "Invalid or non-positive configuration fails closed; no non-expiring fallback.",
      {"step": "06", "tag": "E2"}),
 ])
 
@@ -253,10 +264,9 @@ x = band(d, [
      "\"User not found\", \"Invalid Password\" and \"Account not verified\" each say "
      "something different — an attacker can enumerate which emails exist and which "
      "are verified without ever guessing a password."),
-    ("E2", "No Expiry, No Refresh, No Rotation", "jwt.sign with no options",
-     "The token is valid until the JWT_SECRET itself changes. There is no refresh "
-     "token, no rotation, and no server-side revocation list — see AUTH-FLOW-03/04 "
-     "for what little session teardown does exist."),
+    ("E2", "No Refresh, Rotation, or Revocation", "bounded expiry only",
+     "issueAccessToken always supplies an expiry (JWT_EXPIRES_IN, 15m by default). "
+     "There is still no refresh token, rotation, or server-side revocation list."),
     ("E3", "Plaintext Token in localStorage", "no HttpOnly cookie",
      "Any script that can execute in this origin (e.g. via a future XSS bug) can "
      "read the token directly. This is a real exposure only if such a bug exists "
@@ -748,7 +758,7 @@ note = final_region(d, r4, [
 ], ("No backend endpoint exists", [
     "There is no POST /auth/logout route anywhere in auth.routes.js. If one "
     "existed, this is the step that would call it — none does, so the JWT itself "
-    "remains valid (per its own, absent, expiry) until AUTH-FLOW-04 or a JWT_SECRET "
+    "remains valid on another client until its configured expiry or a JWT_SECRET "
     "rotation invalidates it.",
     "Because every step is local, logout cannot fail due to the backend being "
     "unavailable — there is nothing here to retry or time out.",

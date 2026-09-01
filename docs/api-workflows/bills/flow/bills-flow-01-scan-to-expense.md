@@ -57,14 +57,14 @@ single `File` in `BillUpload`'s local state.
 
 | Step | API | Documented in |
 |---|---|---|
-| Extraction | `POST /bills/bill-upload` | [BILLS-01](bills-api-01-upload-and-extract.md) |
-| Persistence | `POST /expense/add-expense` | [API-05](../expense/api-05-create-expense.md) — see the note below |
+| Extraction | `POST /bills/bill-upload` | [BILLS-01](../upload-extract/bills-api-01-upload-and-extract.md) |
+| Persistence | `POST /expense/add-expense` | [API-05](../../expense/create/api-05-create-expense.md) — see the note below |
 
 **On `POST /expense/add-expense`:** it is an expense-mutation endpoint, and Bills is **not**
 its primary consumer — `AddExpense.js` is, and it serves all manual expense creation whether
 or not a bill was scanned. It is therefore cross-referenced here rather than adopted under a
 Bills API ID. It is now documented in the expense set as
-[API-05 — create an expense](../expense/api-05-create-expense.md), whose consumption map
+[API-05 — create an expense](../../expense/create/api-05-create-expense.md), whose consumption map
 lists the bill-prefilled path as one of its three callers.
 
 ## 7. Data transformations
@@ -118,7 +118,7 @@ invalidated because Bills owns no cache entry.
 |---|---|---|---|
 | Host form | `frontend/src/components/expensesHandling/AddExpense.js` | `AddExpense`, `handleSubmit` | Owns `billData`, prefill effect, submit |
 | Scan screen | `frontend/src/components/billScanner/BillUpload.js` | `BillUpload`, `formatDateForInput` | Extraction call and date reshape |
-| Extraction | *(see [BILLS-01](bills-api-01-upload-and-extract.md))* | `uploadBill` | Returns parsed values |
+| Extraction | *(see [BILLS-01](../upload-extract/bills-api-01-upload-and-extract.md))* | `uploadBill` | Returns parsed values |
 | Persistence | `frontend/src/hooks/mutations/useAddExpenseMutation.js` | `useAddExpenseMutation` | Invalidates four query families |
 | Persistence | `frontend/src/api/expenseApi.js` | `addExpense` | `POST /expense/add-expense` |
 | Model | `backend/config/Schemas.js` | `ExpenseModel` | The record that is finally written |

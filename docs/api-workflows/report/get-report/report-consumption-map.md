@@ -13,7 +13,7 @@ HTTP boundary of its own.
 
 | API ID | Method | Endpoint | Route mount | Backend handler | Frontend caller | Consumer | Status |
 |---|---|---|---|---|---|---|---|
-| [REPORT-01](report-api-01-get-report.md) | GET | `/report` | `app.use("/report", apiLimiter, reportRoutes)` | `reportController.getReport` | `getReport` in `reportApi.js` | `useReport()` → `MonthlyInsightPage.js` | Actively used |
+| REPORT-01 | GET | `/report` | `app.use("/report", apiLimiter, reportRoutes)` | `reportController.getReport` | `getReport` in `reportApi.js` | `useReport()` → `MonthlyInsightPage.js` | Actively used |
 
 **That is the entire backend surface.** `report.routes.js` declares one route. There is
 no create, update, delete, list, or per-section endpoint — the report is always read as
@@ -22,7 +22,7 @@ one whole object, never partially fetched or partially written.
 | Operation | Endpoint? |
 |---|---|
 | Read the report | Yes — REPORT-01 |
-| Manual refresh | No — refresh only happens as a side effect of an Expense/Budget mutation (FLOW-02) |
+| Manual refresh | No — synchronization happens as a side effect of Expense, Income, or Budget mutations (FLOW-02) |
 | Create/update/delete | No public endpoint — the document is written only by the engine itself |
 | Per-section fetch (e.g. just `financialHealth`) | No — the object is monolithic |
 
@@ -128,12 +128,12 @@ each overwrite Mongo/Redis independently.
 
 | Report touches | Nature | Documented in |
 |---|---|---|
-| `ExpenseModel` | Read-only, 4 date-ranged queries per report | [Expense set](../expense/README.md) |
-| `BudgetModel` | Read-only, all-months query | [Budget set](../budget/README.md) |
-| `IncomeModel` | **Never read** — confirmed absent from `dataProvider.js` and `analyticsContext.js` | [Income set](../income/README.md) — income mutations invalidate `reports.all` anyway (a harmless no-op refetch) |
-| `chartConstants.MONTH_ORDER` | Shared sort order for budget history | [Charts set](../charts/README.md) |
-| Expense mutations (add/edit/delete) | Call `refreshReport` synchronously — see [FLOW-02](report-flow-02-mutation-refresh.md) | [Expense API-05/06/07](../expense/README.md) |
-| Budget mutations (set/update) | Call `refreshReport` synchronously — see [FLOW-02](report-flow-02-mutation-refresh.md) | [Budget BUDGET-02/03](../budget/README.md) |
+| `ExpenseModel` | Read-only, 4 date-ranged queries per report | [Expense set](../../expense/README.md) |
+| `BudgetModel` | Read-only, all-months query | [Budget set](../../budget/README.md) |
+| `IncomeModel` | Not read by the current analytics context | [Income set](../../income/README.md) — income mutations still synchronize the report |
+| `chartConstants.MONTH_ORDER` | Shared sort order for budget history | [Charts set](../../charts/README.md) |
+| Expense mutations (add/edit/delete) | Use reserved, revision-fenced synchronization — see [FLOW-02](../flow/mutation-refresh/report-flow-02-mutation-refresh.md) | [Expense APIs](../../expense/README.md) |
+| Budget mutations (set/update) | Use reserved, revision-fenced synchronization — see [FLOW-02](../flow/mutation-refresh/report-flow-02-mutation-refresh.md) | [Budget APIs](../../budget/README.md) |
 | `cron/recurringJob.js` | Also calls `refreshReport` — a sixth, non-HTTP trigger | not yet part of this module's scope; noted here as a caller only |
 | ML Service / SIA | **Not called anywhere in this module** — confirmed by tracing every analyzer and score calculator; no HTTP client, no queue, no model artifact referenced | out of scope, stated explicitly rather than diagrammed |
 

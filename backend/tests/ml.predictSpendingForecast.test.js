@@ -7,7 +7,24 @@
  */
 
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const app = require('../app'); // Express app
+
+const TEST_JWT_SECRET = 'ml-spending-forecast-test-secret';
+const originalJwtSecret = process.env.JWT_SECRET;
+
+function authorizationHeader() {
+  return `Bearer ${jwt.sign({ _id: '507f1f77bcf86cd799439011' }, TEST_JWT_SECRET)}`;
+}
+
+beforeAll(() => {
+  process.env.JWT_SECRET = TEST_JWT_SECRET;
+});
+
+afterAll(() => {
+  if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = originalJwtSecret;
+});
 
 // Mock the ML service client module
 jest.mock('../utils/mlServiceClient', () => {
@@ -29,7 +46,7 @@ jest.mock('../utils/mlServiceClient', () => {
 });
 
 describe('POST /ml/predict-spending-forecast', () => {
-  it('returns 200 with forecast data when token header is provided', async () => {
+  it('returns 200 with forecast data for an authenticated user', async () => {
     const payload = {
       spentSoFar: 1234,
       forecastableSpentSoFar: 200,
@@ -40,7 +57,7 @@ describe('POST /ml/predict-spending-forecast', () => {
     const res = await request(app)
       .post('/ml/predict-spending-forecast')
       .set('Content-Type', 'application/json')
-      .set('X-ML-Operations-Token', 'test-token')
+      .set('Authorization', authorizationHeader())
       .send(payload);
 
     expect(res.status).toBe(200);
@@ -53,7 +70,7 @@ describe('POST /ml/predict-spending-forecast', () => {
     });
   });
 
-  it('returns 200 even if token header is missing (mocked service ignores it)', async () => {
+  it('rejects an unauthenticated request before calling the ML client', async () => {
     const payload = {
       spentSoFar: 1234,
       forecastableSpentSoFar: 200,
@@ -61,11 +78,15 @@ describe('POST /ml/predict-spending-forecast', () => {
       daysInMonth: 30,
     };
 
+    const client = require('../utils/mlServiceClient');
+    client.requestSpendingForecast.mockClear();
+
     const res = await request(app)
       .post('/ml/predict-spending-forecast')
       .set('Content-Type', 'application/json')
       .send(payload);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    expect(client.requestSpendingForecast).not.toHaveBeenCalled();
   });
 });

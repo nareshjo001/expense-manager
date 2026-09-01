@@ -62,6 +62,6 @@ d.path([(s10.right, o.R2_CY), (1584, o.R2_CY), (1584, 502), (o.COL[8] + o.CW, 50
 
 svg = o.render(["Same two queries and same period resolution as the header route; only the derived "
                 "numbers differ. Any of the three objects can come back null."], "INCOME-06")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "insights-card",
                   "income-api-06-insights-card-overview.svg"), "w", encoding="utf-8").write(svg)
 print("wrote income-api-06-insights-card-overview.svg", len(svg))

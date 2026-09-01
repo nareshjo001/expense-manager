@@ -84,7 +84,7 @@ necessary, but simple and unambiguous.
 ## 12. Navigation
 
 No router navigation — `App.js`'s own conditional render handles the transition, the
-same mechanism [AUTH-FLOW-02](auth-flow-02-session-restoration.md) uses on the way in.
+same mechanism [AUTH-FLOW-02](../frontend-session-restore-flow/auth-flow-02-session-restoration.md) uses on the way in.
 
 ## 13. Query-cache impact
 
@@ -95,7 +95,7 @@ their own first fetch completes.
 
 ## 14. Cross-account data-isolation impact
 
-This flow, together with [AUTH-FLOW-04](auth-flow-04-expired-token.md), is the primary
+This flow, together with [AUTH-FLOW-04](../expired-token-flow/auth-flow-04-expired-token.md), is the primary
 mechanism protecting against stale-data leakage between accounts sharing a browser tab.
 Both clear the same two stores (`localStorage`, TanStack Query) via the same two calls.
 
@@ -110,8 +110,8 @@ Both clear the same two stores (`localStorage`, TanStack Query) via the same two
 ## 16. Confirmed limitations
 
 - **No backend endpoint exists.** If one did, this is the step where it would be
-  called; none is. The JWT itself is never told it's invalid — it remains valid
-  (indefinitely, since it never expires) until a `JWT_SECRET` rotation.
+  called; none is. The JWT itself is never told it's invalid — another copy remains
+  usable until its configured expiry or a `JWT_SECRET` rotation.
 - **`localStorage.clear()` wipes everything, not just the token** — any other
   browser-persisted state (e.g., push-notification registration flags) is discarded
   too.

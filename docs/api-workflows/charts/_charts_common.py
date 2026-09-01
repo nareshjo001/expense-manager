@@ -37,5 +37,7 @@ def no_redis_box(o, x, y, w, h=150):
 
 
 def save(o, svg, name):
-    open(os.path.join(HERE, name), "w", encoding="utf-8").write(svg)
-    print("wrote", name, len(svg))
+    folders = {"charts-api-01": "trend", "charts-api-02": "trend", "charts-api-03": "trend", "charts-api-04": "trend", "charts-api-05": "trend", "charts-api-06": "bar", "charts-api-07": "bar", "charts-api-08": "pie", "charts-api-09": "pie", "charts-flow-01": "flow"}
+    folder = next(value for key, value in folders.items() if name.startswith(key))
+    open(os.path.join(HERE, folder, name), "w", encoding="utf-8").write(svg)
+    print("wrote", os.path.join(folder, name), len(svg))

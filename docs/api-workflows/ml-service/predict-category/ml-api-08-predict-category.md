@@ -91,7 +91,7 @@ Valid `expenseName` → snapshot acquired → text cleaned → TF-IDF transform 
 
 ## 14. Security/privacy behaviour
 
-No authentication on this route itself — the backend's own `verifyToken` on `/ml/predict-category` is the actual gate a real user request passes through, but this endpoint would accept a direct, unauthenticated call if reached on its own network path.
+This route requires `X-ML-Operations-Token`. The guard runs before inference, fails closed with `503` when `ML_OPERATIONS_TOKEN` is not configured, and returns `401` for a missing or invalid token. The Express proxy additionally requires the user's JWT via `verifyToken`.
 
 ## 15. Files involved
 

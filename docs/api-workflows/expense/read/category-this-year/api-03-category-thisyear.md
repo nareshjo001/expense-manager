@@ -5,7 +5,7 @@
 > **Reclassified during the repository-wide API coverage gate.** This document was
 > previously numbered API-03. Under the binding coverage rule that every source
 > endpoint maps to **exactly one** API document, `GET /expense/by-category` cannot have
-> two — [API-02](api-02-category-thismonth.md#endpoint-and-http-method) is that route's
+> two — [API-02](../category-thismonth/api-02-category-thismonth.md#endpoint-and-http-method) is that route's
 > one API workflow document. This file is **not** an API workflow: it documents a second
 > response branch of the same endpoint, cross-linked from API-02, and is excluded from
 > the corpus's API-workflow and source-endpoint counts. It is retained as a standalone
@@ -16,7 +16,7 @@ Two levels of the same workflow. Every statement below is traced to the current
 repository implementation.
 
 > **Shared endpoint, not a separate one.** Same route, same controller and same
-> middleware as [API-02](api-02-category-thismonth.md). The backend special-cases only
+> middleware as [API-02](../category-thismonth/api-02-category-thismonth.md). The backend special-cases only
 > `period === 'thismonth'`; **every other value falls through here**, including the UI's
 > `'thisyear'` and a request with no `period` at all. This document covers that else
 > branch.
@@ -114,7 +114,7 @@ the exceptions band on the detailed diagram.
 
 ## Files involved
 
-Same as [API-02](api-02-category-thismonth.md#files-involved), with these insight rules
+Same as [API-02](../category-thismonth/api-02-category-thismonth.md#files-involved), with these insight rules
 used instead of the monthly ones:
 
 | Layer | File | Function / export | Purpose |
@@ -132,7 +132,7 @@ used instead of the monthly ones:
 
 The rate-limiter, `trust proxy`, Redis and frontend-error-state findings are shared with
 API-01 and API-02 and are not repeated in full — see
-[api-01-last-week.md](api-01-last-week.md#current-implementation-observations).
+[api-01-last-week.md](../last-week/api-01-last-week.md#current-implementation-observations).
 
 | # | Observation | Classification |
 |---|---|---|

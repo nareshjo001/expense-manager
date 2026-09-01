@@ -90,7 +90,7 @@ The MongoDB-backed lock (`mltraininglocks`, singleton document, atomic `find_one
 
 ## 14. Security/privacy behaviour
 
-No authentication on this route itself. No service-to-service credential is sent by the confirmed caller.
+This route requires `X-ML-Operations-Token` before it evaluates an active run, creates a run record, or claims a retraining lock. The backend cron sends that header through `mlOperationsHeaders()`; the endpoint fails closed with `503` if the service token is not configured and returns `401` for a missing or invalid token.
 
 ## 15. Files involved
 
@@ -103,4 +103,4 @@ No authentication on this route itself. No service-to-service credential is sent
 ## 16. Current implementation observations
 
 - **202/200 means accepted or already-active — never "completed" or "promoted."** The full pipeline (ML-FLOW-07) that follows can take minutes and can still fail at any of several later stages; this endpoint's response says nothing about that outcome.
-- No authentication protects this route; retraining is not scheduled inside the ML service itself — it is entirely cron-in-the-Node-backend plus this manual/API path, never an ML-service-internal scheduler.
+- Retraining is not scheduled inside the ML service itself — it is entirely cron-in-the-Node-backend plus this manual/API path, never an ML-service-internal scheduler.

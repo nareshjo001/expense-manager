@@ -50,6 +50,6 @@ d.path([(s[8].cx, s[8].bottom), (s[8].cx, 458)], "error", dashed=True)
 
 svg = o.render(["The list is never fetched on page load — only when the modal opens, and it stays "
                 "cached for five minutes afterwards."], "INCOME-01")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "list-income",
                   "income-api-01-list-income-overview.svg"), "w", encoding="utf-8").write(svg)
 print("wrote income-api-01-list-income-overview.svg", len(svg))

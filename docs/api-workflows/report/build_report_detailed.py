@@ -88,8 +88,11 @@ def finish(d, out, api_id, tail):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=[FOOT, tail])
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
-    print("wrote", out, len(svg))
+    directory = "get-report" if out.startswith("report-api-01") else (
+        "flow/analytics-engine" if out.startswith("report-flow-01") else "flow/mutation-refresh")
+    path = os.path.join(HERE, directory, out)
+    open(path, "w", encoding="utf-8").write(svg)
+    print("wrote", os.path.relpath(path, HERE), len(svg))
 
 
 def region5(d, src, head, left_label, left, right_label, right, note):
@@ -150,14 +153,14 @@ c = stack(d, r3, [
      "One try/catch around the entire service call.", {"step": "05"}),
 ])
 e = stack(d, r4, [
-    ("database", "bolt", "REDIS", "Cache Lookup", "reportCache.get(userId)",
-     "Key report:<userId>. A parse failure is treated as a miss.",
+    ("database", "bolt", "REDIS", "Cache Lookup", "getWithRevision(userId)",
+     "Key report:<userId>. Parse failures degrade to a miss.",
      {"step": "06", "tag": "E3"}),
     ("database", "database", "MONGODB", "Stored Report", "FinancialReport.findOne",
-     "Served as-is if present — not recomputed on a Redis miss.",
+     "Served only if contract-current and revision-fresh.",
      {"step": "07", "tag": "E4"}),
     ("insights", "chart", "ENGINE", "Analytics Engine", "generateReport() — see FLOW-01",
-     "Runs only when no Mongo document exists at all.", {"step": "08"}),
+     "Runs for a missing, stale, or recovery-pending report.", {"step": "08"}),
 ])
 grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "then, on a true miss",
                    [("FinancialReport.findOneAndUpdate", "upsert"),
@@ -202,9 +205,8 @@ x = band(d, [
     ("E3", "Corrupted Cache Treated as Miss", "reportCache.get catch",
      "JSON.parse failure is caught, logged and returns null — falls through to Mongo "
      "rather than crashing the request."),
-    ("E4", "Stored Report Can Be Stale", "findOne, no recompute",
-     "If Redis expired but a Mongo document exists, it is served unchanged — it is "
-     "only ever refreshed by a mutation or a full cache miss."),
+    ("E4", "Stale Reports Are Regenerated", "PendingSync revision + contract check",
+     "A stored or cached report below the durable revision floor is bypassed and regenerated."),
     ("E5", "Missing Nested Fields", "optional chaining throughout",
      "Every consumer defaults its own slice (?? {}), so a malformed report degrades "
      "per-section rather than crashing the page."),
@@ -275,8 +277,8 @@ c = stack(d, r3, [
 e = stack(d, r4, [
     ("insights", "sigma", "CALCULATORS", "5 Score Modules", "budget/spending/category/trend/habit",
      "Each tiered against its own analyzer's output.", {"step": "05"}),
-    ("error", "alert", "PARAMETER BUG", "Habit Score Fed {}", "healthAnalyzer({ monthlyHabits })",
-     "Destructures habits — key mismatch zeroes habit input.",
+    ("insights", "list", "INPUT", "Habit Data Included", "healthAnalyzer({ habits })",
+     "The monthly habit report feeds health scoring and signals.",
      {"step": "05", "tag": "E1"}),
     ("insights", "gears", "AGGREGATE", "Health Score", "weighted average, renormalized",
      "Missing modules excluded, never treated as zero.", {"step": "06", "tag": "E2"}),
@@ -292,9 +294,9 @@ f0 = d.card(r5.card_x, Y0, "backend", "layers", "ASSEMBLY", "assembleReport()",
             "metadata, summary, 6 sections, financialHealth",
             "One object — this is the exact shape cached and persisted.",
             w=RW, step="07")
-f1 = d.card(r5.card_x, f0.bottom + 14, "error", "alert", "FIELD MISMATCH",
-            "summary.healthScore", "healthReport has no such key",
-            "healthReport has no healthScore/riskLevel keys — both undefined.",
+f1 = d.card(r5.card_x, f0.bottom + 14, "insights", "gauge", "SUMMARY",
+            "summary.healthScore", "healthReport values",
+            "Health score and risk level are copied into the summary.",
             w=RW, step="07", tag="E3")
 f2 = d.card(r5.card_x, f1.bottom + 14, "response", "send", "RETURNED",
             "to reportService", "generateReport()'s return value",
@@ -307,17 +309,14 @@ d.handoff(c[-1], e[0], c[-1].right + 14, entry_x=e[0].right - 26)
 d.handoff(e[0], f0, e[0].right + 14, entry_x=f0.right - 26)
 
 x = band(d, [
-    ("E1", "Habit Data Never Reaches Health", "key mismatch, 3 files",
-     "reportGenerator passes monthlyHabits; healthAnalyzer destructures habits. Habit "
-     "score, the weekend-ratio stability bonus, and every habit-derived signal all "
-     "compute against {}. Verified by execution."),
+    ("E1", "Habit Data Reaches Health", "reportGenerator → healthAnalyzer",
+     "The generator passes the monthly habit report as `habits`; health scoring and "
+     "signals use that data."),
     ("E2", "One Analyzer Failure Aborts Everything", "no per-analyzer try/catch",
      "generateReport has no isolation between analyzers — any thrown error fails the "
      "whole report, including sections that already succeeded."),
-    ("E3", "Health Score Is Computed but Unreachable", "summary field-name mismatch",
-     "summary.healthScore and summary.riskLevel are always undefined; the real values "
-     "live at financialHealth.overall and financialHealth.risk. No frontend component "
-     "reads either path."),
+    ("E3", "Summary Includes Health Values", "reportGenerator summary",
+     "summary.healthScore and summary.riskLevel are populated from the health report."),
     ("E4", "Legacy Duplicate Config", "analyzers/config/scoringRules.js",
      "A second, differently-weighted rules file — required by nothing. The live "
      "weights are analyzers/scores/healthRules.js."),
@@ -350,83 +349,74 @@ d, (r1, r2, r3, r4, r5) = base(
     "Level 2 · real functions and call order · badges map to the 9 stages in "
     "report-flow-02-mutation-refresh-overview.svg",
     [(20, 272, "Mutation Commit", "Already documented in Expense/Budget", "database"),
-     (306, 272, "Refresh Invocation", "Synchronous, awaited", "backend"),
-     (592, 272, "Cache Invalidation", "Redis key deleted first", "database"),
+     (306, 272, "Synchronization", "Confirm then refresh", "backend"),
+     (592, 272, "Durable Freshness", "PendingSync revision fence", "database"),
      (878, 272, "Full Recompute", "Same engine as FLOW-01", "insights"),
      (1164, 496, "Cache Write & Response Boundary", "The response waits for all of it", "response")])
 
 a = stack(d, r1, [
-    ("database", "save", "MUTATION", "Document Already Saved", "e.g. newExpense.save()",
-     "The write is committed before any Report code runs.", {"step": "01"}),
-    ("database", "gears", "PROPAGATION", "Budget + Own Cache", "recalculateBudget, clearUserExpenseCache",
-     "Expense/Budget's own propagation — see those modules.", {"step": "02"}),
-    ("error", "alert", "NOT A TRIGGER", "Income, Recurring Toggle", "no refreshReport call",
-     "Neither module ever calls this path — see E5.", {"step": "02", "tag": "E5"}),
+    ("database", "save", "RESERVATION", "Derived Work Reserved", "PendingSync.reserve()",
+     "Pre-write evidence covers report synchronization.", {"step": "01"}),
+    ("database", "save", "MUTATION", "Primary Write Commits", "expense, income, or budget",
+     "After this point the reservation is never abandoned as though the write failed.", {"step": "02"}),
+    ("database", "gears", "PROPAGATION", "Budget + Own Cache", "as applicable",
+     "Expense, Income, and Budget controllers share the synchronization lifecycle.", {"step": "02", "tag": "E5"}),
 ])
 b = stack(d, r2, [
-    ("backend", "refresh", "CALL", "refreshReport(userId)", "awaited",
-     "Not fired-and-forgotten — the mutation's own handler blocks on it.",
+    ("backend", "refresh", "CALL", "synchronizeAfterMutation()", "awaited",
+     "Confirms pending work, then attempts the revision-fenced refresh.",
      {"step": "03", "tag": "E1"}),
 ])
 c = stack(d, r3, [
-    ("database", "bolt", "REDIS", "Cache Dropped First", "reportCache.invalidate",
-     "Deleted before recomputing, not after — a request racing this window sees a "
-     "genuine miss.", {"step": "04"}),
+    ("database", "bolt", "PENDING SYNC", "Revision Confirmed", "PendingSync.confirm()",
+     "The revision becomes the durable minimum freshness floor.", {"step": "04"}),
 ])
 e = stack(d, r4, [
     ("insights", "chart", "ENGINE", "generateReport()", "identical to FLOW-01",
      "No shortcuts — every analyzer and score recomputes.", {"step": "05"}),
-    ("database", "save", "MONGODB", "Upsert", "findOneAndUpdate, upsert: true",
-     "Overwrites the stored report unconditionally.", {"step": "06", "tag": "E2"}),
+    ("database", "save", "MONGODB", "Fenced Persist", "findOneAndUpdate",
+     "A superseded revision cannot overwrite a newer report.", {"step": "06", "tag": "E2"}),
 ])
-grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "no stampede guard",
-                   [("no lock/mutex", "concurrent refreshes overlap"),
-                    ("last write wins", "no version check")])
+grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "atomic ordering",
+                   [("Mongo fence", "older writes are skipped"),
+                    ("Redis CAS", "never overwrite newer cache")])
 d.path([(e[-1].cx, e[-1].bottom), (e[-1].cx, grp.y)], "database")
 d.handoff(a[-1], b[0], 299); d.handoff(b[-1], c[0], 585); d.handoff(c[-1], e[0], 871)
 
 f0, g, h = region5(
     d, e[-1],
     ("database", "database", "CACHE WRITE", "reportCache.set", "EX 3600",
-     "Redis repopulated with the freshly computed report.", {"step": "07"}),
+     "Revision-aware CAS preserves newer cached data.", {"step": "07"}),
     "Then, only now", [
         ("response", "send", "RESPONSE", "Mutation Responds", "201 / 200 OK",
          "The original request finally returns.", {"step": "08", "tag": "E3"}),
         ("frontend", "key", "CLIENT", "Report Invalidated", "queryKeys.reports.all",
          "Part of the mutation's own 4-key invalidation.", {"step": "09"}),
     ],
-    "If step 05-07 throws", [
-        ("error", "alert", "500 RETURNED", "Expense Already Saved", "generic catch",
-         "The client is told the mutation failed. It did not.", {"tag": "E4"}),
-        ("error", "gauge", "REPORT STALE", "Cache Stays Empty", "invalidate ran, set did not",
-         "Next read pays a full recompute instead of a hit.", {}),
+    "If derived synchronization fails", [
+        ("error", "alert", "PENDING", "Write Is Already Durable", "PendingSync marker",
+         "The next report read retries recovery instead of serving unproven data.", {"tag": "E4"}),
+        ("error", "gauge", "REPAIR ON READ", "Freshness Is Rechecked", "report controller",
+         "A failed forced refresh returns controlled 503, never known-stale data.", {}),
     ],
     ("Synchronous, not background", [
-        "Nothing here is queued or backgrounded. The mutation's HTTP response is the "
-        "refresh completing — there is no separate worker.",
-        "This is the same refreshReport already documented as a propagation step in "
-        "Expense API-05/06/07 and Budget BUDGET-02/03.",
+        "Nothing here is queued or backgrounded. Synchronization is attempted in the "
+        "mutation request, with durable repair-on-read if it cannot complete.",
+        "The shared lifecycle is used by Expense, Income, and Budget mutations.",
     ], "error"))
 
 x = band(d, [
-    ("E1", "Response Blocks on the Full Engine", "await refreshReport",
-     "Every Expense and Budget write pays the entire Analytics Engine's cost inside "
-     "its own request — there is no async/background path."),
-    ("E2", "No Stampede Protection", "no lock, no coalescing",
-     "Concurrent mutations for the same user each run their own full recompute and "
-     "each overwrite Mongo and Redis independently; last write wins."),
-    ("E3", "Failure After Commit Reports as Total Failure", "shared try/catch",
-     "recalculateBudget, clearUserExpenseCache and refreshReport share the mutation's "
-     "own try/catch. If any throws, the client receives a generic 500 even though the "
-     "Expense or Budget document was already saved."),
-    ("E4", "Report Stays Stale on That Failure", "invalidate ran, set never reached",
-     "The Redis key was already deleted before the throw, so the next read recomputes "
-     "from scratch rather than serving a wrong cached value — a safe failure, but a "
-     "slow one."),
-    ("E5", "Income Never Refreshes the Report", "grep across Income controllers",
-     "Confirmed absent — consistent with the Analytics Engine never reading "
-     "IncomeModel. The frontend still invalidates queryKeys.reports.all on every "
-     "income mutation; it is a no-op refetch, not a staleness risk."),
+    ("E1", "Refresh Is Synchronous", "await synchronizeAfterMutation",
+     "The mutation attempts derived-data synchronization in its request; a pending marker "
+     "preserves work that needs repair."),
+    ("E2", "Concurrent Writes Are Revision-Fenced", "Mongo conditional update + Redis CAS",
+     "An older refresh is skipped rather than overwriting a newer Mongo or Redis result."),
+    ("E3", "Committed Writes May Need Repair", "post-write synchronization",
+     "A derived-data failure is recorded for read-time repair; it is not treated as a fresh report."),
+    ("E4", "Known-Stale Reports Are Not Served", "controller forced refresh",
+     "If repair remains pending and forced regeneration fails or is superseded, GET /report returns 503."),
+    ("E5", "Income Synchronizes the Report", "Income controllers",
+     "Add, edit, and delete reserve report work and use the same synchronization lifecycle."),
 ])
 refs(d, [(pt, rail, gi, x[i], enter) for i, (pt, rail, gi, enter) in enumerate([
     ((b[0].right, b[0].cy), 580, 0, "left"),
@@ -436,5 +426,5 @@ refs(d, [(pt, rail, gi, x[i], enter) for i, (pt, rail, gi, enter) in enumerate([
     ((a[2].cx, a[2].bottom), a[2].cx, 4, "top"),
 ])])
 finish(d, "report-flow-02-mutation-refresh-detailed.svg", "FLOW-02",
-       "The refresh is synchronous and unconditional. Its failure boundary is shared "
-       "with the triggering mutation, not isolated from it.")
+       "Synchronization is attempted synchronously; unfinished report work remains "
+       "durable and is repaired on a later report read.")

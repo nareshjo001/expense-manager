@@ -33,8 +33,11 @@ def error_card(o, x, y, w, title, lines):
 
 
 def save(o, svg, name):
-    open(os.path.join(HERE, name), "w", encoding="utf-8").write(svg)
-    print("wrote", name, len(svg))
+    directory = "get-report" if name.startswith("report-api-01") else (
+        "flow/analytics-engine" if name.startswith("report-flow-01") else "flow/mutation-refresh")
+    path = os.path.join(HERE, directory, name)
+    open(path, "w", encoding="utf-8").write(svg)
+    print("wrote", os.path.relpath(path, HERE), len(svg))
 
 
 # ===========================================================================
@@ -46,8 +49,8 @@ o = new("GET /report — loading the financial report",
         "Quick overview · follow 01 → 11 · full detail in report-api-01-get-report-detailed.svg")
 d, R1, R2 = o.d, o.ROW1, o.ROW2
 
-d.group_box(882, 276, 704, 180, "Cache-miss path", "database",
-            note="only reached when Redis has nothing cached",
+d.group_box(882, 276, 704, 180, "Freshness-validation path", "database",
+            note="also used for a stale revision, contract, or pending repair",
             label_x=996, note_x=1180)
 
 d.facts_panel(34, 276, 836, 280, "At a glance", [
@@ -67,20 +70,20 @@ s3 = o.card(2, R1, "auth", "key", "03", "Authenticated GET", "Axios + JWT",
 s4 = o.card(3, R1, "auth", "shield", "04", "API Security", "Limiter + JWT",
             "IP rate limit, then JWT validation.")
 s5 = o.card(4, R1, "backend", "gears", "05", "Report Controller", "getReport()",
-            "One try/catch around the whole service call.")
-s6 = o.card(5, R1, "database", "bolt", "06", "Redis Lookup", "reportCache.get",
-            "Keyed by report:<userId>.")
+            "Repairs known pending synchronization before serving.")
+s6 = o.card(5, R1, "database", "bolt", "06", "Redis Lookup", "getWithRevision()",
+            "Returns only a contract-current, revision-fresh entry.")
 s10 = o.card(7, R1, "response", "send", "10", "200 OK", "Cached or Fresh Report",
              "Same schema either way.")
 s11 = o.card(8, R1, "ui", "layout", "11", "Dashboard Render", "4 Components",
              "Header, budget card, insights, overall.")
 
-s7 = o.card(5, R2, "database", "database", "07", "Mongo or Engine", "FinancialReport",
-            "Stored doc if present, else full run.")
+s7 = o.card(5, R2, "database", "database", "07", "PendingSync + Mongo", "freshness floor",
+            "A stale or pending stored report is regenerated.")
 s8 = o.card(6, R2, "insights", "chart", "08", "Analytics Engine", "See FLOW-01",
             "Context, six analyzers, six scores.")
 s9 = o.card(7, R2, "database", "save", "09", "Upsert and Cache", "Mongo + Redis",
-            "Stores the result, then caches it.")
+            "Revision-fenced Mongo write plus Redis CAS.")
 
 o.chain([s1, s2, s3, s4, s5, s6], o.R1_CY)
 o.chain([s7, s8, s9], o.R2_CY)
@@ -97,8 +100,8 @@ error_card(o, o.COL[8], 460, o.CW, "One failure code",
 d.path([(s11.right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
        "error", dashed=True)
 
-save(o, o.render(["A cache hit answers straight from Redis and skips 07-09 entirely. A stored "
-                  "Mongo document is served as-is on a miss — it is not recomputed."],
+save(o, o.render(["A cache entry or stored document is served only when its report-contract and "
+                  "sync revision satisfy the durable PendingSync freshness floor."],
                  "REPORT-01"),
      "report-api-01-get-report-overview.svg")
 
@@ -170,36 +173,35 @@ o = new("Mutation-triggered Report refresh — synchronous, not background",
 d, R1, R2 = o.d, o.ROW1, o.ROW2
 
 d.facts_panel(34, 276, 836, 280, "At a glance", [
-    ("Triggers",   "Expense create/update/delete, Budget set/update", "database"),
-    ("Not a trigger", "Income and the recurring toggle — never call it", "error"),
+    ("Triggers",   "Expense, Income, and Budget mutations", "database"),
+    ("Reliability", "reserve → write → confirm → fenced derived-data sync", "auth"),
     ("Runs",       "Synchronously, awaited before the HTTP response", "backend"),
     ("On failure", "The whole mutation answers 500 — see the note",  "error"),
     ("Async?",     "No — nothing is queued or backgrounded",         "error"),
 ])
 
 d.note_box(882, 276, 516, 168, "The response waits", [
-    "refreshReport is awaited before the mutation's own res.status(...) call, so a "
-    "successful save is followed by a full report recompute before the client hears "
-    "back.",
-    "If that recompute throws, the response is 500 even though the write already "
-    "committed.",
+    "After a committed write, synchronizeAfterMutation confirms durable pending work and "
+    "attempts a fenced report refresh before the mutation response.",
+    "A failed derived-data attempt remains pending for repair-on-read rather than being "
+    "silently treated as fresh.",
 ], "error")
 
 t = [
     o.card(0, R1, "database", "save", "01", "Mutation Commits", "e.g. addExpense",
            "The document is already saved."),
-    o.card(1, R1, "database", "gears", "02", "Budget + Cache", "recalculateBudget",
-           "Expense's own propagation, not Report's."),
-    o.card(2, R1, "backend", "refresh", "03", "Refresh Called", "refreshReport(userId)",
-           "Awaited, not fired-and-forgotten."),
-    o.card(3, R1, "database", "bolt", "04", "Cache Dropped", "reportCache.invalidate",
-           "Redis key deleted before recomputing."),
+    o.card(1, R1, "database", "gears", "02", "Work Reserved", "PendingSync.reserve()",
+           "Durable pre-write evidence covers the report."),
+    o.card(2, R1, "backend", "refresh", "03", "Sync Attempt", "synchronizeAfterMutation()",
+           "Confirms pending work, then calls the fenced refresh."),
+    o.card(3, R1, "database", "bolt", "04", "Freshness Revision", "PendingSync.revision",
+           "Fences each derived-data write for this user."),
     o.card(4, R1, "insights", "chart", "05", "Full Recompute", "generateReport()",
            "Same engine as FLOW-01, no shortcuts."),
-    o.card(5, R1, "database", "save", "06", "Mongo Upsert", "findOneAndUpdate",
-           "Overwrites the stored report."),
+    o.card(5, R1, "database", "save", "06", "Mongo Persist", "fenced findOneAndUpdate",
+           "Older concurrent work is reported as superseded."),
     o.card(6, R1, "database", "database", "07", "Redis Repopulated", "reportCache.set",
-           "Fresh report cached for 1 hour."),
+           "CAS prevents an older revision overwriting a newer one."),
     o.card(7, R1, "response", "send", "08", "Mutation Responds", "201 / 200 OK",
            "Only now does the original request return."),
 ]
@@ -209,13 +211,12 @@ o.chain(t, o.R1_CY)
 d.path([(t[7].cx, t[7].bottom), (t[7].cx, s09.y)], "frontend", width=2.8,
        label="ON SUCCESS", label_at=(t[7].cx, o.LABEL_Y))
 
-error_card(o, o.COL[8], 460, o.CW, "Failure after commit",
-           ["If step 03-07 throws, the", "expense is saved but the", "client is told it failed."])
+error_card(o, o.COL[8], 460, o.CW, "Derived data remains pending",
+           ["A post-write sync failure keeps", "repair evidence durable; the next", "report read attempts recovery."])
 d.path([(s09.right, o.R2_CY), (1584, o.R2_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
        "error", dashed=True)
 
-save(o, o.render(["This is the same refreshReport already documented as a propagation step in "
-                  "Expense API-05/06/07 and Budget BUDGET-02/03. Shown here as its own flow "
-                  "because its failure boundary is significant enough to warrant one."],
+save(o, o.render(["This flow is shared by Expense, Income, and Budget mutations. It uses the "
+                  "same PendingSync evidence and revision fencing that report reads validate."],
                  "FLOW-02"),
      "report-flow-02-mutation-refresh-overview.svg")

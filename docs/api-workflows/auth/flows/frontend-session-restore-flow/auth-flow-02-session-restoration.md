@@ -35,7 +35,7 @@ raster fallback: [`auth-flow-02-session-restoration-detailed.png`](auth-flow-02-
 ## 4. Trigger
 
 `App.js` mounting — either a fresh page load, a browser refresh, or the hard reload
-that [AUTH-FLOW-04](auth-flow-04-expired-token.md) itself performs.
+that [AUTH-FLOW-04](../expired-token-flow/auth-flow-04-expired-token.md) itself performs.
 
 ## 5. Initial state
 
@@ -63,7 +63,7 @@ base64 parsing anywhere in the frontend source.
 
 None applies here — this runs before any network request is made. The interceptors in
 `api/axios.js` only come into play once the first protected call fires, which is
-outside this flow (see [AUTH-FLOW-01](auth-flow-01-protected-request.md)).
+outside this flow (see [AUTH-FLOW-01](../protected-request-flow/auth-flow-01-protected-request.md)).
 
 ## 9. Success path
 
@@ -82,8 +82,8 @@ nothing here inspects the token's contents.
 ## 11. State cleanup
 
 None performed by this flow — it only reads state, never clears it. Cleanup is entirely
-owned by [AUTH-FLOW-03](auth-flow-03-logout.md) (manual) and
-[AUTH-FLOW-04](auth-flow-04-expired-token.md) (forced).
+owned by [AUTH-FLOW-03](../logout-flow/auth-flow-03-logout.md) (manual) and
+[AUTH-FLOW-04](../expired-token-flow/auth-flow-04-expired-token.md) (forced).
 
 ## 12. Navigation
 
@@ -99,7 +99,7 @@ None directly — no query fires until deeper inside the authenticated tree.
 
 None at this stage — this flow doesn't touch any user-scoped data, only a boolean flag.
 The actual isolation-relevant cache behaviour lives in
-[AUTH-FLOW-03](auth-flow-03-logout.md)/[AUTH-FLOW-04](auth-flow-04-expired-token.md)'s
+[AUTH-FLOW-03](../logout-flow/auth-flow-03-logout.md)/[AUTH-FLOW-04](../expired-token-flow/auth-flow-04-expired-token.md)'s
 `queryClient.clear()` calls, which run *before* this flow would ever re-run for a
 different account.
 
@@ -122,7 +122,7 @@ other frontend file directly.
   nothing inside `LandingPage` is individually guarded.
 - **"Frontend considers user authenticated" and "backend-verified identity" are
   different facts here.** This flow only ever establishes the former. A stale, expired
-  (moot, since tokens never expire), malformed, or deleted-user token still restores
+  malformed, expired, or deleted-user token still restores
   `isLoggedIn = true` — the real check only happens on the first protected request.
 - **No loading/unknown auth state exists beyond the splash screen's fixed 2-second
   timer** — `isLoading` is a timer, not a function of whether the auth check has

@@ -54,7 +54,7 @@ d.facts_panel(34, 276, 836, 280, "At a glance", [
 
 s1 = o.card(0, R1, "ui", "cursor", "01", "External Caller", "curl / monitor",
             "Not called by this app's own frontend.")
-s2 = o.card(1, R1, "backend", "gauge", "02", "Express App", "server.js",
+s2 = o.card(1, R1, "backend", "gauge", "02", "Express App", "app.js",
             "cors + express.json only - no limiter, no auth.")
 s3 = o.card(2, R1, "backend", "layers", "03", "Inline Handler", "app.get(\"/\", ...)",
             "One synchronous res.send call.")
@@ -63,45 +63,46 @@ s4 = o.card(3, R1, "response", "send", "04", "Static Response", "200 text",
 
 o.chain([s1, s2, s3, s4], o.R1_CY)
 
-error_card(o, o.COL[8], 460, o.CW, "Text asserts what it never checks",
+error_card(o, 930, 350, 620, "Text asserts what it never checks",
            ["The DB-connected message is a", "literal string - no mongoose", "connection state is read."])
-d.path([(s4.right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
+d.path([(s4.right, o.R1_CY), (910, o.R1_CY), (910, 397), (930, 397)],
        "error", dashed=True)
 
 save(o, o.render(["No middleware beyond cors/json. No auth, no rate limit, no downstream call - "
                   "the entire handler is one line."], "SYSTEM-01"),
-     "system-api-01-root-overview.svg")
+     os.path.join("root", "system-api-01-root-overview.svg"))
 
 
 # ===========================================================================
 # SYSTEM-02 - GET /ping
 # ===========================================================================
-o = new("GET /ping - cross-service health aggregation",
+o = new("GET /ping - backend, ML and push capability",
         "Quick overview · follow 01 -> 06 · full detail in system-api-02-ping-detailed.svg")
 d, R1, R2 = o.d, o.ROW1, o.ROW2
 
-d.group_box(882, 276, 704, 180, "ML service (proxied)", "insights",
-            note="ML-API-02 · GET / · no credential attached",
+d.group_box(882, 276, 704, 180, "Dependency checks", "insights",
+            note="Firebase capability + ML-API-02 root probe",
             label_x=996, note_x=1180)
 
 d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Endpoint",   "GET /ping",                                "response"),
     ("Auth",       "None on either leg",                       "auth"),
+    ("Push check", "isFirebaseAvailable() -> up / down",        "database"),
     ("Downstream", "axios.get(ML_ROUTE + \"/\")",              "insights"),
     ("Timeout",    "None configured on this call",             "error"),
-    ("Caller",     "No frontend caller - external checks only", "ui"),
+    ("Caller",     "App keep-alive + external checks",          "ui"),
 ])
 
-s1 = o.card(0, R1, "ui", "cursor", "01", "External Caller", "curl / monitor",
-            "Not called by this app's own frontend.")
-s2 = o.card(1, R1, "backend", "gauge", "02", "Express App", "server.js",
+s1 = o.card(0, R1, "ui", "cursor", "01", "Caller", "App.js / monitor",
+            "App pings after splash, then every 10 minutes.")
+s2 = o.card(1, R1, "backend", "gauge", "02", "Express App", "app.js",
             "No limiter, no auth ahead of the handler.")
-s3 = o.card(2, R1, "auth", "key", "03", "Inline Handler", "app.get(\"/ping\", ...)",
-            "One try/catch wraps the whole body.")
+s3 = o.card(2, R1, "backend", "key", "03", "Push Capability", "isFirebaseAvailable()",
+            "Runs before the ML try/catch; returns up or down.")
 s5 = o.card(6, R1, "response", "send", "05", "Aggregated Response", "200 / 503",
-            "{success, backend, ml} - collapsed error detail.")
-s6 = o.card(7, R1, "ui", "layout", "06", "External Consumer", "Uptime tooling",
-            "Reads the combined status.")
+            "{success, backend, ml, push}.")
+s6 = o.card(7, R1, "ui", "layout", "06", "App Error Handling", "App.js keepAlive",
+            "Shows a toast only when the response is not OK.")
 
 s4 = o.card(6, R2, "insights", "chart", "04", "ML Root Probe", "ML-API-02 target",
             "GET / on the ML service, unauthenticated.")
@@ -113,14 +114,14 @@ d.path([(s4.cx, s4.y), (s4.cx, s5.bottom)], "insights", width=3.0,
        label="200 or ERROR", label_at=(s4.cx, o.LABEL_Y))
 o.chain([s5, s6], o.R1_CY)
 
-error_card(o, o.COL[8], 460, o.CW, "No timeout on the downstream call",
+error_card(o, 930, 470, 620, "No timeout on the downstream call",
            ["Unlike predict-category's 5s", "timeout, this axios.get has", "none - it can hang."])
-d.path([(s6.right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
+d.path([(s6.cx, s6.bottom), (s6.cx, 470)],
        "error", dashed=True)
 
-save(o, o.render(["Network error, DNS failure, and an ML-side 5xx are all reported identically as "
-                  "“ml: down” - the catch block does not distinguish them."], "SYSTEM-02"),
-     "system-api-02-ping-overview.svg")
+save(o, o.render(["The push value reflects Firebase Admin initialization only. Network error, DNS failure, and an "
+                  "ML-side 5xx are all reported identically as “ml: down”."], "SYSTEM-02"),
+     os.path.join("ping", "system-api-02-ping-overview.svg"))
 
 
 # ===========================================================================
@@ -139,7 +140,7 @@ d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Auth",       "Required - verifyToken",                   "auth"),
     ("Transport",  "Raw fetch - bypasses shared axios client", "error"),
     ("Uniqueness", "One token -> one user, enforced by index", "database"),
-    ("Retention",  "No expiry - nothing ever deletes a row",  "error"),
+    ("Retention",  "No TTL; invalid FCM tokens are deleted",  "error"),
 ])
 
 s1 = o.card(0, R1, "ui", "cursor", "01", "Push Permission", "Web/Native prompt",
@@ -169,11 +170,11 @@ d.path([(s7.right, o.R2_CY), (s8.x, o.R2_CY)], "database", width=2.4)
 d.path([(s8.cx, s8.y), (s8.cx, s9.bottom)], "response", width=3.0,
        label="200 / 409", label_at=(s8.cx, o.LABEL_Y))
 
-error_card(o, o.COL[8], 460, o.CW, "Silent non-409 failures",
+error_card(o, 930, 470, 620, "Silent non-409 failures",
            ["useWebPush only console.logs", "any status besides 409 - no", "retry, no user feedback."])
-d.path([(s9.right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
+d.path([(s9.cx, s9.bottom), (s9.cx, 470)],
        "error", dashed=True)
 
-save(o, o.render(["No TTL or cleanup exists anywhere in the repository for a DeviceToken document - "
-                  "registrations are permanent once written."], "SYSTEM-03"),
-     "system-api-03-device-token-overview.svg")
+save(o, o.render(["DeviceToken has no TTL. push.service.js removes a token only after FCM reports it invalid; "
+                  "otherwise registrations remain stored."], "SYSTEM-03"),
+     os.path.join("device-token", "system-api-03-device-token-overview.svg"))

@@ -2,7 +2,7 @@
 
 A combined workflow, not an endpoint. One **retrieval** call hydrates the form, the user
 changes what they want, and one **mutation** call saves it
-([API-06](api-06-update-expense.md)). The two are independent requests with no transaction
+([API-06](../../update/api-06-update-expense.md)). The two are independent requests with no transaction
 between them.
 
 ## 1. Trigger
@@ -76,15 +76,15 @@ sanitisers, the spinner, the toasts — is shared.
 | Request | Role | Counted here? |
 |---|---|---|
 | `GET /expense/expense-edit-data?expenseId=<ObjectId>` | Hydration | **No — it is a retrieval endpoint.** Shown as an upstream dependency |
-| `PUT /expense/update-expense?editID=<ObjectId>` | Persistence | No. Documented as [API-06](api-06-update-expense.md) |
+| `PUT /expense/update-expense?editID=<ObjectId>` | Persistence | No. Documented as [API-06](../../update/api-06-update-expense.md) |
 
 Worth stating plainly: the hydration route is **not** one of the four approved expense
 viewing APIs. Those cover the list, the two category periods and the custom range
-([API-01](api-01-last-week.md) – [API-04](api-04-custom-range.md)); the original index
+([API-01](../../read/last-week/api-01-last-week.md) – [API-04](../../read/custom/api-04-custom-range.md)); the original index
 explicitly placed `expense-edit-data` out of that scope because it backs the edit form
 rather than the viewing experience. It is a **fifth expense read endpoint that has no
 document of its own**, and it is recorded as such in the
-[consumption map](expense-consumption-map.md#e-known-gap-the-fifth-read-endpoint).
+consumption map.
 
 Its behaviour, traced for this flow:
 
@@ -111,7 +111,7 @@ the name, the values differ, the ref is nulled, and prediction resumes normally.
 
 This is the correct behaviour here — but it is the same mechanism that lets stale
 prediction telemetry survive into a later save, described in
-[FLOW-01 §12.2](flow-01-ml-assisted-entry.md#12-current-implementation-observations).
+[FLOW-01 §12.2](../ml-assisted-entry/flow-01-ml-assisted-entry.md#12-current-implementation-observations).
 
 ## 7. Transformation
 
@@ -127,13 +127,13 @@ day part round-trips unchanged.
 
 Nothing else is transformed. `expenseAmount` goes straight into a number input;
 `setAmount(exp.expenseAmount || '')` turns a stored `0` into an empty string, though
-[API-05](api-05-create-expense.md) makes a zero-amount expense impossible to create in the
+[API-05](../../create/api-05-create-expense.md) makes a zero-amount expense impossible to create in the
 first place.
 
 ## 8. User review and the persistence boundary
 
 Every field stays editable, and nothing is written until submit. The whole form is sent,
-never a diff — but [API-06](api-06-update-expense.md#5-request-structure) applies its
+never a diff — but [API-06](../../update/api-06-update-expense.md#5-request-structure) applies its
 five-name allow-list regardless, so `id`, `userId`, `isRecurring` and the ML telemetry
 fields cannot be reached even though some of them were loaded into the component.
 
@@ -147,7 +147,7 @@ while the user's typed edits are still on screen.
 |---|---|
 | Hydration read | Served through `queryClient.fetchQuery` on `expenses.detail(id)`. Inside the 5-minute `staleTime` it **skips the network entirely** |
 | Hydration read (server) | No Redis on this route |
-| Save | Full [API-06 propagation](api-06-update-expense.md#12-redis-and-frontend-cache-invalidation): `clearUserExpenseCache`, `refreshReport`, four query prefixes |
+| Save | Full [API-06 propagation](../../update/api-06-update-expense.md#12-redis-and-frontend-cache-invalidation): `clearUserExpenseCache`, `refreshReport`, four query prefixes |
 | After the save | `expenses.detail(id)` is nested under `["expenses"]`, so the next edit-open refetches instead of replaying the pre-edit copy |
 
 That last point is what keeps the flow self-consistent: the write invalidates the very
@@ -164,7 +164,7 @@ cache entry the read relies on.
 | Save 404 (deleted in between) | Generic error toast; **edits are preserved on screen** | Re-create the expense |
 | Save 500 (cast failure) | Generic error toast; edits preserved | Correct the value |
 
-Retrying the save is safe — [API-06 is idempotent](api-06-update-expense.md#14-retry-and-duplicate-submission-behaviour)
+Retrying the save is safe — [API-06 is idempotent](../../update/api-06-update-expense.md#14-retry-and-duplicate-submission-behaviour)
 for the same payload.
 
 ## 11. Files involved
@@ -192,7 +192,7 @@ for the same payload.
    values that were already superseded.
 2. **A stored zero becomes an empty field.** `setAmount(exp.expenseAmount || '')` treats
    `0` as falsy. Unreachable through the UI today, because create rejects a zero — but
-   [update accepts one](api-06-update-expense.md#6-validation-behaviour), so a
+   [update accepts one](../../update/api-06-update-expense.md#6-validation-behaviour), so a
    zero-amount expense produced by a direct API call would hydrate with a blank amount.
 3. **The date transform assumes UTC storage.** It holds today because
    `<input type="date">` stores UTC midnight, but any change to how dates are written would
@@ -214,7 +214,7 @@ for the same payload.
 7. **The hydration request's `AbortSignal` is honoured** — `getExpenseEditData` accepts and
    forwards it, so navigating away mid-load cancels the request. Recorded as a positive,
    and worth contrasting with the bill upload, where the signal is
-   [accepted but never passed](../bills/bills-api-01-upload-and-extract.md).
+   [accepted but never passed](../../../bills/upload-extract/bills-api-01-upload-and-extract.md).
 8. **No conflict detection.** Nothing carries a version or an `updatedAt`, so a
    last-write-wins overwrite between two tabs is undetectable.
 
@@ -226,7 +226,7 @@ for the same payload.
 
 ---
 
-**Related:** [API-06 — update](api-06-update-expense.md) ·
-[FLOW-01 — ML-assisted entry](flow-01-ml-assisted-entry.md) ·
-[API-01 … API-04 — the approved read set](README.md) ·
-[consumption map](expense-consumption-map.md)
+**Related:** [API-06 — update](../../update/api-06-update-expense.md) ·
+[FLOW-01 — ML-assisted entry](../ml-assisted-entry/flow-01-ml-assisted-entry.md) ·
+[API-01 … API-04 — the approved read set](../../../ml-service/README.md) ·
+consumption map

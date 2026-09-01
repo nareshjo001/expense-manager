@@ -1,151 +1,101 @@
-# SYSTEM-02 — Cross-service health ping
+# SYSTEM-02 — Backend, ML, and push capability check
 
 `GET /ping`
 
-Discovered during the repository-wide API coverage gate. Defined directly on the Express
-`app` object in `backend/server.js`, immediately after `GET /`. This is the **only**
-backend route whose handler itself calls into the ML service — every other backend→ML
-call (predict, describe, retrain) is triggered by a controller reached through a
-different route, not by this one.
+## Purpose
 
-## 1. Purpose
+Reports whether the backend route can reach the ML service and whether Firebase Admin
+initialized in this backend process. It is not a delivery test: `push: "up"` means the
+Firebase Admin capability initialized, not that a notification was sent or received.
 
-Reports whether both the backend process and the ML service are reachable, in one round
-trip, by proxying a single call to the ML service's own root (`ML-API-02`, `GET /`).
-
-## 2. Endpoint and HTTP method
+## Endpoint
 
 | | |
 |---|---|
-| **Method** | `GET` |
-| **Path** | `/ping` |
-| **Mount** | `app.get("/ping", ...)` — `backend/server.js:61-77`, above every router mount |
-| **Middleware order** | `cors()` → `express.json()` → handler. No `apiLimiter`, no `verifyToken` |
-| **Auth** | None |
-| **Rate limiting** | None |
-| **Downstream call** | `axios.get(`${process.env.ML_ROUTE}/`)` — no explicit timeout configured on this call |
+| Method | `GET` |
+| Path | `/ping` |
+| Mount | Inline `app.get("/ping", ...)` in `backend/app.js`, before router mounts |
+| Middleware | `cors()` → `express.json()` → handler; no `apiLimiter` or `verifyToken` |
+| Auth | None |
+| ML dependency | `axios.get(`${process.env.ML_ROUTE}/`)` with no explicit timeout |
+| Push dependency | `isFirebaseAvailable()` from `config/firebaseAdmin.js` |
 
-## 3. Level 1 quick workflow
+## Level 1 quick workflow
 
 <picture>
   <source srcset="system-api-02-ping-overview.svg" type="image/svg+xml">
   <img src="system-api-02-ping-overview.png" alt="Overview of GET /ping">
 </picture>
 
-Vector: [`system-api-02-ping-overview.svg`](system-api-02-ping-overview.svg) ·
-raster fallback: [`system-api-02-ping-overview.png`](system-api-02-ping-overview.png)
+Vector: [SVG](system-api-02-ping-overview.svg) · raster: [PNG](system-api-02-ping-overview.png)
 
-## 4. Level 2 detailed workflow
+## Level 2 detailed workflow
 
 <picture>
   <source srcset="system-api-02-ping-detailed.svg" type="image/svg+xml">
   <img src="system-api-02-ping-detailed.png" alt="Detailed workflow for GET /ping">
 </picture>
 
-Vector: [`system-api-02-ping-detailed.svg`](system-api-02-ping-detailed.svg) ·
-raster fallback: [`system-api-02-ping-detailed.png`](system-api-02-ping-detailed.png)
+Vector: [SVG](system-api-02-ping-detailed.svg) · raster: [PNG](system-api-02-ping-detailed.png)
 
-## 5. Request structure
+## Verified execution flow
 
-```http
-GET /ping HTTP/1.1
-Host: <backend-host>
+1. `frontend/src/App.js` calls `keepAlive()` once after its splash state clears, then
+   every ten minutes while the app remains mounted. External callers can also call this
+   unauthenticated endpoint.
+2. The handler calls `isFirebaseAvailable()` before entering the ML `try/catch`, producing
+   `push: "up"` or `push: "down"`.
+3. It awaits the ML service root request.
+4. A successful ML response returns `200`; any rejected/non-2xx ML request reaches the
+   catch and returns `503`.
+5. The frontend only reacts to a non-OK HTTP response. It maps `ml: "down"` to an ML
+   toast; the returned `push` field is not currently consumed by the UI.
+
+## Response contract
+
+Success (`200`):
+
+```json
+{ "success": true, "backend": "up", "ml": "up", "push": "up" }
 ```
 
-No headers, body, query string or path parameters are read.
+`push` may instead be `"down"` while the response remains `200`, because Firebase is
+an optional capability.
 
-## 6. Request validation behaviour
+ML failure (`503`):
 
-None — no input to validate.
-
-## 7. Processing behaviour
-
-One `await axios.get(`${process.env.ML_ROUTE}/`)` call, wrapped in a single `try/catch`
-covering the entire body. This is ML-API-02 on the ML-service side (`GET /`, the FastAPI
-root). **No service-to-service credential is attached** — consistent with the other three
-backend→ML calls documented in ML-FLOW-09: no header, token or shared secret accompanies
-this request either.
-
-## 8. Response structure
-
-Success (ML reachable):
-```jsonc
-{ "success": true, "backend": "up", "ml": "up" }
+```json
+{
+  "success": false,
+  "backend": "up",
+  "ml": "down",
+  "push": "down",
+  "message": "Server Unavailable."
+}
 ```
-`200`.
 
-Failure (ML unreachable, timed out, or returned a non-2xx):
-```jsonc
-{ "success": false, "backend": "up", "ml": "down", "message": "Server Unavailable." }
-```
-`503`. The `catch` block does not distinguish a network error from an ML-side 4xx/5xx —
-both collapse to the same `"ml": "down"` response.
+The exact `push` value in either shape is the result of the Firebase capability check.
 
-## 9. Persistence behaviour
+## Persistence and side effects
 
-None. No read, no write, on either side.
+None. The route does not send a push notification, read/write MongoDB, or mutate the ML
+service. It performs one local Firebase initialization check and one outbound ML request.
 
-## 10. Frontend consumption
+## Security and operational facts
 
-**Not called anywhere.** Grepped across `frontend/src` for `/ping` — no match. Like
-`GET /`, this exists for external/manual checks (uptime monitors, deployment health
-probes) rather than the application's own UI.
-
-## 11. TanStack Query and cache behaviour
-
-Not applicable — no frontend caller.
-
-## 12. Loading, success and error states
-
-Not applicable — no frontend caller.
-
-## 13. Runtime/in-memory effects
-
-None on the backend. On the ML side, this reaches `GET /` (ML-API-02), which itself has
-no side effects (confirmed in the ML Service audit).
-
-## 14. Security and operational behaviour
-
-| Concern | Finding |
+| Concern | Verified behavior |
 |---|---|
-| Auth | None on either leg — backend accepts unauthenticated, and calls the ML service unauthenticated |
-| Rate limiting | None — an unauthenticated caller can trigger unlimited backend→ML round trips |
-| Timeout | **Absent.** Unlike `predict-category` and `generate-description` (both `PREDICT_TIMEOUT_MS` / explicit 5000ms), this `axios.get` has no timeout configured — a hung ML service leaves this request pending indefinitely, bounded only by the platform's own connection limits |
-| Error granularity | A network failure, a DNS failure, and an ML-side 500 are all reported identically as `"ml": "down"` |
-| Amplification | Each unauthenticated `/ping` call causes exactly one outbound call to the ML service — a caller can use this route to generate load against the ML service without ever calling it directly |
+| Authentication | None on the endpoint or on the ML request |
+| Rate limiting | None; it is mounted before the authenticated route limiters |
+| ML timeout | None explicitly configured |
+| Failure detail | DNS, network, and ML non-2xx failures collapse to `ml: "down"` |
+| Push meaning | Firebase Admin initialization only; not message delivery or token validity |
 
-## 15. Files involved
+## Files involved
 
-| Layer | File | Function/Export | Purpose |
-|---|---|---|---|
-| Server mount | `backend/server.js` | inline `app.get("/ping", ...)` | Cross-service health aggregation |
-| Downstream | `ml-service/app.py` | `GET /` (ML-API-02) | The endpoint actually being probed |
-
-## 16. Current implementation observations
-
-**Summary:** Correctness 1 · Security / operational 2 · Reliability 1 · Maintainability 0
-
-### Correctness
-
-1. **"backend": "up" is unconditional, like `GET /`.** It is set from a literal in both
-   the success and failure branches — it does not mean anything was checked beyond "this
-   handler executed," which is trivially true if the process is running at all.
-
-### Security / operational
-
-2. **No service-to-service authentication.** Confirmed consistent with ML-FLOW-09's
-   finding for the other three backend→ML calls: this is now a fifth confirmed call site
-   with the same gap, not a new pattern.
-
-3. **Unauthenticated amplification surface.** Because `/ping` requires no auth and no rate
-   limiting, and it always issues one downstream request, it is a way to generate
-   ML-service traffic without calling the ML service directly. The blast radius is small
-   (one GET each) but the absence of any limiter is the same class of gap noted for
-   `GET /`.
-
-### Reliability
-
-4. **No timeout on the downstream call.** `axios.get(`${ML_ROUTE}/`)` has no
-   `timeout` option set, unlike `ml.router.js`'s `PREDICT_TIMEOUT_MS = 5000`. A slow or
-   hanging ML service turns this into a slow or hanging `/ping` request rather than a fast
-   `503`.
+| Layer | File | Role |
+|---|---|---|
+| Client | `frontend/src/App.js` | Scheduled `keepAlive()` caller and failed-response toast |
+| Server | `backend/app.js` | Inline `/ping` route and response contract |
+| Firebase | `backend/config/firebaseAdmin.js` | Guarded Firebase Admin availability check |
+| ML service | `ml-service/app.py` | Root endpoint probed by the backend |

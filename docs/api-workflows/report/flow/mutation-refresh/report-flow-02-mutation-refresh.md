@@ -24,7 +24,7 @@ UI screen); not a type-2 upload flow.
 | Is it queued or backgrounded? | **No** |
 | Does the triggering mutation share a try/catch with the refresh? | **Yes**, in every caller |
 | Can the refresh fail independently of the mutation succeeding? | **Yes** — and the client is told the whole request failed |
-| Does Income trigger this? | **No** — confirmed absent from Income controllers |
+| Does Income trigger this? | **Yes** — add, edit, and delete reserve report work and synchronize it |
 
 ## 3. Level 1 quick workflow
 
@@ -59,16 +59,18 @@ Six call sites, grep-confirmed:
 | Update budget | `Controllers/BudgetControllers/updatebudget.js` |
 | Recurring expense cron | `cron/recurringJob.js` |
 
-Every HTTP caller invokes `refreshReport(userId)` **after its own primary write has
+Every mutation reserves report synchronization work **before its primary write**, then invokes
+`synchronizeAfterMutation(...)` after the write. That service confirms durable pending evidence
+and invokes the revision-fenced `refreshReport(userId, { fenceRevision })` attempt.
 already committed**, and **before** sending its response.
 
 ## 6. Upstream and downstream API dependencies
 
 | Step | Documented in |
 |---|---|
-| Triggering mutation | [Expense API-05/06/07](../expense/README.md), [Budget BUDGET-02/03](../budget/README.md) |
-| The recompute itself | [FLOW-01 — the Analytics Engine](report-flow-01-analytics-engine.md) |
-| The next read | [REPORT-01](report-api-01-get-report.md) — served from the now-warm Redis cache |
+| Triggering mutation | [Expense APIs](../../../expense/README.md), [Income APIs](../../../income/README.md), [Budget APIs](../../../budget/README.md) |
+| The recompute itself | [FLOW-01 — the Analytics Engine](../analytics-engine/report-flow-01-analytics-engine.md) |
+| The next read | [REPORT-01](../../get-report/report-consumption-map.md#a-report-api-inventory) — validates freshness before serving |
 
 ## 7. Data transformations
 
@@ -81,10 +83,10 @@ invalidate-then-repopulate sequence.
 1. The triggering write commits (e.g. `newExpense.save()`).
 2. The mutation's own propagation runs (e.g. `recalculateBudget`,
    `clearUserExpenseCache` for Expense) — documented in those modules, not here.
-3. `refreshReport(userId)` is called and **awaited**:
+3. `synchronizeAfterMutation(...)` is called and **awaited**:
    1. `reportCache.invalidate(userId)` — Redis key deleted **first**, before recompute.
    2. `generateReport(userId)` — full engine run, identical to FLOW-01.
-   3. `FinancialReport.findOneAndUpdate({user: userId}, {...generated}, {upsert: true,
+   3. `FinancialReport.findOneAndUpdate` conditionally persists only when its sync revision is not older,
       runValidators: true, setDefaultsOnInsert: true}).lean()`.
    4. `reportCache.set(userId, updatedReport)` — Redis repopulated, 1 h TTL.
 4. Only after all of the above resolves does the triggering mutation send its own HTTP
@@ -92,17 +94,17 @@ invalidate-then-repopulate sequence.
 
 ## 9. Persistence boundary
 
-The Expense/Budget write and the Report upsert are **two independent Mongo operations,
-no transaction**. The Expense/Budget write is already durable by the time the refresh
+The primary write and report persistence are independent Mongo operations, but the shared
+`PendingSync` marker makes unfinished derived-data work durable. The primary write is durable by the time the refresh
 even starts.
 
 ## 10. Failure and recovery behaviour
 
 | Failure | Effect | Recovery |
 |---|---|---|
-| `refreshReport` throws (Redis or Mongo) | The mutation's shared try/catch returns a generic 500 — **the client is told the mutation failed even though it already committed** | The underlying Expense/Budget change persists silently; the next report read pays a full recompute since the cache was already invalidated in step 3.1 |
-| Redis down for `invalidate`/`set` | Caught and swallowed at the cache-module boundary — degrades to Mongo-backed correctness with a caching-performance cost only | No user-visible failure from Redis alone |
-| Two mutations for the same user race | Each independently invalidates, recomputes, and overwrites — last write wins, no stampede lock | Both refreshes eventually complete; the final cached/persisted state reflects whichever finished last |
+| Derived-data refresh cannot complete | Pending report work remains durable | The next `GET /report` repairs it or returns controlled `503` rather than serving a known-stale report |
+| Redis down for `set` | Caught at the cache boundary | Mongo remains authoritative; a later read validates revision freshness |
+| Two mutations for the same user race | Mongo revision fence and Redis CAS order writes | Older work is skipped rather than overwriting a newer report |
 
 There is no partial-success case in which the Expense/Budget write is rolled back
 because the refresh failed — rollback never happens.
@@ -119,13 +121,13 @@ fresh fetch — typically served instantly from the now-warm Redis cache.
 
 | Layer | File | Function/Export | Purpose |
 |---|---|---|---|
-| Trigger (example) | `backend/Controllers/ExpenseControllers/addexpense.js` | `addExpense` | Saves the expense, then awaits `refreshReport` before responding |
-| Trigger (example) | `backend/Controllers/BudgetControllers/setbudget.js` | `setbudget` | Same pattern for a budget write |
-| Trigger (non-HTTP) | `backend/cron/recurringJob.js` | — | Scheduled job, same call |
-| Refresh entrypoint | `backend/Services/reportService.js` | `refreshReport` | Invalidate → recompute → upsert → cache |
+| Trigger (example) | `backend/Controllers/ExpenseControllers/addexpense.js` | `addExpense` | Reserves report work, writes, then synchronizes derived data |
+| Trigger (example) | `backend/Controllers/BudgetControllers/setbudget.js` | `setbudget` | Same shared lifecycle for a budget write |
+| Trigger (example) | `backend/Controllers/IncomeControllers/addincome.js` | `addIncome` | Reserves and synchronizes report work |
+| Refresh entrypoint | `backend/Services/syncRecoveryService.js` | `synchronizeAfterMutation` | Confirm pending work → fenced recompute → revision-aware cache write |
 | Engine | `backend/analytics/reportGenerator.js` | `generateReport` | Documented in FLOW-01 |
-| Cache | `backend/cache/reportCache.js` | `invalidate`, `set` | `report:<userId>`, TTL 3600 s |
-| Model | `backend/models/Report.js` | `FinancialReport` | Upserted unconditionally |
+| Cache | `backend/cache/reportCache.js` | `getWithRevision`, `set` | `report:<userId>`, TTL 3600 s, Redis CAS write |
+| Model | `backend/models/Report.js` | `FinancialReport` | Persisted with a revision fence |
 
 ---
 
@@ -135,10 +137,9 @@ fresh fetch — typically served instantly from the now-warm Redis cache.
 
 ### Correctness
 
-1. **Income never triggers this flow.** Grep-confirmed absent from every Income
-   controller — consistent with the engine never reading `IncomeModel` at all. The
-   frontend's `reports.all` invalidation on income mutations is therefore a harmless
-   no-op refetch, not a genuine staleness bug.
+1. **Income triggers this flow.** Add, edit, and delete Income controllers reserve report
+   work and use `synchronizeAfterMutation`, even though the current analytics data provider
+   does not read `IncomeModel`.
 
 ### Reliability
 

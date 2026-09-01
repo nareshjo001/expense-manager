@@ -5,7 +5,7 @@
 Edits an existing expense in place. It is a **partial** update over a five-field
 allow-list, reached only from the edit mode of the same form that creates expenses. The
 hydration read that fills that form is documented separately in
-[FLOW-02](flow-02-retrieval-assisted-edit.md).
+[FLOW-02](../flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md).
 
 ## 2. Endpoint and HTTP method
 
@@ -218,7 +218,7 @@ the client pays for a refetch it already had the answer to.
 
 ## 12. Redis and frontend cache invalidation
 
-Identical to [API-05 §12](api-05-create-expense.md#12-redis-and-frontend-cache-invalidation):
+Identical to [API-05 §12](../create/api-05-create-expense.md#12-redis-and-frontend-cache-invalidation):
 `clearUserExpenseCache` flushes `lastWeek:`, `category:`, `pie:` and `pieComparison:` via
 the `cachekeys:<userId>` set; `refreshReport` handles `report:<userId>`; the client
 invalidates four query prefixes, which includes the `expenses.detail(id)` entry that
@@ -228,7 +228,7 @@ hydrated the form.
 
 | State | Signal |
 |---|---|
-| Hydrating | Full-screen spinner while the edit data loads — see [FLOW-02](flow-02-retrieval-assisted-edit.md) |
+| Hydrating | Full-screen spinner while the edit data loads — see [FLOW-02](../flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md) |
 | Submitting | Same `z-index: 9999` overlay as create |
 | Success | Toast, form cleared, edit mode exited, `navigate('/')` |
 | Failure | Toast; **edits are preserved** so the user can correct and resubmit |
@@ -285,7 +285,7 @@ hydrated the form.
    `2026-03-03`.
 5. **The same timezone shift applies.** Recalculation resolves the month with
    `getMonthRange`, in server local time, against a UTC-midnight date — see
-   [API-05 §17.5](api-05-create-expense.md#17-current-implementation-observations).
+   [API-05 §17.5](../create/api-05-create-expense.md#17-current-implementation-observations).
 6. **A conditional recalculation that is never conditional in practice.** The form always
    sends all five fields, so the amount/date check only helps a partial API caller.
 
@@ -316,7 +316,7 @@ hydrated the form.
 
 ---
 
-**Related:** [FLOW-02 — retrieval-assisted edit](flow-02-retrieval-assisted-edit.md) ·
-[API-05 — create](api-05-create-expense.md) ·
-[API-07 — delete](api-07-delete-expense.md) ·
-[consumption map](expense-consumption-map.md)
+**Related:** [FLOW-02 — retrieval-assisted edit](../flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md) ·
+[API-05 — create](../create/api-05-create-expense.md) ·
+[API-07 — delete](../delete/api-07-delete-expense.md) ·
+consumption map

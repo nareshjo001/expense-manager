@@ -6,8 +6,8 @@ Two levels of the same workflow. Every statement below is traced to the current
 repository implementation.
 
 > **Starts, but does not complete, the reset journey.** This endpoint only issues an
-> OTP. [AUTH-API-03](auth-api-03-verify-otp.md)'s reset branch authorizes the change;
-> [AUTH-API-06](auth-api-06-reset-password.md) performs it.
+> OTP. [AUTH-API-03](../verify-otp/auth-api-03-verify-otp.md)'s reset branch authorizes the change;
+> [AUTH-API-06](../reset-password/auth-api-06-reset-password.md) performs it.
 
 ---
 
@@ -67,7 +67,7 @@ No Joi validation middleware on this route.
 3. `canResendOtp(user.lastOtpSent, 120000)` — `429` with seconds remaining if too soon.
 4. `generateOTP()`, `hashOTP()`, new `otpExpiry` (5 min), `lastOtpSent = now`,
    **`user.isPasswordReset = true`** — the flag that routes
-   [AUTH-API-03](auth-api-03-verify-otp.md) into its reset branch.
+   [AUTH-API-03](../verify-otp/auth-api-03-verify-otp.md) into its reset branch.
 5. `sendOTPEmail(email, otp, "reset")` — a different email subject than signup's.
 
 ## 8. Password/JWT behaviour
@@ -105,10 +105,10 @@ directly.
 
 - Three distinct responses (404/403/200) enumerate whether an email is a registered,
   verified account — the same pattern documented for
-  [AUTH-API-02](auth-api-02-login.md).
+  [AUTH-API-02](../login/auth-api-02-login.md).
 - Overwrites any OTP a pending signup verification might have had for the same
   account, since both journeys share one `otp` field — see
-  [AUTH-API-03 §17, finding 3](auth-api-03-verify-otp.md#17-current-implementation-observations).
+  [AUTH-API-03 §17, finding 3](../verify-otp/auth-api-03-verify-otp.md#17-current-implementation-observations).
 - The old password is never read or required at this or any later step of the reset
   journey.
 
@@ -148,6 +148,6 @@ directly.
 ### Maintainability
 
 2. **`isPasswordReset` is set here but cleared in a different controller**
-   ([AUTH-API-06](auth-api-06-reset-password.md)) — a reader of this file alone would
+   ([AUTH-API-06](../reset-password/auth-api-06-reset-password.md)) — a reader of this file alone would
    not see where or how the flag it sets gets consumed or reset without also reading
    `resetPassword.js` and `verifyOTP.js`.

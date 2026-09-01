@@ -75,7 +75,7 @@ r1 = d.region(20, 272, "Caller", "External only - no app frontend caller",
               accent="ui", step=1)
 r2 = d.region(306, 272, "Express App", "Global middleware, in order", accent="backend",
               step=2)
-r3 = d.region(592, 272, "Inline Handler", "server.js:56-58, above every router",
+r3 = d.region(592, 272, "Inline Handler", "app.js, above every router",
               accent="backend", step=3)
 r4 = d.region(878, 272, "Response", "A static literal, always", accent="response",
               step=4)
@@ -118,7 +118,7 @@ refs(d, [
     ((e[0].x, e[0].cy), 852, 0, x[0], "left"),
     ((c[0].right, c[0].cy), 852, 1, x[1], "top"),
 ])
-finish(d, "system-api-01-root-detailed.svg", "SYSTEM-01",
+finish(d, os.path.join("root", "system-api-01-root-detailed.svg"), "SYSTEM-01",
        "Discovered during the repository-wide API coverage gate, not a prior module audit.",
        FOOT)
 
@@ -127,35 +127,39 @@ finish(d, "system-api-01-root-detailed.svg", "SYSTEM-01",
 # SYSTEM-02 - GET /ping
 # ===========================================================================
 d = Diagram(T, title="GET /ping - detailed implementation workflow",
-            subtitle="Level 2 · one try/catch, one unauthenticated downstream call · "
-                     "badges map to the 6 stages in system-api-02-ping-overview.svg")
-r1 = d.region(20, 272, "Caller", "External only - no app frontend caller",
+            subtitle="Level 2 · Firebase capability plus one unauthenticated downstream call · "
+            "badges map to the 6 stages in system-api-02-ping-overview.svg")
+r1 = d.region(20, 272, "Caller", "App keep-alive or external health check",
               accent="ui", step=1)
-r2 = d.region(306, 272, "Inline Handler", "server.js:61-77, above every router",
+r2 = d.region(306, 272, "Inline Handler", "app.js, above every router",
               accent="backend", step=2)
-r3 = d.region(592, 272, "ML Service Probe", "ML-API-02 · GET / · cross-service",
+r3 = d.region(592, 272, "Dependency Checks", "Firebase capability + ML-API-02 root probe",
               accent="insights", step=3)
-r4 = d.region(878, 272, "Aggregated Response", "Success/failure collapsed to one shape",
+r4 = d.region(878, 272, "Response & Client", "Combined status plus App.js failure toast",
               accent="response", step=4)
 
 a = stack(d, r1, [
-    ("ui", "cursor", "EXTERNAL", "Uptime Monitor / curl", "GET /ping",
-     "Not reachable from any code path in frontend/src.", {"step": "01", "tag": "E1"}),
+    ("ui", "cursor", "CLIENT", "App keepAlive() / monitor", "GET /ping",
+     "App calls after splash, then every 10 minutes; external callers also work.", {"step": "01", "tag": "E1"}),
 ])
 b = stack(d, r2, [
     ("backend", "sigma", "HANDLER", "Inline Route", "app.get(\"/ping\", async (req,res)=>{})",
-     "Single try/catch wraps the entire body.", {"step": "02"}),
+     "The Firebase check runs before the ML try/catch.", {"step": "02"}),
+    ("database", "gauge", "CAPABILITY", "Firebase Check", "isFirebaseAvailable()",
+     "Maps local Admin initialization to push: up or down.", {"step": "03"}),
     ("insights", "send", "OUTBOUND", "ML Root Call", "axios.get(ML_ROUTE + \"/\")",
      "No Authorization header, no shared secret.", {"step": "03", "tag": "E2"}),
 ])
 c = stack(d, r3, [
+    ("database", "key", "LOCAL", "Firebase Admin", "config/firebaseAdmin.js",
+     "Lazy guarded initialization; no push message is sent here.", {"step": "03"}),
     ("insights", "chart", "CROSS-REF", "ML-API-02 Handler", "GET / (FastAPI)",
      "Documented separately in the ML Service module.", {"step": "03"}),
 ])
 e = stack(d, r4, [
-    ("response", "send", "RESPONSE · OK", "200 JSON", "{success:true, backend:\"up\", ml:\"up\"}",
+    ("response", "send", "RESPONSE · OK", "200 JSON", "{success:true, backend:\"up\", ml:\"up\", push}",
      "Only reached if the ML call resolves 2xx.", {"step": "04"}),
-    ("error", "alert", "RESPONSE · ERR", "503 JSON", "{success:false, ml:\"down\", message:\"...\"}",
+    ("error", "alert", "RESPONSE · ERR", "503 JSON", "{success:false, ml:\"down\", push, message:\"...\"}",
      "Network error, timeout and ML 5xx all land here identically.",
      {"step": "04", "tag": "E3"}),
 ])
@@ -182,7 +186,7 @@ refs(d, [
     ((b[1].right, b[1].cy), 852, 1, x[1], "top"),
     ((e[1].x, e[1].cy), 852, 2, x[2], "top"),
 ])
-finish(d, "system-api-02-ping-detailed.svg", "SYSTEM-02",
+finish(d, os.path.join("ping", "system-api-02-ping-detailed.svg"), "SYSTEM-02",
        "The only backend route whose own handler calls into the ML service directly.",
        FOOT)
 
@@ -235,7 +239,7 @@ e = stack(d, r4, [
 ])
 grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "unique index: token",
                    [("one token", "one user, enforced by MongoDB"),
-                    ("no TTL", "rows are permanent")])
+                    ("no TTL", "invalid FCM tokens are removed")])
 d.path([(e[-1].cx, e[-1].bottom), (grp.cx, grp.y)], "database")
 
 d.handoff(a[-1], b[0], 299); d.handoff(b[-1], c[0], 585); d.handoff(c[-1], e[0], 871)
@@ -266,9 +270,9 @@ x = band(d, [
     ("E1", "No length/format cap on token", "token non-empty check only",
      "Any non-empty string is accepted and stored as-is - no upper bound, no format "
      "validation beyond presence."),
-    ("E2", "No expiry or cleanup path", "DeviceToken has no TTL index",
-     "Nothing in the repository ever deletes a DeviceToken document - uninstalled or "
-     "permission-revoked devices remain targets forever."),
+    ("E2", "No proactive expiry", "DeviceToken has no TTL index",
+     "push.service.js deletes tokens only after FCM returns an invalid-token code; "
+     "uninstalled or permission-revoked devices remain until that send attempt."),
     ("E3", "Success body omits the success flag", "res.status(200).json({message})",
      "Every 400/409/500 body includes success:false; the 200 body does not include "
      "success:true, an inconsistency with the rest of this corpus's convention."),
@@ -282,6 +286,6 @@ refs(d, [
     ((f0.x, f0.bottom), f0.x, 2, x[2], "top"),
     ((a[2].right, a[2].cy), 318, 3, x[3], "top-offset"),
 ])
-finish(d, "system-api-03-device-token-detailed.svg", "SYSTEM-03",
+finish(d, os.path.join("device-token", "system-api-03-device-token-detailed.svg"), "SYSTEM-03",
        "Zero references existed anywhere in docs/api-workflows/ prior to this document.",
        FOOT)

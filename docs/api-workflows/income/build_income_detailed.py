@@ -96,8 +96,13 @@ def finish(d, out, api_id, notes):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=notes)
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
-    print("wrote", out, len(svg))
+    destinations = {"income-api-01": "list-income", "income-api-02": "add-income",
+                    "income-api-03": "edit-income", "income-api-04": "delete-income",
+                    "income-api-05": "insights-header", "income-api-06": "insights-card"}
+    directory = next(folder for prefix, folder in destinations.items() if out.startswith(prefix))
+    path = os.path.join(HERE, directory, out)
+    open(path, "w", encoding="utf-8").write(svg)
+    print("wrote", os.path.relpath(path, HERE), len(svg))
 
 
 FOOT = ("Heavy arrows are region hand-offs; the cyan one is the HTTP response. Light arrows "
@@ -277,7 +282,7 @@ g = [d.card(1180, LY + i * PITCH, *sp[:6], **sp[6]) for i, sp in enumerate([
      "[\"income\"] is a prefix, so list, summary and insights all refetch.",
      {"step": "09"}),
     ("frontend", "key", "INVALIDATE", "Reports", "queryKeys.reports.all",
-     "Refetched even though the report pipeline reads no income.", {"step": "09"}),
+     "Refetched after the report synchronization lifecycle runs.", {"step": "09"}),
 ])]
 d.flow_down(g[0], g[1])
 h = [d.card(1420, LY + i * PITCH, *sp[:6], **sp[6]) for i, sp in enumerate([
@@ -395,7 +400,7 @@ g = [d.card(1180, LY + i * PITCH, *sp[:6], **sp[6]) for i, sp in enumerate([
      "[\"income\"] is a prefix, so list, summary and insights all refetch.",
      {"step": "09"}),
     ("frontend", "key", "INVALIDATE", "Reports", "queryKeys.reports.all",
-     "Refetched even though the report pipeline reads no income.", {"step": "09"}),
+     "Refetched after the report synchronization lifecycle runs.", {"step": "09"}),
 ])]
 d.flow_down(g[0], g[1])
 h = [d.card(1420, LY + i * PITCH, *sp[:6], **sp[6]) for i, sp in enumerate([
@@ -510,7 +515,7 @@ g = [d.card(1180, LY + i * PITCH, *sp[:6], **sp[6]) for i, sp in enumerate([
      "[\"income\"] is a prefix, so list, summary and insights all refetch.",
      {"step": "09"}),
     ("frontend", "key", "INVALIDATE", "Reports", "queryKeys.reports.all",
-     "Refetched even though the report pipeline reads no income.", {"step": "09"}),
+     "Refetched after the report synchronization lifecycle runs.", {"step": "09"}),
 ])]
 d.flow_down(g[0], g[1])
 h = [d.card(1420, LY + i * PITCH, *sp[:6], **sp[6]) for i, sp in enumerate([

@@ -654,7 +654,12 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
     }
 
     const snapshotResult = await buildFinancialSnapshot(req.userId, { timeZone: config.appTimeZone });
-    if (!snapshotResult.ok) return res.status(503).json(UNAVAILABLE_RESPONSE);
+    if (!snapshotResult.ok) {
+      if (reservation) {
+        await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
+      }
+      return res.status(503).json(UNAVAILABLE_RESPONSE);
+    }
 
     const recentTurns = activeSession ? await safeLoadRecentTurns(activeSession._id, req.userId) : [];
     const providerStartedAt = Date.now();
@@ -678,6 +683,9 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
         errorCode: `DIRECT_ANSWER_${directResult.reasonCode || "REJECTED"}`,
         latencyMs: Date.now() - providerStartedAt,
       });
+      if (reservation) {
+        await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
+      }
       return res.status(503).json(UNAVAILABLE_RESPONSE);
     }
 

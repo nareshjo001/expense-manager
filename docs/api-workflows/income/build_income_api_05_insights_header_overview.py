@@ -56,6 +56,6 @@ d.path([(s10.right, o.R2_CY), (1584, o.R2_CY), (1584, 502), (o.COL[8] + o.CW, 50
 
 svg = o.render(["Both income insight routes run the same two queries over the same range; only the "
                 "numbers they derive from them differ."], "INCOME-05")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "insights-header",
                   "income-api-05-insights-header-overview.svg"), "w", encoding="utf-8").write(svg)
 print("wrote income-api-05-insights-header-overview.svg", len(svg))

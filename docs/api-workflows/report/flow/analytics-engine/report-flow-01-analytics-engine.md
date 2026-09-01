@@ -2,8 +2,8 @@
 
 An internal computation flow, not an endpoint. **It has no HTTP boundary of its own** —
 it is invoked exactly two ways: a true cache miss inside
-[REPORT-01](report-api-01-get-report.md), or a mutation-triggered refresh
-([FLOW-02](report-flow-02-mutation-refresh.md)). Every statement below is traced to the
+[REPORT-01](../../get-report/report-consumption-map.md#a-report-api-inventory), or a mutation-triggered refresh
+([FLOW-02](../mutation-refresh/report-flow-02-mutation-refresh.md)). Every statement below is traced to the
 current repository implementation.
 
 > **Deterministic, not ML.** Every analyzer and score calculator is arithmetic over the
@@ -64,7 +64,7 @@ other parameter exists.
 
 Five parallel Mongo queries inside `createAnalyticsContext`, all `userId`-scoped:
 current-month expenses, previous-month expenses, current-year expenses, previous-year
-expenses, and all budgets. See the consumption map's [Table D](report-consumption-map.md#d-data-dependency-inventory)
+expenses, and all budgets. See the consumption map's [Table D](../../get-report/report-consumption-map.md#d-data-dependency-inventory)
 for exact filters and ranges. No Income data is ever read.
 
 ## 7. Analytics Context schema
@@ -96,8 +96,7 @@ Built by `createAnalyticsContext`, consumed by every analyzer:
 6. `trendAnalyzer.analyze({trendData, currentMonthExpenses, previousMonthExpenses})`
 7. `habitAnalyzer.analyze(currentMonthExpenses)` — monthly
 8. `habitAnalyzer.analyze(currentYearExpenses)` — yearly
-9. `healthAnalyzer.analyze({budget, category, spending, trend, monthlyHabits})` —
-   **key mismatch, see Finding 1**
+9. `healthAnalyzer.analyze({budget, category, spending, trend, habits: monthlyHabitReport})`
 
 ## 9. Per-analyzer summary
 
@@ -136,7 +135,7 @@ practice given Finding 1.
 ## 12. Report schema
 
 `reportAssembler.assembleReport` returns the object documented in the consumption map's
-[Table C](report-consumption-map.md#c-analytics-engine-component-inventory). This exact
+[Table C](../../get-report/report-consumption-map.md#c-analytics-engine-component-inventory). This exact
 shape is what gets cached, persisted, and returned to the frontend — the engine itself
 never touches Redis or Mongo; that happens in the caller (REPORT-01 or FLOW-02).
 
@@ -191,18 +190,13 @@ recomputation exists — every trigger recomputes everything.
 
 ### Correctness
 
-1. **Habit data never reaches the health analyzer — verified by execution.**
-   `reportGenerator.js` passes the key `monthlyHabits`; `healthAnalyzer.analyze`
-   destructures a parameter named `habits`. `habits` is therefore always `{}` inside
-   `healthAnalyzer`, `calculateStabilityScore`, `calculateHabitScore`, and
-   `generateSignals`. **Consequence:** the habit score, the stability score's
-   weekend-ratio bonus, and every habit-derived health signal are computed from an
-   always-empty stub rather than the user's real habit data, in every report ever
-   generated.
+1. **Habit data reaches the health analyzer.** `reportGenerator.js` passes the monthly
+   habit report as `habits`, which is the property consumed by `healthAnalyzer`, its
+   habit score, stability calculation, and health signals.
 
-2. **`summary.healthScore` / `summary.riskLevel` reference fields that don't exist.**
-   `healthAnalyzer.analyze` returns `{scores, overall, dataCompleteness, risk, signals}` —
-   no `healthScore`, no `riskLevel`. Both summary fields are always `undefined`.
+2. **Summary health values are populated.** `reportGenerator.js` copies
+   `healthReport.healthScore` and `healthReport.riskLevel` into the summary returned to
+   the client.
 
 3. **`lastExpenseUpdate` / `lastBudgetUpdate` are always null.** `reportGenerator.js`
    reads them off `analyticsContext` via `?? null`, but `createAnalyticsContext` never

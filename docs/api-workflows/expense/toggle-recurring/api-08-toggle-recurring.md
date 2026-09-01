@@ -69,7 +69,7 @@ if (!expenseId || typeof isRecurring !== "boolean") {
 ```
 
 That rejects a missing id and a string `"true"`, but it is **not** an ObjectId check.
-Unlike [API-06](api-06-update-expense.md) and [API-07](api-07-delete-expense.md), this
+Unlike [API-06](../update/api-06-update-expense.md) and [API-07](../delete/api-07-delete-expense.md), this
 route has no `Types.ObjectId.isValid` guard, so a malformed id reaches Mongoose, raises a
 `CastError` and surfaces as a generic **500**.
 
@@ -278,7 +278,7 @@ refetches.
 
 ---
 
-**Related:** [API-05 — create](api-05-create-expense.md) ·
-[API-06 — update](api-06-update-expense.md) ·
-[API-07 — delete](api-07-delete-expense.md) ·
-[consumption map](expense-consumption-map.md)
+**Related:** [API-05 — create](../create/api-05-create-expense.md) ·
+[API-06 — update](../update/api-06-update-expense.md) ·
+[API-07 — delete](../delete/api-07-delete-expense.md) ·
+consumption map

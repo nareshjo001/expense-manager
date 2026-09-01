@@ -8,7 +8,7 @@ The full user-facing round trip: typing an expense name, through the Node backen
 
 Documents how category prediction, description generation, feedback capture, and the retraining trigger connect across `backend/` and `ml-service/` as one coherent user experience, without duplicating any already-documented backend API.
 
-> **Not a substitute for endpoint-level documentation.** The backend's `POST /ml/predict-category` proxy route has its own dedicated API document, **[ML-API-11](ml-api-11-backend-predict-proxy.md)**, added during the repository-wide API coverage gate. This flow document describes the wider round trip these endpoints participate in; it does not itself count as coverage for any individual endpoint.
+> **Not a substitute for endpoint-level documentation.** The backend's `POST /ml/predict-category` proxy route has its own dedicated API document, **[ML-API-11](../../backend-predict-proxy/ml-api-11-backend-predict-proxy.md)**, added during the repository-wide API coverage gate. This flow document describes the wider round trip these endpoints participate in; it does not itself count as coverage for any individual endpoint.
 
 ## 2. Level 1 quick workflow
 
@@ -114,7 +114,7 @@ This *is* the backend/frontend impact — the entire flow exists to connect the 
 
 ## 17. Confirmed limitations
 
-- **No service-to-service authentication anywhere.** None of the four backend→ML calls (`predict-category`, `generate-description`, `retrain-model`, the `/ping` health check) carries any header, token, or credential — confirmed absent across all four call sites by direct code inspection.
+- **Protected backend→ML calls carry the shared operations token.** `predict-category`, `generate-description`, `retrain-model`, and spending-forecast requests use `mlOperationsHeaders()` to send `X-ML-Operations-Token`; `/ping` probes `GET /` without a token because it is a health check.
 - **Prediction is a UI convenience, never a gate.** The backend's own `addExpense` controller never calls `/predict-category` itself; only the frontend does, before submission. Expense creation proceeds identically whether prediction succeeded, failed, or was never attempted.
 - **A feedback-write failure blocks expense creation — an asymmetry with description generation.** `addexpense.js` gives the description-generation call (ML-API-09) its own `try/catch` specifically so a failure there cannot block the save; no equivalent isolation exists around `mlFeedback.save()`. A Mongoose validation error, duplicate key, or transient MongoDB failure on the feedback write returns `500` to the user and the expense is **never persisted**, even though the expense data itself was entirely valid.
 - **Feedback and expense persistence are not atomic.** Both are plain sequential `.save()` calls with no MongoDB transaction — confirmed no `mongoose.startSession()`/`withTransaction()` anywhere in `addexpense.js`. A crash or connection loss between the two `await` calls would leave a `pending` feedback document with no corresponding expense ever created.

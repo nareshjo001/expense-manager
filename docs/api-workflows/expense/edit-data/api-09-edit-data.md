@@ -3,7 +3,7 @@
 `GET /expense/expense-edit-data`
 
 > **Created during the repository-wide API coverage gate.** Previously this endpoint was
-> cross-linked only from [FLOW-02](flow-02-retrieval-assisted-edit.md), which is not a
+> cross-linked only from [FLOW-02](../flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md), which is not a
 > substitute for its own API document under this corpus's coverage rules. This is now
 > that document. FLOW-02 continues to describe the combined retrieval-then-edit user
 > journey and cross-links this document rather than duplicating it.

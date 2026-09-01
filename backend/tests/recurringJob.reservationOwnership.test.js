@@ -55,8 +55,16 @@ const CRON_JOB_PATH = "../cron/recurringJob";
 const USER_ID = "64f1a2b3c4d5e6f7a8b9c0aa";
 
 afterEach(() => {
+  jest.useRealTimers();
   jest.resetModules();
   jest.restoreAllMocks();
+});
+
+beforeEach(() => {
+  // The fixture is due in August and should advance to September. Pin the
+  // cron clock inside that month so this ownership test remains valid after
+  // the real calendar reaches September.
+  jest.useFakeTimers().setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
 });
 
 function occurrenceIdFor(recurringId, nextDueDate) {

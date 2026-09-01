@@ -43,7 +43,7 @@ s3 = o.card(2, R1, "auth", "shield", "03", "API Security", "Limiter + JWT",
 s4 = o.card(3, R1, "auth", "gauge", "04", "Field Check", "expenseName truthy",
             "Single truthiness check, no schema.")
 s5 = o.card(4, R1, "insights", "send", "05", "Proxy Call", "axios.post, 5s timeout",
-            "No service-to-service credential.")
+            "Attaches X-ML-Operations-Token.")
 s8 = o.card(7, R1, "response", "send", "08", "Respond", "200 / 400 / 503 / 4xx / 500",
             "Body forwarded verbatim on 2xx.")
 
@@ -71,7 +71,7 @@ d.mid.append('<g><rect x="%d" y="458" width="%d" height="98" rx="10" fill="%s" '
                 d._text(C[8] + 13, 532, "as a success, unchecked.", 9.8, d.n["inkMuted"], 400)))
 
 svg = o.render(["This is the real auth boundary for the whole prediction round trip -- ML-API-08 "
-                "itself has no authentication of its own."], "ML-API-11")
-open(os.path.join(HERE, "ml-api-11-backend-predict-proxy-overview.svg"), "w",
+                "itself also requires the operations token."], "ML-API-11")
+open(os.path.join(HERE, "backend-predict-proxy", "ml-api-11-backend-predict-proxy-overview.svg"), "w",
      encoding="utf-8").write(svg)
 print("wrote ml-api-11-backend-predict-proxy-overview.svg", len(svg), "bytes")

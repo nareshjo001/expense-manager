@@ -3,7 +3,7 @@
 `GET /`
 
 Discovered during the repository-wide API coverage gate, not during any prior module
-audit. Defined directly on the Express `app` object in `backend/server.js` — there is no
+audit. Defined directly on the Express `app` object in `backend/app.js` — there is no
 router file for it.
 
 ## 1. Purpose
@@ -18,7 +18,7 @@ frontend or any other backend module.
 |---|---|
 | **Method** | `GET` |
 | **Path** | `/` |
-| **Mount** | `app.get("/", ...)` — `backend/server.js:56-58`, declared before every router `app.use(...)` call |
+| **Mount** | `app.get("/", ...)` in `backend/app.js`, declared before every router `app.use(...)` call |
 | **Middleware order** | `cors()` → `express.json()` → handler. No `apiLimiter`, no `verifyToken` |
 | **Auth** | None |
 | **Rate limiting** | None — it sits above the `/api`, `/expense`, etc. `apiLimiter` mounts |
@@ -109,7 +109,7 @@ None.
 
 | Layer | File | Function/Export | Purpose |
 |---|---|---|---|
-| Server mount | `backend/server.js` | inline `app.get("/", ...)` | Static liveness string |
+| Server mount | `backend/app.js` | inline `app.get("/", ...)` | Static liveness string |
 
 ## 16. Current implementation observations
 
@@ -119,7 +119,7 @@ None.
 
 1. **The response text asserts a DB connection state it never checks.** `res.send("Welcome!
    Connected to DB...")` is unconditional — confirmed by direct inspection of
-   `server.js:56-58`: no reference to `mongoose.connection`, no call into `connectDB`'s
+   `app.js`: no reference to `mongoose.connection`, no call into `connectDB`'s
    result, no try/catch. If the database is down, this route still returns the same
    "Connected to DB..." text with a `200`.
 
@@ -128,4 +128,4 @@ None.
 2. **No rate limiting on the app's own root.** Every other route group is behind
    `apiLimiter` or the auth router's own `authLimiter`; this one sits above both, mounted
    before any middleware besides `cors`/`express.json`. Confirmed by inspection: `/` is
-   declared at `server.js:56`, ahead of every `app.use("/...", apiLimiter, ...)` line.
+   declared in `app.js`, ahead of every `app.use("/...", apiLimiter, ...)` line.

@@ -108,8 +108,8 @@ The month key is built with `toLocaleString('en-US', { month:'short', year:'nume
 
 **Summary:** Correctness 2 · Security / operational 2 · Reliability 2 · Maintainability 1
 
-**This route reads budget data written by [BUDGET-02](../budget/budget-api-02-set-budget.md)
-and [BUDGET-03](../budget/budget-api-03-update-budget.md) without calling them.**
+**This route reads budget data written by [BUDGET-02](../../../budget/set-budget/budget-api-02-set-budget.md)
+and [BUDGET-03](../../../budget/update-budget/budget-api-03-update-budget.md) without calling them.**
 
 ### Correctness
 

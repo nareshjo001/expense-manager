@@ -7,7 +7,7 @@ repository implementation.
 
 > **Not a create-only route.** Despite the `POST` verb, this endpoint upserts. It writes
 > the current month's document whether or not one already exists, which makes it
-> behaviourally near-identical to [BUDGET-03](budget-api-03-update-budget.md).
+> behaviourally near-identical to [BUDGET-03](../update-budget/budget-api-03-update-budget.md).
 
 ---
 

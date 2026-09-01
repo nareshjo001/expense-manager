@@ -134,6 +134,7 @@ function createSiaRequestFake() {
 function loadApp({
   buildContextImpl,
   askLlmImpl,
+  directAnswerImpl,
   findOwnedSessionImpl,
   createSessionImpl,
   appendTurnImpl,
@@ -166,6 +167,24 @@ function loadApp({
       }))
   );
   jest.doMock("../sia/llmService", () => ({ askLlm: askLlmMock, LlmProviderError: RealLlmProviderError }));
+
+  // POST /sia/ask now uses the direct financial-snapshot path. Keep this
+  // suite's idempotency assertions at the provider boundary, but adapt the
+  // historic answer fixtures to the direct service's { ok, answer } result.
+  const buildFinancialSnapshotMock = jest.fn(async () => ({
+    ok: true,
+    snapshot: { period: { label: "this month" }, analytics: {}, income: {} },
+  }));
+  const answerDirectlyMock = jest.fn(async (args) => {
+    if (directAnswerImpl) return directAnswerImpl(args);
+    const result = await askLlmMock(args);
+    if (result && typeof result.ok === "boolean") return result;
+    return result && typeof result.answer === "string"
+      ? { ok: true, answer: result.answer }
+      : { ok: false, errorCode: "DIRECT_ANSWER_INVALID" };
+  });
+  jest.doMock("../sia/financialSnapshotService", () => ({ buildFinancialSnapshot: buildFinancialSnapshotMock }));
+  jest.doMock("../sia/directAnswerService", () => ({ answerDirectly: answerDirectlyMock }));
 
   const findOwnedSessionMock = jest.fn(
     findOwnedSessionImpl || (async (userId, sessionId) => ({ _id: sessionId, user: userId }))
@@ -208,6 +227,8 @@ function loadApp({
     findOwnedSessionMock,
     createSessionMock,
     appendTurnMock,
+    buildFinancialSnapshotMock,
+    answerDirectlyMock,
     requestFake,
   };
 }
@@ -614,14 +635,9 @@ describe("POST /sia/ask -- failures leave the key safely retryable", () => {
     expect(askLlmMock).toHaveBeenCalledTimes(2); // one failed, one successful
   });
 
-  it("a grounding-validation rejection creates no empty session and leaves the key retryable", async () => {
+  it("a direct-answer validation rejection creates no empty session and leaves the key retryable", async () => {
     const { app, createSessionMock, requestFake } = loadApp({
-      buildContextImpl: async () => ({
-        intent: "SPENDING_FORECAST_EXPLANATION",
-        fields: { forecast: { hasData: true, nextMonthForecast: { hasData: true, estimate: 1000 } } },
-        sourceReportGeneratedAt: "2026-08-08T00:00:00.000Z",
-      }),
-      askLlmImpl: async () => ({ answer: "Next month you'll spend $999999.", model: "m", latencyMs: 5 }),
+      directAnswerImpl: async () => ({ ok: false, errorCode: "DIRECT_ANSWER_UNSUPPORTED_MONETARY_FIGURE" }),
     });
     const token = signToken("user-fail-2");
 
@@ -640,8 +656,8 @@ describe("POST /sia/ask -- failures leave the key safely retryable", () => {
 // ---------------------------------------------------------------------
 // 9. No-data retry
 // ---------------------------------------------------------------------
-describe("POST /sia/ask -- no-data replay", () => {
-  it("replays the same 200 without an LLM call and without creating an empty session", async () => {
+describe("POST /sia/ask -- direct-answer replay", () => {
+  it("replays the same 200 without a second direct-answer call or a new session", async () => {
     const { app, askLlmMock, createSessionMock } = loadApp({
       buildContextImpl: async () => ({ intent: "HEALTH_EXPLANATION", fields: null, reason: "no_data" }),
     });
@@ -654,8 +670,8 @@ describe("POST /sia/ask -- no-data replay", () => {
     expect(first.status).toBe(200);
     expect(retry.status).toBe(200);
     expect(retry.body).toEqual(first.body);
-    expect(askLlmMock).not.toHaveBeenCalled();
-    expect(createSessionMock).not.toHaveBeenCalled();
+    expect(askLlmMock).toHaveBeenCalledTimes(1);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
   });
 });
 

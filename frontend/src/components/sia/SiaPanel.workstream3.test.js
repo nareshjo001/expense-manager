@@ -470,7 +470,7 @@ describe("SiaPanel -- interpretation trust label", () => {
     });
     renderPanel(conversation);
 
-    expect(screen.getByText("Using multiple periods")).toBeInTheDocument();
+    expect(screen.getByText("Using this month, last month")).toBeInTheDocument();
     expect(screen.queryByText(/EXPENSE_TOTAL/)).not.toBeInTheDocument();
   });
 });

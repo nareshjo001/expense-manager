@@ -7,7 +7,7 @@ Every statement below is traced to the current repository implementation.
 > **This endpoint stores nothing.** There is no Bill model, no bill collection and no
 > retained file. It reads an image, guesses three values from it, deletes everything it
 > created and returns the guesses. Creating an expense is a separate, explicit action —
-> see [BILLS-FLOW-01](bills-flow-01-scan-to-expense.md).
+> see [BILLS-FLOW-01](../flow/bills-flow-01-scan-to-expense.md).
 
 ## 1. Purpose
 

@@ -1,6 +1,6 @@
 # ML Service module — workflow documentation
 
-Ten confirmed HTTP endpoints under the FastAPI `ml-service/`, each documented as its own API
+Eleven confirmed HTTP endpoints under the FastAPI `ml-service/`, each documented as its own API
 workflow — no real endpoint is folded into a combined document, including the three health
 endpoints and the two operational status endpoints with no confirmed caller. Plus one more
 API workflow, **ML-API-11**, added during the repository-wide API coverage gate: the
@@ -30,26 +30,28 @@ service — retraining is triggered by a daily cron job in the Node backend, or 
 
 | ID | Method | Endpoint | Status | Document |
 |---|---|---|---|---|
-| ML-API-01 | HEAD | `/` | Externally reachable but unused | [ml-api-01-health-head.md](ml-api-01-health-head.md) |
-| ML-API-02 | GET | `/` | Actively used (backend `/ping`) | [ml-api-02-health.md](ml-api-02-health.md) |
-| ML-API-03 | GET | `/health/live` | Externally reachable but unused | [ml-api-03-health-live.md](ml-api-03-health-live.md) |
-| ML-API-04 | GET | `/health/ready` | Externally reachable but unused | [ml-api-04-health-ready.md](ml-api-04-health-ready.md) |
-| ML-API-05 | GET | `/ml-status` | Internal/testing endpoint | [ml-api-05-ml-status.md](ml-api-05-ml-status.md) |
-| ML-API-06 | GET | `/training-runs` | Internal/testing endpoint | [ml-api-06-training-runs-list.md](ml-api-06-training-runs-list.md) |
-| ML-API-07 | GET | `/training-runs/{run_id}` | Internal/testing endpoint | [ml-api-07-training-run-detail.md](ml-api-07-training-run-detail.md) |
-| ML-API-08 | POST | `/predict-category` | Actively used | [ml-api-08-predict-category.md](ml-api-08-predict-category.md) |
-| ML-API-09 | POST | `/generate-description` | Actively used | [ml-api-09-generate-description.md](ml-api-09-generate-description.md) |
-| ML-API-10 | POST | `/retrain-model` | Actively used (daily cron) | [ml-api-10-retrain-model.md](ml-api-10-retrain-model.md) |
+| ML-API-01 | HEAD | `/` | Externally reachable but unused | [document](health-head/ml-api-01-health-head.md) |
+| ML-API-02 | GET | `/` | Actively used (backend `/ping`) | [document](health/ml-api-02-health.md) |
+| ML-API-03 | GET | `/health/live` | Externally reachable but unused | [document](health-live/ml-api-03-health-live.md) |
+| ML-API-04 | GET | `/health/ready` | Externally reachable but unused | [document](health-ready/ml-api-04-health-ready.md) |
+| ML-API-05 | GET | `/ml-status` | Internal/testing endpoint | [document](ml-status/ml-api-05-ml-status.md) |
+| ML-API-06 | GET | `/training-runs` | Internal/testing endpoint | [document](training-runs-list/ml-api-06-training-runs-list.md) |
+| ML-API-07 | GET | `/training-runs/{run_id}` | Internal/testing endpoint | [document](training-run/ml-api-07-training-run-detail.md) |
+| ML-API-08 | POST | `/predict-category` | Actively used | [document](predict-category/ml-api-08-predict-category.md) |
+| ML-API-09 | POST | `/generate-description` | Actively used | [document](generate-description/ml-api-09-generate-description.md) |
+| ML-API-10 | POST | `/retrain-model` | Actively used (daily cron) | [document](retrain-model/ml-api-10-retrain-model.md) |
+| ML-API-12 | POST | `/predict-spending-forecast` | Backend proxy target | [document](spending-forecast/ml-api-12-spending-forecast.md) |
 
 That is the complete FastAPI surface — confirmed by reading every `@app.get/post/head` decorator
 in `app.py`. Full inventory with caller evidence:
-[ml-service-consumption-map.md, Table A](ml-service-consumption-map.md#a-http-api-inventory).
+the endpoint documents and their verified caller traces below.
 
 ### Backend proxy route (Express, not FastAPI)
 
 | ID | Method | Endpoint | Status | Document |
 |---|---|---|---|---|
-| ML-API-11 | POST | `/ml/predict-category` (Express, `backend/Routes/ml.router.js`) | Actively used | [ml-api-11-backend-predict-proxy.md](ml-api-11-backend-predict-proxy.md) |
+| ML-API-11 | POST | `/ml/predict-category` (Express, `backend/Routes/ml.router.js`) | Actively used | [document](backend-predict-proxy/ml-api-11-backend-predict-proxy.md) |
+| ML-API-12 | POST | `/ml/predict-spending-forecast` (Express, `backend/Routes/ml.router.js`) | JWT-protected proxy | [document](spending-forecast/ml-api-12-spending-forecast.md) |
 
 This is a distinct route from ML-API-08 — a different server, a different path, and this
 module's only API document that lives in the Express backend rather than the FastAPI
@@ -61,15 +63,15 @@ is not this route's coverage.
 
 | ID | Type | Document |
 |---|---|---|
-| ML-FLOW-01 | Internal (in-memory pipeline) | [ml-flow-01-prediction-pipeline.md](ml-flow-01-prediction-pipeline.md) |
-| ML-FLOW-02 | Internal (FastAPI startup) | [ml-flow-02-startup-loading.md](ml-flow-02-startup-loading.md) |
-| ML-FLOW-03 | Internal (retraining stage) | [ml-flow-03-dataset-construction.md](ml-flow-03-dataset-construction.md) |
-| ML-FLOW-04 | Internal (retraining stage, subprocess) | [ml-flow-04-training-evaluation.md](ml-flow-04-training-evaluation.md) |
-| ML-FLOW-05 | Internal (retraining stage, subprocess) | [ml-flow-05-validation-promotion.md](ml-flow-05-validation-promotion.md) |
-| ML-FLOW-06 | Internal (retraining stage) | [ml-flow-06-persistence-activation.md](ml-flow-06-persistence-activation.md) |
-| ML-FLOW-07 | Internal (umbrella lifecycle) | [ml-flow-07-retraining-lifecycle.md](ml-flow-07-retraining-lifecycle.md) |
-| ML-FLOW-08 | Internal (FastAPI startup) | [ml-flow-08-startup-reconciliation.md](ml-flow-08-startup-reconciliation.md) |
-| ML-FLOW-09 | Combined (Node backend + FastAPI) | [ml-flow-09-backend-integration.md](ml-flow-09-backend-integration.md) |
+| ML-FLOW-01 | Internal (in-memory pipeline) | [document](flow/prediction/ml-flow-01-prediction-pipeline.md) |
+| ML-FLOW-02 | Internal (FastAPI startup) | [document](flow/startup-loading/ml-flow-02-startup-loading.md) |
+| ML-FLOW-03 | Internal (retraining stage) | [document](flow/dataset-const/ml-flow-03-dataset-construction.md) |
+| ML-FLOW-04 | Internal (retraining stage, subprocess) | [document](flow/training-eval/ml-flow-04-training-evaluation.md) |
+| ML-FLOW-05 | Internal (retraining stage, subprocess) | [document](flow/validation-promotion/ml-flow-05-validation-promotion.md) |
+| ML-FLOW-06 | Internal (retraining stage) | [document](flow/persistence-activation/ml-flow-06-persistence-activation.md) |
+| ML-FLOW-07 | Internal (umbrella lifecycle) | [document](flow/retraining-lifecycle/ml-flow-07-retraining-lifecycle.md) |
+| ML-FLOW-08 | Internal (FastAPI startup) | [document](startup-reconciliation/ml-flow-08-startup-reconciliation.md) |
+| ML-FLOW-09 | Combined (Node backend + FastAPI) | [document](flow/backend-integration/ml-flow-09-backend-integration.md) |
 
 ML-FLOW-07 is the explicitly-permitted umbrella lifecycle connecting ML-FLOW-03 through
 ML-FLOW-06 — it does not replace their independent, stage-level documentation.
@@ -86,7 +88,7 @@ pipeline; `POST /generate-description` (ML-API-09) is unrelated rule-based text,
 Manual or cron-triggered via `POST /retrain-model` (ML-API-10) → a MongoDB-backed distributed
 lock → a background thread (ML-FLOW-07) sequencing dataset construction (ML-FLOW-03), training
 (ML-FLOW-04), validation (ML-FLOW-05), and activation (ML-FLOW-06) → six possible terminal
-states. Full state-transition table: [ML-FLOW-07](ml-flow-07-retraining-lifecycle.md#8-state-transitions).
+states. Full state-transition table: [ML-FLOW-07](flow/retraining-lifecycle/ml-flow-07-retraining-lifecycle.md#8-state-transitions).
 
 ## Model-bundle lifecycle
 
@@ -94,13 +96,13 @@ states. Full state-transition table: [ML-FLOW-07](ml-flow-07-retraining-lifecycl
 joblib artifacts + `metadata.json`, atomic temp-dir-then-rename) and `training/models/active.json`
 (the published pointer, atomic temp-file-then-`os.replace`). Retention/cleanup is best-effort and
 runs only after activation and feedback are already terminal — see
-[ml-service-consumption-map.md, Table D](ml-service-consumption-map.md#d-dataartifact-inventory).
+ml-service-consumption-map.md, Table D.
 
 ## Persistence model
 
 Two MongoDB collections owned by this service (`mltrainingruns`, `mltraininglocks`), one shared
 with the Node backend (`mlfeedbacks`, defined in `backend/config/Schemas.js`). Full repository
-inventory: [ml-service-consumption-map.md, Table E](ml-service-consumption-map.md#e-repositorycollection-inventory).
+inventory: ml-service-consumption-map.md, Table E.
 
 ## Runtime state
 
@@ -110,59 +112,57 @@ ML-FLOW-01's own throttled check, never immediate and never centrally pushed.
 
 ## Backend integration
 
-Four confirmed backend→ML calls, all via plain `axios`, **none carrying any authentication
-header or token**: `POST /predict-category` (5s timeout), `POST /generate-description` (5s
-timeout), `POST /retrain-model` (no timeout set), and `GET /` (health, no timeout visible).
-Full trace: [ML-FLOW-09](ml-flow-09-backend-integration.md).
+The backend sends `X-ML-Operations-Token` on its protected ML calls: `POST /predict-category`
+(5s timeout), `POST /generate-description` (5s timeout), `POST /retrain-model` (no timeout
+set), and spending-forecast requests (3s default timeout). `GET /` from `/ping` is an
+unauthenticated health probe. Full trace: [ML-FLOW-09](flow/backend-integration/ml-flow-09-backend-integration.md).
 
 ## Security boundary
 
-The three operational endpoints (`/ml-status`, `/training-runs`, `/training-runs/{id}`) are
-gated by a shared-secret `X-ML-Operations-Token` header, fail-closed if unset — and **is
-unset** in this repository's checked-out `.env`, making all three unconditionally 503 in the
-current configuration. Every other endpoint (health checks, predict, generate-description,
-retrain-model) has **no authentication of its own** — the only real access control a real user
-request passes through is the backend's `verifyToken` middleware on `/ml/predict-category`,
-documented in the Authentication module.
+`/ml-status`, `/training-runs`, `/training-runs/{id}`, `/predict-category`,
+`/generate-description`, `/predict-spending-forecast`, and `/retrain-model` require the shared
+`X-ML-Operations-Token` header and fail closed with `503` when `ML_OPERATIONS_TOKEN` is not
+configured. Health endpoints remain deliberately unauthenticated probes. The Express
+`/ml/predict-category` proxy additionally requires the user JWT via `verifyToken`.
 
 ## Documents and diagrams
 
 | Workflow | Level 1 | Level 2 | Document |
 |---|---|---|---|
-| ML-API-01 | [overview](ml-api-01-health-head-overview.svg) | [detailed](ml-api-01-health-head-detailed.svg) | [ml-api-01-health-head.md](ml-api-01-health-head.md) |
-| ML-API-02 | [overview](ml-api-02-health-overview.svg) | [detailed](ml-api-02-health-detailed.svg) | [ml-api-02-health.md](ml-api-02-health.md) |
-| ML-API-03 | [overview](ml-api-03-health-live-overview.svg) | [detailed](ml-api-03-health-live-detailed.svg) | [ml-api-03-health-live.md](ml-api-03-health-live.md) |
-| ML-API-04 | [overview](ml-api-04-health-ready-overview.svg) | [detailed](ml-api-04-health-ready-detailed.svg) | [ml-api-04-health-ready.md](ml-api-04-health-ready.md) |
-| ML-API-05 | [overview](ml-api-05-ml-status-overview.svg) | [detailed](ml-api-05-ml-status-detailed.svg) | [ml-api-05-ml-status.md](ml-api-05-ml-status.md) |
-| ML-API-06 | [overview](ml-api-06-training-runs-list-overview.svg) | [detailed](ml-api-06-training-runs-list-detailed.svg) | [ml-api-06-training-runs-list.md](ml-api-06-training-runs-list.md) |
-| ML-API-07 | [overview](ml-api-07-training-run-detail-overview.svg) | [detailed](ml-api-07-training-run-detail-detailed.svg) | [ml-api-07-training-run-detail.md](ml-api-07-training-run-detail.md) |
-| ML-API-08 | [overview](ml-api-08-predict-category-overview.svg) | [detailed](ml-api-08-predict-category-detailed.svg) | [ml-api-08-predict-category.md](ml-api-08-predict-category.md) |
-| ML-API-09 | [overview](ml-api-09-generate-description-overview.svg) | [detailed](ml-api-09-generate-description-detailed.svg) | [ml-api-09-generate-description.md](ml-api-09-generate-description.md) |
-| ML-API-10 | [overview](ml-api-10-retrain-model-overview.svg) | [detailed](ml-api-10-retrain-model-detailed.svg) | [ml-api-10-retrain-model.md](ml-api-10-retrain-model.md) |
-| ML-API-11 | [overview](ml-api-11-backend-predict-proxy-overview.svg) | [detailed](ml-api-11-backend-predict-proxy-detailed.svg) | [ml-api-11-backend-predict-proxy.md](ml-api-11-backend-predict-proxy.md) |
-| ML-FLOW-01 | [overview](ml-flow-01-prediction-pipeline-overview.svg) | [detailed](ml-flow-01-prediction-pipeline-detailed.svg) | [ml-flow-01-prediction-pipeline.md](ml-flow-01-prediction-pipeline.md) |
-| ML-FLOW-02 | [overview](ml-flow-02-startup-loading-overview.svg) | [detailed](ml-flow-02-startup-loading-detailed.svg) | [ml-flow-02-startup-loading.md](ml-flow-02-startup-loading.md) |
-| ML-FLOW-03 | [overview](ml-flow-03-dataset-construction-overview.svg) | [detailed](ml-flow-03-dataset-construction-detailed.svg) | [ml-flow-03-dataset-construction.md](ml-flow-03-dataset-construction.md) |
-| ML-FLOW-04 | [overview](ml-flow-04-training-evaluation-overview.svg) | [detailed](ml-flow-04-training-evaluation-detailed.svg) | [ml-flow-04-training-evaluation.md](ml-flow-04-training-evaluation.md) |
-| ML-FLOW-05 | [overview](ml-flow-05-validation-promotion-overview.svg) | [detailed](ml-flow-05-validation-promotion-detailed.svg) | [ml-flow-05-validation-promotion.md](ml-flow-05-validation-promotion.md) |
-| ML-FLOW-06 | [overview](ml-flow-06-persistence-activation-overview.svg) | [detailed](ml-flow-06-persistence-activation-detailed.svg) | [ml-flow-06-persistence-activation.md](ml-flow-06-persistence-activation.md) |
-| ML-FLOW-07 | [overview](ml-flow-07-retraining-lifecycle-overview.svg) | [detailed](ml-flow-07-retraining-lifecycle-detailed.svg) | [ml-flow-07-retraining-lifecycle.md](ml-flow-07-retraining-lifecycle.md) |
-| ML-FLOW-08 | [overview](ml-flow-08-startup-reconciliation-overview.svg) | [detailed](ml-flow-08-startup-reconciliation-detailed.svg) | [ml-flow-08-startup-reconciliation.md](ml-flow-08-startup-reconciliation.md) |
-| ML-FLOW-09 | [overview](ml-flow-09-backend-integration-overview.svg) | [detailed](ml-flow-09-backend-integration-detailed.svg) | [ml-flow-09-backend-integration.md](ml-flow-09-backend-integration.md) |
+| ML-API-01 | [overview](health-head/ml-api-01-health-head-overview.svg) | [detailed](health-head/ml-api-01-health-head-detailed.svg) | [document](health-head/ml-api-01-health-head.md) |
+| ML-API-02 | [overview](health/ml-api-02-health-overview.svg) | [detailed](health/ml-api-02-health-detailed.svg) | [document](health/ml-api-02-health.md) |
+| ML-API-03 | [overview](health-live/ml-api-03-health-live-overview.svg) | [detailed](health-live/ml-api-03-health-live-detailed.svg) | [document](health-live/ml-api-03-health-live.md) |
+| ML-API-04 | [overview](health-ready/ml-api-04-health-ready-overview.svg) | [detailed](health-ready/ml-api-04-health-ready-detailed.svg) | [document](health-ready/ml-api-04-health-ready.md) |
+| ML-API-05 | [overview](ml-status/ml-api-05-ml-status-overview.svg) | [detailed](ml-status/ml-api-05-ml-status-detailed.svg) | [document](ml-status/ml-api-05-ml-status.md) |
+| ML-API-06 | [overview](training-runs-list/ml-api-06-training-runs-list-overview.svg) | [detailed](training-runs-list/ml-api-06-training-runs-list-detailed.svg) | [document](training-runs-list/ml-api-06-training-runs-list.md) |
+| ML-API-07 | [overview](training-run/ml-api-07-training-run-detail-overview.svg) | [detailed](training-run/ml-api-07-training-run-detail-detailed.svg) | [document](training-run/ml-api-07-training-run-detail.md) |
+| ML-API-08 | [overview](predict-category/ml-api-08-predict-category-overview.svg) | [detailed](predict-category/ml-api-08-predict-category-detailed.svg) | [document](predict-category/ml-api-08-predict-category.md) |
+| ML-API-09 | [overview](generate-description/ml-api-09-generate-description-overview.svg) | [detailed](generate-description/ml-api-09-generate-description-detailed.svg) | [document](generate-description/ml-api-09-generate-description.md) |
+| ML-API-10 | [overview](retrain-model/ml-api-10-retrain-model-overview.svg) | [detailed](retrain-model/ml-api-10-retrain-model-detailed.svg) | [document](retrain-model/ml-api-10-retrain-model.md) |
+| ML-API-11 | [overview](backend-predict-proxy/ml-api-11-backend-predict-proxy-overview.svg) | [detailed](backend-predict-proxy/ml-api-11-backend-predict-proxy-detailed.svg) | [document](backend-predict-proxy/ml-api-11-backend-predict-proxy.md) |
+| ML-API-12 | [overview](spending-forecast/ml-api-12-spending-forecast-overview.svg) | [detailed](spending-forecast/ml-api-12-spending-forecast-detailed.svg) | [document](spending-forecast/ml-api-12-spending-forecast.md) |
+| ML-FLOW-01 | [overview](flow/prediction/ml-flow-01-prediction-pipeline-overview.svg) | [detailed](flow/prediction/ml-flow-01-prediction-pipeline-detailed.svg) | [document](flow/prediction/ml-flow-01-prediction-pipeline.md) |
+| ML-FLOW-02 | [overview](flow/startup-loading/ml-flow-02-startup-loading-overview.svg) | [detailed](flow/startup-loading/ml-flow-02-startup-loading-detailed.svg) | [document](flow/startup-loading/ml-flow-02-startup-loading.md) |
+| ML-FLOW-03 | [overview](flow/dataset-const/ml-flow-03-dataset-construction-overview.svg) | [detailed](flow/dataset-const/ml-flow-03-dataset-construction-detailed.svg) | [document](flow/dataset-const/ml-flow-03-dataset-construction.md) |
+| ML-FLOW-04 | [overview](flow/training-eval/ml-flow-04-training-evaluation-overview.svg) | [detailed](flow/training-eval/ml-flow-04-training-evaluation-detailed.svg) | [document](flow/training-eval/ml-flow-04-training-evaluation.md) |
+| ML-FLOW-05 | [overview](flow/validation-promotion/ml-flow-05-validation-promotion-overview.svg) | [detailed](flow/validation-promotion/ml-flow-05-validation-promotion-detailed.svg) | [document](flow/validation-promotion/ml-flow-05-validation-promotion.md) |
+| ML-FLOW-06 | [overview](flow/persistence-activation/ml-flow-06-persistence-activation-overview.svg) | [detailed](flow/persistence-activation/ml-flow-06-persistence-activation-detailed.svg) | [document](flow/persistence-activation/ml-flow-06-persistence-activation.md) |
+| ML-FLOW-07 | [overview](flow/retraining-lifecycle/ml-flow-07-retraining-lifecycle-overview.svg) | [detailed](flow/retraining-lifecycle/ml-flow-07-retraining-lifecycle-detailed.svg) | [document](flow/retraining-lifecycle/ml-flow-07-retraining-lifecycle.md) |
+| ML-FLOW-08 | [overview](startup-reconciliation/ml-flow-08-startup-reconciliation-overview.svg) | [detailed](startup-reconciliation/ml-flow-08-startup-reconciliation-detailed.svg) | [document](startup-reconciliation/ml-flow-08-startup-reconciliation.md) |
+| ML-FLOW-09 | [overview](flow/backend-integration/ml-flow-09-backend-integration-overview.svg) | [detailed](flow/backend-integration/ml-flow-09-backend-integration-detailed.svg) | [document](flow/backend-integration/ml-flow-09-backend-integration.md) |
 
-Full inventory tables (HTTP API, components, backend/frontend integration, data/artifact,
-repository/collection, environment variables, dead/unused code, findings):
-[ml-service-consumption-map.md](ml-service-consumption-map.md). End-to-end state machine and
-lifecycle narrative: [ml-service-lifecycle.md](ml-service-lifecycle.md).
+End-to-end state machine and lifecycle narrative:
+[ml-service-lifecycle.md](ml-service-lifecycle.md).
 
 ## Confirmed limitations
 
 The ten worth reading first (full list per-document):
 
-1. **No service-to-service authentication** on any of the four backend→ML calls, or on
-   `/predict-category`, `/generate-description`, `/retrain-model` themselves.
-2. **The three operational status endpoints are unconditionally 503** in this repository's
-   checked-out `.env` — `ML_OPERATIONS_TOKEN` is never set.
+1. **Protected ML calls depend on matching `ML_OPERATIONS_TOKEN` configuration** in the backend
+   and ML service. A missing configuration fails closed with `503`; a missing or wrong header is
+   rejected with `401`.
+2. **The checked-in `.env` is not a deployment configuration.** Runtime token availability must
+   be verified in the deployed environment; no token value is documented or logged here.
 3. **Regression-threshold default mismatch** — `.env.example` documents `0.02`; the code's own
    fallback (`validate_model.py`) is actually `0.05` when the env var is unset, which is what
    currently governs validation gate 7.

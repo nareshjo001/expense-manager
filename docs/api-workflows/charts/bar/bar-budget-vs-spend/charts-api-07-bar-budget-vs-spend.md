@@ -106,8 +106,8 @@ A numeric year input; the hook enables the query once the value is four characte
 
 **Summary:** Correctness 1 · Security / operational 3 · Reliability 1 · Maintainability 1
 
-**This route reads budget data written by [BUDGET-02](../budget/budget-api-02-set-budget.md)
-and [BUDGET-03](../budget/budget-api-03-update-budget.md). It does not call those
+**This route reads budget data written by [BUDGET-02](../../../budget/set-budget/budget-api-02-set-budget.md)
+and [BUDGET-03](../../../budget/update-budget/budget-api-03-update-budget.md). It does not call those
 endpoints, and it never queries the expense collection.**
 
 ### Correctness

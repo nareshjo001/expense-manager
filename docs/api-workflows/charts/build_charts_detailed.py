@@ -99,7 +99,9 @@ def finish(d, out, api_id, tail):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=[FOOT, tail])
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
+    folders = {"charts-api-01": "trend", "charts-api-02": "trend", "charts-api-03": "trend", "charts-api-04": "trend", "charts-api-05": "trend", "charts-api-06": "bar", "charts-api-07": "bar", "charts-api-08": "pie", "charts-api-09": "pie", "charts-flow-01": "flow"}
+    folder = next(value for key, value in folders.items() if out.startswith(key))
+    open(os.path.join(HERE, folder, out), "w", encoding="utf-8").write(svg)
     print("wrote", out, len(svg))
 
 
@@ -833,9 +835,9 @@ cached_pie(
     COMMON_BAND[:2] + [
         ("E3", "401 User does not exist", "UserModel.findById → null",
          "Checked only on a cache miss, because the cache is read first."),
-        ("E4", "Stale after a budget change", "no clearUserExpenseCache",
-         "BUDGET-02 and BUDGET-03 never clear this key, so a newly set budget is not "
-         "reflected here until the 300 s TTL expires."),
+        ("E4", "Repair-on-read is best effort", "syncRecoveryService.repairIfPending",
+         "The budget comparison repairs pending derived spend before lookup; a failed "
+         "repair leaves the existing stored value in place for this response."),
         ("E5", "500 Internal Server Error", "catch (err)",
          "A read failure surfaces here with a generic body."),
         ("E6", "Month key is hardcoded en-US", "toLocaleString('en-US', …)",

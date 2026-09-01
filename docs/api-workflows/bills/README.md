@@ -27,35 +27,35 @@ The name suggests more than the code contains. Confirmed by inspection:
 
 | API ID | Method | Endpoint | Route mount | Backend handler | Frontend caller | Consumer | Status |
 |---|---|---|---|---|---|---|---|
-| [BILLS-01](bills-api-01-upload-and-extract.md) | POST | `/bills/bill-upload` | `app.use("/bills", apiLimiter, billRoutes)` | `uploadBill` | `uploadBill` (`billApi.js`) | `BillUpload.js` → `AddExpense.js` | Actively used |
+| [BILLS-01](upload-extract/bills-api-01-upload-and-extract.md) | POST | `/bills/bill-upload` | `app.use("/bills", apiLimiter, billRoutes)` | `uploadBill` | `uploadBill` (`billApi.js`) | `BillUpload.js` → `AddExpense.js` | Actively used |
 
 No backend-only routes. No frontend call pointing at a missing endpoint. No duplicate,
 legacy or unreachable route. Upload, extraction, preview, confirmation, saving, listing,
 viewing, editing, deleting and retry are covered in
-[the consumption map](bills-consumption-map.md#a-bills-api-inventory) — only the first two
+the consumption map — only the first two
 exist, and they share one request.
 
 ## B. Frontend Bills inventory
 
 Six UI surfaces, two of which issue a network request. Full table with formats, validation,
 state ownership and unmount behaviour in
-[bills-consumption-map.md](bills-consumption-map.md#b-frontend-bills-inventory).
+bills-consumption-map.md.
 
 ## C. File-processing and dependency inventory
 
 Every stage from file picker to UI update, including the ones that are **absent**
 (client-side validation, external provider, schema validation, bill persistence), is
 tabulated in
-[bills-consumption-map.md](bills-consumption-map.md#c-file-processing-and-dependency-inventory).
+bills-consumption-map.md.
 
 ## Documents
 
 | # | Workflow | Classification | Level 1 | Level 2 | Document |
 |---|---|---|---|---|---|
-| BILLS-01 | Upload and extract | Upload → extraction only | [svg](bills-api-01-upload-and-extract-overview.svg) | [svg](bills-api-01-upload-and-extract-detailed.svg) | [md](bills-api-01-upload-and-extract.md) |
-| FLOW-01 | Scan to saved expense | Upload → extraction → review → **explicit** persistence (combined Bills–Expense) | [svg](bills-flow-01-scan-to-expense-overview.svg) | [svg](bills-flow-01-scan-to-expense-detailed.svg) | [md](bills-flow-01-scan-to-expense.md) |
+| BILLS-01 | Upload and extract | Upload → extraction only | [svg](upload-extract/bills-api-01-upload-and-extract-overview.svg) | [svg](upload-extract/bills-api-01-upload-and-extract-detailed.svg) | [md](upload-extract/bills-api-01-upload-and-extract.md) |
+| FLOW-01 | Scan to saved expense | Upload → extraction → review → **explicit** persistence (combined Bills–Expense) | [svg](flow/bills-flow-01-scan-to-expense-overview.svg) | [svg](flow/bills-flow-01-scan-to-expense-detailed.svg) | [md](flow/bills-flow-01-scan-to-expense.md) |
 
-Plus the [consumption map](bills-consumption-map.md).
+Plus the consumption map.
 
 ## Structural facts
 

@@ -7,7 +7,7 @@ repository implementation.
 
 > **Signup verification only.** This route is reachable only from `OTPForm.js`, which
 > renders exclusively during signup verification. Password-reset resends go through
-> [AUTH-API-05](auth-api-05-forgot-password.md) instead — confirmed by tracing every
+> [AUTH-API-05](../forgot-password/auth-api-05-forgot-password.md) instead — confirmed by tracing every
 > caller of this endpoint.
 
 ---
@@ -107,7 +107,7 @@ cycle from the UI, though the two timers (client and server) are not the same cl
 - The previous OTP is fully superseded, not merely supplemented — the old code stops
   working the instant this succeeds, not just at its original 5-minute expiry.
 - Same cooldown helper (`canResendOtp`) and 120-second window as
-  [AUTH-API-05](auth-api-05-forgot-password.md), applied independently per endpoint.
+  [AUTH-API-05](../forgot-password/auth-api-05-forgot-password.md), applied independently per endpoint.
 
 ## 15. Failure paths
 
@@ -150,4 +150,4 @@ cycle from the UI, though the two timers (client and server) are not the same cl
    mid-password-reset (`isPasswordReset: true`) — the `isVerified` guard alone decides
    eligibility, so a resend during an active reset window would still succeed and
    would overwrite the pending reset OTP, since both share the same field (see
-   [AUTH-API-03 §17, finding 3](auth-api-03-verify-otp.md#17-current-implementation-observations)).
+   [AUTH-API-03 §17, finding 3](../verify-otp/auth-api-03-verify-otp.md#17-current-implementation-observations)).

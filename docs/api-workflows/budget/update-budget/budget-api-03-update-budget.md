@@ -5,7 +5,7 @@
 Two levels of the same workflow. Every statement below is traced to the current
 repository implementation.
 
-> **Not an update-only route.** Like [BUDGET-02](budget-api-02-set-budget.md), this endpoint
+> **Not an update-only route.** Like [BUDGET-02](../set-budget/budget-api-02-set-budget.md), this endpoint
 > upserts — it will happily create the current month's document if none exists. The two
 > routes are separate controllers with near-identical behaviour; the differences are
 > tabulated in §5.
@@ -100,7 +100,7 @@ closes the modal; the visible figure updates through the invalidate-and-refetch 
 
 ## 8. Cache behaviour
 
-Identical to [BUDGET-02 §7](budget-api-02-set-budget.md#7-cache-behaviour): no budget cache in
+Identical to [BUDGET-02 §7](../set-budget/budget-api-02-set-budget.md#7-cache-behaviour): no budget cache in
 Redis; `report:<userId>` invalidated and repopulated with a 1 h TTL; TanStack invalidation
 of `budgets.all`, `reports.all` and `charts.all`, with `expenses.all` deliberately left
 alone.
@@ -167,7 +167,7 @@ Findings shared with BUDGET-02 — locale-dependent month key, the `spent`-less 
 window, IP-keyed rate limiting, unset `trust proxy`, no route validator, three writes
 without a transaction, and synchronous report regeneration — apply here unchanged and are
 not restated in full. See
-[BUDGET-02 §13](budget-api-02-set-budget.md#13-findings).
+[BUDGET-02 §13](../set-budget/budget-api-02-set-budget.md#13-findings).
 
 ### Correctness
 
@@ -206,7 +206,7 @@ not restated in full. See
 ### Maintainability
 
 7. **Two controllers implement one behaviour.** See
-   [BUDGET-02 finding 8](budget-api-02-set-budget.md#13-findings). The `PUT`/`POST` split
+   [BUDGET-02 finding 8](../set-budget/budget-api-02-set-budget.md#13-findings). The `PUT`/`POST` split
    carries no behavioural meaning.
 
 8. **The upsert is written twice with different operator styles** — `{ $set: { budget } }`

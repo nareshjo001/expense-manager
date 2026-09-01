@@ -64,6 +64,6 @@ d.path([(ret[1].right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (1574, 502)],
        "error", dashed=True)
 
 svg = o.render(["Deletion is scoped by userId and cannot be undone; the UI offers no confirmation before the request is sent."], "INCOME-04")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "income-api-04-delete-income-overview.svg"),
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "delete-income", "income-api-04-delete-income-overview.svg"),
      "w", encoding="utf-8").write(svg)
 print("wrote income-api-04-delete-income-overview.svg", len(svg))

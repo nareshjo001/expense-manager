@@ -39,7 +39,9 @@ def error_card(o, x, y, w, title, lines):
 
 
 def save(o, svg, name):
-    open(os.path.join(HERE, name), "w", encoding="utf-8").write(svg)
+    folders = {"api-05": "create", "api-06": "update", "api-07": "delete", "api-08": "toggle-recurring", "flow-01": "flow", "flow-02": "flow"}
+    folder = next(value for key, value in folders.items() if name.startswith(key))
+    open(os.path.join(HERE, folder, name), "w", encoding="utf-8").write(svg)
     print("wrote", name, len(svg))
 
 

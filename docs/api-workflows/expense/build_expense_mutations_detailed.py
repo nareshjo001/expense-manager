@@ -93,7 +93,9 @@ def finish(d, out, api_id, tail):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=[FOOT, tail])
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
+    folders = {"api-05": "create", "api-06": "update", "api-07": "delete", "api-08": "toggle-recurring", "flow-01": "flow", "flow-02": "flow"}
+    folder = next(value for key, value in folders.items() if out.startswith(key))
+    open(os.path.join(HERE, folder, out), "w", encoding="utf-8").write(svg)
     print("wrote", out, len(svg))
 
 
@@ -182,9 +184,9 @@ e = stack(d, r4, [
      {"step": "08"}),
 ])
 grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "then, in order",
-                   [("recalculateBudget", "month total"),
+                   [("synchronizeAfterMutation", "fenced derived sync"),
                     ("clearUserExpenseCache", "4 key families"),
-                    ("refreshReport", "report:<userId>")])
+                    ("derivedData", "recovery outcome")])
 e5 = d.card(r4.card_x, grp.bottom + 14, "response", "send", "RESPONSE",
             "201 Created", "message + success",
             "No document is returned — the client refetches instead.",
@@ -302,7 +304,7 @@ e = stack(d, r4, [
      {"step": "08", "tag": "E6"}),
 ])
 grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "then, conditionally",
-                   [("recalculateBudget", "amount/date only"),
+                   [("synchronizeAfterMutation", "fenced derived sync"),
                     ("second month", "when the date moved"),
                     ("clearUserExpenseCache", "always")])
 e5 = d.card(r4.card_x, grp.bottom + 14, "response", "send", "RESPONSE",
@@ -425,7 +427,7 @@ e = stack(d, r4, [
 ])
 grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "then, in order",
                    [("clearUserExpenseCache", "4 key families"),
-                    ("refreshReport", "report:<userId>"),
+                    ("derivedData", "recovery outcome"),
                     ("no other cleanup", "see the note")])
 e5 = d.card(r4.card_x, grp.bottom + 14, "response", "send", "RESPONSE",
             "200 OK or 404", "message only",
@@ -811,7 +813,7 @@ e = stack(d, r4, [
      "Anything outside the allow-list is silently dropped.", {"step": "09"}),
 ])
 grp = d.pill_group(r4.card_x, e[-1].bottom + 6, CW, "then, conditionally",
-                   [("recalculateBudget", "amount/date only"),
+                   [("synchronizeAfterMutation", "fenced derived sync"),
                     ("second month", "when the date moved"),
                     ("clearUserExpenseCache", "always")])
 e5 = d.card(r4.card_x, grp.bottom + 14, "response", "send", "RESPONSE",

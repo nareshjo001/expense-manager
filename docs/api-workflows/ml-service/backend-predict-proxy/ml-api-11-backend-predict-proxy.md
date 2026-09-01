@@ -65,8 +65,8 @@ router.post("/predict-category", verifyToken, async (req, res) => {
     const { expenseName } = req.body;
     if (!expenseName) return res.status(400).json({ success: false, message: "expenseName is required" });
 
-    const response = await axios.post(`${process.env.ML_ROUTE}/predict-category`,
-        { expenseName }, { timeout: PREDICT_TIMEOUT_MS });
+    const response = await axios.post(buildMlServiceUrl("/predict-category"),
+        { expenseName }, { timeout: PREDICT_TIMEOUT_MS, headers: mlOperationsHeaders() });
 
     return res.status(200).json(response.data);
     // catch block: three-way branch, see §12
@@ -111,7 +111,7 @@ Stateless per request — no shared mutable state in this handler. Each call ope
 
 ## 14. Security/privacy behaviour
 
-**This is the auth boundary for the whole prediction round trip.** `verifyToken` runs here — ML-API-08 itself has no authentication. A direct, unauthenticated call to the FastAPI service would succeed if reachable on its own network path (documented in ML-API-08 §14 and ML-FLOW-09's confirmed limitations); this proxy is the only place a real user's request is actually gated. The proxy call to the ML service itself carries **no service-to-service credential** — consistent with ML-FLOW-09's finding across all backend→ML call sites.
+`verifyToken` gates the user request, and the proxy attaches `X-ML-Operations-Token` via `mlOperationsHeaders()` for the FastAPI call. ML-API-08 independently validates the shared token before inference; it fails closed with `503` if the ML service token is unset and returns `401` for a missing or invalid token.
 
 ## 15. Files involved
 

@@ -69,7 +69,8 @@ def finish(d, out, api_id, tail):
     svg = d.render(meta_right="BALENISA · Personal Finance Platform",
                    meta_left="docs/api-workflows · %s · Level 2 detailed" % api_id,
                    footer_notes=[FOOT, tail])
-    open(os.path.join(HERE, out), "w", encoding="utf-8").write(svg)
+    folder = "upload-extract" if out.startswith("bills-api-01") else "flow"
+    open(os.path.join(HERE, folder, out), "w", encoding="utf-8").write(svg)
     print("wrote", out, len(svg))
 
 

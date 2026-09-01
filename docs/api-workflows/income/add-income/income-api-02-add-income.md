@@ -126,8 +126,8 @@ insights queries for every period.
 ### Reliability
 
 2. **No duplicate protection.** Nothing prevents the same source, amount and date being
-   submitted twice; there is no unique index and no idempotency key. A double-click while
-   the spinner is up is prevented only by the mutation's pending state.
+   submitted twice; creation uses a per-user idempotency key, payload comparison, and a unique
+   index to return a replay or reject a conflicting reuse.
 
 ### Maintainability
 

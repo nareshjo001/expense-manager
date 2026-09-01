@@ -9,10 +9,10 @@ outwards.
 > **Corrected during the repository-wide API coverage gate.** `GET /expense/by-category`
 > previously had two API documents (API-02 and API-03) for one route — a violation of the
 > exactly-one-document-per-endpoint rule. API-02 remains that route's sole API document;
-> the else-branch document is reclassified as [BRANCH-01](api-03-category-thisyear.md)
+> the else-branch document is reclassified as [BRANCH-01](read/category-this-year/api-03-category-thisyear.md)
 > and excluded from the API count. `GET /expense/expense-edit-data`, previously only
 > cross-linked from FLOW-02 with no document of its own, now has its own API document,
-> [API-09](api-09-edit-data.md).
+> [API-09](edit-data/api-09-edit-data.md).
 
 Diagrams reuse the approved BALENISA design system in
 [`../diagram-tokens.json`](../diagram-tokens.json) and
@@ -24,22 +24,22 @@ components covered every stage.
 
 | API ID | Method | Endpoint | Backend handler | Frontend hook | Status |
 |---|---|---|---|---|---|
-| [API-01](api-01-last-week.md) | `GET` | `/expense/last-week` | `lastWeekExpense` | `useExpensesQuery` | Actively used |
-| [API-02](api-02-category-thismonth.md) | `GET` | `/expense/by-category?period=thismonth` | `getByCategory` | `useExpensesQuery` | Actively used |
-| [API-04](api-04-custom-range.md) | `GET` | `/expense/search` | `getByCustom` | `useExpensesQuery` | Actively used |
-| [API-09](api-09-edit-data.md) | `GET` | `/expense/expense-edit-data` | `geteditexpense` | `useExpenseEditData` (edit form hydration) | Actively used |
+| [API-01](read/last-week/api-01-last-week.md) | `GET` | `/expense/last-week` | `lastWeekExpense` | `useExpensesQuery` | Actively used |
+| [API-02](read/category-thismonth/api-02-category-thismonth.md) | `GET` | `/expense/by-category?period=thismonth` | `getByCategory` | `useExpensesQuery` | Actively used |
+| [API-04](read/custom/api-04-custom-range.md) | `GET` | `/expense/search` | `getByCustom` | `useExpensesQuery` | Actively used |
+| [API-09](edit-data/api-09-edit-data.md) | `GET` | `/expense/expense-edit-data` | `geteditexpense` | `useExpenseEditData` (edit form hydration) | Actively used |
 
 These are **cross-linked, not re-documented** from the mutation documents wherever a write
 invalidates or refreshes their data.
 
-`GET /expense/by-category` has exactly one API document, [API-02](api-02-category-thismonth.md).
+`GET /expense/by-category` has exactly one API document, [API-02](read/category-thismonth/api-02-category-thismonth.md).
 Its else-branch behaviour (any `period` other than `thismonth`) is documented separately as
-[BRANCH-01](api-03-category-thisyear.md) — a **non-API branch document**, not a second API
+[BRANCH-01](read/category-this-year/api-03-category-thisyear.md) — a **non-API branch document**, not a second API
 workflow for the same route. Full rationale for this reclassification is in BRANCH-01's own
 header.
 
 `GET /expense/expense-edit-data` (API-09) was previously documented only indirectly, as an
-upstream dependency inside [FLOW-02](flow-02-retrieval-assisted-edit.md#5-api-dependencies).
+upstream dependency inside [FLOW-02](flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md#5-api-dependencies).
 It now has its own dedicated API document; FLOW-02 continues to describe the combined
 retrieval-then-edit user journey and cross-links API-09 rather than duplicating it.
 
@@ -47,10 +47,10 @@ retrieval-then-edit user journey and cross-links API-09 rather than duplicating 
 
 | API ID | Method | Endpoint | Route mount | Backend handler | Frontend caller | Consumer | Status |
 |---|---|---|---|---|---|---|---|
-| [API-05](api-05-create-expense.md) | `POST` | `/expense/add-expense` | `app.use("/expense", apiLimiter, expenseRouter)` | `addExpense` | `addExpense` | `AddExpense.js` — manual, ML-assisted and bill-prefilled | Actively used |
-| [API-06](api-06-update-expense.md) | `PUT` | `/expense/update-expense` | same | `editexpense` | `updateExpense` | `AddExpense.js` in edit mode | Actively used |
-| [API-07](api-07-delete-expense.md) | `DELETE` | `/expense/delete-expense` | same | `deleteExpense` | `deleteExpense` | `LandingPage.js` via `DeleteAlert` | Actively used |
-| [API-08](api-08-toggle-recurring.md) | `PATCH` | `/api/recurring` | `app.use("/api", apiLimiter, apiRouter)` | `recurring` | `updateRecurringStatus` | `ExpenseItem.js` | Actively used |
+| [API-05](create/api-05-create-expense.md) | `POST` | `/expense/add-expense` | `app.use("/expense", apiLimiter, expenseRouter)` | `addExpense` | `addExpense` | `AddExpense.js` — manual, ML-assisted and bill-prefilled | Actively used |
+| [API-06](update/api-06-update-expense.md) | `PUT` | `/expense/update-expense` | same | `editexpense` | `updateExpense` | `AddExpense.js` in edit mode | Actively used |
+| [API-07](delete/api-07-delete-expense.md) | `DELETE` | `/expense/delete-expense` | same | `deleteExpense` | `deleteExpense` | `LandingPage.js` via `DeleteAlert` | Actively used |
+| [API-08](toggle-recurring/api-08-toggle-recurring.md) | `PATCH` | `/api/recurring` | `app.use("/api", apiLimiter, apiRouter)` | `recurring` | `updateRecurringStatus` | `ExpenseItem.js` | Actively used |
 
 **No bulk operations exist** — no `insertMany`, `updateMany`, `deleteMany` or `bulkWrite`
 anywhere in the backend. No restore or archive route. No backend-only mutation, and no
@@ -64,20 +64,20 @@ happens to be mounted on the shared `/api` router next to the three budget route
 
 | # | Workflow | Classification | Level 1 | Level 2 | Document |
 |---|---|---|---|---|---|
-| API-09 | Edit-data hydration | Retrieval, single-record read for the edit form | [svg](api-09-edit-data-overview.svg) | [svg](api-09-edit-data-detailed.svg) | [md](api-09-edit-data.md) |
-| BRANCH-01 | Yearly category view | Non-API response branch of API-02, not a source endpoint of its own | [svg](api-03-category-thisyear-overview.svg) | [svg](api-03-category-thisyear-detailed.svg) | [md](api-03-category-thisyear.md) |
-| API-05 | Create expense | Manual + ML-assisted + bill-prefilled creation → multi-cache invalidation | [svg](api-05-create-expense-overview.svg) | [svg](api-05-create-expense-detailed.svg) | [md](api-05-create-expense.md) |
-| API-06 | Update expense | Edit/update → multi-cache invalidation | [svg](api-06-update-expense-overview.svg) | [svg](api-06-update-expense-detailed.svg) | [md](api-06-update-expense.md) |
-| API-07 | Delete expense | Deletion → multi-cache invalidation | [svg](api-07-delete-expense-overview.svg) | [svg](api-07-delete-expense-detailed.svg) | [md](api-07-delete-expense.md) |
-| API-08 | Toggle recurring | Mutation with an optimistic update and **no** invalidation | [svg](api-08-toggle-recurring-overview.svg) | [svg](api-08-toggle-recurring-detailed.svg) | [md](api-08-toggle-recurring.md) |
-| FLOW-01 | ML-assisted entry | Combined prediction → user review → explicit persistence | [svg](flow-01-ml-assisted-entry-overview.svg) | [svg](flow-01-ml-assisted-entry-detailed.svg) | [md](flow-01-ml-assisted-entry.md) |
-| FLOW-02 | Retrieval-assisted edit | Retrieval-assisted edit flow, two requests | [svg](flow-02-retrieval-assisted-edit-overview.svg) | [svg](flow-02-retrieval-assisted-edit-detailed.svg) | [md](flow-02-retrieval-assisted-edit.md) |
+| API-09 | Edit-data hydration | Retrieval, single-record read for the edit form | [svg](edit-data/api-09-edit-data-overview.svg) | [svg](edit-data/api-09-edit-data-detailed.svg) | [md](edit-data/api-09-edit-data.md) |
+| BRANCH-01 | Yearly category view | Non-API response branch of API-02, not a source endpoint of its own | [svg](read/category-this-year/api-03-category-thisyear-overview.svg) | [svg](read/category-this-year/api-03-category-thisyear-detailed.svg) | [md](read/category-this-year/api-03-category-thisyear.md) |
+| API-05 | Create expense | Manual + ML-assisted + bill-prefilled creation → multi-cache invalidation | [svg](create/api-05-create-expense-overview.svg) | [svg](create/api-05-create-expense-detailed.svg) | [md](create/api-05-create-expense.md) |
+| API-06 | Update expense | Edit/update → multi-cache invalidation | [svg](update/api-06-update-expense-overview.svg) | [svg](update/api-06-update-expense-detailed.svg) | [md](update/api-06-update-expense.md) |
+| API-07 | Delete expense | Deletion → multi-cache invalidation | [svg](delete/api-07-delete-expense-overview.svg) | [svg](delete/api-07-delete-expense-detailed.svg) | [md](delete/api-07-delete-expense.md) |
+| API-08 | Toggle recurring | Mutation with an optimistic update and **no** invalidation | [svg](toggle-recurring/api-08-toggle-recurring-overview.svg) | [svg](toggle-recurring/api-08-toggle-recurring-detailed.svg) | [md](toggle-recurring/api-08-toggle-recurring.md) |
+| FLOW-01 | ML-assisted entry | Combined prediction → user review → explicit persistence | [svg](flow/ml-assisted-entry/flow-01-ml-assisted-entry-overview.svg) | [svg](flow/ml-assisted-entry/flow-01-ml-assisted-entry-detailed.svg) | [md](flow/ml-assisted-entry/flow-01-ml-assisted-entry.md) |
+| FLOW-02 | Retrieval-assisted edit | Retrieval-assisted edit flow, two requests | [svg](flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit-overview.svg) | [svg](flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit-detailed.svg) | [md](flow/retrieval-assisted-edit/flow-02-retrieval-assisted-edit.md) |
 
-Plus the [consumption map](expense-consumption-map.md).
+Plus the consumption map.
 
 The bill-prefilled creation path is **not** a separate workflow here — it reaches API-05
 unchanged and is documented as
-[BILLS-FLOW-01](../bills/bills-flow-01-scan-to-expense.md), cross-linked from both sides.
+[BILLS-FLOW-01](../bills/flow/bills-flow-01-scan-to-expense.md), cross-linked from both sides.
 
 ## D. What each operation does
 
@@ -103,7 +103,7 @@ disabled, and no confidence threshold gates it. Prediction failure never blocks 
 | Validation | **Joi on create only.** Update, delete and recurring have no validation middleware |
 | Ownership | Always in the query filter — `{ _id, userId }`. No cross-account write path exists |
 | ObjectId guard | Present on update, delete and the hydration read. **Absent on `PATCH /api/recurring`** |
-| Redis | `clearUserExpenseCache` + `refreshReport` on create, update and delete. **Nothing on recurring** |
+| Derived-data synchronization | Create, update and delete reserve recovery evidence before their primary write, clear expense caches, and call fenced `synchronizeAfterMutation`; success responses include additive `derivedData` status. |
 | Client cache | Four prefix invalidations on create, update and delete. **None on recurring** |
 | Mutation retry | `0` everywhere (`queryClient.js` default) |
 | Optimistic updates | API-08 only |

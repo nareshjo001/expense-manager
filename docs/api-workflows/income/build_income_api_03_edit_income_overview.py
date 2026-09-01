@@ -64,6 +64,6 @@ d.path([(ret[1].right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (1574, 502)],
        "error", dashed=True)
 
 svg = o.render(["The update filter carries userId as well as _id, so one account can never edit another account's income."], "INCOME-03")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "income-api-03-edit-income-overview.svg"),
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "edit-income", "income-api-03-edit-income-overview.svg"),
      "w", encoding="utf-8").write(svg)
 print("wrote income-api-03-edit-income-overview.svg", len(svg))

@@ -3,8 +3,8 @@
 ## 1. Purpose
 
 The single write that brings an expense into existence. Every creation path in the
-application ends here: manual entry, ML-assisted entry ([FLOW-01](flow-01-ml-assisted-entry.md))
-and the bill-scan flow ([BILLS-FLOW-01](../bills/bills-flow-01-scan-to-expense.md)) all
+application ends here: manual entry, ML-assisted entry ([FLOW-01](../flow/ml-assisted-entry/flow-01-ml-assisted-entry.md))
+and the bill-scan flow ([BILLS-FLOW-01](../../bills/flow/bills-flow-01-scan-to-expense.md)) all
 call this one endpoint. There is no second create route.
 
 ## 2. Endpoint and HTTP method
@@ -212,10 +212,10 @@ there, and all four carry the userId in segment `[1]`, so all four are cleared:
 
 | Key | Written by | Cleared |
 |---|---|---|
-| `lastWeek:<userId>` | [API-01](api-01-last-week.md) | yes |
-| `category:<userId>:<period>` | [API-02](api-02-category-thismonth.md) (its else branch is [BRANCH-01](api-03-category-thisyear.md)) | yes |
-| `pie:<userId>:<year>:<type>` | [CHARTS-08](../charts/charts-api-08-pie-category.md) | yes |
-| `pieComparison:<userId>:<month>` | [CHARTS-09](../charts/charts-api-09-pie-budget-comparison.md) | yes |
+| `lastWeek:<userId>` | [API-01](../read/last-week/api-01-last-week.md) | yes |
+| `category:<userId>:<period>` | [API-02](../read/category-thismonth/api-02-category-thismonth.md) (its else branch is [BRANCH-01](../read/category-this-year/api-03-category-thisyear.md)) | yes |
+| `pie:<userId>:<year>:<type>` | [CHARTS-08](../../charts/pie/pie-category/charts-api-08-pie-category.md) | yes |
+| `pieComparison:<userId>:<month>` | [CHARTS-09](../../charts/pie/pie-budget-comparison/charts-api-09-pie-budget-comparison.md) | yes |
 
 `report:<userId>` is not in that set; `refreshReport` invalidates and repopulates it
 directly.
@@ -297,7 +297,7 @@ Not invalidated: `queryKeys.income.*`. Correct — no income query reads expense
 6. **The budget month key follows the server locale.** `toLocaleString('default', …)`
    produces `Jul 2026` on an English host but `Juli 2026` on a German one — the same
    locale coupling already recorded for
-   [CHARTS-09](../charts/charts-api-09-pie-budget-comparison.md).
+   [CHARTS-09](../../charts/pie/pie-budget-comparison/charts-api-09-pie-budget-comparison.md).
 7. **No length limits server-side.** The UI caps category at 20 and description at 25
    characters; the API accepts thousands.
 8. **Future dates are accepted** with no warning.
@@ -336,7 +336,7 @@ Not invalidated: `queryKeys.income.*`. Correct — no income query reads expense
 
 ---
 
-**Related:** [FLOW-01 — ML-assisted expense entry](flow-01-ml-assisted-entry.md) ·
-[BILLS-FLOW-01 — scan to saved expense](../bills/bills-flow-01-scan-to-expense.md) ·
-[API-06 — update](api-06-update-expense.md) ·
-[consumption map](expense-consumption-map.md)
+**Related:** [FLOW-01 — ML-assisted expense entry](../flow/ml-assisted-entry/flow-01-ml-assisted-entry.md) ·
+[BILLS-FLOW-01 — scan to saved expense](../../bills/flow/bills-flow-01-scan-to-expense.md) ·
+[API-06 — update](../update/api-06-update-expense.md) ·
+consumption map

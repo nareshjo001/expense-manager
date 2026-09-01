@@ -219,4 +219,4 @@ all — but only `SetBudget` consumes it.
    `useState(totalBudget || "")` captures `totalBudget` on first render, when the query
    has not resolved and the value is `0`. **Consequence:** the edit modal's "New Budget"
    field always opens empty rather than pre-filled with the current budget, even after the
-   query settles. See [BUDGET-03](budget-api-03-update-budget.md) for the write path.
+   query settles. See [BUDGET-03](../update-budget/budget-api-03-update-budget.md) for the write path.

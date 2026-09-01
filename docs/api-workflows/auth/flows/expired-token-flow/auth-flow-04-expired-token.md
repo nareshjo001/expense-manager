@@ -34,7 +34,7 @@ raster fallback: [`auth-flow-04-expired-token-detailed.png`](auth-flow-04-expire
 ## 4. Trigger
 
 Any `401` response received through the shared `axios` instance — i.e., a rejection
-from [AUTH-FLOW-01](auth-flow-01-protected-request.md)'s `verifyToken` middleware on
+from [AUTH-FLOW-01](../protected-request-flow/auth-flow-01-protected-request.md)'s `verifyToken` middleware on
 any of the seven protected routers.
 
 ## 5. Initial state

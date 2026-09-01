@@ -57,7 +57,7 @@ Content-Type: application/json
 ```
 
 One field. `id` here is the Mongo `_id`, not the client-minted `id` string that
-[API-05](api-05-create-expense.md) writes — `ExpenseItem` passes `expense._id`.
+[API-05](../create/api-05-create-expense.md) writes — `ExpenseItem` passes `expense._id`.
 
 ## 6. Validation behaviour
 
@@ -157,7 +157,7 @@ No `mutationKey`. `retry: 0`.
 
 ## 12. Redis and frontend cache invalidation
 
-Identical to [API-05 §12](api-05-create-expense.md#12-redis-and-frontend-cache-invalidation).
+Identical to [API-05 §12](../create/api-05-create-expense.md#12-redis-and-frontend-cache-invalidation).
 The deleted row also disappears from `expenses.detail(id)`, because that key is nested
 under the invalidated `["expenses"]` prefix — so re-opening the edit form for a deleted
 expense refetches and receives a 404 rather than a cached copy.
@@ -228,7 +228,7 @@ expense refetches and receives a 404 rather than a cached copy.
    as a positive.
 5. **The ObjectId guard closes the injection surface.** `{ "$ne": null }` fails
    `isValid()`, so it never reaches Mongo — worth contrasting with
-   [API-08](api-08-toggle-recurring.md), which has no such guard.
+   [API-08](../toggle-recurring/api-08-toggle-recurring.md), which has no such guard.
 6. **404 conflates two cases**, which is the right disclosure choice: a caller cannot probe
    for the existence of another user's expenses.
 7. **No stack traces leak.**
@@ -254,7 +254,7 @@ expense refetches and receives a 404 rather than a cached copy.
 
 ---
 
-**Related:** [API-05 — create](api-05-create-expense.md) ·
-[API-06 — update](api-06-update-expense.md) ·
-[API-08 — toggle recurring](api-08-toggle-recurring.md) ·
-[consumption map](expense-consumption-map.md)
+**Related:** [API-05 — create](../create/api-05-create-expense.md) ·
+[API-06 — update](../update/api-06-update-expense.md) ·
+[API-08 — toggle recurring](../toggle-recurring/api-08-toggle-recurring.md) ·
+consumption map

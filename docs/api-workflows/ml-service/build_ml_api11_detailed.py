@@ -48,7 +48,7 @@ d.flow_down(a1, a2)
 b1 = d.card(*col(r2, 0), "auth", "gauge", "MIDDLEWARE", "Rate Limiter", "apiLimiter",
             "Shared with /expense, /bills, /report, /chart, /income.", step="03", tag="E1")
 b2 = d.card(*col(r2, 1), "auth", "shield", "MIDDLEWARE", "Token Validation", "verifyToken()",
-            "The real auth boundary for this round trip -- ML-API-08 has none.",
+            "User JWT validation; ML-API-08 also validates the operations token.",
             step="03", tag="E2")
 d.flow_down(b1, b2)
 d.handoff(a2, b1, 299)
@@ -57,8 +57,8 @@ c1 = d.card(*col(r3, 0), "backend", "gauge", "VALIDATION", "Field Check",
             "if (!expenseName)",
             "Single truthiness check -- no schema, no type guard.", step="04", tag="E3")
 c2 = d.card(*col(r3, 1), "backend", "send", "OUTBOUND", "Proxy Call",
-            "axios.post(ML_ROUTE + \"/predict-category\", {timeout: 5000})",
-            "No service-to-service credential attached.", step="05")
+            "axios.post(...), 5s timeout",
+            "Attaches X-ML-Operations-Token via mlOperationsHeaders().", step="05")
 d.flow_down(c1, c2)
 d.handoff(b2, c1, 585)
 
@@ -97,10 +97,10 @@ BX = [40, 309, 578, 847, 1116, 1385]
 
 x1 = d.exception_card(BX[0], BY, BW, BH, "E1", "429 Too Many Requests", "apiLimiter",
                       "More than 150 requests in 15 minutes from the same IP address.")
-x2 = d.exception_card(BX[1], BY, BW, BH, "E2", "No auth on ML-API-08 itself",
-                      "verifyToken() runs only here",
-                      "A direct, unauthenticated call to the FastAPI service would "
-                      "succeed if reachable on its own network path.")
+x2 = d.exception_card(BX[1], BY, BW, BH, "E2", "ML token is required downstream",
+                      "X-ML-Operations-Token",
+                      "The proxy attaches the shared token; a missing or invalid token "
+                      "is rejected before the ML service performs inference.")
 x3 = d.exception_card(BX[2], BY, BW, BH, "E3", "400 expenseName is required",
                       "if (!expenseName)",
                       "A falsy value (0, false, \"\") is rejected; any other truthy "
@@ -132,6 +132,6 @@ svg = d.render(
         "Heavy arrows are region hand-offs; the cyan one is the HTTP response. Light arrows are steps inside a region.",
         "The FastAPI side (ML-API-08) is cross-referenced, not re-documented -- see that endpoint's own Level 2 diagram.",
     ])
-open(os.path.join(HERE, "ml-api-11-backend-predict-proxy-detailed.svg"), "w",
+open(os.path.join(HERE, "backend-predict-proxy", "ml-api-11-backend-predict-proxy-detailed.svg"), "w",
      encoding="utf-8").write(svg)
 print("wrote ml-api-11-backend-predict-proxy-detailed.svg", len(svg), "bytes")

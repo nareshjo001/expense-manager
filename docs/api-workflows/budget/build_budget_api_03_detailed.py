@@ -81,7 +81,7 @@ c3 = d.card(*col(r3, 2), "auth", "shield", "MIDDLEWARE", "Token Validation",
             "jwt.verify + payload check; sets req.userId.", step="04", tag="E2")
 c4 = d.card(*col(r3, 3), "backend", "gears", "CONTROLLER", "Request Handler",
             "updatebudget()",
-            "One try/catch around every guard and all three writes.",
+            "One try/catch around validation, reservation, write and sync.",
             step="05", tag="E5")
 d.flow_down(c1, c2); d.flow_down(c2, c3); d.flow_down(c3, c4)
 d.handoff(b4, c1, 585)
@@ -95,25 +95,25 @@ e2 = d.card(r4.card_x, e1.bottom + 14, "auth", "shield", "GUARD", "Amount Valida
             "Rejects blank, non-numeric, NaN, Infinity and negatives.",
             step="06", tag="E4")
 e3 = d.card(r4.card_x, e2.bottom + 14, "database", "save", "MONGODB · WRITE",
-            "Budget Upsert", "BudgetModel.findOneAndUpdate",
-            "Inline, not via the service. Same upsert on the current month.",
+            "Recovery Reservation", "syncRecoveryService.reserve()",
+            "Creates durable recovery evidence before the primary write.",
             step="07", tag="E6")
 e4 = d.card(r4.card_x, e3.bottom + 14, "database", "sigma", "MONGODB · AGGREGATE",
-            "Spend Recalculation", "recalculateBudget(id, now)",
-            "Same aggregate; its return value becomes the response body.", step="08")
+            "Budget Upsert", "BudgetModel.findOneAndUpdate",
+            "Upserts the current-month budget amount.", step="08")
 e5 = d.card(r4.card_x, e4.bottom + 14, "database", "bolt", "REDIS + MONGODB",
-            "Report Refresh", "refreshReport(req.userId)",
-            "Passed the raw string id here, not user._id as in setbudget.", step="09")
+            "Fenced Synchronization", "synchronizeAfterMutation()",
+            "Recalculates derived data and returns recovery status.", step="09")
 e6 = d.card(r4.card_x, e5.bottom + 14, "response", "send", "RESPONSE", "200 OK",
             "res.status(200).json({ … })",
-            "{ message, data, success } — data is the recalculated row.", step="10")
+            "{ message, data, success, derivedData } — data is a fresh read.", step="10")
 d.flow_down(e1, e2); d.flow_down(e2, e3); d.flow_down(e3, e4)
 d.flow_down(e4, e5); d.flow_down(e5, e6)
 d.handoff(c4, e1, 871)
 
-d.note_box(r4.card_x, e6.bottom + 18, CW, 126, "Three writes, no transaction", [
-    "Upsert, recalculation and report refresh are three sequential awaits.",
-    "A failure after the first leaves the budget changed but spent stale.",
+d.note_box(r4.card_x, e6.bottom + 18, CW, 126, "Recoverable derived-data synchronization", [
+    "Reservation precedes the upsert; synchronization is fenced by its revision.",
+    "derivedData reports whether follow-up repair remains pending.",
 ], "database")
 
 # --- 05 what the client refreshes ------------------------------------------
@@ -203,6 +203,6 @@ svg = d.render(
         "Heavy arrows are region hand-offs; the cyan one is the HTTP response. Light arrows are steps inside a region. There is no green rail because budgets are never cached in Redis.",
         "Functionally near-identical to POST /api/setbudget: same upsert, same recalculation, same report refresh. Only the response body and the caller differ.",
     ])
-open(os.path.join(HERE, "budget-api-03-update-budget-detailed.svg"), "w",
+open(os.path.join(HERE, "update-budget", "budget-api-03-update-budget-detailed.svg"), "w",
      encoding="utf-8").write(svg)
 print("wrote budget-api-03-update-budget-detailed.svg", len(svg), "bytes")

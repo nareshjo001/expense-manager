@@ -26,12 +26,12 @@ function in `frontend/src/api/incomeApi.js` maps to exactly one route above.
 
 | API | Level 1 | Level 2 | Document |
 |---|---|---|---|
-| INCOME-01 | [overview](income-api-01-list-income-overview.svg) | [detailed](income-api-01-list-income-detailed.svg) | [income-api-01-list-income.md](income-api-01-list-income.md) |
-| INCOME-02 | [overview](income-api-02-add-income-overview.svg) | [detailed](income-api-02-add-income-detailed.svg) | [income-api-02-add-income.md](income-api-02-add-income.md) |
-| INCOME-03 | [overview](income-api-03-edit-income-overview.svg) | [detailed](income-api-03-edit-income-detailed.svg) | [income-api-03-edit-income.md](income-api-03-edit-income.md) |
-| INCOME-04 | [overview](income-api-04-delete-income-overview.svg) | [detailed](income-api-04-delete-income-detailed.svg) | [income-api-04-delete-income.md](income-api-04-delete-income.md) |
-| INCOME-05 | [overview](income-api-05-insights-header-overview.svg) | [detailed](income-api-05-insights-header-detailed.svg) | [income-api-05-insights-header.md](income-api-05-insights-header.md) |
-| INCOME-06 | [overview](income-api-06-insights-card-overview.svg) | [detailed](income-api-06-insights-card-detailed.svg) | [income-api-06-insights-card.md](income-api-06-insights-card.md) |
+| INCOME-01 | [overview](list-income/income-api-01-list-income-overview.svg) | [detailed](list-income/income-api-01-list-income-detailed.svg) | [document](list-income/income-api-01-list-income.md) |
+| INCOME-02 | [overview](add-income/income-api-02-add-income-overview.svg) | [detailed](add-income/income-api-02-add-income-detailed.svg) | [document](add-income/income-api-02-add-income.md) |
+| INCOME-03 | [overview](edit-income/income-api-03-edit-income-overview.svg) | [detailed](edit-income/income-api-03-edit-income-detailed.svg) | [document](edit-income/income-api-03-edit-income.md) |
+| INCOME-04 | [overview](delete-income/income-api-04-delete-income-overview.svg) | [detailed](delete-income/income-api-04-delete-income-detailed.svg) | [document](delete-income/income-api-04-delete-income.md) |
+| INCOME-05 | [overview](insights-header/income-api-05-insights-header-overview.svg) | [detailed](insights-header/income-api-05-insights-header-detailed.svg) | [document](insights-header/income-api-05-insights-header.md) |
+| INCOME-06 | [overview](insights-card/income-api-06-insights-card-overview.svg) | [detailed](insights-card/income-api-06-insights-card-detailed.svg) | [document](insights-card/income-api-06-insights-card.md) |
 
 ## Structural facts that hold across the whole module
 
@@ -41,7 +41,7 @@ function in `frontend/src/api/incomeApi.js` maps to exactly one route above.
 | Middleware order | `apiLimiter` → `verifyToken` → *(optional Joi)* → controller |
 | Redis | **None on any route.** No `getCache`, no `setCache`, no key, no TTL |
 | Ownership | Enforced in the query filter (`userId` from the token), never from the body |
-| Report pipeline | Income is **not** part of it — `analytics/dataProvider.js` supplies only expenses and budgets |
+| Report pipeline | Income mutations reserve and synchronize report work; the current analytics data provider does not read `IncomeModel` |
 | Chart pipeline | Income is **not** part of it — `chart.service.js` never reads `IncomeModel` |
 | Client cache | TanStack Query only, keyed under the `["income"]` prefix |
 | Update strategy | **Invalidation and refetch on every mutation.** No optimistic updates, no direct cache writes, no page reloads |

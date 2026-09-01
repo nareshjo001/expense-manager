@@ -32,7 +32,8 @@ def error_card(o, x, y, w, title, lines):
 
 
 def save(o, svg, name):
-    open(os.path.join(HERE, name), "w", encoding="utf-8").write(svg)
+    folder = "upload-extract" if name.startswith("bills-api-01") else "flow"
+    open(os.path.join(HERE, folder, name), "w", encoding="utf-8").write(svg)
     print("wrote", name, len(svg))
 
 

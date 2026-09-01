@@ -98,7 +98,7 @@ router.post("/predict-category", verifyToken, async (req, res) => {
 });
 
 // New endpoint to proxy spending forecast requests
-router.post('/predict-spending-forecast', async (req, res) => {
+router.post('/predict-spending-forecast', verifyToken, async (req, res) => {
   try {
     const result = await requestSpendingForecast(req.body);
     if (result.success) {

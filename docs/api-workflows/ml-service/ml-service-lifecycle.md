@@ -11,10 +11,10 @@ document; this page exists to show how they connect, not to duplicate their deta
 1. **Config validation** (`config.py`) — fatal only for a syntactically-invalid `MONGO_CONN` or
    an unwritable `ML_MODEL_ROOT`; every other misconfiguration is a warning with a documented
    default.
-2. **Predictor initialization** — [ML-FLOW-02](ml-flow-02-startup-loading.md): loads the
+2. **Predictor initialization** — [ML-FLOW-02](flow/startup-loading/ml-flow-02-startup-loading.md): loads the
    manifest-referenced model, or falls back to the legacy fixed artifacts.
 3. **Index creation** — idempotent MongoDB index setup for `mltrainingruns`.
-4. **Training-run reconciliation** — [ML-FLOW-08](ml-flow-08-startup-reconciliation.md): three
+4. **Training-run reconciliation** — [ML-FLOW-08](startup-reconciliation/ml-flow-08-startup-reconciliation.md): three
    independent sweeps recovering from any crash window in the retraining lifecycle.
 
 Only step 1's two named conditions abort startup; every other failure here is logged and the
@@ -22,25 +22,25 @@ process continues in a degraded-but-defined state (e.g. serving the legacy model
 
 ## 2. A prediction request
 
-[ML-API-08](ml-api-08-predict-category.md) → [ML-FLOW-01](ml-flow-01-prediction-pipeline.md):
+[ML-API-08](predict-category/ml-api-08-predict-category.md) → [ML-FLOW-01](flow/prediction/ml-flow-01-prediction-pipeline.md):
 snapshot acquired (with a lazy, throttled reload check) → text cleaned → TF-IDF transform →
 RandomForest predicts → label decoded → confidence computed → response returned, always HTTP
-200 even on an internal failure. See [ML-FLOW-09](ml-flow-09-backend-integration.md) for how
+200 even on an internal failure. See [ML-FLOW-09](flow/backend-integration/ml-flow-09-backend-integration.md) for how
 this connects to the actual user-facing form.
 
 ## 3. A retraining request
 
-[ML-API-10](ml-api-10-retrain-model.md) accepts (202) or reports an already-active run (200) —
+[ML-API-10](retrain-model/ml-api-10-retrain-model.md) accepts (202) or reports an already-active run (200) —
 **never** waits for the pipeline below. The accepted request starts
-[ML-FLOW-07](ml-flow-07-retraining-lifecycle.md), the umbrella background lifecycle:
+[ML-FLOW-07](flow/retraining-lifecycle/ml-flow-07-retraining-lifecycle.md), the umbrella background lifecycle:
 
-1. [ML-FLOW-03](ml-flow-03-dataset-construction.md) — feedback reserved, dataset snapshot
+1. [ML-FLOW-03](flow/dataset-const/ml-flow-03-dataset-construction.md) — feedback reserved, dataset snapshot
    written and hashed.
-2. [ML-FLOW-04](ml-flow-04-training-evaluation.md) — a subprocess trains and evaluates a fresh
+2. [ML-FLOW-04](flow/training-eval/ml-flow-04-training-evaluation.md) — a subprocess trains and evaluates a fresh
    TF-IDF + RandomForest pipeline, writes an immutable candidate bundle.
-3. [ML-FLOW-05](ml-flow-05-validation-promotion.md) — a second subprocess runs 9 ordered gates
+3. [ML-FLOW-05](flow/validation-promotion/ml-flow-05-validation-promotion.md) — a second subprocess runs 9 ordered gates
    against the candidate.
-4. [ML-FLOW-06](ml-flow-06-persistence-activation.md) — only on validation success: preload,
+4. [ML-FLOW-06](flow/persistence-activation/ml-flow-06-persistence-activation.md) — only on validation success: preload,
    publish the manifest, swap this process's live snapshot, smoke-test, finalize feedback.
 5. Best-effort artifact cleanup, then the MongoDB lock is released.
 
@@ -65,11 +65,11 @@ documents created before this activation workflow existed.
 
 | Crash window | Recovered by |
 |---|---|
-| Between `create_run()` and ever reaching `running` | [ML-FLOW-08](ml-flow-08-startup-reconciliation.md), sweep 1 (stale `queued`) |
-| Mid-training or mid-validation subprocess | [ML-FLOW-08](ml-flow-08-startup-reconciliation.md), sweep 1 (lock-mismatched `running`/`evaluating`) |
-| A feedback document left `reserved` by a dead run | [ML-FLOW-08](ml-flow-08-startup-reconciliation.md), sweep 2, or the next run's own `reserve_feedback_for_run()` |
-| Between manifest publication and this process's own swap/smoke confirmation | [ML-FLOW-06](ml-flow-06-persistence-activation.md)'s own in-request rollback, or [ML-FLOW-08](ml-flow-08-startup-reconciliation.md) sweep 3 if the process dies first |
-| An already-`activated` run whose feedback finalization itself failed | [ML-FLOW-08](ml-flow-08-startup-reconciliation.md), sweep 3, case 2 |
+| Between `create_run()` and ever reaching `running` | [ML-FLOW-08](startup-reconciliation/ml-flow-08-startup-reconciliation.md), sweep 1 (stale `queued`) |
+| Mid-training or mid-validation subprocess | [ML-FLOW-08](startup-reconciliation/ml-flow-08-startup-reconciliation.md), sweep 1 (lock-mismatched `running`/`evaluating`) |
+| A feedback document left `reserved` by a dead run | [ML-FLOW-08](startup-reconciliation/ml-flow-08-startup-reconciliation.md), sweep 2, or the next run's own `reserve_feedback_for_run()` |
+| Between manifest publication and this process's own swap/smoke confirmation | [ML-FLOW-06](flow/persistence-activation/ml-flow-06-persistence-activation.md)'s own in-request rollback, or [ML-FLOW-08](startup-reconciliation/ml-flow-08-startup-reconciliation.md) sweep 3 if the process dies first |
+| An already-`activated` run whose feedback finalization itself failed | [ML-FLOW-08](startup-reconciliation/ml-flow-08-startup-reconciliation.md), sweep 3, case 2 |
 
 ## 6. What "confirmed" means throughout this documentation set
 
