@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, cleanup, act, fireEvent } from "@testing-library/react";
 import ExpensesPage from "./ExpensesPage";
 import { useExpensesQuery } from "../../hooks/queries/useExpensesQuery";
+import { useInfiniteExpensesQuery } from "../../hooks/queries/useInfiniteExpensesQuery";
 import { useExpenseInsights } from "../contexts/ai-contexts/ExpenseInsightsContext";
 
 jest.mock("framer-motion", () => ({
@@ -25,6 +26,10 @@ jest.mock("../imports/expensesImport", () => ({
 
 jest.mock("../../hooks/queries/useExpensesQuery", () => ({
   useExpensesQuery: jest.fn(),
+}));
+
+jest.mock("../../hooks/queries/useInfiniteExpensesQuery", () => ({
+  useInfiniteExpensesQuery: jest.fn(),
 }));
 
 jest.mock("../contexts/ai-contexts/ExpenseInsightsContext", () => ({
@@ -59,6 +64,15 @@ describe("ExpensesPage progressive rendering", () => {
       clearExpenseInsights: jest.fn(),
       insightText: [],
       isInsightReady: false,
+    });
+
+    // Inert by default -- these existing tests all use the default (last-week) filter, so the custom-mode infinite query stays disabled/unused.
+    useInfiniteExpensesQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: jest.fn(),
     });
   });
 

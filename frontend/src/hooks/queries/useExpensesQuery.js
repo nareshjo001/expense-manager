@@ -1,9 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { getLastWeekExpenses, getExpensesByCategory, searchExpenses } from "../../api/expenseApi";
+import { getLastWeekExpenses, getExpensesByCategory } from "../../api/expenseApi";
 import { queryKeys } from "../../query/queryKeys";
 
 // Resolves the active filter mode into a stable cache key, query function, and enabled flag.
-const resolveExpenseMode = (filter, period, startDate, endDate) => {
+// EXP-003-T05 -- the custom-date-range mode is deliberately absent here: it
+// moved to useInfiniteExpensesQuery, since GET /expense/search is the only
+// one of these three routes with cursor pagination to page against. A
+// filter of "custom" therefore always falls through to the disabled
+// default below -- ExpensesPage drives that mode from the infinite query
+// instead of this hook.
+const resolveExpenseMode = (filter, period) => {
   if (filter === "") {
     return {
       filters: { mode: "lastWeek" },
@@ -20,21 +26,14 @@ const resolveExpenseMode = (filter, period, startDate, endDate) => {
     };
   }
 
-  if (filter === "custom" && startDate && endDate) {
-    return {
-      filters: { mode: "custom", startDate, endDate },
-      queryFn: ({ signal }) => searchExpenses(startDate, endDate, signal),
-      enabled: true,
-    };
-  }
-
-  // No complete filter selection yet — stays disabled so nothing fetches until the user finishes choosing.
+  // No complete filter selection yet (or "custom", handled separately) --
+  // stays disabled so nothing fetches until the user finishes choosing.
   return { filters: { mode: "none" }, queryFn: () => null, enabled: false };
 };
 
-// Unifies last-week, by-category, and custom-date-range expense fetching behind one query per active filter mode.
-export const useExpensesQuery = (filter, period, startDate, endDate) => {
-  const { filters, queryFn, enabled } = resolveExpenseMode(filter, period, startDate, endDate);
+// Unifies last-week and by-category expense fetching behind one query per active filter mode.
+export const useExpensesQuery = (filter, period) => {
+  const { filters, queryFn, enabled } = resolveExpenseMode(filter, period);
 
   return useQuery({
     queryKey: queryKeys.expenses.list(filters),
