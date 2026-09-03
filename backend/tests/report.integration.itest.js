@@ -108,7 +108,13 @@ describe("GET /report (integration)", () => {
       expect(typeof res.body.habits.monthly).toBe("object");
       expect(typeof res.body.habits.yearly).toBe("object");
       expect(typeof res.body.forecast).toBe("object");
-      expect(res.body.forecast).toEqual({});
+      // forecastAnalyzer/currentMonthForecastAnalyzer (analytics/reportGenerator.js)
+      // always return a real, structured object -- never {} -- with an
+      // explicit hasData/reasonCode pair even when there's too little
+      // history to forecast from (User A's fixture is a single day of
+      // current-month data, so every horizon here correctly reports
+      // hasData: false rather than an empty object).
+      expect(typeof res.body.forecast.hasData).toBe("boolean");
 
       // financialHealth: type-checked per the exact, freshly-verified
       // analyzer/assembler shapes -- not guessed.

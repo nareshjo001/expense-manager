@@ -12,16 +12,26 @@ Label: FILESYSTEM/UNIT, never REAL-MONGODB.
 
 import os
 
+# Same pattern as tests/unit/test_operations_token_endpoints.py -- retrain_model
+# is operations-token-protected (Remediation Workstream C), so calling it
+# directly (bypassing FastAPI's own header injection) requires explicitly
+# configuring and passing a valid token, or _require_operations_token's 401
+# fires before this test's own simulated Mongo outage ever gets exercised.
+OPERATIONS_TOKEN = "phase-g-failure-injection-operations-token"
+
 
 def test_mongo_unavailable_before_retraining_leaves_no_orphan_run(mocked_lifecycle_env):
     ctx = mocked_lifecycle_env
+    ctx.app_module.os.environ["ML_OPERATIONS_TOKEN"] = OPERATIONS_TOKEN
 
     def _exploding_create_run(*a, **k):
         raise RuntimeError("simulated MongoDB outage")
 
     ctx.runs.create_run = _exploding_create_run
     try:
-        response = ctx.app_module.retrain_model(payload=None)
+        response = ctx.app_module.retrain_model(
+            payload=None, x_ml_operations_token=OPERATIONS_TOKEN
+        )
     except Exception as exc:
         # app.py raises HTTPException(503) via _service_unavailable(); the fake carries status_code directly.
         assert getattr(exc, "status_code", None) == 503

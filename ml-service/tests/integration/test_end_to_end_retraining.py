@@ -326,7 +326,13 @@ def test_full_lifecycle_reaches_activated_and_synchronized_status(client, caplog
     ready = c.get("/health/ready")
     assert ready.status_code == 200
 
-    pred = c.post("/predict-category", json={"expenseName": "grocery store 42"})
+    # /predict-category is operations-token-protected too (Remediation
+    # Workstream C) -- same missing-headers gap as the /retrain-model call above.
+    pred = c.post(
+        "/predict-category",
+        json={"expenseName": "grocery store 42"},
+        headers=operations_headers,
+    )
     assert pred.status_code == 200
     assert set(pred.json().keys()) == {"expenseName", "cleanedText", "predictedCategory", "confidence"}
 
