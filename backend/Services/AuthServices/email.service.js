@@ -31,4 +31,30 @@ const sendOTPEmail = async (toEmail, otp, purpose = "verify") => {
   });
 };
 
-module.exports = { sendOTPEmail };
+
+// OBS-001-T06 -- best-effort operational alert email, sent to the
+// configured owner address (OBS_ALERT_OWNER_EMAIL) via the same
+// already-approved Brevo transactional client as sendOTPEmail. Callers
+// (backend/utils/alerts.js) already catch and log any rejection, so this
+// intentionally does not swallow errors itself.
+const sendOperationalAlertEmail = async (toEmail, alert) => {
+  const { alertType, metricValue, threshold, runbookUrl } = alert || {};
+
+  await tranEmailApi.sendTransacEmail({
+    sender: {
+      email: "etrackerhq@gmail.com",
+      name: "Expense Tracker"
+    },
+    to: [{ email: toEmail }],
+    subject: `Expense Tracker alert: ${alertType || "unknown"}`,
+    htmlContent: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #dc2626;">Operational alert: ${alertType || "unknown"}</h2>
+          <p>Observed value: <strong>${metricValue}</strong> (threshold: ${threshold})</p>
+          <p>Runbook: ${runbookUrl}</p>
+        </div>
+    `
+  });
+};
+
+module.exports = { sendOTPEmail, sendOperationalAlertEmail };

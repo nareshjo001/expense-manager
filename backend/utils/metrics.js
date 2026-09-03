@@ -5,6 +5,7 @@
 "use strict";
 
 const { logEvent } = require("./logger");
+const { evaluateAndDispatchAlerts } = require("./alerts");
 
 const DEFAULT_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -49,6 +50,14 @@ function snapshotAndReset() {
     avgLatencyMs,
     distinctRoutes: routeCounts.size,
   });
+
+  // OBS-001-T06 -- fire-and-forget: detectAlerts + the log half of
+  // dispatchAlerts run synchronously (see alerts.js), so an alert's own
+  // log line is already emitted by the time this call returns. Only the
+  // best-effort owner email, when configured, continues past this point;
+  // its own failures are caught and logged inside alerts.js, so this
+  // .catch is just a backstop against an unhandled rejection.
+  evaluateAndDispatchAlerts({ requestCount, errorCount, avgLatencyMs }).catch(() => {});
 
   state = createInitialState();
 }
