@@ -15,9 +15,16 @@ export const getExpensesByCategory = async (period, signal) => {
   return data;
 };
 
-export const searchExpenses = async (startDate, endDate, signal) => {
+// EXP-003 -- `pagination` ({ limit, cursor }) is optional and additive; every
+// existing caller that omits it keeps getting the full, unbounded range.
+export const searchExpenses = async (startDate, endDate, signal, pagination) => {
   const { data } = await api.get("/expense/search", {
-    params: { startDate, endDate },
+    params: {
+      startDate,
+      endDate,
+      ...(pagination?.limit ? { limit: pagination.limit } : {}),
+      ...(pagination?.cursor ? { cursor: pagination.cursor } : {}),
+    },
     signal,
   });
   return data;

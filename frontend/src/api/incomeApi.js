@@ -2,9 +2,12 @@ import api from "./axios";
 
 // Thin wrappers over the /income routes, routed through the shared axios instance for centralized auth/error handling.
 
-export const getIncome = async (period, signal) => {
+// EXP-003 -- `pagination` ({ limit, cursor }) is optional and additive; every
+// existing caller that omits it keeps getting the full, unbounded list.
+export const getIncome = async (period, signal, pagination) => {
+  const params = { ...(period ? { period } : {}), ...(pagination?.limit ? { limit: pagination.limit } : {}), ...(pagination?.cursor ? { cursor: pagination.cursor } : {}) };
   const { data } = await api.get("/income/get", {
-    params: period ? { period } : undefined,
+    params: Object.keys(params).length ? params : undefined,
     signal,
   });
   return data;
