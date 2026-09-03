@@ -4,6 +4,18 @@ import PieChartPage from './PieChartPage';
 import { usePieChartQuery } from '../../../hooks/queries/usePieChartQuery';
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
 
+// Real framer-motion's AnimatePresence keeps an exiting element mounted
+// until its exit animation completes, which doesn't resolve synchronously
+// in jsdom -- strip it down to plain passthrough elements so tests observe
+// only the component's own conditional rendering, matching the convention
+// already established in ExpensesPage.test.js.
+jest.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children }) => <div>{children}</div>,
+  },
+  AnimatePresence: ({ children }) => <>{children}</>,
+}));
+
 // FE-001-T05 -- a filter change on PieChartPage refetches a NEW query key
 // (usePieChartQuery uses `placeholderData: keepPreviousData`), so the
 // previously rendered chart must stay on screen instead of being replaced
