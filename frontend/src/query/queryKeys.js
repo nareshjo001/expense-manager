@@ -19,6 +19,11 @@ export const queryKeys = {
     all: ["budgets"],
   },
 
+  // CAT-001 -- saved merchant category rules.
+  merchantRules: {
+    all: ["merchantRules"],
+  },
+
   income: {
     all: ["income"],
     list: (period) => [...queryKeys.income.all, "list", period ?? "all"],

@@ -186,6 +186,108 @@ const deleteSuccessToast = (isPending = false) => {
     );
 };
 
+// CAT-001 -- confirms a merchant rule was saved (post-correction prompt or the rule management screen).
+const merchantRuleSaveSuccessToast = () => {
+    toast.dismiss();
+    toast.success(
+        <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+            Rule saved! Future expenses from this merchant will use this category.
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                background: "linear-gradient(145deg, #d1fae5, #a7f3d0)",
+                color: "#065f46",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+const merchantRuleSaveErrorToast = (data = {}) => {
+    toast.dismiss();
+    toast.error(
+        <div>
+            <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+                {data.message || "Couldn't save the rule."}
+            </div>
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                backgroundColor: "#fee2e2",
+                color: "#991b1b",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+// CAT-001 -- confirms a merchant rule was deleted from the rule management screen.
+const merchantRuleDeleteSuccessToast = () => {
+    toast.dismiss();
+    toast.success(
+        <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+            Rule deleted.
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                background: "linear-gradient(145deg, #d1fae5, #a7f3d0)",
+                color: "#065f46",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+const merchantRuleDeleteErrorToast = (data = {}) => {
+    toast.dismiss();
+    toast.error(
+        <div>
+            <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+                {data.message || "Couldn't delete the rule."}
+            </div>
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                backgroundColor: "#fee2e2",
+                color: "#991b1b",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
 const deleteErrorToast = () => {
     toast.dismiss();
     toast.error(
@@ -220,5 +322,9 @@ export {
     expenseAddSuccessToast,
     expenseAddErrorToast,
     deleteSuccessToast,
-    deleteErrorToast
+    deleteErrorToast,
+    merchantRuleSaveSuccessToast,
+    merchantRuleSaveErrorToast,
+    merchantRuleDeleteSuccessToast,
+    merchantRuleDeleteErrorToast
 };
