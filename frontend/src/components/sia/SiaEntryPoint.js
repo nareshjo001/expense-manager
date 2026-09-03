@@ -102,6 +102,12 @@ const SiaEntryPoint = forwardRef(({ onOpen, hideLauncher = false }, ref) => {
           // The launcher itself is never hidden by backend unavailability
           isAvailable={isSiaAvailable}
           isCheckingAvailability={isCheckingAvailability}
+          // FE-001-T08 -- previously SiaPanel had no way to tell a genuine
+          // status-query failure apart from a clean "available: false"
+          // response; both collapsed into the same "unavailable" copy.
+          // Fail-closed behavior (blockedByAvailability) is unchanged --
+          // this only lets the panel pick more accurate wording.
+          isAvailabilityError={statusQuery.isError}
           onRetryAvailability={statusQuery.refetch}
           focusRequestVersion={focusRequestVersion}
           lastHandledFocusRequestVersionRef={lastHandledFocusRequestVersionRef}

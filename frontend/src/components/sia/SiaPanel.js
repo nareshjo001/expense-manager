@@ -58,6 +58,10 @@ const SiaPanel = ({
   conversation,
   isAvailable,
   isCheckingAvailability,
+  // FE-001-T08 -- distinguishes a genuine status-query failure from a
+  // clean "available: false" response for the notice copy below only;
+  // blockedByAvailability's fail-closed gate is unchanged.
+  isAvailabilityError,
   onRetryAvailability,
   focusRequestVersion,
   lastHandledFocusRequestVersionRef,
@@ -286,7 +290,9 @@ const SiaPanel = ({
     : isCheckingAvailability === true
     ? "Checking SIA availability…"
     : isAvailable !== true
-    ? "SIA is temporarily unavailable. You can still view previous conversations."
+    ? isAvailabilityError
+      ? "Couldn't check SIA's availability right now. You can still view previous conversations."
+      : "SIA is temporarily unavailable. You can still view previous conversations."
     : null;
 
   // Workstream 3, part A: New chat and switching to History both leave the
@@ -356,6 +362,17 @@ const SiaPanel = ({
           {historyLoadError && (
             <p className="sia-error sia-history-error" role="alert">
               {historyLoadError}
+            </p>
+          )}
+          {/* FE-001-T08 -- selecting a session sets selectedHistorySessionId
+              but `mode` stays HISTORY until messagesQuery actually succeeds
+              (see HYDRATE in useSiaConversation.js), so without this the
+              list gave no indication a session was opening at all.
+              messagesQuery.isLoading (not isFetching) so re-opening an
+              already-cached session doesn't flash this needlessly. */}
+          {selectedHistorySessionId && messagesQuery.isLoading && (
+            <p className="sia-muted sia-history-opening" role="status" aria-live="polite">
+              Opening conversation&hellip;
             </p>
           )}
           <SiaSessionList

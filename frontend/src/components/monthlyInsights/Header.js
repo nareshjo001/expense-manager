@@ -7,10 +7,15 @@ import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
 import { useUpdateBudgetMutation } from "../../hooks/mutations/useUpdateBudgetMutation";
 import "./Header.css";
+import "../common/QueryState.css";
 
 // Monthly budget insights header: summary cards plus an inline budget-edit modal.
 export default function Header({ summary }) {
-  const { totalBudget } = useBudgetSummary();
+  // FE-001-T08 -- this is a SEPARATE subscription to the budgets query from
+  // SetBudget.js's own (both derive from the same useBudgetsQuery cache).
+  // Previously ignored isLoading/isError entirely and rendered totalBudget
+  // (defaulting to 0) regardless of query state.
+  const { totalBudget, budgetStatus, refetchBudgets } = useBudgetSummary();
   const [editBudget, setEditBudget] = useState(false);
   const [newBudget, setNewBudget] = useState(totalBudget || "");
 
@@ -77,14 +82,32 @@ export default function Header({ summary }) {
                 type="button"
                 className="edit-budget-icon"
                 aria-label="Edit budget"
-                title="Edit Budget"
+                title={budgetStatus === "ready" ? "Edit Budget" : "Budget is loading"}
                 onClick={() => setEditBudget(true)}
+                disabled={budgetStatus !== "ready"}
               >
                 <FaPen />
               </button>
-              <p>Total Budget</p>
-              <h1>₹ {totalBudget}</h1>
-              <span>Spent: ₹ {summary.totalSpent}</span>
+              {budgetStatus === "loading" ? (
+                <p role="status" aria-live="polite">Loading&hellip;</p>
+              ) : budgetStatus === "error" ? (
+                <>
+                  <p role="alert" aria-live="assertive">Unable to load</p>
+                  <button
+                    type="button"
+                    className="query-state-retry"
+                    onClick={() => refetchBudgets?.()}
+                  >
+                    Retry
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p>Total Budget</p>
+                  <h1>₹ {totalBudget}</h1>
+                  <span>Spent: ₹ {summary.totalSpent}</span>
+                </>
+              )}
           </div>
 
       </div>

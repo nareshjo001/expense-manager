@@ -71,7 +71,7 @@ lists the bill-prefilled path as one of its three callers.
 
 | Stage | Input | Output | Where |
 |---|---|---|---|
-| Extraction | image file | `{ expenseName, expenseAmount, expenseDate, extractedText }` | backend, BILLS-01 |
+| Extraction | image file | `{ expenseName, expenseAmount, expenseDate }` | backend, BILLS-01 |
 | Date reshape | `"05/03/2026"` | `"2026-03-05"` | `formatDateForInput` in `BillUpload` |
 | Prefill | `parsedReceipt` | three form fields | `useEffect` on `billData` in `AddExpense` |
 | Sanitise | user-edited fields | trimmed name, normalised category | `handleSubmit` in `AddExpense` |
@@ -88,9 +88,9 @@ prediction for the bill-supplied name until the user actually types.
 
 ## 9. Persistence boundary
 
-Persistence begins only at form submit. Everything before it is browser state — the temp
-files are already gone and no record exists anywhere. Abandoning the page discards the
-scan entirely.
+Persistence begins only at form submit. Everything before it is browser state — server-side
+processing buffers are not retained and no record exists anywhere. Abandoning the page
+discards the scan entirely.
 
 ## 10. Failure and recovery behaviour
 
@@ -161,5 +161,5 @@ invalidated because Bills owns no cache entry.
 6. **The date reshape lives in the upload component**, not next to the parser that produced
    the format. The two are coupled across the network boundary with no shared contract.
 
-7. **`extractedText` is returned but never used.** `AddExpense` reads three fields; the
-   full transcript is discarded on arrival.
+7. **Receipt text is intentionally not returned.** OCR transcripts can expose sensitive
+   receipt data and the current form needs only the three parsed fields.

@@ -169,10 +169,24 @@ export default function IncomeModal({ isOpen, onClose, period }) {
           </div>
 
           <div className="income-list">
+            {/* FE-001-T08 -- loading/empty text previously had no ARIA role, and
+                a failed fetch showed only a transient toast with no persistent,
+                retryable in-modal state (see the isError branch below). */}
             {loading ? (
-              <p>Loading...</p>
+              <p role="status" aria-live="polite">Loading...</p>
+            ) : listQuery.isError ? (
+              <div className="income-error-block" role="alert" aria-live="assertive">
+                <p className="income-error-text">We couldn't load your income sources.</p>
+                <button
+                  type="button"
+                  className="income-load-more"
+                  onClick={() => listQuery.refetch()}
+                >
+                  Retry
+                </button>
+              </div>
             ) : incomeList.length === 0 ? (
-              <p>No income records found.</p>
+              <p role="status">No income records found.</p>
             ) : (
               incomeList.map((income) => (
 

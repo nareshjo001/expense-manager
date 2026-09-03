@@ -65,9 +65,9 @@ Plus the consumption map.
 | Middleware order | `apiLimiter` → `verifyToken` → multer → controller |
 | Auth before file write | **Yes** — `verifyToken` precedes multer |
 | Multipart field | `bill`, single file |
-| Accepted MIME | `image/jpg`, `image/jpeg`, `image/png`, `application/pdf` |
-| Size limit | 5 MB, enforced server-side only, reported as `400` |
-| Filename | Server-generated `${Date.now()}-${crypto.randomUUID()}${ext}` |
+| Accepted MIME | `image/jpeg`, `image/png` |
+| Size limit | 5 MB, enforced in the frontend and server-side, reported as `413` |
+| Filename | Never persisted; processing remains in memory |
 | Redis | None |
 | Query cache | None — the result is passed by prop callback |
 | Invalidation | None on this route, correctly — it changes no server state |
@@ -87,9 +87,9 @@ first — the first three verified by running the parser:
 4. **Successfully extracted dates are dropped.** `formatDateForInput` handles only
    `DD/MM/YYYY`; a written month name that the parser *did* match becomes `""`, and a
    two-digit year yields an invalid string.
-5. **PDF is accepted but unprocessable.** sharp's own docs require a globally-installed
-   libvips for PDF input; this project uses the prebuilt binaries, so a PDF fails as a
-   `500`. The UI never offers PDF, so only a direct caller reaches it.
+5. **PDF support is intentionally unavailable.** Direct callers receive `415` before a PDF
+   reaches a decoder, avoiding unbounded multi-page rendering until a separately reviewed,
+   resource-bounded renderer is introduced.
 6. **OCR confidence is discarded**, so a barely-legible scan is presented exactly like a
    perfect one.
 

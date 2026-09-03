@@ -81,7 +81,16 @@ const openPanel = () => fireEvent.click(screen.getByRole("button", { name: "Ask 
 const composer = () => screen.getByLabelText(/your question/i);
 const askButton = () => screen.getByRole("button", { name: "Ask" });
 
-const UNAVAILABLE_TEXT = /SIA is temporarily unavailable\. You can still view previous conversations\./i;
+// FE-001-T08 -- SiaPanel now shows distinct first-sentence copy for a
+// genuine status-query failure ("Couldn't check SIA's availability right
+// now.") vs. a clean but non-available response ("SIA is temporarily
+// unavailable."), while the fail-closed behavior this file actually tests
+// (composer/Ask disabled, no submission, no leaked config detail, Retry
+// offered) is unchanged either way. Matching either copy keeps this file
+// asserting what it's meant to -- a safe generic notice -- without pinning
+// to one exact sentence that only ever applied to some of the arrange()
+// cases below to begin with.
+const UNAVAILABLE_TEXT = /(SIA is temporarily unavailable\.|Couldn't check SIA's availability right now\.) You can still view previous conversations\./i;
 const CHECKING_TEXT = /Checking SIA availability/i;
 
 // 1. Build flag off -> no launcher AND no status request at all.

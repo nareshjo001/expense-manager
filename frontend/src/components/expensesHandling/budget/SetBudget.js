@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import './SetBudget.css';
+import '../../common/QueryState.css';
 import { expenseAddSuccessToast, expenseAddErrorToast } from '../../alertsEffects/toastMessages';
 import BudgetBar from './BudgetBar';
 import { useBudgetSummary } from '../../../hooks/queries/useBudgetSummary';
@@ -9,7 +10,7 @@ import { useCreateBudgetMutation } from '../../../hooks/mutations/useCreateBudge
 
 // Sets or displays the current month's budget, reading from the shared budgets query.
 const SetBudget = () => {
-  const { monthlyBudgets, budgetStatus, isCurrentMonthStale } = useBudgetSummary();
+  const { monthlyBudgets, budgetStatus, isCurrentMonthStale, refetchBudgets } = useBudgetSummary();
   const createBudgetMutation = useCreateBudgetMutation();
 
   const [budget, setBudget] = useState({ month: "", budgetAmount: "" });
@@ -51,11 +52,16 @@ const SetBudget = () => {
     });
   };
 
+  // FE-001-T08 -- previously plain text with no ARIA role and no way to
+  // recover from a failed fetch short of reloading the page. role="status"/
+  // role="alert" let assistive tech announce the transition, and Retry
+  // re-issues the same budgets query rather than leaving the user stuck.
   if (budgetStatus === "loading") {
     return (
       <div className="set-budget">
         <h1>Monthly Budget</h1>
-        <p>Fetching budget...</p>
+        <span className="query-state-spinner" aria-hidden="true" />
+        <p role="status" aria-live="polite">Fetching budget...</p>
       </div>
     );
   }
@@ -64,7 +70,14 @@ const SetBudget = () => {
     return (
       <div className="set-budget">
         <h1>Monthly Budget</h1>
-        <p>Network Error</p>
+        <p role="alert" aria-live="assertive">Network Error</p>
+        <button
+          type="button"
+          className="query-state-retry"
+          onClick={() => refetchBudgets?.()}
+        >
+          Retry
+        </button>
       </div>
     );
   }

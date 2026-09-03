@@ -282,3 +282,73 @@ describe("frontend/src/components/sia/SiaPanel", () => {
     expect(screen.queryByLabelText(/your question/i)).toBeNull();
   });
 });
+
+// FE-001-T08 -- a genuine status-query failure previously collapsed into the
+// exact same "SIA is temporarily unavailable" copy as a clean
+// available:false response.
+describe("frontend/src/components/sia/SiaPanel -- FE-001-T08 availability notice copy", () => {
+  function renderWithAvailability(overrides) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <SiaPanel
+          onClose={jest.fn()}
+          conversation={makeConversation()}
+          isCheckingAvailability={false}
+          isAvailable={false}
+          {...overrides}
+        />
+      </QueryClientProvider>
+    );
+  }
+
+  it("shows the generic unavailable copy for a clean available:false response (isAvailabilityError not set)", () => {
+    renderWithAvailability({});
+
+    expect(screen.getByRole("status")).toHaveTextContent(/sia is temporarily unavailable/i);
+  });
+
+  it("shows distinct copy when the status query itself failed", () => {
+    renderWithAvailability({ isAvailabilityError: true });
+
+    expect(screen.getByRole("status")).toHaveTextContent(/couldn't check sia's availability/i);
+    expect(screen.queryByText(/sia is temporarily unavailable/i)).not.toBeInTheDocument();
+  });
+
+  it("still fail-closes (composer disabled) regardless of which unavailable copy is shown", () => {
+    renderWithAvailability({ isAvailabilityError: true });
+
+    expect(screen.getByLabelText(/your question/i)).toBeDisabled();
+  });
+});
+
+// FE-001-T08 -- selecting a history session sets selectedHistorySessionId
+// but `mode` stays HISTORY until messagesQuery actually succeeds, so
+// previously there was no indication a specific session was being opened.
+describe("frontend/src/components/sia/SiaPanel -- FE-001-T08 history-open loading state", () => {
+  it("shows an accessible 'Opening conversation' status while messagesQuery loads for the selected session", () => {
+    useSiaSessionMessagesQuery.mockReturnValue({ isSuccess: false, isError: false, isLoading: true, data: undefined });
+
+    renderPanel(makeConversation({ mode: PANEL_MODE.HISTORY, selectedHistorySessionId: "s1" }));
+
+    const opening = screen.getByText(/opening conversation/i);
+    expect(opening).toBeInTheDocument();
+    expect(opening).toHaveAttribute("role", "status");
+  });
+
+  it("does not show the opening status once messagesQuery has settled", () => {
+    useSiaSessionMessagesQuery.mockReturnValue({ isSuccess: true, isError: false, isLoading: false, data: { sessionId: "s1", messages: [] } });
+
+    renderPanel(makeConversation({ mode: PANEL_MODE.HISTORY, selectedHistorySessionId: "s1" }));
+
+    expect(screen.queryByText(/opening conversation/i)).not.toBeInTheDocument();
+  });
+
+  it("does not show the opening status when no session is selected yet", () => {
+    useSiaSessionMessagesQuery.mockReturnValue({ isSuccess: false, isError: false, isLoading: false, data: undefined });
+
+    renderPanel(makeConversation({ mode: PANEL_MODE.HISTORY, selectedHistorySessionId: null }));
+
+    expect(screen.queryByText(/opening conversation/i)).not.toBeInTheDocument();
+  });
+});

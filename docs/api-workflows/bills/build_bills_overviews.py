@@ -58,7 +58,7 @@ d.group_box(882, 276, 704, 180, "Server-side processing", "backend",
 d.facts_panel(34, 276, 836, 280, "At a glance", [
     ("Endpoint",   "POST /bills/bill-upload",              "response"),
     ("Body",       "multipart/form-data, field \"bill\"",  "backend"),
-    ("Accepted",   "JPG, PNG, PDF · 5 MB limit",           "auth"),
+    ("Accepted",   "JPEG, PNG · verified · 5 MB",          "auth"),
     ("Extraction", "sharp → tesseract.js → regex parser",  "insights"),
     ("Persistence","None — nothing is saved by this route", "error"),
 ])
@@ -66,7 +66,7 @@ d.facts_panel(34, 276, 836, 280, "At a glance", [
 s1 = o.card(0, R1, "ui", "layout", "01", "Bill Upload Screen", "BillUpload",
             "Opened from the Add Expense form.")
 s2 = o.card(1, R1, "ui", "cursor", "02", "File Selected", "Local State",
-            "Blob preview; accept is image/* only.")
+            "JPEG/PNG preview; client limits mirror server limits.")
 s3 = o.card(2, R1, "frontend", "refresh", "03", "Upload Mutation", "TanStack Mutation",
             "Button disabled while pending.")
 s4 = o.card(3, R1, "auth", "key", "04", "Multipart Request", "Axios + FormData",
@@ -74,9 +74,9 @@ s4 = o.card(3, R1, "auth", "key", "04", "Multipart Request", "Axios + FormData",
 s5 = o.card(4, R1, "auth", "shield", "05", "API Security", "Limiter + JWT",
             "IP rate limit, then JWT validation.")
 s6 = o.card(5, R1, "auth", "gauge", "06", "Upload Middleware", "Multer",
-            "MIME filter and a 5 MB cap.")
+            "Memory-only upload; signature, decoder and 5 MB limits.")
 s10 = o.card(7, R1, "response", "send", "10", "Respond and Clean Up", "200 OK",
-             "Both temp files unlinked in finally.")
+             "No files persist; safe response codes explain failures.")
 s11 = o.card(8, R1, "ui", "layout", "11", "Form Prefill", "AddExpense",
              "Three fields land in the form.")
 
@@ -95,8 +95,8 @@ d.path([(s9.cx, s9.y), (s9.cx, s10.bottom)], "response", width=3.0,
        label="200 OK", label_at=(s9.cx, o.LABEL_Y))
 d.path([(s10.right, o.R1_CY), (s11.x, o.R1_CY)], "ui", width=2.8)
 
-error_card(o, o.COL[8], 460, o.CW, "One failure code",
-           ["Anything after the upload —", "sharp, OCR or parsing — returns", "a generic 500."])
+error_card(o, o.COL[8], 460, o.CW, "Bounded failure handling",
+           ["Invalid files are rejected early;", "OCR times out safely; processing", "failures use a client-safe 422 response."])
 d.path([(s11.right, o.R1_CY), (1584, o.R1_CY), (1584, 502), (o.COL[8] + o.CW, 502)],
        "error", dashed=True)
 

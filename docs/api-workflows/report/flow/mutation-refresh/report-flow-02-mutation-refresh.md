@@ -23,7 +23,7 @@ UI screen); not a type-2 upload flow.
 | Is the refresh awaited by the triggering request? | **Yes** |
 | Is it queued or backgrounded? | **No** |
 | Does the triggering mutation share a try/catch with the refresh? | **Yes**, in every caller |
-| Can the refresh fail independently of the mutation succeeding? | **Yes** — and the client is told the whole request failed |
+| Can the refresh fail independently of the mutation succeeding? | **Yes** — Expense CRUD returns its committed success plus `derivedData.recoveryPending: true` |
 | Does Income trigger this? | **Yes** — add, edit, and delete reserve report work and synchronize it |
 
 ## 3. Level 1 quick workflow
@@ -102,12 +102,11 @@ even starts.
 
 | Failure | Effect | Recovery |
 |---|---|---|
-| Derived-data refresh cannot complete | Pending report work remains durable | The next `GET /report` repairs it or returns controlled `503` rather than serving a known-stale report |
+| Expense CRUD derived-data synchronization cannot start or complete | The committed write still returns 2xx with `derivedData.recoveryPending: true` | The pre-write reservation or pending marker remains repairable; the next `GET /report` repairs it or returns controlled `503` rather than serving known-stale data |
 | Redis down for `set` | Caught at the cache boundary | Mongo remains authoritative; a later read validates revision freshness |
 | Two mutations for the same user race | Mongo revision fence and Redis CAS order writes | Older work is skipped rather than overwriting a newer report |
 
-There is no partial-success case in which the Expense/Budget write is rolled back
-because the refresh failed — rollback never happens.
+Expense create, edit, and delete never roll back a committed write because derived synchronization fails. Budget and Income mutation response semantics are outside this Expense-CUD scope.
 
 ## 11. Cache behaviour after the refresh
 
@@ -147,10 +146,7 @@ fresh fetch — typically served instantly from the now-warm Redis cache.
    Expense/Budget write pays the entire engine's cost — 5 queries, 6 analyzers, 6 score
    calculators — inside its own request, with no async or background path.
 
-3. **Failure after commit reports as total failure.** `refreshReport`,
-   `recalculateBudget` and `clearUserExpenseCache` share the triggering mutation's own
-   try/catch. If `refreshReport` throws, the client receives a generic 500 for a write
-   that already succeeded.
+3. **Expense CRUD false-failure response was fixed.** `synchronizeAfterMutation` now converts unexpected post-commit errors into a pending derived-data result, so expense create, edit, and delete remain successful while recovery continues on the next protected read.
 
 4. **No stampede protection.** Concurrent mutations for the same user each independently
    invalidate, recompute and overwrite Mongo/Redis — last write wins, with no lock or
