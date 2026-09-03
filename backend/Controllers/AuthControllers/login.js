@@ -1,41 +1,34 @@
 const { UserModel } = require('../../config/Schemas');
-
-// Password utility function for comparing
-const { comparePassword } = require('../../Services/AuthServices/password.service');
-// Remediation Workstream E -- centralized, bounded-expiration token issuance.
-const { issueAccessToken } = require('../../Services/AuthServices/token.service');
+const passwordService = require('../../Services/AuthServices/password.service');
+const { createLoginSession } = require('./session');
+const {
+    INVALID_CREDENTIALS_RESPONSE,
+    emitAuthAuditEvent,
+} = require('../../Services/AuthServices/security.service');
 
 const login = async (req, res) => {
     try {
-        // Extract login credentials from request body
         const { email, password } = req.body;
-        
-        // Validate user existence
         const user = await UserModel.findOne({ email });
-        if(!user) {
-            return res.status(404).json({ message: 'User not found', success: false });
+        const comparePasswordSafely = passwordService.comparePasswordOrDummy || passwordService.comparePassword;
+        const isMatch = await comparePasswordSafely(password, user?.password);
+
+        if (!user || !isMatch || !user.isVerified) {
+            emitAuthAuditEvent({
+                event: 'login',
+                outcome: 'denied',
+                reason: !user ? 'unknown_identity' : !isMatch ? 'invalid_secret' : 'unverified_account',
+                req,
+                email,
+            });
+            return res.status(401).json(INVALID_CREDENTIALS_RESPONSE);
         }
 
-        // Compare provided password with stored hashed password
-        const isMatch = await comparePassword(password, user.password);
-        if(!isMatch) {
-            return res.status(401).json({ message: 'Invalid Password', success: false });
-        }
-
-        // Prevent login for unverified accounts
-        if(!user.isVerified) {
-            return res.status(403).json({ message: 'Account not verified. Sign Up Again', success: false});
-        }
-
-        // Generate JWT for authenticated session -- now issued with a bounded
-        const token = issueAccessToken({ email: user.email, _id: user._id });
-
-        // Successful login response with auth token and user data
+        const token = await createLoginSession(user, req, res);
+        emitAuthAuditEvent({ event: 'login', outcome: 'success', req, email });
         res.status(200).json({ message: 'Login Successful', success: true, token, email: user.email, firstname: user.fullName });
-    
     } catch (err) {
-        // Handle unexpected server errors
-        console.error(err);
+        console.error('Login failed:', err.message);
         res.status(500).json({ message: 'Internal Server Error', success: false });
     }
 };

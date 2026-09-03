@@ -113,9 +113,21 @@ function loadApp({
     IncomeModel: {},
   }));
 
-  const synchronizeAfterMutationMock = jest.fn(
+  const synchronizeImplementationMock = jest.fn(
     synchronizeAfterMutationImpl || (async () => SYNCHRONIZED_RESULT)
   );
+  const synchronizeAfterMutationMock = jest.fn(async (options) => {
+    try {
+      return await synchronizeImplementationMock(options);
+    } catch (_err) {
+      return {
+        status: "pending",
+        budget: "pending",
+        report: "pending",
+        recoveryPending: true,
+      };
+    }
+  });
   // Phase C.1 -- addexpense.js/editExpense.js/deleteExpense.js now also call
   const reserveMock = jest.fn(async () => ({
     budgetReservations: [{ month: new Date("2026-01-01T00:00:00.000Z"), token: "budget-token-1" }],
@@ -237,7 +249,7 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("Phase C.3 requirement #4: returns 500 when synchronizeAfterMutation throws AFTER the primary write already committed -- abandon() must NEVER be called for this attempt's reservation", async () => {
+  it("returns committed success with pending derived data when downstream synchronization throws after the primary write", async () => {
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     const { app, saveMock, abandonMock } = loadApp({
       synchronizeAfterMutationImpl: async () => {
@@ -250,10 +262,15 @@ describe("POST /expense/add-expense -- primary failure is unaffected", () => {
       .set("Authorization", `Bearer ${signToken(USER_ID)}`)
       .send(validAddPayload());
 
-    expect(res.status).toBe(500);
-    // The primary write itself DID commit.
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.derivedData).toEqual({
+      status: "pending",
+      budget: "pending",
+      report: "pending",
+      recoveryPending: true,
+    });
     expect(saveMock).toHaveBeenCalledTimes(1);
-    // The failure is entirely downstream (derived-data sync) -- the
     expect(abandonMock).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
@@ -533,7 +550,7 @@ describe("PUT /expense/update-expense -- primary failure is unaffected", () => {
     );
   });
 
-  it("Phase C.3 requirement #4: returns 500 when synchronizeAfterMutation throws AFTER the primary write already committed -- abandon() must NEVER be called for this attempt's reservation", async () => {
+  it("returns committed success with pending derived data when downstream synchronization throws after an edit", async () => {
     const originalExpense = {
       _id: EXPENSE_ID,
       expenseName: "Coffee",
@@ -555,9 +572,9 @@ describe("PUT /expense/update-expense -- primary failure is unaffected", () => {
       .set("Authorization", `Bearer ${signToken(USER_ID)}`)
       .send({ expenseAmount: 20 });
 
-    expect(res.status).toBe(500);
-    // The reservation protecting this already-committed edit must survive
-    // untouched.
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.derivedData.recoveryPending).toBe(true);
     expect(abandonMock).not.toHaveBeenCalled();
   });
 
@@ -798,7 +815,7 @@ describe("DELETE /expense/delete-expense -- committed success, synchronized vs p
     );
   });
 
-  it("Phase C.3 requirement #4: returns 500 when synchronizeAfterMutation throws AFTER the primary delete already committed -- abandon() must NEVER be called for this attempt's reservation", async () => {
+  it("returns committed success with pending derived data when downstream synchronization throws after a delete", async () => {
     const { app, abandonMock } = loadDeleteApp({
       synchronizeAfterMutationImpl: async () => {
         throw new Error("simulated downstream failure AFTER the delete already committed");
@@ -810,9 +827,9 @@ describe("DELETE /expense/delete-expense -- committed success, synchronized vs p
       .set("Authorization", `Bearer ${signToken(USER_ID)}`)
       .send({ id: EXPENSE_ID });
 
-    expect(res.status).toBe(500);
-    // The reservation protecting this already-committed delete must
-    // survive untouched.
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.derivedData.recoveryPending).toBe(true);
     expect(abandonMock).not.toHaveBeenCalled();
   });
 

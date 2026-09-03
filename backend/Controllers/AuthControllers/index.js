@@ -5,4 +5,7 @@ module.exports = {
   resendOTP: require('./resendOTP').resendOTP,
   forgotPassword: require('./forgotPassword').forgotPassword,
   resetPassword: require('./resetPassword').resetPassword,
+  refresh: require('./session').refresh,
+  logout: require('./session').logout,
+  logoutAll: require('./session').logoutAll,
 };

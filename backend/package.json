@@ -24,6 +24,7 @@
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
     "form-data": "^2.5.5",
+    "helmet": "^8.3.0",
     "joi": "^18.0.1",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.21.0",

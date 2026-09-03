@@ -1,7 +1,9 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const axios = require("axios");
 const { isFirebaseAvailable } = require("./config/firebaseAdmin");
+const { createCorsOptions, createHelmetOptions } = require("./config/httpSecurity");
 
 // Routes
 const authRouter = require("./Routes/auth.routes");
@@ -24,8 +26,9 @@ const { apiLimiter } = require("./utils/rateLimiter");
 const app = express();
 
 
-// Middlewares
-app.use(cors());
+// Apply security headers before cross-origin and request parsing middleware.
+app.use(helmet(createHelmetOptions()));
+app.use(cors(createCorsOptions()));
 app.use(express.json());
 
 
@@ -61,7 +64,7 @@ app.get("/ping", async (req, res) => {
 });
 
 
-// Credential/OTP endpoints. These carry their own stricter authLimiter
+// Authentication endpoints apply both IP and normalized-identity attempt limits.
 // internally, so apiLimiter (which keys on req.userId) is not applied here.
 app.use("/auth", authRouter);
 

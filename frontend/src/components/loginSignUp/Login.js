@@ -3,6 +3,7 @@ import "./Auth.css";
 
 import ForgotPassword from "./passwordReset/ForgotPassword";
 import { loginSuccessToast, logInErrorToast } from '../alertsEffects/toastMessages';
+import { setAccessToken } from '../../api/sessionClient';
 
 // Login form with an inline Forgot Password flow.
 const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
@@ -35,6 +36,7 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
       const response = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(enteredLoginInfo),
       });
 
@@ -42,7 +44,7 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
 
       if (response.ok) {
 
-        localStorage.setItem("token", data.token);
+        setAccessToken(data.token);
   
         setIsLoggedIn(true);
         loginSuccessToast(data);
@@ -85,6 +87,7 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
             placeholder="Email ID"
             className="login-input"
             onChange={handleChange}
+            maxLength={72}
             required
           />
 

@@ -1,63 +1,67 @@
 const { UserModel } = require('../../config/Schemas');
-
-// Service responsible for sending OTP emails to users
 const { sendOTPEmail } = require('../../Services/AuthServices/email.service');
-
-// OTP utility functions for generation, security, expiry control
 const { 
     canResendOtp,
     generateOTP, 
     hashOTP, 
     getOtpExpiry, 
 } = require('../../Services/AuthServices/otp.service');
+const {
+    RECOVERY_RESPONSE,
+    emitAuthAuditEvent,
+    waitForRecoveryResponse,
+} = require('../../Services/AuthServices/security.service');
+
+const COOLDOWN_MS = 120 * 1000;
+
+const sendGenericRecoveryResponse = async (res, startedAt) => {
+    await waitForRecoveryResponse(startedAt);
+    return res.status(202).json(RECOVERY_RESPONSE);
+};
 
 const forgotPassword = async (req, res) => {
+    const startedAt = Date.now();
+
     try {
-        // Extract email and verify user existence
         const { email } = req.body;
-        
         const user = await UserModel.findOne({ email });
-        
-        // If user not exists
-        if(!user) {
-            return res.status(404).json({ message: 'User not found', success: false });
+
+        if (!user || !user.isVerified) {
+            emitAuthAuditEvent({ event: 'password_reset_requested', outcome: 'accepted', reason: 'ineligible_identity', req, email });
+            return sendGenericRecoveryResponse(res, startedAt);
         }
 
-        // Allow password reset only for verified accounts
-        if(!user.isVerified) {
-            return res.status(403).json({ message: 'Account not verified. Sign Up Again', success: false});
+        if (!canResendOtp(user.lastOtpSent, COOLDOWN_MS).allowed) {
+            emitAuthAuditEvent({ event: 'password_reset_requested', outcome: 'accepted', reason: 'cooldown_active', req, email });
+            return sendGenericRecoveryResponse(res, startedAt);
         }
 
-        // Enforce cooldown to prevent OTP abuse
-        const COOLDOWN_MS = 120 * 1000;
-        const otpCheck = canResendOtp(user.lastOtpSent, COOLDOWN_MS);
-
-        // Check cooldown
-        if (!otpCheck.allowed) {
-            return res.status(429).json({
-                message: `Please wait ${otpCheck.remaining}s before requesting a new OTP`,
-                success: false,
-                cooldown: otpCheck.remaining
-            });
-        }
-
-        // Generate OTP for password reset and update user state
         const otp = generateOTP();
-        user.otp = hashOTP(otp);
+        const hashedOtp = hashOTP(otp);
+        user.otp = hashedOtp;
         user.otpExpiry = getOtpExpiry(5);
         user.lastOtpSent = new Date();
         user.isPasswordReset = true;
+        user.passwordResetExpiry = undefined;
         await user.save();
 
-        // Send password reset OTP email
-        await sendOTPEmail(email, otp, "reset");
+        try {
+            await sendOTPEmail(email, otp, 'reset');
+            emitAuthAuditEvent({ event: 'password_reset_otp_issued', outcome: 'success', req, email });
+        } catch (emailError) {
+            await UserModel.updateOne(
+                { _id: user._id, otp: hashedOtp },
+                { $unset: { otp: '', otpExpiry: '', lastOtpSent: '', passwordResetExpiry: '' }, $set: { isPasswordReset: false } }
+            );
+            emitAuthAuditEvent({ event: 'password_reset_otp_issued', outcome: 'failure', reason: 'email_delivery_failed', req, email });
+            console.error('Password reset email failed:', emailError.message);
+        }
 
-        // Successful OTP dispatch response
-        res.status(200).json({ message: 'OTP sent successfully', success:true, cooldown: Math.ceil(COOLDOWN_MS / 1000) });
-
+        return sendGenericRecoveryResponse(res, startedAt);
     } catch(err) {
-        // Handle unexpected server errors
-        console.error(err);
+        emitAuthAuditEvent({ event: 'password_reset_requested', outcome: 'failure', reason: 'internal_error', req, email: req.body?.email });
+        console.error('Password reset request failed:', err.message);
+        await waitForRecoveryResponse(startedAt);
         res.status(500).json({ message: 'Internal Server Error', success: false });
     }
 }

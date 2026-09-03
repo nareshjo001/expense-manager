@@ -35,6 +35,8 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
             newErrors.password = 'Password is required';
         } else if (enteredUserInfo.password.length < 8) {
             newErrors.password = 'Password must be at least 8 characters';
+        } else if (enteredUserInfo.password.length > 72) {
+            newErrors.password = 'Password must be 72 characters or fewer';
         }
 
         setErrors(newErrors);
@@ -145,6 +147,7 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
                                 className={`signup-input ${errors.password ? "error" : ""}`}
                                 value={enteredUserInfo.password}
                                 onChange={handleChange('password')}
+                                maxLength={72}
                                 placeholder="Password"
                                 />
                             {errors.password  && <p>{errors.password }</p>}

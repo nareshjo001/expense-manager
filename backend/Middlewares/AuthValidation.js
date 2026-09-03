@@ -1,61 +1,14 @@
 const Joi = require('joi');
+const { authSchemas, validateAuthRequest } = require('../Services/AuthServices/validation.service');
 
 // Signup request validation middleware
-const signupValidation = (req, res, next) => {
-    
-    // Define Joi validation rules for signup data
-    const schema = Joi.object({
-        fullName: Joi.string().min(4).max(15).required(),
-        email: Joi.string().email().required(),
-        password: Joi.string().min(8).max(25).required()
-    }).unknown(true); // Allow extra fields in request body
-
-    // Validate incoming request body
-    const { error } = schema.validate(req.body, { abortEarly: true });
-
-    if (error) {
-        // Capitalize the first letter of the error message
-        const rawMessage = error.details[0].message.replace(/"/g, '');
-        const message = rawMessage.charAt(0).toUpperCase() + rawMessage.slice(1);
-
-        // Send validation error response
-        return res.status(400).json({
-            success: false,
-            message
-        });
-    }
-
-    // Validation passed → move to next middleware/controller
-    next();
-};
+const signupValidation = validateAuthRequest(authSchemas.signup);
 
 // Login request validation middleware
-const loginValidation = (req, res, next) => {
-    
-    // Define Joi validation rules for login data
-    const schema = Joi.object({
-        email: Joi.string().email().required(),
-        password: Joi.string().min(8).max(25).required()
-    }).unknown(true); // Allow extra fields in request body
-    
-    // Validate incoming request body
-    const { error } = schema.validate(req.body, { abortEarly: true });
-    
-    if (error) {
-        // Capitalize the first letter of the error message
-        const rawMessage = error.details[0].message.replace(/"/g, '');
-        const message = rawMessage.charAt(0).toUpperCase() + rawMessage.slice(1);
-
-        // Send validation error response
-        return res.status(400).json({
-            success: false,
-            message
-        });
-    }
-
-    // Validation passed → move to next middleware/controller
-    next();
-}
+const loginValidation = validateAuthRequest(authSchemas.login);
+const emailOnlyValidation = validateAuthRequest(authSchemas.emailOnly);
+const verifyOtpValidation = validateAuthRequest(authSchemas.verifyOtp);
+const resetPasswordValidation = validateAuthRequest(authSchemas.resetPassword);
 
 // Add Expense request validation middleware
 const expenseValidation = (req, res, next) => {
@@ -142,6 +95,9 @@ const editIncomeValidation = (req, res, next) => {
 module.exports = {
     signupValidation,
     loginValidation,
+    emailOnlyValidation,
+    verifyOtpValidation,
+    resetPasswordValidation,
     expenseValidation,
     addIncomeValidation,
     editIncomeValidation

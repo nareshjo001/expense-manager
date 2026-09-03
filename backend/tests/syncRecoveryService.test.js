@@ -998,4 +998,28 @@ describe("synchronizeAfterMutation", () => {
     expect(recalculateBudgetMock).toHaveBeenCalledWith(USER_ID, FEB_2026, { fenceRevision: 1 });
     expect(result.budget).toBe("pending");
   });
+
+  it("returns pending when durable confirmation itself rejects after a committed write", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const { syncRecoveryService, recalculateBudgetMock, refreshReportMock } = loadService({
+      findOneAndUpdateImpl: async () => {
+        throw new Error("simulated pending marker write failure");
+      },
+    });
+
+    const result = await syncRecoveryService.synchronizeAfterMutation({
+      userId: USER_ID,
+      budgetDates: [JAN_2026],
+    });
+
+    expect(result).toEqual({
+      status: "pending",
+      budget: "pending",
+      report: "pending",
+      recoveryPending: true,
+    });
+    expect(recalculateBudgetMock).not.toHaveBeenCalled();
+    expect(refreshReportMock).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
 });

@@ -21,6 +21,7 @@ import { useWebPush } from "./components/hooks/useWebPush";
 import { useNativePush } from "./components/hooks/useMobilePush";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { SiaLauncherProvider } from "./components/sia/SiaLauncherContext";
+import { refreshAccessToken } from "./api/sessionClient";
 
 // Root app shell: gates the splash screen, authentication state, and global providers/routing.
 function App() {
@@ -40,25 +41,23 @@ function App() {
     handleLater
   } = useWebPush(isLoggedIn);
 
-  // Restores login state from a stored token on mount, or clears it after logout.
+  // Restores the in-memory access credential from the rotated HttpOnly session cookie.
   useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    if (token && !isLogout) {
-      setIsLoggedIn(true);
-    } else {
+    let active = true;
+    if (isLogout) {
       setIsLoggedIn(false);
+      setIsLoading(false);
+      return undefined;
     }
+    refreshAccessToken().then((session) => {
+      if (!active) return;
+      setIsLoggedIn(Boolean(session?.token));
+      setIsLoading(false);
+    });
+    return () => { active = false; };
   }, [isLogout]);
 
   useNativePush(isLoggedIn);
-
-  // Pings the backend on load and periodically, to avoid cold-start delays and surface server-down errors.
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -137,7 +136,7 @@ function App() {
         <div className="notification-modal">
           <div className="notification-content">
             <h3>Enable Notifications?</h3>
-            <p>Get real-time budget alerts and reminders.</p>
+            <p>Get reminders when recurring expenses are created.</p>
 
             <div className="notification-buttons">
               <button onClick={handleEnable} >

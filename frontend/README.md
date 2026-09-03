@@ -19,7 +19,7 @@ App shell → feature components → query/mutation hooks → api clients → Ex
                          └──────── SIA conversation + launcher ────────┘
 ```
 
-`src/api/axios.js` is the shared authenticated client. It attaches the stored JWT and centrally handles authentication, rate-limit, and conflict responses. The browser never calls the ML service or LLM providers directly.
+`src/api/axios.js` is the shared authenticated client. It attaches only an in-memory access token, refreshes it through a rotated HttpOnly session cookie, and centrally handles authentication, rate-limit, and conflict responses. The browser never calls the ML service or LLM providers directly.
 
 ## 📁 Key folders
 
@@ -48,6 +48,16 @@ REACT_APP_SIA_ENABLED=true
 ```
 
 `REACT_APP_SIA_ENABLED` controls only launcher visibility; the backend is the authoritative availability and security gate. CRA embeds `REACT_APP_*` values at build time.
+
+## 🔒 Production deployment
+
+The Vercel project Root Directory must be `frontend`. Set this production variable in Vercel before rebuilding:
+
+```env
+REACT_APP_BACKEND_URL=/backend
+```
+
+`vercel.json` proxies `/backend/*` to Render so refresh cookies remain first-party to `balensia.vercel.app`; do not point the production browser directly at Render. The session design uses an HttpOnly refresh cookie, a readable CSRF cookie/header pair, and a memory-only access token. Keep the CSP report-only until a production browser check confirms Firebase messaging, Google Fonts, and every API path work as expected.
 
 ## 🧠 SIA UI behavior
 

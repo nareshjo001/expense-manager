@@ -21,20 +21,10 @@ const canResendOtp = (lastSent, cooldownMs = 120000) => {
   };
 };
 
-// Consume the OTP by wiping every field tied to the verification attempt.
-const clearOtpFields = (user) => {
-  user.otp = undefined;
-  user.otpExpiry = undefined;
-  user.lastOtpSent = undefined;
-  user.verificationExpiresAt = undefined;
-  user.isPasswordReset = false;
-};
-
 module.exports = {
   generateOTP,
   hashOTP,
   getOtpExpiry,
   getVerificationExpiry,
   canResendOtp,
-  clearOtpFields,
 };

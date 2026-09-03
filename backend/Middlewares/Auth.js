@@ -1,8 +1,9 @@
 // Import jsonwebtoken library
 const jwt = require('jsonwebtoken');
+const { isSessionActive } = require('../Services/AuthServices/session.service');
 
 // Middleware to verify JWT token
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   try {
     // Get Authorization header from request
     const authHeader = req.headers.authorization;
@@ -30,6 +31,10 @@ const verifyToken = (req, res, next) => {
         success: false,
         message: 'Invalid token payload'
       });
+    }
+
+    if (decoded.sid && !(await isSessionActive(decoded.sid, decoded._id))) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
     }
 
     // Attach user id to request object for later use

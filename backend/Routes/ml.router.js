@@ -5,7 +5,7 @@ const router = express.Router();
 
 const verifyToken = require("../Middlewares/Auth");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
-const { buildMlServiceUrl, mlOperationsHeaders, requestSpendingForecast } = require("../utils/mlServiceClient");
+const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
 
 // Bounded timeout for the ML service call -- previously unset, meaning a
 const PREDICT_TIMEOUT_MS = 5000;
@@ -76,21 +76,6 @@ router.post("/predict-category", verifyToken, async (req, res) => {
             message: "Prediction service unavailable"
         });
     }
-});
-
-// New endpoint to proxy spending forecast requests
-router.post('/predict-spending-forecast', verifyToken, async (req, res) => {
-  try {
-    const result = await requestSpendingForecast(req.body);
-    if (result.success) {
-      return res.json({ success: true, data: { success: true, ...result.data } });
-    }
-    // Forward any error from the ML service
-    return res.status(502).json({ success: false, reason: result.reason || 'ML service error' });
-  } catch (err) {
-    console.error('Spending forecast proxy error:', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
 });
 
 module.exports = router;

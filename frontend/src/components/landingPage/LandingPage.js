@@ -19,6 +19,7 @@ import { signUpSuccessToast } from '../alertsEffects/toastMessages';
 import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
+import { getAccessToken, logoutSession } from '../../api/sessionClient';
 
 // Main authenticated app shell: header/nav, mobile menus, routed pages, and expense-delete confirmation flow.
 const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
@@ -60,7 +61,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
     // Deletes the confirmed expense; the mutation's own invalidation refreshes the expense list and budget totals.
     const confirmDeleteHandler = () => {
-        const token = localStorage.getItem('token');
+        const token = getAccessToken();
         if (!token) return;
 
         setIsSpinnerLoad(true);
@@ -124,8 +125,8 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
         </>
     );
 
-    const handleLogout = () => {
-        localStorage.clear();
+    const handleLogout = async () => {
+        await logoutSession();
         // Clears cached server state so the next login on this tab never sees the previous user's data.
         queryClient.clear();
         const data = {

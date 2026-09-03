@@ -13,6 +13,7 @@ const {
 
 // Password utility functions for hashing and comparing
 const { hashPassword } = require('../../Services/AuthServices/password.service');
+const { emitAuthAuditEvent } = require('../../Services/AuthServices/security.service');
 
 const signup = async (req, res) => {
   try {
@@ -24,6 +25,7 @@ const signup = async (req, res) => {
 
     // If user exists and is already verified, block duplicate registration
     if (user && user.isVerified) {
+      emitAuthAuditEvent({ event: 'signup_requested', outcome: 'denied', reason: 'existing_verified_account', req, email });
       return res.status(409).json({ message: 'User Already Exists', success: false });
     }
 
@@ -45,6 +47,8 @@ const signup = async (req, res) => {
       user.otpExpiry = otpExpiry;
       user.lastOtpSent = new Date();
       user.verificationExpiresAt = verificationExpiresAt;
+      user.isPasswordReset = false;
+      user.passwordResetExpiry = undefined;
       await user.save();
     } 
     // Otherwise, create a brand-new unverified user
@@ -61,15 +65,24 @@ const signup = async (req, res) => {
       await user.save();
     }
 
-    // Send OTP email for account verification
-    await sendOTPEmail(email, otp, "verify");
+    try {
+      await sendOTPEmail(email, otp, "verify");
+    } catch (emailError) {
+      await UserModel.updateOne(
+        { _id: user._id, otp: hashedOTP },
+        { $unset: { otp: '', otpExpiry: '', lastOtpSent: '', verificationExpiresAt: '' } }
+      );
+      emitAuthAuditEvent({ event: 'signup_otp_issued', outcome: 'failure', reason: 'email_delivery_failed', req, email });
+      console.error('Signup verification email failed:', emailError.message);
+      return res.status(503).json({ message: 'Verification email could not be sent. Please try again.', success: false });
+    }
 
-    // Final success response after signup initiation
+    emitAuthAuditEvent({ event: 'signup_otp_issued', outcome: 'success', req, email });
     res.status(201).json({ message: 'Registered successfully. Verify OTP to continue', success: true });
   
   } catch (err) {
-    // Handle unexpected server errors
-    console.error(err);
+    emitAuthAuditEvent({ event: 'signup_otp_issued', outcome: 'failure', reason: 'internal_error', req, email: req.body?.email });
+    console.error('Signup failed:', err.message);
     res.status(500).json({ message: 'Internal Server Error', success: false });
   }
 };

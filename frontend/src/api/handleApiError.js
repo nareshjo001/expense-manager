@@ -1,11 +1,12 @@
 import { expenseAddErrorToast } from "../components/alertsEffects/toastMessages";
 import { queryClient } from "../query/queryClient";
+import { clearAccessToken } from "./sessionClient";
 
 // Centralized handling for expired sessions and shared HTTP error statuses (401/429/409).
 
 // Clears the session and returns to the auth screen, mirroring LandingPage.js's manual logout.
 export const forceReauth = () => {
-  localStorage.clear();
+  clearAccessToken();
   // Clears authenticated server state before a new session can begin.
   queryClient.clear();
   window.location.replace("/");

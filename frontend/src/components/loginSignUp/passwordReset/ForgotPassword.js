@@ -13,6 +13,7 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
     const [isOTPSent, setIsOTPSent] = useState(false);
     const [otp, setOtp] = useState("");
     const [isOTPVerified, setIsOTPVerified] = useState(false);
+    const [resetToken, setResetToken] = useState("");
 
     const [countdown, setCountdown] = useState(120);
 
@@ -72,9 +73,12 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
 
                 const data = await response.json();
 
-                if (response.ok) {
+                if (response.ok && typeof data.resetToken === "string") {
                     signUpSuccessToast(data);
+                    setResetToken(data.resetToken);
                     setIsOTPVerified(true);
+                } else if (response.ok) {
+                    logInErrorToast({ message: "Verification could not be completed. Please request a new code." });
                 } else if (response.status === 429) {
                     logInErrorToast({
                         message: "Too many attempts. Please wait a moment and try again",
@@ -131,6 +135,7 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
             <ResetPassword
                 onBack={onBack}
                 email={email}
+                resetToken={resetToken}
                 setIsSpinnerLoad={setIsSpinnerLoad}
             />
         );
@@ -167,7 +172,9 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
                             placeholder="Enter OTP"
                             className="forgot-pass-input"
                             value={otp}
-                            onChange={(e) => setOtp(e.target.value)}
+                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            inputMode="numeric"
+                            maxLength={6}
                             required={isOTPSent}
                         />
                     </div>

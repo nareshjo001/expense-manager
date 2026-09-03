@@ -1,9 +1,5 @@
 const { UserModel } = require('../../config/Schemas');
-
-// Service responsible for sending OTP emails to users
 const { sendOTPEmail } = require('../../Services/AuthServices/email.service');
-
-// OTP utility functions for generation, security, expiry control
 const { 
     canResendOtp,
     generateOTP, 
@@ -11,55 +7,58 @@ const {
     getOtpExpiry, 
     getVerificationExpiry, 
 } = require('../../Services/AuthServices/otp.service');
+const {
+    RECOVERY_RESPONSE,
+    emitAuthAuditEvent,
+    waitForRecoveryResponse,
+} = require('../../Services/AuthServices/security.service');
+
+const COOLDOWN_MS = 120 * 1000;
+
+const sendGenericResendResponse = async (res, startedAt) => {
+    await waitForRecoveryResponse(startedAt);
+    return res.status(202).json(RECOVERY_RESPONSE);
+};
 
 const resendOTP = async (req, res) => {
+    const startedAt = Date.now();
+
     try {
-        // Extract email and validate user existence
         const { email } = req.body;
-        
-        // Check if a user exists with the given email
         const user = await UserModel.findOne({ email });
-        
-        // If not exists
-        if(!user) {
-            return res.status(404).json({ message: 'User not found', success: false });
-        }
 
-        // Prevent OTP resend for already verified users
-        if(user.isVerified) {
-            return res.status(400).json({ message: 'User already verified', success: false});
-        }
-
-        // Enforce cooldown window to avoid OTP abuse
-        const COOLDOWN_MS = 120 * 1000;
-        const otpCheck = canResendOtp(user.lastOtpSent, COOLDOWN_MS);
-        
-        // Check cooldown
-        if (!otpCheck.allowed) {
-            return res.status(429).json({
-                message: `Please wait ${otpCheck.remaining}s before requesting a new OTP`,
-                success: false,
-                cooldown: otpCheck.remaining
-            });
+        if (!user || user.isVerified || !canResendOtp(user.lastOtpSent, COOLDOWN_MS).allowed) {
+            emitAuthAuditEvent({ event: 'verification_otp_resent', outcome: 'accepted', reason: 'ineligible_or_cooldown', req, email });
+            return sendGenericResendResponse(res, startedAt);
         }       
 
-        // Generate and persist a fresh OTP with updated expiry data
         const otp = generateOTP();
-        user.otp = hashOTP(otp);
+        const hashedOtp = hashOTP(otp);
+        user.otp = hashedOtp;
         user.otpExpiry = getOtpExpiry(5);
         user.lastOtpSent = new Date();
         user.verificationExpiresAt = getVerificationExpiry(10);
+        user.isPasswordReset = false;
+        user.passwordResetExpiry = undefined;
         await user.save();
 
-        // Send OTP email to user
-        await sendOTPEmail(email, otp, "verify");
+        try {
+            await sendOTPEmail(email, otp, 'verify');
+            emitAuthAuditEvent({ event: 'verification_otp_resent', outcome: 'success', req, email });
+        } catch (emailError) {
+            await UserModel.updateOne(
+                { _id: user._id, otp: hashedOtp },
+                { $unset: { otp: '', otpExpiry: '', lastOtpSent: '', verificationExpiresAt: '' } }
+            );
+            emitAuthAuditEvent({ event: 'verification_otp_resent', outcome: 'failure', reason: 'email_delivery_failed', req, email });
+            console.error('Verification email failed:', emailError.message);
+        }
 
-        // Successful resend response
-        res.status(200).json({ message: 'OTP resent successfully', success:true, cooldown: Math.ceil(COOLDOWN_MS / 1000) });
-
+        return sendGenericResendResponse(res, startedAt);
     } catch(err) {
-        // Handle unexpected server errors
-        console.error(err);
+        emitAuthAuditEvent({ event: 'verification_otp_resent', outcome: 'failure', reason: 'internal_error', req, email: req.body?.email });
+        console.error('OTP resend failed:', err.message);
+        await waitForRecoveryResponse(startedAt);
         res.status(500).json({ message: 'Internal Server Error', success: false });
     }
 }

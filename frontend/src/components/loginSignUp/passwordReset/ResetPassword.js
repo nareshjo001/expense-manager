@@ -12,7 +12,7 @@ const styles = {
 }
 
 // Final step of the forgot-password flow: sets a new password after OTP verification.
-const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
+const ResetPassword = ({ onBack, email, resetToken, setIsSpinnerLoad }) => {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -55,7 +55,7 @@ const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
             const response = await fetch(`${BASE_URL}/auth/reset-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email, password, resetToken }),
             });
 
             const data = await response.json();
@@ -104,6 +104,7 @@ const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
                         className="reset-pass-input"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        maxLength={72}
                         required
                     />
 
@@ -113,6 +114,7 @@ const ResetPassword = ({ onBack, email, setIsSpinnerLoad }) => {
                         className="reset-pass-input"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
+                        maxLength={72}
                         required
                     />
 

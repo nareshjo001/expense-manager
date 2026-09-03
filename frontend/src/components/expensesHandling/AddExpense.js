@@ -12,6 +12,7 @@ import { queryClient } from '../../query/queryClient';
 import { queryKeys } from '../../query/queryKeys';
 import { useAddExpenseMutation } from '../../hooks/mutations/useAddExpenseMutation';
 import { useUpdateExpenseMutation } from '../../hooks/mutations/useUpdateExpenseMutation';
+import { getAccessToken } from '../../api/sessionClient';
 
 // Category Normalization -- moved to module scope (react-hooks/exhaustive-
 const sanitizeText = (text = '') => {
@@ -85,7 +86,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     // Reuses the existing silent-failure path below via the catch block.
                     throw new Error("Missing backend URL");
                 }
-                const token = localStorage.getItem("token");
+                const token = getAccessToken();
 
                 const response = await fetch(`${BASE_URL}/ml/predict-category`,
                     {

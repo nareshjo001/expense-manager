@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./BillUpload.css";
 import { FaArrowLeft } from "react-icons/fa";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
@@ -8,21 +8,32 @@ import { useBillUploadMutation } from "../../hooks/mutations/useBillUploadMutati
 const BillUpload = ({ setIsBillUpload, setBillData }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [fileError, setFileError] = useState("");
+  const abortControllerRef = useRef(null);
 
   const billUploadMutation = useBillUploadMutation();
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
 
-    if (file) {
-      setSelectedFile(file);
-      setPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setSelectedFile(null);
+      setPreview(null);
+      setFileError("Choose a JPEG or PNG image that is 5 MB or smaller.");
+      return;
     }
+
+    setFileError("");
+    setSelectedFile(file);
+    setPreview(URL.createObjectURL(file));
   };
 
   // Revokes the previous preview's Blob URL when it's replaced, and the active one on unmount.
   useEffect(() => {
     return () => {
+      abortControllerRef.current?.abort();
       if (preview) {
         URL.revokeObjectURL(preview);
       }
@@ -48,7 +59,8 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
   const handleUpload = () => {
     if (!selectedFile) return;
 
-    billUploadMutation.mutate(selectedFile, {
+    abortControllerRef.current = new AbortController();
+    billUploadMutation.mutate({ file: selectedFile, signal: abortControllerRef.current.signal }, {
       onSuccess: (result) => {
         result.parsedReceipt.expenseDate = formatDateForInput(result.parsedReceipt.expenseDate);
         setBillData(result.parsedReceipt);
@@ -61,8 +73,8 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
           return;
         }
 
-        console.error(error);
-        expenseAddErrorToast({ message: "Failed to upload bill. Please try again." });
+        if (error.code === "ERR_CANCELED") return;
+        expenseAddErrorToast({ message: error.response?.data?.message || "Failed to upload bill. Please try again." });
       },
     });
   };
@@ -85,13 +97,16 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
         </div>
 
         <div className="bill-upload-input-section">
-          <label>Select Bill Image</label>
+          <label htmlFor="bill-upload-file">Select Bill Image</label>
 
           <input
+            id="bill-upload-file"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png"
             onChange={handleFileChange}
+            aria-describedby={fileError ? "bill-upload-error" : undefined}
           />
+          {fileError && <p id="bill-upload-error" className="bill-upload-error" role="alert">{fileError}</p>}
         </div>
 
         {preview && (

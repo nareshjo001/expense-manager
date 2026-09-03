@@ -546,7 +546,7 @@ async function repairIfPending(userId, options = {}) {
 }
 
 // Best-effort post-write synchronization: the caller must have already called reserve() and must pass its tokens here. First action is an unconditional confirm(), so durable Tier-1 evidence exists before any recompute; the revision it returns then fences every recompute+persist in this call and the final clearIfRevisionMatches. `budgetDates` may hold 0, 1, or 2 dates (an edit that moved months attempts both independently); `budgetTokens`/`reportToken`/`userWideToken` are this mutation's own reserve() tokens (empty/null for a caller that never reserved -- confirm() still runs correctly, it just has nothing to release).
-async function synchronizeAfterMutation({
+async function synchronizeDerivedData({
   userId,
   budgetDates = [],
   budgetTokens = [],
@@ -624,6 +624,21 @@ async function synchronizeAfterMutation({
     report: reportStatus,
     recoveryPending,
   };
+}
+
+// Keeps a committed financial write successful when secondary synchronization cannot start or finish.
+async function synchronizeAfterMutation(options = {}) {
+  try {
+    return await synchronizeDerivedData(options);
+  } catch (err) {
+    console.error("syncRecoveryService.synchronizeAfterMutation deferred:", sanitizeError(err));
+    return {
+      status: "pending",
+      budget: "pending",
+      report: "pending",
+      recoveryPending: true,
+    };
+  }
 }
 
 module.exports = {

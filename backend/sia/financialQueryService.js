@@ -1,4 +1,5 @@
-// SIA financial query service -- the ONLY module SIA controllers may use
+// SIA financial query service -- the ONLY module SIA controllers may use.
+// NEVER calls into report.controller.js or report recovery.
 "use strict";
 
 const mongoose = require("mongoose");

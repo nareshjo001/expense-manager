@@ -36,7 +36,7 @@ The backend owns authorization, financial writes, deterministic analytics, cachi
 |---|---|---|
 | [`frontend/`](frontend/) | React UI, client caching, responsive experience, SIA panel | [Frontend README](frontend/README.md) |
 | [`backend/`](backend/) | Express API, reports, finance logic, SIA, OCR, caching and jobs | [Backend README](backend/README.md) |
-| [`ml-service/`](ml-service/) | Category prediction, spending forecast, guarded model lifecycle | [ML service README](ml-service/README.md) |
+| [`ml-service/`](ml-service/) | Category prediction and guarded model lifecycle | [ML service README](ml-service/README.md) |
 | [`docs/`](docs/) | API workflow documentation | [Workflow index](docs/api-workflows/README.md) |
 
 ## 🚀 Local start

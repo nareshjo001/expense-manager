@@ -80,7 +80,6 @@ const parseReceipt = (text) => {
     expenseName: extractMerchant(text),
     expenseAmount: extractAmount(text),
     expenseDate: extractDate(text),
-    extractedText: text,
   };
 };
 

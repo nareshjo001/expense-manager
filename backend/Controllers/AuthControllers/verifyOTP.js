@@ -1,57 +1,74 @@
 const { UserModel } = require('../../config/Schemas');
-
-// OTP utility functions for security and clearing otp fields control
-const { hashOTP, clearOtpFields, getVerificationExpiry } = require('../../Services/AuthServices/otp.service');
+const { hashOTP, getVerificationExpiry } = require('../../Services/AuthServices/otp.service');
+const {
+    INVALID_OTP_RESPONSE,
+    emitAuthAuditEvent,
+    generateResetToken,
+    hashResetToken,
+    safeHashEqual,
+} = require('../../Services/AuthServices/security.service');
 
 const verifyOTP = async (req, res) => {
     try {
-        // Extract email and OTP from request body
         const { email, otp } = req.body;
-        
-        // Check if a user exists with the given email
         const user = await UserModel.findOne({ email });
-        
-        // If user not exists
-        if(!user) {
-            return res.status(404).json({ message: 'User not found', success: false });
+        const inputOtpHash = hashOTP(otp);
+        const isResetFlow = Boolean(user?.isVerified && user?.isPasswordReset);
+        const isSignupFlow = Boolean(user && !user.isVerified && !user.isPasswordReset);
+        const hasValidOtp = Boolean(
+            user?.otp &&
+            user?.otpExpiry &&
+            user.otpExpiry > new Date() &&
+            safeHashEqual(inputOtpHash, user.otp) &&
+            (isResetFlow || isSignupFlow)
+        );
+
+        if (!hasValidOtp) {
+            emitAuthAuditEvent({ event: 'otp_verified', outcome: 'denied', reason: 'invalid_or_expired', req, email });
+            return res.status(400).json(INVALID_OTP_RESPONSE);
         }
 
-        // Prevent re-verification unless it's part of a password reset flow
-        if(user.isVerified && !user.isPasswordReset) {
-            return res.status(400).json({ message: 'User already verified', success: false });
+        const resetToken = isResetFlow ? generateResetToken() : undefined;
+        const update = isResetFlow
+            ? {
+                $set: {
+                    isVerified: true,
+                    isPasswordReset: true,
+                    otp: hashResetToken(resetToken),
+                    passwordResetExpiry: getVerificationExpiry(10),
+                },
+                $unset: { otpExpiry: '', lastOtpSent: '', verificationExpiresAt: '' },
+            }
+            : {
+                $set: { isVerified: true, isPasswordReset: false },
+                $unset: { otp: '', otpExpiry: '', lastOtpSent: '', verificationExpiresAt: '', passwordResetExpiry: '' },
+            };
+
+        const verifiedUser = await UserModel.findOneAndUpdate(
+            {
+                _id: user._id,
+                otp: inputOtpHash,
+                otpExpiry: { $gt: new Date() },
+                isPasswordReset: isResetFlow,
+            },
+            update,
+            { new: true }
+        );
+
+        if (!verifiedUser) {
+            emitAuthAuditEvent({ event: 'otp_verified', outcome: 'denied', reason: 'already_consumed', req, email });
+            return res.status(400).json(INVALID_OTP_RESPONSE);
         }
 
-        // Validate OTP expiry before comparing values
-        const inputOTP = hashOTP(otp);
-        if (user.otpExpiry < new Date()) {
-            return res.status(400).json({ message: 'OTP has expired. Please request a new one', success: false });
-        }
-
-        // Compare hashed OTP values for security
-        if (inputOTP !== user.otp) {
-            return res.status(400).json({ message: 'Invalid OTP', success: false });
-        }
-
-        const isResetFlow = user.isPasswordReset;
-
-        // Mark user as verified and clear OTP fields.
-        user.isVerified = true;
-        clearOtpFields(user);
-
-        // Grant a short-lived window to complete a password reset.
-        if (isResetFlow) {
-            user.isPasswordReset = true;
-            user.passwordResetExpiry = getVerificationExpiry(10);
-        }
-
-        await user.save();
-
-        // Successful verification response
-        res.status(200).json({ message: 'Email verified successfully', success:true });
-    
+        emitAuthAuditEvent({ event: 'otp_verified', outcome: 'success', reason: isResetFlow ? 'password_reset' : 'signup', req, email });
+        res.status(200).json({
+            message: isResetFlow ? 'Verification successful' : 'Email verified successfully',
+            success: true,
+            ...(resetToken ? { resetToken } : {}),
+        });
     } catch(err) {
-        // Handle unexpected server errors
-        console.error(err);
+        emitAuthAuditEvent({ event: 'otp_verified', outcome: 'failure', reason: 'internal_error', req, email: req.body?.email });
+        console.error('OTP verification failed:', err.message);
         res.status(500).json({ message: 'Internal Server Error', success: false });
     }
 }

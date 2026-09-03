@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Response, Header
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, RootModel
+from pydantic import BaseModel
 
 from inference.predictor import predict_category
 from inference.predictor_manager import predictor_manager, ActivationError
@@ -557,25 +557,6 @@ def generate_description_api(
         category=data.expenseCategory,
         amount=data.expenseAmount
     )
-class SpendingForecastRequest(RootModel[dict]):
-    """Arbitrary JSON payload for spending forecast endpoint"""
-    pass
-
-@app.post("/predict-spending-forecast")
-def predict_spending_forecast(
-    data: SpendingForecastRequest,
-    x_ml_operations_token: Optional[str] = Header(None)
-):
-    """
-    Returns ML forecast for the current month spending.
-    Requires the operations token guard.
-    """
-    _require_operations_token(x_ml_operations_token)
-    payload = data.root
-    from inference.spend_forecaster import predict_spending_snapshot
-    result = predict_spending_snapshot(payload)
-    return JSONResponse(status_code=200, content=result)
-
 def _heartbeat(run_id):
     """
     Best-effort heartbeat update passed into run_retraining() as its stage

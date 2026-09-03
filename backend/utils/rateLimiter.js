@@ -1,4 +1,30 @@
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
+const {
+    fingerprint,
+    hashResetToken,
+    normalizeEmail,
+} = require("../Services/AuthServices/security.service");
+
+const AUTH_RATE_LIMIT_MESSAGE = Object.freeze({
+    success: false,
+    code: "AUTH_RATE_LIMITED",
+    message: "Too many attempts. Please try again later."
+});
+
+const identityKey = (req) => {
+    const email = normalizeEmail(req.body?.email);
+    if (!email) return ipKeyGenerator(req.ip);
+    return `identity:${fingerprint(email) || hashResetToken(email)}`;
+};
+
+const createIdentityLimiter = (max) => rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max,
+    keyGenerator: identityKey,
+    message: AUTH_RATE_LIMIT_MESSAGE,
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -20,14 +46,27 @@ const apiLimiter = rateLimit({
 
 // Auth limiter (IP-based) for credential and OTP endpoints
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 mins
-    max: 20,
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    keyGenerator: (req) => ipKeyGenerator(req.ip),
+    message: AUTH_RATE_LIMIT_MESSAGE,
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
+const loginLimiter = createIdentityLimiter(10);
+const otpIssueLimiter = createIdentityLimiter(5);
+const otpVerifyLimiter = createIdentityLimiter(8);
+const passwordResetLimiter = createIdentityLimiter(5);
+const receiptLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 12,
+    keyGenerator: (req) => req.userId || ipKeyGenerator(req.ip),
     message: {
         success: false,
-        message: "Too many attempts. Please try again later."
+        code: "RECEIPT_RATE_LIMITED",
+        message: "Too many receipt uploads. Please try again later."
     },
-
     standardHeaders: true,
     legacyHeaders: false
 });
@@ -69,4 +108,14 @@ const siaVoiceLimiter = rateLimit({
     legacyHeaders: false
 });
 
-module.exports = { apiLimiter, authLimiter, siaLimiter, siaVoiceLimiter };
+module.exports = {
+    apiLimiter,
+    authLimiter,
+    loginLimiter,
+    otpIssueLimiter,
+    otpVerifyLimiter,
+    passwordResetLimiter,
+    receiptLimiter,
+    siaLimiter,
+    siaVoiceLimiter
+};

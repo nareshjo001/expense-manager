@@ -4,6 +4,6 @@ import { uploadBill } from "../../api/billApi";
 // Bill upload only returns OCR-parsed receipt data to prefill the Add Expense form — it never persists an
 export const useBillUploadMutation = () => {
   return useMutation({
-    mutationFn: (file) => uploadBill(file),
+    mutationFn: ({ file, signal }) => uploadBill(file, signal),
   });
 };

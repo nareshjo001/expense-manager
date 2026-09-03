@@ -36,6 +36,7 @@ function mockRes() {
   const res = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  res.cookie = jest.fn().mockReturnValue(res);
   return res;
 }
 
@@ -109,6 +110,12 @@ describe("Remediation Workstream E: login.js issuance", () => {
     }));
     jest.doMock(PASSWORD_SERVICE_PATH, () => ({
       comparePassword: jest.fn(async () => passwordMatches),
+    }));
+    jest.doMock("../Services/AuthServices/session.service", () => ({
+      createSession: jest.fn(async () => ({ session: { _id: "session-1" }, refreshToken: "refresh", csrfToken: "csrf" })),
+      cookieOptions: jest.fn(() => ({})),
+      CSRF_COOKIE_NAME: "balensia_csrf",
+      REFRESH_COOKIE_NAME: "balensia_refresh",
     }));
     const { login } = require(LOGIN_PATH);
     return { login };

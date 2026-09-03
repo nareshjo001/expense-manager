@@ -6,6 +6,9 @@ const router = require('express').Router();
 const {
   signupValidation,
   loginValidation,
+  emailOnlyValidation,
+  verifyOtpValidation,
+  resetPasswordValidation,
 } = require('../Middlewares/AuthValidation');
 
 // ---------------- AUTH CONTROLLERS ----------------
@@ -16,16 +19,29 @@ const {
   verifyOTP,
   resendOTP,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  refresh,
+  logout,
+  logoutAll,
 } = require('../Controllers/AuthControllers');
+const verifyToken = require('../Middlewares/Auth');
+const sessionCsrf = require('../Middlewares/sessionCsrf');
 
-const { authLimiter } = require('../utils/rateLimiter');
+const rateLimiters = require('../utils/rateLimiter');
+const authLimiter = rateLimiters.authLimiter;
+const loginLimiter = rateLimiters.loginLimiter || authLimiter;
+const otpIssueLimiter = rateLimiters.otpIssueLimiter || authLimiter;
+const otpVerifyLimiter = rateLimiters.otpVerifyLimiter || authLimiter;
+const passwordResetLimiter = rateLimiters.passwordResetLimiter || authLimiter;
 
-router.post('/login', authLimiter, loginValidation, login);      // User login with validation
-router.post('/signup', authLimiter, signupValidation, signup);   // User signup with validation
-router.post('/verify-otp', authLimiter, verifyOTP);              // OTP verification
-router.post('/resend-otp', authLimiter, resendOTP);              // Resend OTP
-router.post('/forgot-password', authLimiter, forgotPassword);    // Forgot password request
-router.post('/reset-password', authLimiter, resetPassword);      // Reset password
+router.post('/login', authLimiter, loginValidation, loginLimiter, login);
+router.post('/signup', authLimiter, signupValidation, otpIssueLimiter, signup);
+router.post('/verify-otp', authLimiter, verifyOtpValidation, otpVerifyLimiter, verifyOTP);
+router.post('/resend-otp', authLimiter, emailOnlyValidation, otpIssueLimiter, resendOTP);
+router.post('/forgot-password', authLimiter, emailOnlyValidation, otpIssueLimiter, forgotPassword);
+router.post('/reset-password', authLimiter, resetPasswordValidation, passwordResetLimiter, resetPassword);
+router.post('/refresh', authLimiter, sessionCsrf, refresh);
+router.post('/logout', authLimiter, sessionCsrf, logout);
+router.post('/logout-all', verifyToken, authLimiter, logoutAll);
 
 module.exports = router;

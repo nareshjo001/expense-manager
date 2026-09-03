@@ -21,23 +21,4 @@ function mlOperationsHeaders() {
   return { [OPERATIONS_TOKEN_HEADER]: token };
 }
 
-const axios = require('axios');
-
-/* Request ML spending forecast prediction. */
-async function requestSpendingForecast(features, { timeoutMs = 3000 } = {}) {
-  const url = buildMlServiceUrl('/predict-spending-forecast');
-  try {
-    const resp = await axios.post(url, features, {
-      timeout: timeoutMs,
-      headers: mlOperationsHeaders(),
-    });
-    return { success: true, data: resp.data };
-  } catch (err) {
-    const reason = err.code === 'ECONNABORTED' ? 'ML service timeout'
-      : err.response?.data?.message || err.message;
-    return { success: false, fallback: true, reason };
-  }
-}
-
-module.exports = { buildMlServiceUrl, mlOperationsHeaders, OPERATIONS_TOKEN_HEADER, requestSpendingForecast };
-
+module.exports = { buildMlServiceUrl, mlOperationsHeaders, OPERATIONS_TOKEN_HEADER };
