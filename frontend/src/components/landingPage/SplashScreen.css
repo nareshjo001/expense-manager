@@ -196,3 +196,11 @@ html, body {
     font-size: 70px; /* Reduces text size accordingly */
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body,
+  .layer {
+    animation: none;
+  }
+}
