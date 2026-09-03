@@ -69,11 +69,13 @@ class TestPredictCategoryContractStatic:
     def test_backend_preserves_the_successful_response_contract(self):
         """
         The fix above must not change what a SUCCESSFUL prediction
-        response looks like -- still `response.data` forwarded verbatim
-        with a 200, no wrapping or added fields.
+        response looks like. CAT-001 (merchant category rules) added a
+        `source` field, but every field `response.data` carried before is
+        still forwarded verbatim -- the spread comes first, so `source`
+        can only ever be additive, never overwrite an existing key.
         """
         src = _read(BACKEND_ML_ROUTER)
-        assert re.search(r"res\.status\(200\)\.json\(\s*response\.data\s*\)", src)
+        assert re.search(r"\.\.\.\s*response\.data\s*,\s*\n\s*source:\s*[\"']model[\"']", src)
 
 
 class TestRetrainModelContractStatic:
@@ -91,12 +93,14 @@ class TestRetrainModelContractStatic:
         src = _read(BACKEND_CRON)
         assert "retrain-model" in src
 
-        # Whitespace-tolerant match of the real, multi-line axios.post call
+        # Whitespace-tolerant match of the real, multi-line axios.post call.
+        # OBS-001-T02 added an optional per-run correlation-ID argument to
+        # mlOperationsHeaders(...) -- any argument list is accepted here.
         call_pattern = re.compile(
             r"axios\.post\(\s*"
             r"buildMlServiceUrl\(\s*[\"']\/retrain-model[\"']\s*\)\s*,\s*"
             r"(?:undefined|null)\s*,\s*"
-            r"\{\s*headers:\s*mlOperationsHeaders\(\)\s*\}\s*"
+            r"\{\s*headers:\s*mlOperationsHeaders\([^)]*\)\s*\}\s*"
             r"\)"
         )
         assert call_pattern.search(src), (

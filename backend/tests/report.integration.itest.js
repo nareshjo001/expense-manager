@@ -85,7 +85,8 @@ describe("GET /report (integration)", () => {
 
       // Deterministic, arithmetic-derived values from User A's own fixture.
       expect(res.body.summary.totalSpent).toBe(4321);
-      expect(res.body.summary.topCategory).toBe("M0-2-USER-A-CATEGORY");
+      // normalizeCategoryForGrouping Title-Cases unknown categories (utils/categoryNormalization.js) -- the raw all-caps marker is never returned verbatim.
+      expect(res.body.summary.topCategory).toBe("M0-2-User-A-Category");
 
       // Cross-user isolation: none of User B's recognisable markers appear
       // anywhere in User A's response.
@@ -169,9 +170,12 @@ describe("GET /report (integration)", () => {
     const cachedRaw = await testServices.redisClient.get(cacheKey);
     expect(cachedRaw).not.toBeNull();
 
+    // reportCache.set() persists a CAS envelope { revision, payload }
+    // (cache/reportCache.js) -- the actual cached report lives under
+    // .payload, never at the envelope's top level.
     const cached = JSON.parse(cachedRaw);
-    expect(cached.summary.totalSpent).toBe(res.body.summary.totalSpent);
-    expect(cached.summary.topCategory).toBe(res.body.summary.topCategory);
+    expect(cached.payload.summary.totalSpent).toBe(res.body.summary.totalSpent);
+    expect(cached.payload.summary.topCategory).toBe(res.body.summary.topCategory);
 
     const ttl = await testServices.redisClient.ttl(cacheKey);
     expect(ttl).toBeGreaterThan(0);
@@ -244,7 +248,7 @@ describe("GET /report (integration)", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.summary.totalSpent).not.toBe(eMarker);
-    expect(res.body.summary.topCategory).toBe("M0-2-USER-F-CATEGORY");
+    expect(res.body.summary.topCategory).toBe("M0-2-User-F-Category");
     expect(JSON.stringify(res.body)).not.toContain(String(eMarker));
   });
 });

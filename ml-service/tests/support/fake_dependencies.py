@@ -201,10 +201,30 @@ def install_fake_dependencies(patch):
     fixture (never at module import time -- see this module's own
     docstring for why that distinction is the entire point of this fix).
 
-    Never shadows a REAL package that is already imported in this process
-    -- each fake is only installed if the real name is not already present
-    in `sys.modules`, so a real-dependency test that already imported the
-    genuine package earlier in the same pytest session is never displaced.
+    joblib/pymongo are only faked if the real package is not already
+    imported in this process, so a real-dependency test that already
+    imported the genuine one earlier in the same pytest session is never
+    displaced (see this module's own docstring for why that distinction
+    mattered for joblib specifically).
+
+    fastapi/pydantic are ALWAYS faked here, unconditionally -- the mocked
+    lifecycle fixture's entire premise is that app.py gets reloaded
+    against the FAKE FastAPI/Header/Request/Response (whose Header(...)
+    resolves to a plain default value and whose Request/Response are
+    trivially constructible, unlike the real ASGI-bound classes). A
+    conditional guard here is unsafe: tests/contracts/test_backend_contract.py
+    does a module-level `pytest.importorskip("fastapi")`, which pytest
+    executes during COLLECTION for every session where fastapi is
+    installed -- before any fixture runs -- permanently seeding real
+    fastapi into `sys.modules`. A "not already present" guard would then
+    skip faking fastapi for the rest of the whole pytest session, so
+    every mocked-lifecycle test would silently run against the real
+    Header/Request/Response instead (observed as `Header(...)` objects
+    reaching `secrets.compare_digest` unresolved, and
+    `Request.__init__() got an unexpected keyword argument 'headers'`).
+    `monkeypatch.setitem` still restores whatever was in `sys.modules`
+    (real or absent) the instant this fixture's test ends, so this never
+    leaks into or displaces state for any other test.
 
     Returns the dict of {module_name: fake_module} actually installed
     (useful for assertions in tests that want to confirm what was faked).
@@ -215,8 +235,7 @@ def install_fake_dependencies(patch):
         installed.update(make_fake_joblib())
     if "pymongo" not in sys.modules:
         installed.update(make_fake_mongo_stack())
-    if "fastapi" not in sys.modules:
-        installed.update(make_fake_fastapi_stack())
+    installed.update(make_fake_fastapi_stack())
 
     for name, module in installed.items():
         patch.setitem(sys.modules, name, module)

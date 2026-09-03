@@ -283,7 +283,10 @@ def test_full_lifecycle_reaches_activated_and_synchronized_status(client, caplog
 
     caplog.set_level("INFO", logger="ml-service.lifecycle")
 
-    resp = c.post("/retrain-model")
+    # /retrain-model is operations-token-protected like every other call in
+    # this test -- this call was missing `headers=operations_headers`,
+    # which made it 401 instead of actually triggering a run.
+    resp = c.post("/retrain-model", headers=operations_headers)
     assert resp.status_code in (200, 202)
     run_id = resp.json()["runId"]
 
