@@ -5,6 +5,7 @@ import { queryKeys } from "../../query/queryKeys";
 import { useAddExpenseMutation } from "./useAddExpenseMutation";
 import { useUpdateExpenseMutation } from "./useUpdateExpenseMutation";
 import { useDeleteExpenseMutation } from "./useDeleteExpenseMutation";
+import { removeExpenseFromCachedPages } from "../../query/pagedCacheReconciliation";
 
 jest.mock("@tanstack/react-query", () => ({
   useMutation: jest.fn(),
@@ -17,13 +18,22 @@ jest.mock("../../api/expenseApi", () => ({
   deleteExpense: jest.fn(),
 }));
 
+jest.mock("../../query/pagedCacheReconciliation", () => ({
+  removeExpenseFromCachedPages: jest.fn(),
+}));
+
 afterEach(() => {
   jest.clearAllMocks();
 });
 
 function captureOptions(hook) {
   const invalidateQueries = jest.fn();
-  useQueryClient.mockReturnValue({ invalidateQueries });
+  // EXP-003-T06 -- useDeleteExpenseMutation additionally calls
+  // queryClient.setQueriesData to reconcile the paged expense cache;
+  // Add/Update never call it, but the shared describe.each below covers
+  // all three hooks with this same client stub.
+  const setQueriesData = jest.fn();
+  useQueryClient.mockReturnValue({ invalidateQueries, setQueriesData });
 
   let capturedOptions;
   useMutation.mockImplementation((options) => {
@@ -32,7 +42,7 @@ function captureOptions(hook) {
   });
 
   hook();
-  return { options: capturedOptions, invalidateQueries };
+  return { options: capturedOptions, invalidateQueries, setQueriesData };
 }
 
 describe.each([
@@ -100,5 +110,15 @@ describe("useDeleteExpenseMutation -- mutationFn identity", () => {
   it("passes the exact imported deleteExpense function as mutationFn", () => {
     const { options } = captureOptions(useDeleteExpenseMutation);
     expect(options.mutationFn).toBe(deleteExpense);
+  });
+});
+
+describe("useDeleteExpenseMutation -- paged cache reconciliation (EXP-003-T06)", () => {
+  it("patches the cache with the deleted expense's id (the mutate() variable) before invalidating", () => {
+    const { options } = captureOptions(useDeleteExpenseMutation);
+
+    options.onSuccess({ success: true }, "expense-42");
+
+    expect(removeExpenseFromCachedPages).toHaveBeenCalledWith(expect.anything(), "expense-42");
   });
 });
