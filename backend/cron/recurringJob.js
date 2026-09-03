@@ -10,8 +10,19 @@ const { clearUserExpenseCache } = require('../utils/expenseCache');
 const { normalizeCategory, UNCATEGORIZED } = require('../utils/categoryNormalization');
 // Remediation follow-up -- durable report/cache synchronization across a
 const { reserve, synchronizeAfterMutation } = require('../Services/syncRecoveryService');
+// REC-001 -- job-level lease so only one server instance runs this body at
+// a time; the expense insert's own occurrence-ID uniqueness constraint
+// remains the actual financial-correctness backstop either way.
+const { runWithLease } = require('../utils/jobLease');
+
+const JOB_NAME = "recurringJob";
+const LEASE_TTL_MS = 10 * 60 * 1000;
 
 cron.schedule("30 20 * * *", async () => {
+   await runWithLease(JOB_NAME, LEASE_TTL_MS, runRecurringJob);
+});
+
+async function runRecurringJob() {
 
    try {
 
@@ -177,4 +188,4 @@ cron.schedule("30 20 * * *", async () => {
       console.error("Recurring cron failed.");
    }
 
-});
+}

@@ -5,9 +5,21 @@ const crypto = require("crypto");
 const { MlFeedbackModel } = require("../config/Schemas");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
 const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
+// REC-001 -- job-level lease so multiple instances don't all separately
+// count feedback and call /retrain-model on the same day (the ML service
+// itself already dedupes concurrent triggers via existingRun, but the
+// lease avoids the redundant Mongo count + HTTP call across instances too).
+const { runWithLease } = require("../utils/jobLease");
+
+const JOB_NAME = "feedbackCollector";
+const LEASE_TTL_MS = 5 * 60 * 1000;
 
 // Runs every day at 20:30 server time.
 cron.schedule("30 20 * * *", async () => {
+    await runWithLease(JOB_NAME, LEASE_TTL_MS, runFeedbackCollectorJob);
+});
+
+async function runFeedbackCollectorJob() {
     console.log("ML RETRAIN CHECK STARTED");
     try {
 
@@ -64,4 +76,4 @@ cron.schedule("30 20 * * *", async () => {
             );
         }
     }
-});
+}

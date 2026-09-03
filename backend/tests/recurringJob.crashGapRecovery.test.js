@@ -49,6 +49,15 @@ function loadCronJob({ dueExpenses, createBehavior, existingExpenseForDedupe, sy
     }),
   }));
 
+  // REC-001 -- bypass the real Redis-backed lease in these unit tests; the
+  // job body should run exactly as before regardless of lease outcome.
+  jest.doMock("../utils/jobLease", () => ({
+    runWithLease: jest.fn(async (_jobName, _ttlMs, fn) => {
+      await fn();
+      return { ran: true };
+    }),
+  }));
+
   const findOneAndUpdateMock = jest.fn(async (...args) => {
     callOrder.push("advanceSchedule");
     return { _id: "updated" };

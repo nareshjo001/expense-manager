@@ -1,8 +1,18 @@
 const cron = require("node-cron");
 const Notification = require("../models/Notification");
 const { sendPush } = require("../Services/push.service");
+// REC-001 -- job-level lease so two instances never both re-send the same
+// failed push notification (this loop has no per-item claim of its own).
+const { runWithLease } = require("../utils/jobLease");
+
+const JOB_NAME = "retryPush";
+const LEASE_TTL_MS = 5 * 60 * 1000;
 
 cron.schedule("*/15 * * * *", async () => {
+  await runWithLease(JOB_NAME, LEASE_TTL_MS, runRetryPushJob);
+});
+
+async function runRetryPushJob() {
 
   try {
 
@@ -59,4 +69,4 @@ cron.schedule("*/15 * * * *", async () => {
     console.error("Retry cron failed.");
   }
 
-});
+}

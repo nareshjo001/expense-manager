@@ -30,6 +30,15 @@ function loadCronJob({ dueExpenses }) {
     }),
   }));
 
+  // REC-001 -- bypass the real Redis-backed lease in these unit tests; the
+  // job body should run exactly as before regardless of lease outcome.
+  jest.doMock("../utils/jobLease", () => ({
+    runWithLease: jest.fn(async (_jobName, _ttlMs, fn) => {
+      await fn();
+      return { ran: true };
+    }),
+  }));
+
   jest.doMock(RECURRING_EXPENSE_PATH, () => ({
     RecurringExpenseModel: {
       find: jest.fn(() => ({
