@@ -36,6 +36,14 @@
   width: 100%;
 }
 
+/* FE-001-T05 -- shown while a filter change keeps the previous chart
+   visible (placeholderData) and refetches the new one in the background. */
+.chart-refreshing-indicator {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
 .chart-title {
   font-size: 1.5rem;
   font-weight: bold;

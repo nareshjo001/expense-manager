@@ -102,3 +102,76 @@ describe('BarChartPage -- explicit query states (FE-001)', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+describe('BarChartPage -- stale chart preserved during background refetch (FE-001-T05)', () => {
+  beforeEach(() => {
+    useChartInsights.mockReturnValue(mockChartInsights());
+  });
+
+  it('keeps rendering the previous chart (not the loading state) while a filter change refetches in the background', () => {
+    useBarChartQuery.mockReturnValue({
+      data: { success: true, data: [{ month: 'Jan', total: 100 }] },
+      isLoading: false,
+      isFetching: true,
+      isPlaceholderData: true,
+      isError: false,
+      enabled: true,
+      refetch: jest.fn(),
+    });
+
+    render(<BarChartPage />);
+
+    // The stale chart stays on screen -- no loading spinner takes its place.
+    expect(screen.getByTestId('mock-bar-chart-wrapper')).toBeInTheDocument();
+    expect(screen.queryByText('Loading your chart...')).not.toBeInTheDocument();
+  });
+
+  it('shows the "Updating chart" affordance only while isFetching and isPlaceholderData are both true', () => {
+    useBarChartQuery.mockReturnValue({
+      data: { success: true, data: [{ month: 'Jan', total: 100 }] },
+      isLoading: false,
+      isFetching: true,
+      isPlaceholderData: true,
+      isError: false,
+      enabled: true,
+      refetch: jest.fn(),
+    });
+
+    render(<BarChartPage />);
+
+    expect(screen.getByText('Updating chart\u2026')).toBeInTheDocument();
+  });
+
+  it('does not show the "Updating chart" affordance for a plain settled query (no placeholder data in play)', () => {
+    useBarChartQuery.mockReturnValue({
+      data: { success: true, data: [{ month: 'Jan', total: 100 }] },
+      isLoading: false,
+      isFetching: false,
+      isPlaceholderData: false,
+      isError: false,
+      enabled: true,
+      refetch: jest.fn(),
+    });
+
+    render(<BarChartPage />);
+
+    expect(screen.queryByText('Updating chart\u2026')).not.toBeInTheDocument();
+  });
+
+  it('does not show the "Updating chart" affordance merely because a background refetch is running on settled (non-placeholder) data', () => {
+    useBarChartQuery.mockReturnValue({
+      data: { success: true, data: [{ month: 'Jan', total: 100 }] },
+      isLoading: false,
+      isFetching: true,
+      isPlaceholderData: false,
+      isError: false,
+      enabled: true,
+      refetch: jest.fn(),
+    });
+
+    render(<BarChartPage />);
+
+    expect(screen.queryByText('Updating chart\u2026')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mock-bar-chart-wrapper')).toBeInTheDocument();
+  });
+});

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   getTrendChartByWeek,
   getTrendChartByMonth,
@@ -55,11 +55,15 @@ export const useTrendChartQuery = (viewBy, selectedMonthYear, selectedYear, comp
     selectedYears
   );
 
-  // Filter changes intentionally show a loading transition rather than the previous chart's data — matches the prior UX of clearing chart data immediately on filter change.
+  // FE-001-T05 -- keeps the previously loaded chart visible while a
+  // filter change refetches a NEW query key, instead of clearing to a
+  // loading state; isPlaceholderData (exposed via the spread below) lets
+  // the page show a subtle "still refreshing" indicator over it.
   const query = useQuery({
     queryKey: queryKeys.charts.trend(filters),
     queryFn,
     enabled,
+    placeholderData: keepPreviousData,
   });
 
   // FE-001 -- callers need `enabled` to tell "no filter chosen yet" (query

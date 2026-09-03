@@ -100,6 +100,15 @@ const PieChartPage = ({ expenses }) => {
                         <option value="comparison">Budget vs Spent</option>
                     </select>
                 </div>
+
+                {/* FE-001-T05 -- subtle affordance while the previous chart
+                    stays visible (placeholderData) and a filter change is
+                    refetching a new query key in the background. */}
+                {pieChartQuery.isFetching && pieChartQuery.isPlaceholderData && (
+                    <p className="chart-refreshing-indicator" role="status" aria-live="polite">
+                        Updating chart&hellip;
+                    </p>
+                )}
             </div>
 
             {show === '' && (

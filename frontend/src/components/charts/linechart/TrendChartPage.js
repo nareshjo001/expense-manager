@@ -158,6 +158,15 @@ const TrendChartPage = ({ expenses }) => {
         </div>
       </div>
 
+      {/* FE-001-T05 -- subtle affordance while the previous chart stays
+          visible (placeholderData) and a filter change is refetching a
+          new query key in the background. */}
+      {trendChartQuery.isFetching && trendChartQuery.isPlaceholderData && (
+        <p className="chart-refreshing-indicator" role="status" aria-live="polite">
+          Updating chart&hellip;
+        </p>
+      )}
+
       {viewBy === 'byyear' && (
         <div className="compare-by-year">
           <input
