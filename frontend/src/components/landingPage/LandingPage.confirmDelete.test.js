@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import LandingPage from "./LandingPage";
 import { useDeleteExpenseMutation } from "../../hooks/mutations/useDeleteExpenseMutation";
 import { deleteSuccessToast, deleteErrorToast } from "../imports/Imports";
+import { clearAccessToken, getAccessToken, setAccessToken } from "../../api/sessionClient";
 
 // An explicit factory (not bare jest.mock(path) auto-mocking) so Jest never
 jest.mock("../../hooks/mutations/useDeleteExpenseMutation", () => ({
@@ -55,12 +56,12 @@ jest.mock("../imports/Imports", () => {
 });
 
 beforeEach(() => {
-  localStorage.setItem("token", "fake-test-token");
+  setAccessToken("fake-test-token");
 });
 
 afterEach(() => {
   jest.clearAllMocks();
-  localStorage.clear();
+  clearAccessToken();
 });
 
 function renderLandingPage() {
@@ -72,6 +73,24 @@ function renderLandingPage() {
 function triggerDeleteAndCapture(mockMutate) {
   fireEvent.click(screen.getByText("trigger-delete"));
   fireEvent.click(screen.getByText("confirm-delete"));
+
+  // TEMP DIAGNOSTIC (remove once the CI-only failure below is understood):
+  // this suite is 100% reproducible on GitHub Actions (ubuntu-latest,
+  // Node 20) but has never once reproduced locally across three separate
+  // environments/Node versions, including an exact Node 20.18.1 match. If
+  // mutate genuinely wasn't called, dump every piece of state
+  // confirmDeleteHandler's early-return guard depends on, plus whether the
+  // confirmation modal even rendered, so the next real CI run tells us
+  // which branch is actually being taken.
+  if (mockMutate.mock.calls.length === 0) {
+    // eslint-disable-next-line no-console
+    console.error("[DIAG] mutate was never called.", {
+      accessToken: getAccessToken(),
+      deleteAlertPresent: !!screen.queryByTestId("delete-alert"),
+      confirmButtonPresent: !!screen.queryByText("confirm-delete"),
+    });
+  }
+
   const [confirmDeleteId, callbacks] = mockMutate.mock.calls[mockMutate.mock.calls.length - 1];
   return { confirmDeleteId, callbacks };
 }
