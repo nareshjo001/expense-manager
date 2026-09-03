@@ -11,6 +11,7 @@ import Insights from '../monthlyInsights/Insights';
 import { deleteSuccessToast, deleteErrorToast } from '../alertsEffects/toastMessages';
 import Add from '../expensesHandling/Add';
 import Spinner from '../alertsEffects/Spinner';
+import MerchantRules from '../merchantRules/MerchantRules';
 
 // Barrel re-export of top-level page/context/util modules used across the app.
 export {
@@ -27,5 +28,6 @@ export {
     deleteSuccessToast,
     deleteErrorToast,
     Add,
-    Spinner
+    Spinner,
+    MerchantRules
 };

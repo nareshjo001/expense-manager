@@ -3,18 +3,19 @@ import "./IncomeModel.css";
 import { FaTimes, FaEdit, FaTrash } from "react-icons/fa";
 import { expenseAddErrorToast, expenseAddSuccessToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
-import { useIncomeListQuery } from "../../hooks/queries/useIncomeListQuery";
+import { useInfiniteIncomeQuery } from "../../hooks/queries/useInfiniteIncomeQuery";
 import { useUpdateIncomeMutation } from "../../hooks/mutations/useUpdateIncomeMutation";
 import { useDeleteIncomeMutation } from "../../hooks/mutations/useDeleteIncomeMutation";
 
 // Modal for viewing, editing, and deleting income records.
 export default function IncomeModal({ isOpen, onClose, period }) {
 
-  const listQuery = useIncomeListQuery(period, isOpen);
+  // EXP-003-T05 -- network-paged instead of the previous unbounded fetch; a "Load more" button (not scroll-triggered, since this list lives inside a modal rather than the page) requests the next page on demand.
+  const listQuery = useInfiniteIncomeQuery(period, isOpen);
   const updateMutation = useUpdateIncomeMutation();
   const deleteMutation = useDeleteIncomeMutation();
 
-  const incomeList = listQuery.data?.data ?? [];
+  const incomeList = (listQuery.data?.pages ?? []).flatMap((page) => (page?.success ? page.data : []));
   const loading = listQuery.isLoading || updateMutation.isPending || deleteMutation.isPending;
 
   const [isEdit, setIsEdit] = useState(false);
@@ -210,6 +211,17 @@ export default function IncomeModal({ isOpen, onClose, period }) {
                   </div>
                 </div>
               ))
+            )}
+
+            {listQuery.hasNextPage && (
+              <button
+                type="button"
+                className="income-load-more"
+                onClick={() => listQuery.fetchNextPage()}
+                disabled={listQuery.isFetchingNextPage}
+              >
+                {listQuery.isFetchingNextPage ? "Loading…" : "Load more"}
+              </button>
             )}
           </div>
         </div>

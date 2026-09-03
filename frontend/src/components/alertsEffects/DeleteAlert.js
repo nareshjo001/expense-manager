@@ -1,12 +1,13 @@
 import React from 'react';
 import '../landingPage/LandingPage.css';
 
-// DeleteAlert is a reusable modal component for confirming deletion of an expense.
-const DeleteAlert = ({ confirmDeleteId, confirmDeleteHandler, cancelDeleteHandler }) => {
+// DeleteAlert is a reusable modal component for confirming a destructive action.
+// `message` defaults to the original expense-delete copy so every existing caller keeps its exact behavior unchanged.
+const DeleteAlert = ({ confirmDeleteId, confirmDeleteHandler, cancelDeleteHandler, message = 'Are you sure you want to delete this expense?' }) => {
     return (
         <div className="modal-overlay">
             <div className="modal">
-                <p>Are you sure you want to delete this expense?</p>
+                <p>{message}</p>
 
                 <div className="modal-buttons">
                     <button onClick={cancelDeleteHandler}>Cancel</button>

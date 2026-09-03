@@ -9,14 +9,15 @@ import {
     Insights,
     deleteSuccessToast,
     deleteErrorToast,
-    Add
+    Add,
+    MerchantRules
 } from '../imports/Imports';
 import icons from '../imports/iconsImport';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './LandingPage.css';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
-import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars } from "react-icons/fa";
+import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
@@ -211,6 +212,12 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         </span>
                                     </Link>
 
+                                    <Link className="nav-link" to="/rules">
+                                        <span className="nav-item">
+                                            <FaTags /> Rules
+                                        </span>
+                                    </Link>
+
                                 </nav>
 
                                 <div className="header-buttons">
@@ -252,6 +259,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             <Route path="/chart/bar" element={<BarChartPage />} />
                             <Route path="/chart/pie" element={<PieChartPage />} />
                             <Route path="/analysis" element={<Insights />} />
+                            <Route path="/rules" element={<MerchantRules />} />
                         </Routes>
                     </main>
 
@@ -278,6 +286,11 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             <Link to="/analysis" className={location.pathname === "/analysis" ? "active-nav" : ""}>
                                 <FaSearchDollar />
                                 <span>Analysis</span>
+                            </Link>
+
+                            <Link to="/rules" className={location.pathname === "/rules" ? "active-nav" : ""}>
+                                <FaTags />
+                                <span>Rules</span>
                             </Link>
                         </nav>
                     }

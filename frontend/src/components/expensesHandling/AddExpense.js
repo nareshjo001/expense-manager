@@ -12,7 +12,10 @@ import { queryClient } from '../../query/queryClient';
 import { queryKeys } from '../../query/queryKeys';
 import { useAddExpenseMutation } from '../../hooks/mutations/useAddExpenseMutation';
 import { useUpdateExpenseMutation } from '../../hooks/mutations/useUpdateExpenseMutation';
+import { useSaveMerchantRuleMutation } from '../../hooks/mutations/useSaveMerchantRuleMutation';
 import { getAccessToken } from '../../api/sessionClient';
+import SaveRuleAlert from '../alertsEffects/SaveRuleAlert';
+import { merchantRuleSaveSuccessToast, merchantRuleSaveErrorToast } from '../alertsEffects/toastMessages';
 
 // Category Normalization -- moved to module scope (react-hooks/exhaustive-
 const sanitizeText = (text = '') => {
@@ -42,6 +45,9 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     const [mlConfidence, setMlConfidence] = useState(null);
     const [mlPredictedCategory, setMlPredictedCategory] = useState('');
 
+    // CAT-001-T05 -- set once a just-submitted expense's category diverged from the ML prediction; drives the post-submit "save this as a rule?" prompt.
+    const [ruleSavePrompt, setRuleSavePrompt] = useState(null);
+
     // Tracks a programmatically-set expenseName (edit load / bill scan) so ML prediction doesn't run or overwrite the loaded category until the user actually types.
     const programmaticNameRef = useRef(null);
 
@@ -61,6 +67,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
     const addExpenseMutation = useAddExpenseMutation();
     const updateExpenseMutation = useUpdateExpenseMutation();
+    const saveMerchantRuleMutation = useSaveMerchantRuleMutation();
 
     // Debounced ML category prediction: skips programmatic name changes and short text, and cancels an in-flight prediction when superseded.
     useEffect(() => {
@@ -218,6 +225,11 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 // a fresh create or a replay -- next submit is a new attempt.
                 addAttemptIdRef.current = null;
 
+                // CAT-001-T05 -- offer to remember this merchant's category only when the user actually overrode the ML prediction on THIS submit.
+                if (wasMlCorrected) {
+                    setRuleSavePrompt({ merchantName: payload.expenseName, category: payload.expenseCategory });
+                }
+
                 navigate('/');
 
                 const toastData = data?.derivedData?.recoveryPending
@@ -248,6 +260,27 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
             updateExpenseMutation.mutate({ editID: isEdit.expense_id, payload }, mutationCallbacks);
         }
     };
+
+    // CAT-001-T05 -- persists the corrected category as a durable merchant rule; dismisses the prompt either way.
+    const confirmSaveRuleHandler = () => {
+        if (!ruleSavePrompt) return;
+
+        saveMerchantRuleMutation.mutate(
+            { merchantName: ruleSavePrompt.merchantName, category: ruleSavePrompt.category },
+            {
+                onSuccess: () => {
+                    merchantRuleSaveSuccessToast();
+                    setRuleSavePrompt(null);
+                },
+                onError: (error) => {
+                    merchantRuleSaveErrorToast(error.response?.data);
+                    setRuleSavePrompt(null);
+                },
+            }
+        );
+    };
+
+    const cancelSaveRuleHandler = () => setRuleSavePrompt(null);
 
     useEffect(() => {
         if (billData) {
@@ -359,6 +392,16 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 </button>
             </form>
         </div>
+
+        {ruleSavePrompt && (
+            <SaveRuleAlert
+                merchantName={ruleSavePrompt.merchantName}
+                category={ruleSavePrompt.category}
+                isSaving={saveMerchantRuleMutation.isPending}
+                onConfirm={confirmSaveRuleHandler}
+                onCancel={cancelSaveRuleHandler}
+            />
+        )}
     </>
     )
 }

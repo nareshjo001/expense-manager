@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ExpenseItem, SetBudget, formatDateRange } from '../imports/expensesImport';
 
 import { useExpensesQuery } from '../../hooks/queries/useExpensesQuery';
+import { useInfiniteExpensesQuery } from '../../hooks/queries/useInfiniteExpensesQuery';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 import { useExpenseInsights } from '../contexts/ai-contexts/ExpenseInsightsContext';
@@ -29,9 +30,19 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
     isInsightReady,
   } = useExpenseInsights();
 
-  const expensesQuery = useExpensesQuery(filter, period, startDate, endDate);
-  const backendExpenses = expensesQuery.data?.success ? expensesQuery.data.data : [];
-  const loading = expensesQuery.isLoading;
+  const expensesQuery = useExpensesQuery(filter, period);
+
+  // EXP-003-T05 -- the only expense mode with real cursor pagination
+  // available server-side; it's driven by its own infinite query rather
+  // than the plain one above, and fetches network pages on demand instead
+  // of pulling the whole date range up front.
+  const isCustomMode = filter === 'custom' && Boolean(startDate) && Boolean(endDate);
+  const infiniteExpensesQuery = useInfiniteExpensesQuery(startDate, endDate, isCustomMode);
+
+  const backendExpenses = isCustomMode
+    ? (infiniteExpensesQuery.data?.pages ?? []).flatMap((page) => (page?.success ? page.data : []))
+    : expensesQuery.data?.success ? expensesQuery.data.data : [];
+  const loading = isCustomMode ? infiniteExpensesQuery.isLoading : expensesQuery.isLoading;
   const loadMoreRef = useRef(null);
   const [visibleExpenseCount, setVisibleExpenseCount] = useState(INITIAL_VISIBLE_EXPENSES);
 
@@ -78,7 +89,12 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
     (count, groupList) => count + (Array.isArray(groupList) ? groupList.length : 0),
     0
   );
-  const hasMoreExpenses = visibleExpenseCount < totalExpenseCount;
+  // EXP-003-T05 -- in custom mode, "more" means another network page exists
+  // (server-driven); otherwise it means more of the already-fetched array
+  // hasn't been revealed to the DOM yet (client-side windowing, unchanged).
+  const hasMoreExpenses = isCustomMode
+    ? Boolean(infiniteExpensesQuery.hasNextPage)
+    : visibleExpenseCount < totalExpenseCount;
 
   // Preserve the existing filter/API behavior while keeping the DOM small.
   useEffect(() => {
@@ -116,14 +132,28 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   }, [isMobile, openMobileMenuId]);
 
   const revealMoreExpenses = useCallback(() => {
+    if (isCustomMode) {
+      if (!infiniteExpensesQuery.isFetchingNextPage) {
+        infiniteExpensesQuery.fetchNextPage();
+      }
+      return;
+    }
     setVisibleExpenseCount((current) => Math.min(current + EXPENSE_RENDER_BATCH_SIZE, totalExpenseCount));
-  }, [totalExpenseCount]);
+  }, [isCustomMode, infiniteExpensesQuery, totalExpenseCount]);
 
   useEffect(() => {
     if (!hasMoreExpenses) return undefined;
 
     if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
-      setVisibleExpenseCount(totalExpenseCount);
+      // Degraded fallback (no IntersectionObserver support): reveal
+      // everything already fetched for the client-windowed modes, or fetch
+      // exactly one more network page for the infinite (custom) mode --
+      // never loop-fetch the entire range up front.
+      if (isCustomMode) {
+        revealMoreExpenses();
+      } else {
+        setVisibleExpenseCount(totalExpenseCount);
+      }
       return undefined;
     }
 
@@ -139,18 +169,24 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMoreExpenses, revealMoreExpenses, totalExpenseCount]);
+  }, [hasMoreExpenses, revealMoreExpenses, totalExpenseCount, isCustomMode]);
 
+  // EXP-003-T05 -- custom mode's `backendExpenses` only ever holds pages
+  // already fetched from the network (bounded by PAGE_SIZE per page), so it
+  // needs no further client-side truncation; the other modes still window
+  // their single, fully-fetched array to keep the DOM small.
   let remainingVisibleExpenses = visibleExpenseCount;
-  const visibleGroups = Object.entries(groupedExpenses)
-    .map(([category, groupList]) => {
-      const visibleItems = Array.isArray(groupList)
-        ? groupList.slice(0, Math.max(remainingVisibleExpenses, 0))
-        : [];
-      remainingVisibleExpenses -= visibleItems.length;
-      return [category, visibleItems];
-    })
-    .filter(([, groupList]) => groupList.length > 0);
+  const visibleGroups = isCustomMode
+    ? Object.entries(groupedExpenses).filter(([, groupList]) => Array.isArray(groupList) && groupList.length > 0)
+    : Object.entries(groupedExpenses)
+        .map(([category, groupList]) => {
+          const visibleItems = Array.isArray(groupList)
+            ? groupList.slice(0, Math.max(remainingVisibleExpenses, 0))
+            : [];
+          remainingVisibleExpenses -= visibleItems.length;
+          return [category, visibleItems];
+        })
+        .filter(([, groupList]) => groupList.length > 0);
 
   return (
     <div className="expenses-page-container">

@@ -1,0 +1,76 @@
+/* CAT-001-T06 -- merchant rule management screen. */
+
+.merchant-rules-heading {
+    margin-bottom: 4px;
+}
+
+.merchant-rules-subheading {
+    margin-top: 0;
+    margin-bottom: 20px;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.merchant-rules-form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.merchant-rules-cancel-edit {
+    background: none;
+    border: 1px solid var(--text-color, #666);
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+}
+
+.merchant-rules-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.merchant-rules-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: rgba(127, 127, 127, 0.08);
+}
+
+.merchant-rules-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.merchant-rules-item-merchant {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.merchant-rules-item-category {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.merchant-rules-item-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.merchant-rules-item-actions button {
+    background: none;
+    border: 1px solid var(--text-color, #666);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+}

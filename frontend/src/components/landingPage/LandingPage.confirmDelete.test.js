@@ -52,6 +52,7 @@ jest.mock("../imports/Imports", () => {
     deleteSuccessToast: jest.fn(),
     deleteErrorToast: jest.fn(),
     Add: () => null,
+    MerchantRules: () => null,
   };
 });
 

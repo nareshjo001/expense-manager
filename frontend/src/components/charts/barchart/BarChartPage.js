@@ -118,6 +118,15 @@ const BarChartPage = ({ expenses }) => {
         </div>
       </div>
 
+      {/* FE-001-T05 -- subtle affordance while the previous chart stays
+          visible (placeholderData) and a filter change is refetching a
+          new query key in the background. */}
+      {barChartQuery.isFetching && barChartQuery.isPlaceholderData && (
+        <p className="chart-refreshing-indicator" role="status" aria-live="polite">
+          Updating chart&hellip;
+        </p>
+      )}
+
       {viewBy === 'bycategory' && (
         <div className="compare-by-year">
           <input

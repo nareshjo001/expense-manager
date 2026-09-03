@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import AddExpense from "./AddExpense";
 import { useAddExpenseMutation } from "../../hooks/mutations/useAddExpenseMutation";
 import { useUpdateExpenseMutation } from "../../hooks/mutations/useUpdateExpenseMutation";
+import { useSaveMerchantRuleMutation } from "../../hooks/mutations/useSaveMerchantRuleMutation";
 import { expenseAddSuccessToast, expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { queryClient } from "../../query/queryClient";
 
@@ -13,6 +14,15 @@ jest.mock("../../hooks/mutations/useAddExpenseMutation", () => ({
 }));
 jest.mock("../../hooks/mutations/useUpdateExpenseMutation", () => ({
   useUpdateExpenseMutation: jest.fn(),
+}));
+// CAT-001-T05 -- unrelated to this file's own scenarios, but AddExpense.js
+// now imports this hook (which transitively pulls in the real axios
+// package); leaving it unmocked here breaks under CRA's pinned Jest 27
+// (no package.json "exports" support), since axios 1.11.x's "main" entry
+// is ESM-only. Mocked with a fixed default return so no test here needs to
+// know it exists.
+jest.mock("../../hooks/mutations/useSaveMerchantRuleMutation", () => ({
+  useSaveMerchantRuleMutation: jest.fn(),
 }));
 jest.mock("../alertsEffects/toastMessages", () => ({
   expenseAddSuccessToast: jest.fn(),
@@ -29,6 +39,7 @@ jest.mock("../../query/queryClient", () => ({
 // CRA's default Jest config sets `resetMocks: true`, which wipes a
 beforeEach(() => {
   queryClient.fetchQuery.mockResolvedValue({ data: null });
+  useSaveMerchantRuleMutation.mockReturnValue({ mutate: jest.fn(), isPending: false });
 });
 
 // Fully hand-mocked (no jest.requireActual, no Router wrapper needed) --
