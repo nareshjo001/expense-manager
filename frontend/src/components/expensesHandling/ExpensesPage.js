@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
+import '../common/QueryState.css';
 
 import { ExpenseItem, SetBudget, formatDateRange } from '../imports/expensesImport';
 
@@ -43,6 +44,12 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
     ? (infiniteExpensesQuery.data?.pages ?? []).flatMap((page) => (page?.success ? page.data : []))
     : expensesQuery.data?.success ? expensesQuery.data.data : [];
   const loading = isCustomMode ? infiniteExpensesQuery.isLoading : expensesQuery.isLoading;
+  // Improvements-#13/FE-001-T08 -- previously unread: a genuine fetch
+  // failure left `loading` false and `groupedExpenses` empty, which
+  // rendered identically to "you have no expenses" on the app's main
+  // data screen. Surfaced as its own distinct, retryable state below.
+  const isExpensesError = isCustomMode ? infiniteExpensesQuery.isError : expensesQuery.isError;
+  const refetchActiveExpenses = isCustomMode ? infiniteExpensesQuery.refetch : expensesQuery.refetch;
   const loadMoreRef = useRef(null);
   const [visibleExpenseCount, setVisibleExpenseCount] = useState(INITIAL_VISIBLE_EXPENSES);
 
@@ -226,6 +233,17 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
       {loading ? (
         <div className="loading-dots">
           <span></span><span></span><span></span>
+        </div>
+      ) : isExpensesError ? (
+        <div className="query-state query-state-error" role="alert" aria-live="assertive">
+          <p className="query-state-message">We couldn't load your expenses. Please try again.</p>
+          <button
+            type="button"
+            className="query-state-retry"
+            onClick={() => refetchActiveExpenses?.()}
+          >
+            Retry
+          </button>
         </div>
       ) : Object.keys(groupedExpenses).length === 0 ? (
         <motion.p
