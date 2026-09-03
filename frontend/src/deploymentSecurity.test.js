@@ -10,12 +10,13 @@ const headers = Object.fromEntries(
 );
 
 describe("Vercel browser security headers", () => {
-  test("uses report-only CSP with only approved production connections", () => {
-    expect(headers["Content-Security-Policy-Report-Only"]).toContain("default-src 'self'");
-    expect(headers["Content-Security-Policy-Report-Only"]).toContain(
-      "https://expense-manager-backend-nnxe.onrender.com"
+  test("enforces CSP with only approved production connections", () => {
+    expect(headers["Content-Security-Policy"]).toContain("default-src 'self'");
+    expect(headers["Content-Security-Policy"]).toContain(
+      "https://firebaseinstallations.googleapis.com"
     );
-    expect(headers["Content-Security-Policy-Report-Only"]).not.toContain("*");
+    expect(headers["Content-Security-Policy"]).not.toContain("*");
+    expect(headers["Content-Security-Policy-Report-Only"]).toBeUndefined();
   });
 
   test("sets baseline privacy and browser isolation headers", () => {
