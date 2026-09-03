@@ -23,6 +23,7 @@ import os
 import sys
 import csv
 import json
+import logging
 import random
 import time
 
@@ -244,7 +245,7 @@ def _insert_synthetic_pending_feedback(app_module, count=12):
     return set(result.inserted_ids)
 
 
-def test_full_lifecycle_reaches_activated_and_synchronized_status(client, caplog):
+def test_full_lifecycle_reaches_activated_and_synchronized_status(client, caplog, request):
     c, app_module = client
     operations_headers = {"X-ML-Operations-Token": OPERATIONS_TOKEN}
 
@@ -281,7 +282,18 @@ def test_full_lifecycle_reaches_activated_and_synchronized_status(client, caplog
         f"visible: {worker_visible_ids!r}"
     )
 
+    # observability.py sets logging.getLogger("ml-service.lifecycle").propagate
+    # = False (deliberately, to keep its own dedicated handler/formatter
+    # isolated) -- caplog's capture handler lives on the ROOT logger, so a
+    # non-propagating logger's records never reach it no matter what level
+    # is set. caplog.set_level(level, logger=...) only sets that logger's
+    # level, it does not attach a handler to it. The documented pytest
+    # workaround is to attach caplog's own handler directly to the
+    # non-propagating logger for the duration of this test.
     caplog.set_level("INFO", logger="ml-service.lifecycle")
+    lifecycle_logger = logging.getLogger("ml-service.lifecycle")
+    lifecycle_logger.addHandler(caplog.handler)
+    request.addfinalizer(lambda: lifecycle_logger.removeHandler(caplog.handler))
 
     # /retrain-model is operations-token-protected like every other call in
     # this test -- this call was missing `headers=operations_headers`,
