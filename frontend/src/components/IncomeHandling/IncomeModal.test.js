@@ -133,3 +133,63 @@ describe("IncomeModal -- paged income list", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+// FE-001-T08 -- a failed fetch previously showed only a transient toast with
+// no persistent, retryable in-modal state, and the loading/empty text had no
+// ARIA role.
+describe("IncomeModal -- FE-001-T08 loading/error state a11y and retry", () => {
+  it("exposes the loading text as an accessible status region", () => {
+    useInfiniteIncomeQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: jest.fn(),
+    });
+    setupMutations();
+
+    render(<IncomeModal isOpen={true} onClose={jest.fn()} period="thismonth" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/loading/i);
+  });
+
+  it("shows a persistent, accessible error state with a working Retry instead of the list or empty text", () => {
+    const refetch = jest.fn();
+    useInfiniteIncomeQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { response: { status: 500 } },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: jest.fn(),
+      refetch,
+    });
+    setupMutations();
+
+    render(<IncomeModal isOpen={true} onClose={jest.fn()} period="thismonth" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load your income sources/i);
+    expect(screen.queryByText(/no income records found/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes the empty state as an accessible status region", () => {
+    useInfiniteIncomeQuery.mockReturnValue({
+      data: { pages: [{ success: true, data: [] }] },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: jest.fn(),
+    });
+    setupMutations();
+
+    render(<IncomeModal isOpen={true} onClose={jest.fn()} period="thismonth" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/no income records found/i);
+  });
+});

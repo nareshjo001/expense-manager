@@ -2,6 +2,7 @@ import { FaCreditCard, FaThLarge, FaPiggyBank  } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import { useEffect, useState } from "react";
 import "../Header.css";
+import "../../common/QueryState.css";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import IncomeModal from '../../IncomeHandling/IncomeModal';
 import { expenseAddErrorToast } from "../../alertsEffects/toastMessages";
@@ -78,13 +79,57 @@ export default function Header({ period, setPeriod }) {
           </div>
 
           <div className="monthly-insights-header-budget">
-              <p>Total Income</p>
-              <h1>₹ {cardData.totalIncome}</h1>
-              <span>Spent: ₹ {cardData.totalExpenses}</span>
+              {/* FE-001-T08 -- DEFAULT_CARD_DATA's zeroed totals previously
+                  rendered here while loading, indistinguishable from a real
+                  ₹0. */}
+              {summaryQuery.isLoading ? (
+                <p role="status" aria-live="polite">Loading&hellip;</p>
+              ) : summaryQuery.isError ? (
+                <p role="alert" aria-live="assertive">Unable to load</p>
+              ) : (
+                <>
+                  <p>Total Income</p>
+                  <h1>₹ {cardData.totalIncome}</h1>
+                  <span>Spent: ₹ {cardData.totalExpenses}</span>
+                </>
+              )}
           </div>
       </div>
 
       <div className={`monthly-insights-body-cards ${animate ? "show" : ""}`} style={styles}>
+          {/* FE-001-T08 -- each card's own zero/"N/A" fallback previously
+              rendered identically whether the summary query was still
+              loading or had genuinely resolved to nothing, and a fetch
+              failure was toast-only (still fired below, but that's
+              transient -- this is the persistent, retryable state). */}
+          {summaryQuery.isLoading ? (
+            <div
+              className="query-state query-state-loading"
+              role="status"
+              aria-live="polite"
+              style={{ gridColumn: "1 / -1" }}
+            >
+              <span className="query-state-spinner" aria-hidden="true" />
+              <p className="query-state-message">Loading income insights...</p>
+            </div>
+          ) : summaryQuery.isError ? (
+            <div
+              className="query-state query-state-error"
+              role="alert"
+              aria-live="assertive"
+              style={{ gridColumn: "1 / -1" }}
+            >
+              <p className="query-state-message">We couldn't load your income insights.</p>
+              <button
+                type="button"
+                className="query-state-retry"
+                onClick={() => summaryQuery.refetch()}
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+          <>
           <div className="monthly-insights-card">
               <div className="monthly-insights-card-header">
                   <i className="fa-solid fa-chart-line">
@@ -172,6 +217,8 @@ export default function Header({ period, setPeriod }) {
                 <p style={{fontSize: "24px"}}>{cardData.topSource}</p>
               )}
           </div>
+          </>
+          )}
       </div>
 
       <IncomeModal

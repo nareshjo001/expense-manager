@@ -56,7 +56,7 @@ const mockPanelMountSpy = jest.fn();
 // isAvailable/isCheckingAvailability are surfaced as data-attributes (not
 jest.mock("./SiaPanel", () => {
   const ReactForMock = require("react");
-  return function MockSiaPanel({ onClose, isAvailable, isCheckingAvailability }) {
+  return function MockSiaPanel({ onClose, isAvailable, isCheckingAvailability, isAvailabilityError }) {
     ReactForMock.useEffect(() => {
       mockPanelMountSpy();
     }, []);
@@ -65,6 +65,7 @@ jest.mock("./SiaPanel", () => {
         data-testid="mock-sia-panel"
         data-checking={String(Boolean(isCheckingAvailability))}
         data-available={String(Boolean(isAvailable))}
+        data-availability-error={String(Boolean(isAvailabilityError))}
       >
         <button type="button" onClick={onClose}>
           Mock Close
@@ -215,5 +216,39 @@ describe("frontend/src/components/sia/SiaEntryPoint", () => {
     expect(undefinedDataWarnings).toEqual([]);
 
     errorSpy.mockRestore();
+  });
+
+  // FE-001-T08 -- a genuine status-query failure previously collapsed into
+  // exactly the same "unavailable" props as a clean "available: false"
+  // response, so a caller downstream (SiaPanel) had no way to tell them
+  // apart in its copy.
+  it("surfaces a genuine status-query failure to SiaPanel as isAvailabilityError, distinct from a clean unavailable response", async () => {
+    getSiaStatus.mockRejectedValue(new Error("network down"));
+    setFlag("true");
+    render(<SiaEntryPoint />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+    const panel = screen.getByTestId("mock-sia-panel");
+
+    // useSiaStatusQuery configures retry: 1, so a rejection settles only
+    // after one retry round-trip -- longer than RTL's default 1s timeout.
+    await waitFor(() => expect(panel).toHaveAttribute("data-checking", "false"), { timeout: 5000 });
+
+    expect(panel).toHaveAttribute("data-available", "false");
+    expect(panel).toHaveAttribute("data-availability-error", "true");
+  });
+
+  it("does not report an availability error for a clean available:false response", async () => {
+    getSiaStatus.mockResolvedValue({ success: true, available: false });
+    setFlag("true");
+    render(<SiaEntryPoint />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+    const panel = screen.getByTestId("mock-sia-panel");
+
+    await waitFor(() => expect(panel).toHaveAttribute("data-checking", "false"));
+
+    expect(panel).toHaveAttribute("data-available", "false");
+    expect(panel).toHaveAttribute("data-availability-error", "false");
   });
 });

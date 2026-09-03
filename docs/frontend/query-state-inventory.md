@@ -2,14 +2,20 @@
 
 Every frontend screen/component that owns a TanStack Query call (`useQuery`
 or `useInfiniteQuery`, directly or via a derived hook), and its current
-loading/error/empty state coverage as of 2026-09-03. This is the formal
-deliverable for FE-001-T01 — the four other completed FE-001 tasks (T02
-shared `QueryState` component, T03 explicit error+retry, T04 empty-state
-guidance, T05 stale-data preservation, T06 accessibility roles) were applied
-against this same set of screens, identified informally during that work
-rather than from a written inventory. This document is that inventory,
-written after the fact, plus an honest gap list for anything not yet
-covered.
+loading/error/empty state coverage as of 2026-09-03 (updated for FE-001-T08,
+see below). This is the formal deliverable for FE-001-T01 — the four other
+completed FE-001 tasks (T02 shared `QueryState` component, T03 explicit
+error+retry, T04 empty-state guidance, T05 stale-data preservation, T06
+accessibility roles) were applied against this same set of screens,
+identified informally during that work rather than from a written
+inventory. This document is that inventory, written after the fact, plus an
+honest gap list for anything not yet covered.
+
+**FE-001-T08 update:** closed every remaining Partial/untested gap listed
+below -- ExpensesPage's missing error state (Improvements-#13), then the 8
+Partial screens and SiaSessionList's missing test file. All 14 query-owning
+screens in this inventory are now Full coverage. See each row's Notes for
+what changed and the state-matrix test file proving it.
 
 Coverage levels used below:
 
@@ -40,12 +46,12 @@ Coverage levels used below:
 
 | Screen | Query hook(s) | Coverage | Notes |
 |---|---|---|---|
-| `expensesHandling/ExpensesPage.js` | `useExpensesQuery`, `useInfiniteExpensesQuery` | Partial | Has a distinct loading state (dots) and a distinct empty state ("No Expenses"), so loading isn't confused with empty — good. **Gap: no error state at all.** `isError` is never read; a failed fetch just settles into `loading=false` with an empty `groupedExpenses`, so a real network failure looks identical to "you have no expenses." Tests: `ExpensesPage.test.js`, `ExpensesPage.customInfiniteScroll.test.js` (cover pagination, not the missing error path). |
-| `expensesHandling/budget/SetBudget.js` | `useBudgetSummary` (→ `useBudgetsQuery`) | Partial | Has plain-text loading ("Fetching budget...") and error ("Network Error") branches — genuinely distinct, but no ARIA role, no retry action, and no test coverage of these two branches specifically. Tests: `SetBudget.test.js` (doesn't appear to exercise the loading/error branches). |
-| `IncomeHandling/IncomeModal.js` | `useInfiniteIncomeQuery` | Partial | Distinct "Loading..." and "No income records found." text. Error is toast-only (`expenseAddErrorToast`) — transient, no persistent in-modal error state or retry. No ARIA role on the loading/empty text. Tests: `IncomeModal.test.js`. |
-| `monthlyInsights/Income/OverallInsight.js` | `useIncomeInsightsQuery` | Partial | Each card has its own "no data" fallback copy, but that fallback is what renders **while loading too** (no separate loading indicator) — a slow response looks identical to genuinely no data. Error is `console.error` only, nothing shown to the user. No test file. |
-| `monthlyInsights/Income/Header.js` | `useIncomeSummaryQuery` | Partial | Same shape as `OverallInsight.js`: `DEFAULT_CARD_DATA` zeroes feed the same "insufficient data" copy used for genuine emptiness, so loading and empty are visually identical. Error is toast-only. No test file. |
-| `monthlyInsights/Header.js` (budget header) | `useBudgetSummary` (→ `useBudgetsQuery`) | None | Calls the hook independently of `SetBudget.js` (its own separate subscription to the same underlying query) purely to read `totalBudget`, and does nothing with `isLoading`/`isError` — renders `₹ {totalBudget}` regardless of query state. Tests: `Header.test.js` (doesn't exercise this). |
+| `expensesHandling/ExpensesPage.js` | `useExpensesQuery`, `useInfiniteExpensesQuery` | Full | Has a distinct loading state (dots) and a distinct empty state ("No Expenses"). Improvements-#13/FE-001-T08: added a distinct, retryable `role="alert"` error state (reusing `QueryState`'s CSS) for both the default/category query and the custom-range infinite query -- previously `isError` was never read, so a failed fetch looked identical to "you have no expenses." Tests: `ExpensesPage.test.js`, `ExpensesPage.customInfiniteScroll.test.js`, `ExpensesPage.errorState.test.js`. |
+| `expensesHandling/budget/SetBudget.js` | `useBudgetSummary` (→ `useBudgetsQuery`) | Full | FE-001-T08: loading/error branches now carry `role="status"`/`role="alert"`, and the error branch offers a Retry wired to a new `refetchBudgets` returned from `useBudgetSummary`. Tests: `SetBudget.test.js`. |
+| `IncomeHandling/IncomeModal.js` | `useInfiniteIncomeQuery` | Full | FE-001-T08: loading/empty text now carry `role="status"`; a failed fetch now also shows a persistent, retryable `role="alert"` block in the list area (the existing toast is unchanged, kept as supplementary immediate feedback). Tests: `IncomeModal.test.js`. |
+| `monthlyInsights/Income/OverallInsight.js` | `useIncomeInsightsQuery` | Full | FE-001-T08: wrapped in the shared `QueryState` for loading/error, so the per-card "no data" fallback is now reached only on a genuinely successful, empty response. Error is now shown via `QueryState` with Retry (the `console.error` call is kept as supplementary dev logging). Tests: `OverallInsight.test.js` (new). |
+| `monthlyInsights/Income/Header.js` | `useIncomeSummaryQuery` | Full | FE-001-T08: the total-income box and the 3-card grid each now show their own distinct `role="status"`/`role="alert"` (with Retry on the card grid) instead of falling through to `DEFAULT_CARD_DATA`'s zeroed copy while loading; the period selector and title stay usable throughout. The existing toast is unchanged. Tests: `Header.test.js` (new). |
+| `monthlyInsights/Header.js` (budget header) | `useBudgetSummary` (→ `useBudgetsQuery`) | Full | FE-001-T08: now renders a distinct `role="status"`/`role="alert"` (with Retry) for its own `budgetStatus` instead of rendering `₹ {totalBudget}` (defaulting to 0) regardless of query state, and disables the Edit-budget button until the total is actually ready. Tests: `Header.test.js`. |
 
 ## Merchant rules
 
@@ -57,17 +63,23 @@ Coverage levels used below:
 
 | Screen | Query hook(s) | Coverage | Notes |
 |---|---|---|---|
-| `sia/SiaEntryPoint.js` | `useSiaStatusQuery` | Partial | `isCheckingAvailability`/`isSiaAvailable` drive a fail-closed `blockedByAvailability` gate (reasonable: anything but a confirmed-available response disables the composer), and a `role="status"` availability notice exists in `SiaPanel.js`. No distinct handling for a genuine `isError` on the status query itself — it collapses into the same "unavailable" treatment as a real outage, which is defensible (fail closed) but not distinguished in the UI copy. Tests: `SiaEntryPoint.test.js`. |
-| `sia/SiaPanel.js` | `useSiaSessionMessagesQuery` | Partial | `isError` on history-message loading is handled (falls back to a fresh conversation + `role="alert"` message). No dedicated loading indicator specifically for `messagesQuery` while switching into a history session. Tests: `SiaPanel.test.js`. |
-| `sia/SiaSessionList.js` | `useSiaSessionsQuery` | Full-ish, untested | Genuinely distinct loading / error+retry / empty text with `role="status"`/`role="alert"`, hand-rolled rather than via `QueryState` but equivalent in substance. **No test file exists** (`SiaSessionList.test.js` is missing) — implementation looks complete, but the state matrix isn't proven by a test the way the chart/merchant-rules screens are. |
+| `sia/SiaEntryPoint.js` | `useSiaStatusQuery` | Full | `isCheckingAvailability`/`isSiaAvailable` drive the fail-closed `blockedByAvailability` gate (unchanged: anything but a confirmed-available response disables the composer). FE-001-T08: now also passes `isAvailabilityError={statusQuery.isError}` down to `SiaPanel.js` so its `role="status"` notice can distinguish a genuine status-query failure from a clean `available: false` response, without changing the fail-closed behavior itself. Tests: `SiaEntryPoint.test.js`. |
+| `sia/SiaPanel.js` | `useSiaSessionMessagesQuery` | Full | `isError` on history-message loading is handled (falls back to a fresh conversation + `role="alert"` message). FE-001-T08: added a `role="status"` "Opening conversation…" indicator for the window between selecting a history session and `messagesQuery` resolving (previously nothing indicated a session was opening, since `mode` stays `HISTORY` until hydrate succeeds); also renders the distinct availability-error copy described above. Tests: `SiaPanel.test.js`. |
+| `sia/SiaSessionList.js` | `useSiaSessionsQuery` | Full | Genuinely distinct loading / error+retry / empty text with `role="status"`/`role="alert"`, hand-rolled rather than via `QueryState` but equivalent in substance. FE-001-T08: added the missing `SiaSessionList.test.js`, proving the state matrix plus the inline delete-confirm flow. |
 
 ## Summary
 
-- **Full coverage, tested:** BarChartPage, PieChartPage, TrendChartPage, MonthlyInsightPage, MerchantRules. (5)
-- **Partial coverage:** ExpensesPage, SetBudget, IncomeModal, Income/OverallInsight, Income/Header, monthlyInsights/Header (budget), SiaEntryPoint, SiaPanel. (8)
-- **Implemented but untested:** SiaSessionList. (1)
+- **Full coverage, tested:** BarChartPage, PieChartPage, TrendChartPage, MonthlyInsightPage, MerchantRules, ExpensesPage, SetBudget, IncomeModal, Income/OverallInsight, Income/Header, monthlyInsights/Header (budget), SiaEntryPoint, SiaPanel, SiaSessionList. (14)
+- **Partial coverage:** none remaining.
+- **Implemented but untested:** none remaining.
 - **Not a query owner (correctly excluded):** BudgetIntelligence, SpendingForecast, AnomalyInsights. (3)
 
-The single gap worth prioritizing over the rest: **ExpensesPage has no error state whatsoever** — it's the app's primary data screen, and a real fetch failure currently renders identically to "no expenses," which is actively misleading rather than merely incomplete. Everything else in the Partial bucket is a smaller a11y/polish/loading-vs-empty gap, not a correctness gap.
-
-This inventory is FE-001-T07's scope map: the 4 screens the original audit evidence named (MonthlyInsightPage, BarChartPage, TrendChartPage, PieChartPage) are the "Full coverage, tested" row above and are done; the 8 Partial + 1 untested screens are what a future app-wide T07 pass would work through, in roughly the priority order implied by the summary above.
+This inventory was FE-001-T07's scope map (the 4 screens the original audit
+evidence named -- MonthlyInsightPage, BarChartPage, TrendChartPage,
+PieChartPage -- were already Full) and FE-001-T08's punch list (the
+remaining 9: ExpensesPage's error-state gap, closed first as the single
+correctness-level issue since it's the app's primary data screen and a real
+fetch failure rendered identically to "no expenses"; then the 8
+Partial/untested a11y/polish/loading-vs-empty screens above, in the priority
+order implied by the original summary). Every query-owning screen in this
+inventory is now Full coverage.

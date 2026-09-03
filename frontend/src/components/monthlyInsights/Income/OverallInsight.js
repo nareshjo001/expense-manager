@@ -4,6 +4,7 @@ import { FaFire, FaChartPie } from "react-icons/fa";
 import { FaPiggyBank } from "react-icons/fa6";
 import { useInView } from 'react-intersection-observer';
 import { useIncomeInsightsQuery } from '../../../hooks/queries/useIncomeInsightsQuery';
+import QueryState from '../../common/QueryState';
 
 // Savings rate, runway forecast, and income-dependency cards for the income insights page.
 export default function OverallInsight({ period }) {
@@ -22,7 +23,21 @@ export default function OverallInsight({ period }) {
     }
   }, [insightsQuery.isError, insightsQuery.error]);
 
+  // FE-001-T08 -- each card's own "no data" fallback previously rendered
+  // while loading too (a slow response looked identical to genuinely no
+  // data), and a fetch failure was console.error-only with nothing shown to
+  // the user. Per-card emptiness (a card genuinely having no data even once
+  // the query succeeds) is intentionally left as-is below -- that's not a
+  // loading/error gap, it's legitimate partial data.
   return (
+    <QueryState
+      isLoading={insightsQuery.isLoading}
+      isError={insightsQuery.isError}
+      isEmpty={false}
+      onRetry={insightsQuery.refetch}
+      loadingLabel="Loading income insights..."
+      errorLabel="We couldn't load your income insights."
+    >
     <div className='overall-insights-container'>
       
       <div className='overall-insights-card spending-jump'>
@@ -189,5 +204,6 @@ export default function OverallInsight({ period }) {
         )}
       </div>
     </div>
+    </QueryState>
   )
 }

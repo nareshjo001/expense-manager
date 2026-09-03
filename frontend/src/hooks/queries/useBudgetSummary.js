@@ -25,5 +25,14 @@ export const useBudgetSummary = () => {
   const recoveryPending = budgetsQuery.data?.recoveryPending === true;
   const isCurrentMonthStale = recoveryPending && staleMonths.includes(currentMonth);
 
-  return { monthlyBudgets, budgetStatus, totalBudget, recoveryPending, isCurrentMonthStale };
+  return {
+    monthlyBudgets,
+    budgetStatus,
+    totalBudget,
+    recoveryPending,
+    isCurrentMonthStale,
+    // FE-001-T08 -- lets any consumer offer a Retry action on budgetStatus === "error"
+    // without reaching into the underlying TanStack Query object itself.
+    refetchBudgets: budgetsQuery.refetch,
+  };
 };

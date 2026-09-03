@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { format } from "date-fns";
 import SetBudget from "./SetBudget";
 
@@ -61,5 +61,50 @@ describe("SetBudget -- Phase C.2 stale-state UX", () => {
 
     expect(screen.queryByText(/budget is refreshing/i)).not.toBeInTheDocument();
     expect(screen.getByText(/fetching budget/i)).toBeInTheDocument();
+  });
+});
+
+// FE-001-T08 -- the loading/error branches previously had no ARIA role and
+// the error branch had no way to recover short of a page reload.
+describe("SetBudget -- FE-001-T08 loading/error state a11y and retry", () => {
+  it("exposes the loading branch as an accessible status region", () => {
+    mockSummary = {
+      monthlyBudgets: [],
+      budgetStatus: "loading",
+      isCurrentMonthStale: false,
+    };
+
+    render(<SetBudget />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/fetching budget/i);
+  });
+
+  it("exposes the error branch as an accessible alert and offers a working Retry", () => {
+    const refetchBudgets = jest.fn();
+    mockSummary = {
+      monthlyBudgets: [],
+      budgetStatus: "error",
+      isCurrentMonthStale: false,
+      refetchBudgets,
+    };
+
+    render(<SetBudget />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/network error/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetchBudgets).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not throw when the error branch renders without a refetchBudgets function", () => {
+    mockSummary = {
+      monthlyBudgets: [],
+      budgetStatus: "error",
+      isCurrentMonthStale: false,
+    };
+
+    render(<SetBudget />);
+
+    expect(() => fireEvent.click(screen.getByRole("button", { name: "Retry" }))).not.toThrow();
   });
 });

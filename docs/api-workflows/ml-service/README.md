@@ -40,7 +40,6 @@ service — retraining is triggered by a daily cron job in the Node backend, or 
 | ML-API-08 | POST | `/predict-category` | Actively used | [document](predict-category/ml-api-08-predict-category.md) |
 | ML-API-09 | POST | `/generate-description` | Actively used | [document](generate-description/ml-api-09-generate-description.md) |
 | ML-API-10 | POST | `/retrain-model` | Actively used (daily cron) | [document](retrain-model/ml-api-10-retrain-model.md) |
-| ML-API-12 | POST | `/predict-spending-forecast` | Backend proxy target | [document](spending-forecast/ml-api-12-spending-forecast.md) |
 
 That is the complete FastAPI surface — confirmed by reading every `@app.get/post/head` decorator
 in `app.py`. Full inventory with caller evidence:
@@ -51,7 +50,6 @@ the endpoint documents and their verified caller traces below.
 | ID | Method | Endpoint | Status | Document |
 |---|---|---|---|---|
 | ML-API-11 | POST | `/ml/predict-category` (Express, `backend/Routes/ml.router.js`) | Actively used | [document](backend-predict-proxy/ml-api-11-backend-predict-proxy.md) |
-| ML-API-12 | POST | `/ml/predict-spending-forecast` (Express, `backend/Routes/ml.router.js`) | JWT-protected proxy | [document](spending-forecast/ml-api-12-spending-forecast.md) |
 
 This is a distinct route from ML-API-08 — a different server, a different path, and this
 module's only API document that lives in the Express backend rather than the FastAPI
@@ -113,14 +111,14 @@ ML-FLOW-01's own throttled check, never immediate and never centrally pushed.
 ## Backend integration
 
 The backend sends `X-ML-Operations-Token` on its protected ML calls: `POST /predict-category`
-(5s timeout), `POST /generate-description` (5s timeout), `POST /retrain-model` (no timeout
-set), and spending-forecast requests (3s default timeout). `GET /` from `/ping` is an
+(5s timeout), `POST /generate-description` (5s timeout), and `POST /retrain-model` (no timeout
+set). `GET /` from `/ping` is an
 unauthenticated health probe. Full trace: [ML-FLOW-09](flow/backend-integration/ml-flow-09-backend-integration.md).
 
 ## Security boundary
 
 `/ml-status`, `/training-runs`, `/training-runs/{id}`, `/predict-category`,
-`/generate-description`, `/predict-spending-forecast`, and `/retrain-model` require the shared
+`/generate-description` and `/retrain-model` require the shared
 `X-ML-Operations-Token` header and fail closed with `503` when `ML_OPERATIONS_TOKEN` is not
 configured. Health endpoints remain deliberately unauthenticated probes. The Express
 `/ml/predict-category` proxy additionally requires the user JWT via `verifyToken`.
@@ -140,7 +138,6 @@ configured. Health endpoints remain deliberately unauthenticated probes. The Exp
 | ML-API-09 | [overview](generate-description/ml-api-09-generate-description-overview.svg) | [detailed](generate-description/ml-api-09-generate-description-detailed.svg) | [document](generate-description/ml-api-09-generate-description.md) |
 | ML-API-10 | [overview](retrain-model/ml-api-10-retrain-model-overview.svg) | [detailed](retrain-model/ml-api-10-retrain-model-detailed.svg) | [document](retrain-model/ml-api-10-retrain-model.md) |
 | ML-API-11 | [overview](backend-predict-proxy/ml-api-11-backend-predict-proxy-overview.svg) | [detailed](backend-predict-proxy/ml-api-11-backend-predict-proxy-detailed.svg) | [document](backend-predict-proxy/ml-api-11-backend-predict-proxy.md) |
-| ML-API-12 | [overview](spending-forecast/ml-api-12-spending-forecast-overview.svg) | [detailed](spending-forecast/ml-api-12-spending-forecast-detailed.svg) | [document](spending-forecast/ml-api-12-spending-forecast.md) |
 | ML-FLOW-01 | [overview](flow/prediction/ml-flow-01-prediction-pipeline-overview.svg) | [detailed](flow/prediction/ml-flow-01-prediction-pipeline-detailed.svg) | [document](flow/prediction/ml-flow-01-prediction-pipeline.md) |
 | ML-FLOW-02 | [overview](flow/startup-loading/ml-flow-02-startup-loading-overview.svg) | [detailed](flow/startup-loading/ml-flow-02-startup-loading-detailed.svg) | [document](flow/startup-loading/ml-flow-02-startup-loading.md) |
 | ML-FLOW-03 | [overview](flow/dataset-const/ml-flow-03-dataset-construction-overview.svg) | [detailed](flow/dataset-const/ml-flow-03-dataset-construction-detailed.svg) | [document](flow/dataset-const/ml-flow-03-dataset-construction.md) |

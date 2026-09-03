@@ -86,7 +86,7 @@ r2 = d.region(306, 272, "Frontend State & Network", "Local state + multipart cli
               accent="frontend", step=2)
 r3 = d.region(592, 272, "API Security & Upload", "Middleware chain, in order",
               accent="backend", step=3)
-r4 = d.region(878, 272, "File Processing & Extraction", "Temp file → sharp → OCR → parse",
+r4 = d.region(878, 272, "File Processing & Extraction", "Memory buffer → sharp → OCR worker → parse",
               accent="insights", step=4)
 r5 = d.region(1164, 496, "Response & Form Hand-off", "Where the parsed values go",
               accent="ui", step=5)
@@ -96,9 +96,9 @@ a = stack(d, r1, [
      "Offers an optional bill upload before the manual fields.", {"step": "01"}),
     ("ui", "window", "SCREEN", "Bill Upload Screen", "BillUpload.js",
      "Replaces the form entirely while open; no modal, no route.", {"step": "01"}),
-    ("ui", "cursor", "INPUT", "File Picker", "input accept=\"image/*\"",
-     "Single file. PDF is never offered here despite the server allowing it.",
-     {"step": "02", "tag": "E5"}),
+    ("ui", "cursor", "INPUT", "File Picker", "input accept=\"image/jpeg,image/png\"",
+     "One JPEG or PNG; client limits mirror server validation.",
+     {"step": "02"}),
     ("ui", "monitor", "PREVIEW", "Blob Preview", "URL.createObjectURL",
      "Revoked when replaced and on unmount by a cleanup effect.", {"step": "02"}),
 ])
@@ -121,19 +121,19 @@ c = stack(d, r3, [
      "Runs BEFORE multer, so no file is written for an anonymous caller.",
      {"step": "05", "tag": "E2"}),
     ("auth", "file-text", "MIDDLEWARE", "File Filter", "fileFilter + limits",
-     "Allows 4 MIME types and caps at 5 MB. MIME is client-declared.",
-     {"step": "06", "tag": "E3"}),
+     "Memory-only JPEG/PNG intake; server verifies signatures and applies a 5 MB cap.",
+     {"step": "06"}),
     ("backend", "gears", "CONTROLLER", "Request Handler", "uploadBill()",
      "One try/catch/finally around every processing stage.",
      {"step": "06", "tag": "E4"}),
 ])
 e = stack(d, r4, [
-    ("database", "save", "TEMP FILE", "Disk Write", "multer.diskStorage",
-     "Server-generated name into billUploads/. Client name is discarded.",
-     {"step": "06"}),
+    ("database", "save", "VALIDATION", "Receipt Validation", "signature + sharp metadata",
+     "MIME/signature match, decoder, dimension, page and pixel limits are enforced.",
+     {"step": "07"}),
     ("backend", "layers", "TRANSFORM", "Image Preprocessing", "preprocessImage()",
-     "sharp: resize 1500, grayscale, normalize, sharpen, write PNG.",
-     {"step": "07", "tag": "E5"}),
+     "sharp: bounded input, resize 1500, grayscale, normalize, sharpen, in-memory PNG.",
+     {"step": "08"}),
     ("insights", "chart", "LOCAL OCR", "Text Extraction", "extractTextFromImage()",
      "tesseract.js, eng. In-process — no external service, no timeout.",
      {"step": "08", "tag": "E6"}),
@@ -193,16 +193,13 @@ x = band(d, [
      "Missing Bearer header, malformed payload or expired JWT. Runs before multer, so "
      "no file is written for an unauthenticated caller."),
     ("E3", "400 File rejected", "MulterError / INVALID_FILE_TYPE",
-     "Wrong MIME type, or over the 5 MB limit. Both are mapped to 400 — an oversized "
-     "upload does not return 413."),
+     "Unsupported uploads return 415; oversized uploads return 413 before OCR starts."),
     ("E4", "400 No file uploaded", "if (!req.file)",
      "A request with no bill part reaches the controller and is rejected there."),
-    ("E5", "PDF accepted but unprocessable", "fileFilter vs sharp",
-     "application/pdf passes the filter, but sharp's PDF input needs a globally "
-     "installed libvips; the bundled build has none, so it fails as a 500."),
-    ("E6", "500 for every processing failure", "catch (error)",
-     "sharp, OCR and parsing errors all return the same generic 500. The client cannot "
-     "tell an unreadable image from a server fault."),
+    ("E5", "OCR processing timeout", "bounded tesseract worker",
+     "A worker that exceeds the configured timeout is terminated and returns 504."),
+    ("E6", "Unreadable image", "signature + decoder validation",
+     "The endpoint rejects unreadable images with a safe 422 response before OCR output is used."),
 ])
 refs(d, [
     ((c[0].right, c[0].cy), 852, 0, x[0], "left"),
