@@ -12,6 +12,7 @@ import icons from '../../imports/iconsImport';
 
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
 import InlineChartInsight from '../../insights/InlineChartInsight';
+import QueryState from '../../common/QueryState';
 import { useTrendChartQuery } from '../../../hooks/queries/useTrendChartQuery';
 import { useLoggedYearsQuery } from '../../../hooks/queries/useLoggedYearsQuery';
 
@@ -197,54 +198,69 @@ const TrendChartPage = ({ expenses }) => {
         </div>
       )}
 
-      <AnimatePresence mode="wait">
-        {shouldRenderChart && !compareByYear && (
-          <motion.div
-            key={viewBy}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-          >
-            <TrendChartWrapper
-              theme={theme}
-              data={data}
-              average={average}
-              xKey={
-                viewBy === 'byyear'
-                  ? 'year'
-                  : viewBy === 'bymonth'
-                  ? 'month'
-                  : 'week'
-              }
-              yKey="total"
-              tooltipComponent={customTooltip}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* FE-001 -- explicit loading/error(+retry)/empty states only while a
+          filter is actually selected (trendChartQuery.enabled); "no filter
+          chosen yet" keeps its own message above, unrelated to the query. */}
+      {trendChartQuery.enabled && (
+        <QueryState
+          isLoading={trendChartQuery.isLoading}
+          isError={trendChartQuery.isError}
+          isEmpty={!trendChartQuery.isLoading && !trendChartQuery.isError && !shouldRenderChart}
+          onRetry={trendChartQuery.refetch}
+          loadingLabel="Loading your chart..."
+          errorLabel="We couldn't load this chart. Please try again."
+          emptyLabel="No expenses found for this filter."
+        >
+          <AnimatePresence mode="wait">
+            {shouldRenderChart && !compareByYear && (
+              <motion.div
+                key={viewBy}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+              >
+                <TrendChartWrapper
+                  theme={theme}
+                  data={data}
+                  average={average}
+                  xKey={
+                    viewBy === 'byyear'
+                      ? 'year'
+                      : viewBy === 'bymonth'
+                      ? 'month'
+                      : 'week'
+                  }
+                  yKey="total"
+                  tooltipComponent={customTooltip}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      <AnimatePresence>
-        {shouldRenderChart && compareByYear && (
-          <motion.div
-            key="compare-chart"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            transition={{ duration: 0.5 }}
-            className="chart-content"
-          >
-            <MultiTrendChartWrapper
-              theme={theme}
-              data={data}
-              linesData={selectedYears.map((year) => ({
-                dataKey: year.toString(),
-                name: year.toString(),
-              }))}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <AnimatePresence>
+            {shouldRenderChart && compareByYear && (
+              <motion.div
+                key="compare-chart"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -30 }}
+                transition={{ duration: 0.5 }}
+                className="chart-content"
+              >
+                <MultiTrendChartWrapper
+                  theme={theme}
+                  data={data}
+                  linesData={selectedYears.map((year) => ({
+                    dataKey: year.toString(),
+                    name: year.toString(),
+                  }))}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </QueryState>
+      )}
       {isChartInsightReady && !compareByYear && <InlineChartInsight item={chartInsightText} />}
     </div>
   );

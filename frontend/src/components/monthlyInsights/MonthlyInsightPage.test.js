@@ -43,21 +43,36 @@ const mockReport = (overrides = {}) => ({
   ...overrides,
 });
 
-describe("MonthlyInsightPage -- loading and error states", () => {
-  it("shows the spinner while the report is loading", () => {
-    useReport.mockReturnValue({ data: undefined, isLoading: true, error: null });
+describe("MonthlyInsightPage -- loading, error, empty and retry states (FE-001)", () => {
+  it("shows an explicit loading message while the report is loading", () => {
+    useReport.mockReturnValue({ data: undefined, isLoading: true, isError: false, refetch: jest.fn() });
 
     render(<MonthlyInsightPage />);
 
+    expect(screen.getByText("Loading your monthly insights...")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-anomaly-insights")).not.toBeInTheDocument();
   });
 
-  it("shows a failure message and mounts no sections when the report fails to load", () => {
-    useReport.mockReturnValue({ data: undefined, isLoading: false, error: new Error("network") });
+  it("shows a distinct failure message with a retry action when the report fails to load", () => {
+    const refetch = jest.fn();
+    useReport.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
 
     render(<MonthlyInsightPage />);
 
-    expect(screen.getByText("Failed to load report.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load your report. Please try again.")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-anomaly-insights")).not.toBeInTheDocument();
+
+    screen.getByRole("button", { name: "Retry" }).click();
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a distinct empty-state message (not the error message) for a genuinely empty report", () => {
+    useReport.mockReturnValue({ data: undefined, isLoading: false, isError: false, refetch: jest.fn() });
+
+    render(<MonthlyInsightPage />);
+
+    expect(screen.getByText("No report data yet.")).toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load your report. Please try again.")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mock-anomaly-insights")).not.toBeInTheDocument();
   });
 });
@@ -65,7 +80,7 @@ describe("MonthlyInsightPage -- loading and error states", () => {
 describe("MonthlyInsightPage -- Anomaly Detection Layer V1 wiring", () => {
   it("mounts AnomalyInsights exactly once, passing the exact same report object every other section receives", () => {
     const report = mockReport();
-    useReport.mockReturnValue({ data: report, isLoading: false, error: null });
+    useReport.mockReturnValue({ data: report, isLoading: false, isError: false, refetch: jest.fn() });
 
     render(<MonthlyInsightPage />);
 
@@ -75,7 +90,7 @@ describe("MonthlyInsightPage -- Anomaly Detection Layer V1 wiring", () => {
   });
 
   it("mounts every existing section alongside the new Anomaly Insights section, without altering their presence", () => {
-    useReport.mockReturnValue({ data: mockReport(), isLoading: false, error: null });
+    useReport.mockReturnValue({ data: mockReport(), isLoading: false, isError: false, refetch: jest.fn() });
 
     render(<MonthlyInsightPage />);
 
@@ -88,7 +103,7 @@ describe("MonthlyInsightPage -- Anomaly Detection Layer V1 wiring", () => {
   });
 
   it("does not call useReport a second time on behalf of the anomaly section (single shared query)", () => {
-    useReport.mockReturnValue({ data: mockReport(), isLoading: false, error: null });
+    useReport.mockReturnValue({ data: mockReport(), isLoading: false, isError: false, refetch: jest.fn() });
 
     render(<MonthlyInsightPage />);
 

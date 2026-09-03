@@ -11,6 +11,7 @@ import icons from '../../imports/iconsImport';
 
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
 import InlineChartInsight from '../../insights/InlineChartInsight';
+import QueryState from '../../common/QueryState';
 import { useBarChartQuery } from '../../../hooks/queries/useBarChartQuery';
 
 // Bar chart view of expenses by month or category, with cancellable data fetching per filter change.
@@ -146,27 +147,42 @@ const BarChartPage = ({ expenses }) => {
         </p>
       )}
 
-      <AnimatePresence mode="wait">
-        {shouldRenderChart && (
-          <motion.div
-            key={`${viewBy}-${specificMonth}-${selectedYear}`}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            transition={{ duration: 0.5 }}
-            className="chart-content"
-          >
-            <BarChartWrapper
-              data={data}
-              xKey={viewBy === 'bymonth' ? 'month' : 'category'}
-              barKey="total"
-              secondBarKey={viewBy === 'bymonth' ? 'budget' : null}
-              showDoubleBar={viewBy === 'bymonth'}
-              theme={theme}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* FE-001 -- explicit loading/error(+retry)/empty states only while a
+          filter is actually selected (barChartQuery.enabled); "no filter
+          chosen yet" keeps its own message above, unrelated to the query. */}
+      {barChartQuery.enabled && (
+        <QueryState
+          isLoading={barChartQuery.isLoading}
+          isError={barChartQuery.isError}
+          isEmpty={!barChartQuery.isLoading && !barChartQuery.isError && !shouldRenderChart}
+          onRetry={barChartQuery.refetch}
+          loadingLabel="Loading your chart..."
+          errorLabel="We couldn't load this chart. Please try again."
+          emptyLabel="No expenses found for this filter."
+        >
+          <AnimatePresence mode="wait">
+            {shouldRenderChart && (
+              <motion.div
+                key={`${viewBy}-${specificMonth}-${selectedYear}`}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -30 }}
+                transition={{ duration: 0.5 }}
+                className="chart-content"
+              >
+                <BarChartWrapper
+                  data={data}
+                  xKey={viewBy === 'bymonth' ? 'month' : 'category'}
+                  barKey="total"
+                  secondBarKey={viewBy === 'bymonth' ? 'budget' : null}
+                  showDoubleBar={viewBy === 'bymonth'}
+                  theme={theme}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </QueryState>
+      )}
       {isChartInsightReady && <InlineChartInsight item={chartInsightText} />}
     </div>
   );

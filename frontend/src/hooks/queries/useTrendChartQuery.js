@@ -56,9 +56,13 @@ export const useTrendChartQuery = (viewBy, selectedMonthYear, selectedYear, comp
   );
 
   // Filter changes intentionally show a loading transition rather than the previous chart's data — matches the prior UX of clearing chart data immediately on filter change.
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.charts.trend(filters),
     queryFn,
     enabled,
   });
+
+  // FE-001 -- callers need `enabled` to tell "no filter chosen yet" (query
+  // intentionally disabled) apart from an active loading/error/empty state.
+  return { ...query, enabled };
 };

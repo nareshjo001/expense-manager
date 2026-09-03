@@ -6,6 +6,7 @@ import icons from '../../imports/iconsImport';
 
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
 import InlineChartInsight from '../../insights/InlineChartInsight';
+import QueryState from '../../common/QueryState';
 import { usePieChartQuery } from '../../../hooks/queries/usePieChartQuery';
 
 // Pie chart view of expense distribution/count/budget comparison, with cancellable data fetching per filter change.
@@ -107,21 +108,36 @@ const PieChartPage = ({ expenses }) => {
                 </p>
             )}
 
-            <AnimatePresence mode="wait">
-                <motion.div
-                    key={show + '-' + viewBy}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -30 }}
-                    transition={{ duration: 0.5 }}
-                    className="chart-content"
+            {/* FE-001 -- explicit loading/error(+retry)/empty states only while
+                a filter is actually selected (pieChartQuery.enabled); "no
+                filter chosen yet" keeps its own message above. */}
+            {pieChartQuery.enabled && (
+                <QueryState
+                    isLoading={pieChartQuery.isLoading}
+                    isError={pieChartQuery.isError}
+                    isEmpty={!pieChartQuery.isLoading && !pieChartQuery.isError && chartData.length === 0}
+                    onRetry={pieChartQuery.refetch}
+                    loadingLabel="Loading your chart..."
+                    errorLabel="We couldn't load this chart. Please try again."
+                    emptyLabel="No expenses found for this filter."
                 >
-                    <PieChartWrapper
-                        data={chartData}
-                        show={show}
-                    />
-                </motion.div>
-            </AnimatePresence>
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={show + '-' + viewBy}
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -30 }}
+                            transition={{ duration: 0.5 }}
+                            className="chart-content"
+                        >
+                            <PieChartWrapper
+                                data={chartData}
+                                show={show}
+                            />
+                        </motion.div>
+                    </AnimatePresence>
+                </QueryState>
+            )}
             {isChartInsightReady && <InlineChartInsight item={chartInsightText} />}
         </div>
     );
