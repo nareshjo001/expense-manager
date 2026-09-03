@@ -29,7 +29,7 @@ router.post("/predict-category", verifyToken, async (req, res) => {
             },
             {
                 timeout: PREDICT_TIMEOUT_MS,
-                headers: mlOperationsHeaders()
+                headers: mlOperationsHeaders(req.requestId)
             }
         );
 

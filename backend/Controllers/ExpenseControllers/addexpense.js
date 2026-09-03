@@ -145,7 +145,7 @@ const addExpense = async (req, res) => {
                   expenseCategory: normalizedCategory,
                   expenseAmount
               },
-              { timeout: 5000, headers: mlOperationsHeaders() }
+              { timeout: 5000, headers: mlOperationsHeaders(req.requestId) }
             );
 
             finalDescription = response.data.description;

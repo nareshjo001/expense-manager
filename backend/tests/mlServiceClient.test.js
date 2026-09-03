@@ -58,4 +58,31 @@ describe("Remediation Workstream C: utils/mlServiceClient.js", () => {
 
     expect(mlOperationsHeaders()).toEqual({});
   });
+
+  // OBS-001-T02 -- request/correlation ID forwarding to the ML service.
+  it("forwards a well-shaped requestId as X-Request-ID", () => {
+    delete process.env.ML_OPERATIONS_TOKEN;
+    const { mlOperationsHeaders, REQUEST_ID_HEADER } = require(MODULE_PATH);
+
+    const headers = mlOperationsHeaders("req-abc-123");
+    expect(headers[REQUEST_ID_HEADER]).toBe("req-abc-123");
+  });
+
+  it("does not forward a malformed or missing requestId", () => {
+    delete process.env.ML_OPERATIONS_TOKEN;
+    const { mlOperationsHeaders, REQUEST_ID_HEADER } = require(MODULE_PATH);
+
+    expect(mlOperationsHeaders("has a space\nand newline")[REQUEST_ID_HEADER]).toBeUndefined();
+    expect(mlOperationsHeaders(undefined)[REQUEST_ID_HEADER]).toBeUndefined();
+    expect(mlOperationsHeaders()[REQUEST_ID_HEADER]).toBeUndefined();
+  });
+
+  it("combines both the operations token and requestId headers when both are present", () => {
+    process.env.ML_OPERATIONS_TOKEN = "a-real-token-value";
+    const { mlOperationsHeaders, OPERATIONS_TOKEN_HEADER, REQUEST_ID_HEADER } = require(MODULE_PATH);
+
+    const headers = mlOperationsHeaders("req-xyz");
+    expect(headers[OPERATIONS_TOKEN_HEADER]).toBe("a-real-token-value");
+    expect(headers[REQUEST_ID_HEADER]).toBe("req-xyz");
+  });
 });

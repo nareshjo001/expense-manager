@@ -128,6 +128,17 @@ def make_fake_fastapi_stack():
         def head(self, path):
             return lambda fn: fn
 
+        # OBS-001 -- app.py registers a request-id middleware via
+        # @app.middleware("http"). The fake only needs to preserve the
+        # decorated function unchanged (same shape as post/get/head above);
+        # nothing in the mocked-lifecycle test suite drives the ASGI
+        # middleware chain itself, so no invocation behavior is faked here.
+        def middleware(self, middleware_type):
+            def decorator(fn):
+                self._startup_handlers = self._startup_handlers  # no-op, keeps attribute stable
+                return fn
+            return decorator
+
     class FakeHTTPException(Exception):
         def __init__(self, status_code=500, detail=""):
             self.status_code = status_code
@@ -136,11 +147,23 @@ def make_fake_fastapi_stack():
     class FakeResponse:
         def __init__(self, status_code=200):
             self.status_code = status_code
+            # OBS-001 -- request_id_middleware writes response.headers[...],
+            # mirroring the real Starlette Response's mutable headers mapping.
+            self.headers = {}
+
+    # OBS-001 -- app.py type-hints its request-id middleware's parameter as
+    # `Request`; the fake only needs to exist as an importable name (it is
+    # never instantiated by the mocked-lifecycle test suite).
+    class FakeRequest:
+        def __init__(self, headers=None):
+            self.headers = headers or {}
+            self.state = types.SimpleNamespace()
 
     fake_fastapi.FastAPI = FakeFastAPI
     fake_fastapi.HTTPException = FakeHTTPException
     fake_fastapi.Response = FakeResponse
     fake_fastapi.Header = lambda default=None: default
+    fake_fastapi.Request = FakeRequest
 
     fake_fastapi_responses = types.ModuleType("fastapi.responses")
 

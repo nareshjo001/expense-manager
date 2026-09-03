@@ -1,5 +1,6 @@
 const cron = require("node-cron");
 const axios = require("axios");
+const crypto = require("crypto");
 
 const { MlFeedbackModel } = require("../config/Schemas");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
@@ -25,10 +26,14 @@ cron.schedule("30 20 * * *", async () => {
         console.log("Retraining threshold reached");
 
         // Threshold met — trigger a model retrain on the ML service.
+        // OBS-001-T02: a fresh per-run correlation ID (no incoming HTTP
+        // request exists for a cron job) so this retrain trigger can be
+        // traced through the ML service's logs.
+        const jobRequestId = crypto.randomUUID();
         const response = await axios.post(
             buildMlServiceUrl("/retrain-model"),
             undefined,
-            { headers: mlOperationsHeaders() }
+            { headers: mlOperationsHeaders(jobRequestId) }
         );
 
         // Phase G item 11: {"existingRun": true, "runId": "..."} is a

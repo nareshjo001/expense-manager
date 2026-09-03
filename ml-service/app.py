@@ -1,9 +1,11 @@
 import os
+import re
 import time
+import uuid
 from threading import Thread
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Response, Header
+from fastapi import FastAPI, HTTPException, Response, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -22,6 +24,23 @@ import config as ml_config
 from observability import log_event, sanitize_reason
 
 app = FastAPI()
+
+# OBS-001-T02 -- request/correlation ID propagation. Reuses a caller-supplied
+# X-Request-ID (forwarded by backend/utils/mlServiceClient.js) only if it
+# matches the same safe shape enforced on the Node side; otherwise a value
+# from an untrusted caller could smuggle unsafe content into these logs.
+REQUEST_ID_HEADER = "X-Request-ID"
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    incoming = request.headers.get(REQUEST_ID_HEADER, "").strip()
+    request_id = incoming if REQUEST_ID_PATTERN.match(incoming) else str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    return response
 
 # How long a "running" lock can go without a heartbeat before a new request may reclaim it as abandoned.
 STALE_RUN_TIMEOUT_SECONDS = int(

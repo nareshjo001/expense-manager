@@ -4,6 +4,8 @@ const helmet = require("helmet");
 const axios = require("axios");
 const { isFirebaseAvailable } = require("./config/firebaseAdmin");
 const { createCorsOptions, createHelmetOptions } = require("./config/httpSecurity");
+const { requestIdMiddleware } = require("./Middlewares/requestId");
+const { requestMetricsMiddleware, startMetricsReporting } = require("./utils/metrics");
 
 // Routes
 const authRouter = require("./Routes/auth.routes");
@@ -30,6 +32,15 @@ const app = express();
 app.use(helmet(createHelmetOptions()));
 app.use(cors(createCorsOptions()));
 app.use(express.json());
+
+// OBS-001 -- correlation ID first (so every later log line can carry it),
+// then request-latency/error metrics collection.
+app.use(requestIdMiddleware);
+app.use(requestMetricsMiddleware);
+
+// Periodic aggregate metrics snapshot; a no-op if already started (e.g. tests
+// that import app.js multiple times within one process).
+startMetricsReporting();
 
 
 // Routes
