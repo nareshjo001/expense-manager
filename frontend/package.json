@@ -55,5 +55,11 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "overrides": {
+    "protobufjs": "7.6.6",
+    "websocket-driver": "0.7.5",
+    "shell-quote": "1.10.0",
+    "tar": "7.5.22"
   }
 }
