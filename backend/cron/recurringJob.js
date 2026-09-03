@@ -82,10 +82,7 @@ cron.schedule("30 20 * * *", async () => {
                wasNewInsert = false;
             } else {
                // A genuine, non-dedupe insert failure is AMBIGUOUS -- it
-               console.error(
-                  `Recurring cron: expense insert failed for recurring ${recurring._id} (occurrence ${occurrenceId}):`,
-                  createErr
-               );
+               console.error("Recurring cron: expense insert failed.");
                continue;
             }
          }
@@ -111,17 +108,12 @@ cron.schedule("30 20 * * *", async () => {
                budgetDates: [occurrenceExpenseDate],
                budgetTokens: reserved.budgetReservations.map((r) => r.token),
                reportToken: reserved.reportReservation && reserved.reportReservation.token,
-            }).catch((syncErr) => {
-               console.error(
-                  `Recurring cron: replay reconciliation failed for recurring ${recurring._id} (occurrence ${occurrenceId}):`,
-                  syncErr
-               );
+            }).catch(() => {
+               console.error("Recurring cron: replay reconciliation failed.");
                return null;
             });
             if (derivedData && derivedData.recoveryPending) {
-               console.error(
-                  `Recurring cron: report/budget synchronization left pending after replay for user ${recurring.userId} (occurrence ${occurrenceId}, budget=${derivedData.budget}, report=${derivedData.report})`
-               );
+               console.error("Recurring cron: report/budget synchronization remains pending after replay.");
             }
             continue;
          }
@@ -138,9 +130,7 @@ cron.schedule("30 20 * * *", async () => {
          });
          if (derivedData.recoveryPending) {
             // Not a failure of THIS request -- the expense is already
-            console.error(
-               `Recurring cron: report/budget synchronization left pending for user ${recurring.userId} (budget=${derivedData.budget}, report=${derivedData.report})`
-            );
+            console.error("Recurring cron: report/budget synchronization remains pending.");
          }
 
          // Create notification (DB FIRST)
@@ -180,11 +170,11 @@ cron.schedule("30 20 * * *", async () => {
             );
          }
 
-         console.log("Processed recurring:", recurring.expenseName);
+         console.log("Processed recurring expense.");
       }
-   } catch (err) {
+   } catch {
       // Handle any unexpected errors
-      console.error("Recurring cron failed:", err);
+      console.error("Recurring cron failed.");
    }
 
 });

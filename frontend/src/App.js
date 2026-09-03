@@ -37,6 +37,8 @@ function App() {
 
   const {
     showNotificationPrompt,
+    showDetailedPreviews,
+    setShowDetailedPreviews,
     handleEnable,
     handleLater
   } = useWebPush(isLoggedIn);
@@ -135,8 +137,17 @@ function App() {
       {showNotificationPrompt && (
         <div className="notification-modal">
           <div className="notification-content">
-            <h3>Enable Notifications?</h3>
+            <h3>Notification Privacy</h3>
             <p>Get reminders when recurring expenses are created.</p>
+            <label>
+              <input
+                type="checkbox"
+                checked={showDetailedPreviews}
+                onChange={(event) => setShowDetailedPreviews(event.target.checked)}
+              />
+              Show expense names in notification previews
+            </label>
+            <p>Leave this off to keep lock-screen notifications private.</p>
 
             <div className="notification-buttons">
               <button onClick={handleEnable} >

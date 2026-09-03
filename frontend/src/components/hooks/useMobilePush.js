@@ -34,15 +34,13 @@ export function useNativePush(isLoggedIn) {
             console.warn("Device token already registered to another account; skipping registration.");
               return;
             }
-            console.error("Native push registration failed:", err);
+            console.error("Native push registration failed.");
           }
         }));
 
         listenerHandles.push(await PushNotifications.addListener(
           "pushNotificationActionPerformed",
           (notification) => {
-            console.log("Notification tapped:", notification);
-
             const route =
               notification.notification?.data?.route ||
               notification.data?.route ||
@@ -61,8 +59,8 @@ export function useNativePush(isLoggedIn) {
           listenerHandles.length = 0;
         }
 
-      } catch (err) {
-        console.error("Native push error:", err);
+      } catch {
+        console.error("Native push setup failed.");
       }
     }
 

@@ -19,8 +19,8 @@ export async function requestPushToken() {
 
     return token || null;
 
-  } catch (error) {
-    console.error("Web push token error:", error);
+  } catch {
+    console.error("Web push token request failed.");
     return null;
   }
 }

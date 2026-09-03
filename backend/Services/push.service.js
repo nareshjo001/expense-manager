@@ -1,6 +1,11 @@
 const { getAdmin, isFirebaseAvailable } = require("../config/firebaseAdmin");
 const DeviceToken = require('../models/DeviceToken');
 
+const GENERIC_NOTIFICATION = Object.freeze({
+    title: "Expense Manager",
+    body: "A recurring expense was added."
+});
+
 const sendPush = async (userId, title, body, route = '/') => {
 
     // Fetch all device tokens associated with the user
@@ -19,8 +24,10 @@ const sendPush = async (userId, title, body, route = '/') => {
 
     const messages = tokens.map(t => {
 
-        const imageUrl = "https://balensia.vercel.app/images/final.jpeg"; 
-        // Must be PUBLIC HTTPS URL (NOT localhost)
+        const imageUrl = "https://balensia.vercel.app/images/final.jpeg";
+        const content = t.notificationPreview === "detailed"
+            ? { title, body }
+            : GENERIC_NOTIFICATION;
 
         if (t.platform === "mobile") {
             return {
@@ -28,8 +35,8 @@ const sendPush = async (userId, title, body, route = '/') => {
 
                 // This makes Android auto-display notification
                 notification: {
-                    title,
-                    body,
+                    title: content.title,
+                    body: content.body,
                     image: imageUrl
                 },
 
@@ -54,8 +61,8 @@ const sendPush = async (userId, title, body, route = '/') => {
         return {
             token: t.token,
             data: {
-                title,
-                body,
+                title: content.title,
+                body: content.body,
                 image: imageUrl,
                 route,
                 tag: "recurring-expense"

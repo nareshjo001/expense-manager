@@ -54,9 +54,9 @@ cron.schedule("*/15 * * * *", async () => {
       }
     }
 
-  } catch (err) {
+  } catch {
     // Log unexpected retry cron errors
-    console.error("Retry cron failed:", err);
+    console.error("Retry cron failed.");
   }
 
 });

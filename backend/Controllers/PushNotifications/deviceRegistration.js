@@ -3,7 +3,7 @@ const DeviceToken = require('../../models/DeviceToken');
 const deviceRegistration = async (req, res) => {
     try {
         // Extract token (FCM device token) and platform (android / ios / web)
-        const { token, platform } = req.body;
+        const { token, platform, notificationPreview } = req.body;
 
         // Extract userid
         const userId = req.userId;
@@ -17,17 +17,25 @@ const deviceRegistration = async (req, res) => {
             return res.status(400).json({ message: "Platform must be 'web' or 'mobile'", success: false });
         }
 
+        if (notificationPreview !== undefined && notificationPreview !== 'generic' && notificationPreview !== 'detailed') {
+            return res.status(400).json({ message: "Notification preview must be 'generic' or 'detailed'", success: false });
+        }
+
+        const normalizedToken = token.trim();
+        const registration = { userId, platform };
+        if (notificationPreview !== undefined) registration.notificationPreview = notificationPreview;
+
         // Update this user's existing registration for the token.
         const claimed = await DeviceToken.findOneAndUpdate(
-            { token, userId },
-            { userId, platform },
+            { token: normalizedToken, userId },
+            { $set: registration },
             { new: true }
         );
 
         // Register the token, rejecting one owned by another account.
         if (!claimed) {
             try {
-                await DeviceToken.create({ token, userId, platform });
+                await DeviceToken.create({ token: normalizedToken, ...registration });
             } catch (err) {
                 if (err.code === 11000) {
                     return res.status(409).json({
@@ -42,9 +50,9 @@ const deviceRegistration = async (req, res) => {
         // Respond with success message
         res.status(200).json({ message: "Device registered successfully" });
 
-    } catch (error) {
+    } catch {
         // Handle server errors
-        console.error('Error in deviceRegistration:', error);
+        console.error('Device registration failed.');
         res.status(500).json({ message: "Internal Server Error", success: false });
     }
 };

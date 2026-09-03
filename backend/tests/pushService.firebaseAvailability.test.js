@@ -84,6 +84,54 @@ describe("push.service.sendPush -- Firebase availability", () => {
     expect(sendMock).toHaveBeenCalledTimes(2);
   });
 
+  it("uses generic lock-screen content when a device has not opted into details", async () => {
+    const { sendPush, sendMock } = loadPushService({
+      tokens: [{ token: "t1", platform: "web" }],
+      firebaseAvailable: true,
+    });
+
+    await sendPush("user-1", "Recurring Expense Added", "Private Merchant has been logged");
+
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        title: "Expense Manager",
+        body: "A recurring expense was added.",
+      }),
+    }));
+    expect(JSON.stringify(sendMock.mock.calls)).not.toContain("Private Merchant");
+  });
+
+  it("uses detailed content only for a device that explicitly opted in", async () => {
+    const { sendPush, sendMock } = loadPushService({
+      tokens: [{ token: "t1", platform: "mobile", notificationPreview: "detailed" }],
+      firebaseAvailable: true,
+    });
+
+    await sendPush("user-1", "Recurring Expense Added", "Private Merchant has been logged");
+
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+      notification: expect.objectContaining({
+        title: "Recurring Expense Added",
+        body: "Private Merchant has been logged",
+      }),
+    }));
+  });
+
+  it("applies preview privacy independently to each registered device", async () => {
+    const { sendPush, sendMock } = loadPushService({
+      tokens: [
+        { token: "generic-device", platform: "web", notificationPreview: "generic" },
+        { token: "detailed-device", platform: "web", notificationPreview: "detailed" },
+      ],
+      firebaseAvailable: true,
+    });
+
+    await sendPush("user-1", "Recurring Expense Added", "Private Merchant has been logged");
+
+    expect(sendMock.mock.calls[0][0].data.body).toBe("A recurring expense was added.");
+    expect(sendMock.mock.calls[1][0].data.body).toBe("Private Merchant has been logged");
+  });
+
   it("an individual send failure is caught, does not crash, and still returns the {success:false} contract", async () => {
     const err = new Error("generic send failure");
 

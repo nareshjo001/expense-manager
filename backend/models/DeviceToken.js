@@ -15,6 +15,12 @@ const deviceTokenSchema = new mongoose.Schema({
     type: String,
     enum: ["web", "mobile"],
     required: true
+  },
+  notificationPreview: {
+    type: String,
+    enum: ["generic", "detailed"],
+    default: "generic",
+    required: true
   }
 }, {
   timestamps: true
