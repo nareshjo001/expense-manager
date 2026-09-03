@@ -75,4 +75,36 @@ describe("metrics", () => {
     expect(record.requestCount).toBe(1);
     expect(record.errorCount).toBe(0);
   });
+
+  // OBS-001-T06 -- proves the wiring only; alerts.js itself is unit-tested
+  // in alerts.test.js.
+  describe("alert evaluation wiring", () => {
+    let consoleErrorSpy;
+
+    beforeEach(() => {
+      consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    test("does not raise an alert log line for a healthy snapshot", () => {
+      recordRequest({ route: "/expense", statusCode: 200, latencyMs: 10 });
+      snapshotAndReset();
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    });
+
+    test("raises a structured alert log line when the snapshot breaches the error-rate threshold", () => {
+      for (let i = 0; i < 20; i += 1) {
+        recordRequest({ route: "/expense", statusCode: i < 10 ? 500 : 200, latencyMs: 10 });
+      }
+      snapshotAndReset();
+
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      const record = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
+      expect(record.scope).toBe("alert");
+      expect(record.event).toBe("high_error_rate");
+    });
+  });
 });
