@@ -10,6 +10,29 @@ const EXPENSE_CACHE_PATH = "../utils/expenseCache";
 const RECURRING_MODEL_PATH = "../models/RecurringExpense";
 const APP_PATH = "../app";
 
+// Every one of this file's 44 tests calls loadApp(), which does a fresh
+// jest.resetModules() + require(APP_PATH) so each test can swap its own
+// mock implementations of Schemas/syncRecoveryService/expenseCache/
+// RecurringExpense cleanly (see loadApp() below and the afterEach reset
+// above) -- that is deliberate test isolation, not something to remove.
+// The cost is that EVERY test re-walks app.js's full require graph
+// (express, helmet, cors, every Routes file, every Middleware, etc.)
+// from a cold module registry, not the cached one Node normally reuses.
+// Confirmed via two consecutive real runs on this repo's actual Windows
+// dev machine: this file alone took 67-98 seconds across its 44 tests
+// (no other test file requires app.js anywhere near that many times),
+// and a DIFFERENT specific test exceeded Jest's default 5000ms timeout
+// each run (not the same one twice) -- that pattern is a timing margin
+// being crossed by variable per-require I/O cost (Windows Defender or
+// similar real-time scanning is the most likely source of the variance),
+// not a hang in any one test's own logic. The actual controller code
+// under test (Controllers/ExpenseControllers/*.js) has no retry/backoff/
+// setTimeout of any kind on these paths -- confirmed by reading it -- so
+// there is nothing in the application code that a longer timeout could
+// be papering over here; it only accounts for this file's own, unusually
+// heavy per-test module-reload cost.
+jest.setTimeout(30000);
+
 const TEST_JWT_SECRET = "expense-mutation-reliability-test-secret";
 let originalJwtSecret;
 
