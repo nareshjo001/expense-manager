@@ -100,14 +100,24 @@ jobs:
       # legitimate here specifically because this Mongo container is
       # destroyed at the end of every CI run; never pass that flag against
       # a real deployment target.
+      #
+      # REDIS_URL is set explicitly here (config/redis.js reads exactly
+      # this var name) -- the actual fix for the "Could not acquire the
+      # migration lock: Redis is unreachable (The client is closed)"
+      # failure was migrations/run.js never calling connectRedis() before
+      # the lock code used the shared client (see that file's comment);
+      # this is a defensive addition alongside that fix, not a
+      # replacement for it.
       - name: Migrations dry-run (CI ephemeral Mongo)
         env:
           MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_backend_migrations_ci
+          REDIS_URL: redis://127.0.0.1:6379
           MIGRATIONS_ENV_CONFIRMED: "true"
         run: node migrations/run.js --dry-run
       - name: Migrations apply (CI ephemeral Mongo)
         env:
           MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_backend_migrations_ci
+          REDIS_URL: redis://127.0.0.1:6379
           MIGRATIONS_ENV_CONFIRMED: "true"
         run: node migrations/run.js --allow-no-backup-check
 
@@ -241,6 +251,50 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
-      - run: npm audit --prefix backend --omit=dev --audit-level=critical
-      - run: npm audit --prefix frontend --omit=dev --audit-level=critical
-
+      # npm's classic `npm audit` CLI call hits registry.npmjs.org's
+      # quick-audit endpoint (POST /-/npm/v1/security/audits/quick), which
+      # is currently degraded/being retired server-side -- verified
+      # directly (not assumed): the exact same command run by hand against
+      # the real registry returned a mix of indefinite hangs and a
+      # `502 Bad Gateway` on that endpoint. That request failure is also
+      # what produces the "Invalid package tree, run npm install to
+      # rebuild your package-lock.json" text in the failing job's log --
+      # that message is npm's generic wording for the audit request
+      # itself failing, not necessarily a diagnosis of the lockfile.
+      # Checked directly: both backend/package-lock.json and
+      # frontend/package-lock.json are already byte-identical to what
+      # `npm install` produces locally (confirmed via checksum), so there
+      # is no actual lockfile drift to fix here -- the registry endpoint
+      # is the real and only cause. A short retry loop is the correct
+      # mitigation for a flaky external dependency in a required CI gate:
+      # it still fails the job (and therefore blocks the merge) on a real
+      # finding at or above --audit-level, it just does not fail solely
+      # because npmjs.org's audit endpoint dropped one or two requests.
+      - name: Backend dependency audit
+        working-directory: backend
+        run: |
+          attempt=1
+          max_attempts=5
+          until npm audit --omit=dev --audit-level=critical; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "npm audit failed after $max_attempts attempts."
+              exit 1
+            fi
+            echo "npm audit attempt $attempt/$max_attempts failed (often a transient registry.npmjs.org audit-endpoint issue, not a real finding) -- retrying in 15s..."
+            attempt=$((attempt + 1))
+            sleep 15
+          done
+      - name: Frontend dependency audit
+        working-directory: frontend
+        run: |
+          attempt=1
+          max_attempts=5
+          until npm audit --omit=dev --audit-level=critical; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "npm audit failed after $max_attempts attempts."
+              exit 1
+            fi
+            echo "npm audit attempt $attempt/$max_attempts failed (often a transient registry.npmjs.org audit-endpoint issue, not a real finding) -- retrying in 15s..."
+            attempt=$((attempt + 1))
+            sleep 15
+          done
