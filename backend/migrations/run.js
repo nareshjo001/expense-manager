@@ -20,6 +20,7 @@
 // to run, so CI/deploy scripts can gate on this command's exit code
 // directly.
 const connectDB = require("../config/db");
+const { connectRedis } = require("../config/redis");
 const { runMigrations } = require("./driver");
 
 function parseArgs(argv) {
@@ -42,6 +43,21 @@ async function main() {
   const { dryRun, batchSize, allowNoBackupCheck } = parseArgs(process.argv.slice(2));
 
   await connectDB();
+  // migrations/lock.js's acquireMigrationLock() (via utils/jobLease.js)
+  // runs commands directly against config/redis.js's shared redisClient
+  // singleton -- it does not lazily connect that client itself, the same
+  // way server.js's own startup connects both databases before anything
+  // that needs them runs. Without this, that shared client is
+  // constructed but never connected here, and any command against it
+  // throws node-redis's "The client is closed", surfacing as
+  // "Could not acquire the migration lock: Redis is unreachable (The
+  // client is closed)" -- not an actual Redis outage or a wrong
+  // connection URL, just this CLI never having connected it. A dry run
+  // never acquires the lock (driver.js skips it entirely for dry runs),
+  // but connecting here unconditionally is cheap and keeps this
+  // entrypoint's startup sequence identical regardless of mode, matching
+  // server.js's own pattern.
+  await connectRedis();
 
   let result;
   try {
@@ -66,7 +82,8 @@ main()
     process.exitCode = 1;
   })
   .finally(() => {
-    // Close the process explicitly -- an open mongoose connection would
-    // otherwise keep this CLI invocation hanging after main() resolves.
+    // Close the process explicitly -- an open mongoose connection (and
+    // now an open Redis connection too) would otherwise keep this CLI
+    // invocation hanging after main() resolves.
     process.exit(process.exitCode || 0);
   });
