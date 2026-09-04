@@ -137,6 +137,7 @@ export default function IncomeModal({ isOpen, onClose, period }) {
                 placeholder="Enter amount"
                 value={updatedAmount}
                 min="0"
+                step="any"
                 onChange={(e) => setUpdatedAmount(e.target.value)}
               />
             </div>

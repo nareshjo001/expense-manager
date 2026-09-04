@@ -23,9 +23,12 @@ test.describe('Budget', () => {
     // real create flow when nothing is set yet, and still verify the
     // BudgetBar renders correctly either way.
     const setBudgetButton = page.getByRole('button', { name: 'Set', exact: true });
-    const needsToSetBudget = await setBudgetButton.isVisible().catch(() => false);
+    const budgetBar = page.locator('.budget-bar-wrapper');
 
-    if (needsToSetBudget) {
+    // Wait for the query loading state to resolve to either the "Set" prompt or the existing BudgetBar
+    await expect(setBudgetButton.or(budgetBar)).toBeVisible({ timeout: 30_000 });
+
+    if (await setBudgetButton.isVisible()) {
       await setBudgetButton.click();
       await page.getByPlaceholder('Enter Your Budget').fill(BUDGET_AMOUNT);
 

@@ -104,6 +104,7 @@ const SetBudget = () => {
             placeholder="Enter Your Budget"
             onChange={handleBudgetChange}
             min={0}
+            step="any"
             required
           />
           <button
