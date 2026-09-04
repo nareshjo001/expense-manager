@@ -53,8 +53,18 @@ describe("writeTempMongoConfig / cleanupTempMongoConfig", () => {
     expect(content).toContain(conn);
     expect(content.startsWith("uri:")).toBe(true);
 
-    const mode = fs.statSync(temp.filePath).mode & 0o777;
-    expect(mode).toBe(0o600);
+    // Windows/NTFS has no POSIX rwx permission model -- Node's fs mode
+    // argument is only meaningful on POSIX filesystems there, so
+    // fs.statSync().mode on Windows reports 0o666 for a writable file
+    // regardless of what mode writeFileSync was called with (this is a
+    // documented Node/libuv limitation, not a bug in writeTempMongoConfig --
+    // the real CI target, GitHub Actions' ubuntu-latest runners, is POSIX
+    // and does enforce 0600 there, which is what actually matters for the
+    // credential-bearing temp file this writes).
+    if (process.platform !== "win32") {
+      const mode = fs.statSync(temp.filePath).mode & 0o777;
+      expect(mode).toBe(0o600);
+    }
 
     cleanupTempMongoConfig(temp);
     expect(fs.existsSync(temp.filePath)).toBe(false);

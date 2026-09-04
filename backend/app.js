@@ -38,9 +38,29 @@ app.use(express.json());
 app.use(requestIdMiddleware);
 app.use(requestMetricsMiddleware);
 
-// Periodic aggregate metrics snapshot; a no-op if already started (e.g. tests
-// that import app.js multiple times within one process).
-startMetricsReporting();
+// Periodic aggregate metrics snapshot. Guarded against NODE_ENV === "test":
+// startMetricsReporting()'s own internal guard only no-ops a *second* call
+// within the SAME module instance (e.g. app.js required twice in one
+// process) -- it does NOT help here, because Jest gives every test FILE a
+// fresh module registry by default, so each of this suite's 100+ files that
+// require app.js for supertest was spawning its OWN independent, uncleared
+// setInterval (default 5 minutes, unref'd so it never blocks process exit,
+// but still very much still firing). Under `--runInBand`, all those test
+// files share one real process/event loop, so leaked timers from files that
+// ran early in the suite start coming due partway through a long run and
+// pile up for its remainder -- this is what the "Cannot log after tests are
+// done" / metrics_snapshot console spam in a full `npm test` run was: dozens
+// of these firing concurrently, not test flakiness. It also cost real
+// event-loop time (each firing calls logEvent + evaluateAndDispatchAlerts),
+// which is the most likely explanation for report.contract.test.js's one
+// 401-response test occasionally exceeding its 5000ms Jest timeout during a
+// full run despite finishing in under 2s every time it was run in isolation.
+// Both tests/setup/testEnv.js and tests/setup/integrationEnv.js set
+// NODE_ENV=test before any test file's own modules load, so this check is
+// reliable for both `npm test` and `npm run test:integration`.
+if (process.env.NODE_ENV !== "test") {
+  startMetricsReporting();
+}
 
 
 // Routes
