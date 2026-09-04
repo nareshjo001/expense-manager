@@ -28,10 +28,16 @@ function makeFakeDoc({ isNew = true, modifiedFields = [], fields = {} } = {}) {
   };
 }
 
-function runSaveHook(schema, doc) {
-  return new Promise((resolve, reject) => {
-    schema.__hooks.save.call(doc, (err) => (err ? reject(err) : resolve()));
-  });
+// NOTE (fix, 2026-09-04): mongoose@9 / kareem@3 pre hooks no longer
+// receive a `next` callback (kareem strips any trailing function
+// argument before invoking the hook -- see moneyMinorSync.js's header
+// comment). These fakes now call the hook the same way real kareem
+// does: no callback argument, and the hook is either fully synchronous
+// or returns a promise kareem would await. Kept as `async` helpers so
+// existing `await runSaveHook(...)` / `await runUpdateHook(...)` call
+// sites don't need to change.
+async function runSaveHook(schema, doc) {
+  return schema.__hooks.save.call(doc);
 }
 
 function makeFakeQuery(update) {
@@ -45,10 +51,8 @@ function makeFakeQuery(update) {
   };
 }
 
-function runUpdateHook(schema, hookName, query) {
-  return new Promise((resolve, reject) => {
-    schema.__hooks[hookName].call(query, (err) => (err ? reject(err) : resolve()));
-  });
+async function runUpdateHook(schema, hookName, query) {
+  return schema.__hooks[hookName].call(query);
 }
 
 describe("attachMoneyMinorSync -- pre('save')", () => {
