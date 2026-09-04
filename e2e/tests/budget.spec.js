@@ -28,14 +28,28 @@ test.describe('Budget', () => {
     if (needsToSetBudget) {
       await setBudgetButton.click();
       await page.getByPlaceholder('Enter Your Budget').fill(BUDGET_AMOUNT);
-      await page.getByRole('button', { name: 'Confirm' }).click();
+
+      // Same reasoning as expense.spec.js: wait for the actual create
+      // request (POST /api/setbudget) to resolve before relying on the
+      // invalidated budgets query's refetch to swap the form for the
+      // BudgetBar, instead of racing that whole async chain against a
+      // single fixed timeout on the other end.
+      await Promise.all([
+        page.waitForResponse(
+          (resp) => resp.url().includes('/api/setbudget') && resp.request().method() === 'POST',
+          { timeout: 30_000 }
+        ),
+        page.getByRole('button', { name: 'Confirm' }).click(),
+      ]);
     }
 
     // frontend/src/components/expensesHandling/budget/BudgetBar.js's
     // wrapper -- an existing, stable class, unconditionally rendered
     // (unlike its hover-only tooltip contents, which CSS keeps hidden
     // until :hover and so aren't a reliable Playwright visibility target).
-    await expect(page.locator('.budget-bar-wrapper')).toBeVisible({ timeout: 15_000 });
+    // 30s (not the default 15s) for the same cold-CI/first-live-run reason
+    // as expense.spec.js.
+    await expect(page.locator('.budget-bar-wrapper')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/Budget - [A-Za-z]{3}/)).toBeVisible();
   });
 });

@@ -44,10 +44,27 @@ test.describe('Expenses', () => {
     // role+name lookup here is a genuine two-match ambiguity. The form's
     // own existing `.submit-btn` class (scoped to the `.add-expense` form)
     // resolves it without needing a new attribute.
-    await page.locator('form.add-expense .submit-btn').click();
+    // Wait for the actual create request to complete (POST
+    // /expense/add-expense) before asserting on its effects, rather than
+    // racing the click against the mutation's own async chain (network
+    // round-trip -> onSuccess -> invalidateQueries -> navigate('/') ->
+    // ExpensesPage remount -> refetch -> render). A plain click-then-assert
+    // races that whole chain against a single fixed timeout with no signal
+    // for *why* it's slow if it ever is.
+    await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('/expense/add-expense') && resp.request().method() === 'POST',
+        { timeout: 30_000 }
+      ),
+      page.locator('form.add-expense .submit-btn').click(),
+    ]);
 
-    // A successful submit navigates back to "/" (the expense list) and
-    // the new expense renders under its date-range group.
-    await expect(page.getByText(expenseName)).toBeVisible({ timeout: 15_000 });
+    // A successful submit navigates back to "/" (the expense list) and the
+    // new expense renders under its date-range group, once the invalidated
+    // expenses query refetches. 30s (not the default 15s) gives this
+    // suite's first-ever live CI run -- cold containers, an un-warmed CRA
+    // dev server -- room to finish that refetch+render without being a
+    // silent pass/fail coin-flip.
+    await expect(page.getByText(expenseName)).toBeVisible({ timeout: 30_000 });
   });
 });
