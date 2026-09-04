@@ -224,6 +224,7 @@ export default function Header({ summary }) {
                   value={newBudget}
                   onChange={(e) => setNewBudget(e.target.value)}
                   min="0"
+                  step="any"
                   required
                 />
               </div>

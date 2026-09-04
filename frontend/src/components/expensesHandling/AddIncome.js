@@ -118,6 +118,7 @@ const AddIncome = () => {
                         id="number"
                         onChange={(e) => {setAmount(e.target.value)}}
                         min={0}
+                        step="any"
                         required
                     />
                 </div>

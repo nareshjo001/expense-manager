@@ -1,0 +1,16 @@
+{
+  "name": "expense-manager-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TST-001-T05 -- Playwright end-to-end journeys for the expense-manager app (login, add expense, set budget). Runs against the real Express backend and a real MongoDB/Redis, not mocks -- see docs/testing/TST-001-T05-e2e-setup.md.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "mongodb": "^6.21.0"
+  }
+}

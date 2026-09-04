@@ -1,0 +1,109 @@
+name: OPS-002 Encrypted Backup
+
+on:
+  schedule:
+    # Daily, per ADR-0005's provisional <=24h RPO target. 03:00 UTC is an
+    # arbitrary low-traffic slot -- there is no measured traffic pattern
+    # for this app yet (OPS-002's own spec marks that UNKNOWN).
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Run encrypted backup (OPS-002-T03)
+    runs-on: ubuntu-latest
+    # HONESTY NOTE for whoever reads this job's purpose: this workflow
+    # runs entirely against THIS JOB'S OWN throwaway `mongo:7` service
+    # container below, seeded with a tiny fixture document -- it is a
+    # real, working smoke test that backend/scripts/backup/mongoBackup.js
+    # actually functions end-to-end (real mongodump, real openssl
+    # encryption, real manifest write, real retention prune) against a
+    # real MongoDB, exactly the way DAT-003-T07's migration CI job tests
+    # the migration driver against its own ephemeral Mongo. It is NOT
+    # itself the production backup mechanism: this job has no network
+    # path to a real production MONGO_CONN and no real
+    # BACKUP_ENCRYPTION_KEY/remote-destination credentials configured (by
+    # design -- see docs/runbooks/OPS-002-backup-restore-operations.md).
+    # Wiring this tooling to run against the real production database on
+    # a real schedule, with a real destination and a real secret, is an
+    # owner infrastructure decision this task does not make.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_backup_ci
+      BACKUP_ENCRYPTION_KEY: ci-only-dummy-backup-encryption-key-not-for-production-use
+      BACKUP_DESTINATION_DIR: ${{ github.workspace }}/backend/.ci-backup-destination
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      # mongodump/mongorestore are NOT preinstalled on ubuntu-latest --
+      # this installs MongoDB Database Tools from the official MongoDB
+      # apt repository (the standard, documented installation path for
+      # Ubuntu), rather than pinning a specific tarball URL/version that
+      # would go stale. This step's actual network reachability could
+      # not be verified from the sandbox this task was authored in (no
+      # general internet egress there) -- verify it succeeds the first
+      # time this workflow actually runs in GitHub Actions.
+      - name: Install MongoDB Database Tools (mongodump/mongorestore)
+        run: |
+          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+          echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+          mongodump --version
+          mongorestore --version
+
+      # Seeds one tiny fixture document so the backup has something real
+      # to dump -- an empty-collection backup is a valid but less useful
+      # smoke test of the actual mongodump/tar/openssl pipeline.
+      - name: Seed fixture data
+        run: |
+          node -e "
+            const { MongoClient } = require('mongodb');
+            (async () => {
+              const client = new MongoClient(process.env.MONGO_CONN);
+              await client.connect();
+              await client.db().collection('users').insertOne({ email: 'ci-fixture@example.com', createdAt: new Date() });
+              await client.close();
+            })();
+          "
+
+      - name: Run mongoBackup.js (OPS-002-T03)
+        run: node scripts/backup/mongoBackup.js
+
+      - name: Verify a manifest and encrypted archive were actually written
+        run: |
+          node -e "
+            const { listManifestsSync } = require('./scripts/backup/manifest');
+            const manifests = listManifestsSync(process.env.BACKUP_DESTINATION_DIR);
+            if (manifests.length !== 1) { throw new Error('expected exactly 1 manifest, found ' + manifests.length); }
+            const m = manifests[0];
+            console.log(JSON.stringify(m, null, 2));
+            const fs = require('fs');
+            const path = require('path');
+            const archivePath = path.join(process.env.BACKUP_DESTINATION_DIR, m.archiveFileName);
+            if (!fs.existsSync(archivePath)) { throw new Error('archive file missing: ' + archivePath); }
+            const usersEntry = m.collections.find((c) => c.collection === 'users');
+            if (!usersEntry || usersEntry.documentCount !== 1) { throw new Error('expected 1 seeded user document in manifest'); }
+            console.log('backup smoke test OK');
+          "

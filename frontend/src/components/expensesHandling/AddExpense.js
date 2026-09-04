@@ -84,7 +84,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
         const debounceTimer = setTimeout(async () => {
             try {
-                setCategory('');
                 setMlConfidence(null);
                 setMlLoading(true);
 
@@ -121,7 +120,20 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 console.log("ML Prediction:", data);
 
                 if (data.predictedCategory) {
-                    setCategory(data.predictedCategory);
+                    // Bugfix -- never clobber a category the user has already
+                    // typed by the time this debounced prediction resolves.
+                    // This used to unconditionally blank the field the moment
+                    // the request started (`setCategory('')` above, now
+                    // removed) and then unconditionally overwrite it here,
+                    // regardless of anything the user typed into Category in
+                    // the meantime. Filling Name then immediately filling
+                    // Category (well within the 500ms debounce window) wiped
+                    // out the just-typed Category value once this timer
+                    // fired, leaving a required field empty with no visible
+                    // error -- silently blocking submit via the browser's own
+                    // native required-field validation. Only auto-fill when
+                    // the user hasn't already put something there.
+                    setCategory(prev => (prev.trim() === '' ? data.predictedCategory : prev));
                     setMlConfidence(data.confidence);
                     setMlPredictedCategory(data.predictedCategory);
                 }
@@ -361,6 +373,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         id="number"
                         onChange={(e) => {setAmount(e.target.value)}}
                         min={0}
+                        step="any"
                         required
                     />
                 </div>

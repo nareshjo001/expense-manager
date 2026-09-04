@@ -21,7 +21,9 @@ const parseDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const round2 = (value) => Number(Number(value).toFixed(2));
+// DAT-001-T03 -- shared with every other money-rounding call site via
+// backend/utils/money.js, instead of an independently redefined helper.
+const { roundMoney: round2 } = require("../../utils/money");
 
 const isNonBlankString = (value) => typeof value === "string" && value.trim() !== "";
 

@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+// DAT-001-T06 -- keeps each *Minor shadow field in sync on every write,
+// behind the MONEY_MINOR_DUAL_WRITE_ENABLED flag. See
+// backend/utils/moneyMinorSync.js for why this is flag-gated.
+const { attachMoneyMinorSync } = require('../utils/moneyMinorSync');
 
 const userSchema = new Schema({
     fullName: {
@@ -66,6 +70,16 @@ const expenseSchema = new Schema({
         type: Number,
         required: true
     },
+    // DAT-001-T04 -- shadow integer-paise field (ADR-0003). Optional and
+    // additive: populated by the 20260903-backfill-money-minor-fields
+    // migration for existing docs, and left for T06 to start writing on
+    // every new/edited expense. expenseAmount stays authoritative and
+    // required until T07 removes it, after reconciliation AND a backup
+    // (OPS-002) both exist.
+    expenseAmountMinor: {
+        type: Number,
+        required: false,
+    },
     expenseDate: {
         type: Date,
         required: true
@@ -100,6 +114,11 @@ expenseSchema.index({ userId: 1, id: 1 }, { unique: true });
 // Support per-user expense lookups and date range queries.
 expenseSchema.index({ userId: 1, expenseDate: 1 });
 
+// DAT-001-T06 -- see backend/utils/moneyMinorSync.js.
+attachMoneyMinorSync(expenseSchema, [
+    { legacyField: 'expenseAmount', minorField: 'expenseAmountMinor' },
+]);
+
 const budgetSchema = new Schema({
     userId: {
         type: Schema.Types.ObjectId,
@@ -115,10 +134,20 @@ const budgetSchema = new Schema({
         min: 0,
         required: true,
     },
+    // DAT-001-T04 -- shadow integer-paise fields (ADR-0003), same
+    // additive/optional treatment as expenseAmountMinor above.
+    budgetMinor: {
+        type: Number,
+        required: false,
+    },
     spent: {
         type: Number,
         min: 0,
         required: true
+    },
+    spentMinor: {
+        type: Number,
+        required: false,
     },
     // Phase C.2 -- atomic write-fencing generation stamp, mirrors
     syncRevision: {
@@ -129,6 +158,12 @@ const budgetSchema = new Schema({
 
 // Prevent duplicate budget documents per user and month.
 budgetSchema.index({ userId: 1, month: 1 }, { unique: true });
+
+// DAT-001-T06 -- see backend/utils/moneyMinorSync.js.
+attachMoneyMinorSync(budgetSchema, [
+    { legacyField: 'budget', minorField: 'budgetMinor' },
+    { legacyField: 'spent', minorField: 'spentMinor' },
+]);
 
 const MlFeedbackSchema = new mongoose.Schema({
 
@@ -224,6 +259,12 @@ const IncomeSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    // DAT-001-T04 -- shadow integer-paise field (ADR-0003), same
+    // additive/optional treatment as expenseAmountMinor above.
+    incomeAmountMinor: {
+        type: Number,
+        required: false,
+    },
     incomeDate: {
         type: Date,
         required: true
@@ -251,6 +292,11 @@ const INCOME_IDEMPOTENCY_INDEX = {
 };
 
 IncomeSchema.index(INCOME_IDEMPOTENCY_INDEX.key, INCOME_IDEMPOTENCY_INDEX.options);
+
+// DAT-001-T06 -- see backend/utils/moneyMinorSync.js.
+attachMoneyMinorSync(IncomeSchema, [
+    { legacyField: 'incomeAmount', minorField: 'incomeAmountMinor' },
+]);
 
 const ExpenseModel = mongoose.model('expenses', expenseSchema);
 const UserModel = mongoose.model('users', userSchema);

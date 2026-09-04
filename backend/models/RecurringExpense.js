@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+// DAT-001-T06 -- see backend/utils/moneyMinorSync.js.
+const { attachMoneyMinorSync } = require('../utils/moneyMinorSync');
 
 const RecurringExpenseSchema = new Schema({
     userId: {
@@ -24,6 +26,12 @@ const RecurringExpenseSchema = new Schema({
         type: Number,
         required: true
     },
+    // DAT-001-T04 -- shadow integer-paise field (ADR-0003), same
+    // additive/optional treatment as the schemas in config/Schemas.js.
+    expenseAmountMinor: {
+        type: Number,
+        required: false,
+    },
     lastLoggedDate: {
         type: Date,
         required: true
@@ -40,6 +48,11 @@ RecurringExpenseSchema.index(
 );
 
 RecurringExpenseSchema.index({ nextDueDate: 1 });
+
+// DAT-001-T06 -- see backend/utils/moneyMinorSync.js.
+attachMoneyMinorSync(RecurringExpenseSchema, [
+    { legacyField: 'expenseAmount', minorField: 'expenseAmountMinor' },
+]);
 
 const RecurringExpenseModel = mongoose.model(
     'recurringExpenses',

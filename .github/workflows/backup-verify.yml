@@ -1,0 +1,87 @@
+name: OPS-002 Backup Restore Verification
+
+on:
+  schedule:
+    # Weekly -- OPS-002-T07's recurring restore-verification cadence.
+    # Sundays 04:00 UTC, after the daily backup.yml job would have run.
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-verify:
+    name: Verify latest backup restores cleanly (OPS-002-T07)
+    runs-on: ubuntu-latest
+    # Same honesty note as backup.yml: this job seeds fixture data, runs
+    # a REAL backup (OPS-002-T03), then runs a REAL isolated restore
+    # (OPS-002-T05) and count-verification (OPS-002-T07) -- all against
+    # this job's own throwaway `mongo:7` service container, using two
+    # different database names on that one server to stand in for
+    # "production source" (MONGO_CONN) and "isolated restore target"
+    # (RESTORE_TARGET_MONGO_CONN). It proves the restore/verify pipeline
+    # itself works end-to-end; it does not verify a real production
+    # backup, because this job has no access to one -- see
+    # docs/runbooks/OPS-002-backup-restore-operations.md.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_verify_source_ci
+      RESTORE_TARGET_MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_verify_target_ci
+      BACKUP_ENCRYPTION_KEY: ci-only-dummy-backup-encryption-key-not-for-production-use
+      BACKUP_DESTINATION_DIR: ${{ github.workspace }}/backend/.ci-backup-destination
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Install MongoDB Database Tools (mongodump/mongorestore)
+        run: |
+          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+          echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+          mongodump --version
+          mongorestore --version
+
+      - name: Seed fixture data into the source database
+        run: |
+          node -e "
+            const { MongoClient } = require('mongodb');
+            (async () => {
+              const client = new MongoClient(process.env.MONGO_CONN);
+              await client.connect();
+              await client.db().collection('users').insertMany([
+                { email: 'ci-fixture-1@example.com', createdAt: new Date() },
+                { email: 'ci-fixture-2@example.com', createdAt: new Date() },
+              ]);
+              await client.db().collection('expenses').insertOne({ expenseAmount: 42, expenseAmountMinor: 4200, createdAt: new Date() });
+              await client.close();
+            })();
+          "
+
+      - name: Run mongoBackup.js against the source database (OPS-002-T03)
+        run: node scripts/backup/mongoBackup.js
+
+      # verifyBackupRestore.js sets a non-zero process.exitCode when
+      # verification fails (no backup found, restore threw, or a count
+      # mismatch) -- this step's own exit code is the pass/fail signal,
+      # no separate check needed.
+      - name: Run verifyBackupRestore.js -- isolated restore + count check (OPS-002-T05/T07)
+        run: node scripts/backup/verifyBackupRestore.js

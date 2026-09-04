@@ -68,6 +68,12 @@ class RetrainTriggerRequest(BaseModel):
     source: Optional[str] = None
 
 
+class ApprovalDecisionRequest(BaseModel):
+    # ML-001-T06 -- optional free-text operator note, recorded on the run
+    # document by /training-runs/{run_id}/reject. Never required.
+    reason: Optional[str] = None
+
+
 @app.on_event("startup")
 def validate_configuration_on_startup():
     """
@@ -937,6 +943,20 @@ def background_retrain(run_id):
     inspection) -- but never on a bare training-stage failure, where no
     candidate ever existed.
 
+    ML-001-T06 manual promotion gate (default OFF -- see
+    config.is_manual_approval_required): when enabled, a validation
+    success no longer flows straight into "activating" here. It instead
+    stops at "awaiting_approval" and this function returns -- releasing
+    the training lock in its own `finally` below exactly as every other
+    terminal outcome does, but without ever calling _attempt_activation.
+    A human then resolves it via `POST /training-runs/{run_id}/approve`
+    (which calls the SAME _attempt_activation this function would have
+    called, with the same success/failure handling) or
+    `POST /training-runs/{run_id}/reject` (terminal "rejected", candidate
+    bundle left untouched on disk). When the flag is unset/false, this
+    entire paragraph is inapplicable -- the flow above is exactly what
+    runs, unchanged.
+
     Lock-release ordering (Phase E item 17): the lock is released in the
     outer `finally` below ONLY after this entire try block -- training,
     validation, AND the full activation workflow (manifest publication,
@@ -999,60 +1019,74 @@ def background_retrain(run_id):
                 print(f"[background_retrain] warning: could not persist model candidate data for run {run_id}")
 
         if result.get("success"):
-            # Validation succeeded -- attempt full activation; see _attempt_activation for rollback behavior.
-            activation_result = _attempt_activation(
-                run_id,
-                model_version=result.get("modelVersion"),
-                artifact_path=result.get("artifactPath"),
-                dataset_hash=(result.get("datasetMetadata") or {}).get("sha256"),
-            )
-
-            if activation_result.get("success"):
-                runs.mark_activated(
-                    run_id,
-                    activation_result["activation"],
-                    activation_result["manifestGeneration"],
-                    activation_result["publishedAt"],
-                )
+            if ml_config.is_manual_approval_required():
+                # ML-001-T06 manual promotion gate: pause here instead of activating
+                # automatically. modelVersion/artifactPath/datasetHash are already on
+                # the run document (persist_model_candidate + attach_dataset_metadata,
+                # both above) -- nothing else needs to be recorded to resume later via
+                # /training-runs/{run_id}/approve, which calls the exact same
+                # _attempt_activation this branch would otherwise call directly.
+                runs.mark_awaiting_approval(run_id)
                 log_event(
-                    "activation_succeeded", runId=run_id,
+                    "awaiting_manual_approval", runId=run_id,
                     modelVersion=result.get("modelVersion"),
-                    manifestGeneration=activation_result["manifestGeneration"],
                     durationMs=int((time.monotonic() - start_ts) * 1000),
                 )
-                # Only point feedback advances to "trained"; a failure here is bookkeeping only -- model is live.
-                try:
-                    finalized = feedback.finalize_trained_for_run(run_id)
-                    if finalized:
-                        log_event("feedback_finalized", runId=run_id, feedbackCount=finalized)
-                        print(f"[background_retrain] finalized {finalized} feedback document(s) to 'trained' for activated run {run_id}")
-                except Exception as exc:
-                    try:
-                        runs.mark_bookkeeping_warning(run_id, str(exc))
-                    except Exception:
-                        pass
-                    print(
-                        f"[background_retrain] warning: run {run_id} is activated but feedback "
-                        f"finalization failed ({exc}); reconciliation will finalize it later"
-                    )
-
-                # Best-effort, runs after activation/finalization are terminal, so a cleanup failure can't affect either.
-                try:
-                    model_cleanup.run_cleanup(
-                        runs.get_run_for_model_version, runs.find_runs_by_status, dry_run=False
-                    )
-                except Exception as exc:
-                    print(f"[background_retrain] warning: post-activation cleanup failed: {exc}")
             else:
-                # Any failure before a successful activation returns reservations to "pending" -- nothing switched.
-                reason = activation_result.get("reason") or "Activation failed"
-                log_event(
-                    "activation_failed", level=40, runId=run_id,
-                    modelVersion=result.get("modelVersion"), failureType=reason,
-                    durationMs=int((time.monotonic() - start_ts) * 1000),
+                # Validation succeeded -- attempt full activation; see _attempt_activation for rollback behavior.
+                activation_result = _attempt_activation(
+                    run_id,
+                    model_version=result.get("modelVersion"),
+                    artifact_path=result.get("artifactPath"),
+                    dataset_hash=(result.get("datasetMetadata") or {}).get("sha256"),
                 )
-                runs.mark_failed_activation(run_id, reason, activation_result.get("activation"))
-                _rollback_reserved_feedback(run_id, reason)
+
+                if activation_result.get("success"):
+                    runs.mark_activated(
+                        run_id,
+                        activation_result["activation"],
+                        activation_result["manifestGeneration"],
+                        activation_result["publishedAt"],
+                    )
+                    log_event(
+                        "activation_succeeded", runId=run_id,
+                        modelVersion=result.get("modelVersion"),
+                        manifestGeneration=activation_result["manifestGeneration"],
+                        durationMs=int((time.monotonic() - start_ts) * 1000),
+                    )
+                    # Only point feedback advances to "trained"; a failure here is bookkeeping only -- model is live.
+                    try:
+                        finalized = feedback.finalize_trained_for_run(run_id)
+                        if finalized:
+                            log_event("feedback_finalized", runId=run_id, feedbackCount=finalized)
+                            print(f"[background_retrain] finalized {finalized} feedback document(s) to 'trained' for activated run {run_id}")
+                    except Exception as exc:
+                        try:
+                            runs.mark_bookkeeping_warning(run_id, str(exc))
+                        except Exception:
+                            pass
+                        print(
+                            f"[background_retrain] warning: run {run_id} is activated but feedback "
+                            f"finalization failed ({exc}); reconciliation will finalize it later"
+                        )
+
+                    # Best-effort, runs after activation/finalization are terminal, so a cleanup failure can't affect either.
+                    try:
+                        model_cleanup.run_cleanup(
+                            runs.get_run_for_model_version, runs.find_runs_by_status, dry_run=False
+                        )
+                    except Exception as exc:
+                        print(f"[background_retrain] warning: post-activation cleanup failed: {exc}")
+                else:
+                    # Any failure before a successful activation returns reservations to "pending" -- nothing switched.
+                    reason = activation_result.get("reason") or "Activation failed"
+                    log_event(
+                        "activation_failed", level=40, runId=run_id,
+                        modelVersion=result.get("modelVersion"), failureType=reason,
+                        durationMs=int((time.monotonic() - start_ts) * 1000),
+                    )
+                    runs.mark_failed_activation(run_id, reason, activation_result.get("activation"))
+                    _rollback_reserved_feedback(run_id, reason)
         elif result.get("stage") == "validation":
             reason = result.get("error") or "Validation failed"
             runs.mark_failed_validation(run_id, reason)
@@ -1230,5 +1264,163 @@ def retrain_model(
             "status": "queued",
             "existingRun": False,
             "message": "Retraining accepted"
+        }
+    )
+
+
+@app.post("/training-runs/{run_id}/approve")
+def approve_training_run(run_id: str, x_ml_operations_token: Optional[str] = Header(None)):
+    """
+    ML-001-T06 manual promotion gate -- the human-facing counterpart to
+    background_retrain's automatic activation path, usable only when
+    config.is_manual_approval_required() left a run sitting at
+    "awaiting_approval" instead of activating it automatically.
+
+    Deliberately reuses _attempt_activation -- the exact same function
+    the automatic path calls -- rather than reimplementing any part of
+    the preload/publish-manifest/swap/smoke-test workflow, so an approved
+    run goes through precisely the same safety ordering (see
+    _attempt_activation's own docstring) as an automatic activation would
+    have. On success, this applies the exact same follow-up steps
+    background_retrain applies after a successful _attempt_activation
+    call (mark_activated, finalize reserved feedback to "trained",
+    best-effort post-activation cleanup) so an approved run reaches the
+    same end state. On failure, this applies the exact same follow-up
+    background_retrain applies after a failed _attempt_activation call
+    (mark_failed_activation, roll reserved feedback back to "pending").
+
+    Returns 404 if run_id does not resolve to any run (same
+    "never distinguish malformed vs. absent" policy as
+    training_run_detail). Returns 409 if the run exists but is not
+    currently "awaiting_approval" -- e.g. it was already approved,
+    rejected, or never had manual approval enabled for it -- since
+    calling this twice, or on the wrong run, is a state conflict, not a
+    malformed request. Returns 422 if _attempt_activation itself reports
+    failure (a legitimate, already-logged operational outcome -- the
+    request itself was well-formed and correctly authorized; the
+    candidate just could not be safely promoted).
+    """
+    _require_operations_token(x_ml_operations_token)
+
+    run_doc = runs.get_run(run_id)
+    if run_doc is None:
+        raise HTTPException(status_code=404, detail="No such training run.")
+    if run_doc.get("status") != "awaiting_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Training run {run_id} is not awaiting approval (status: {run_doc.get('status')}).",
+        )
+
+    activation_result = _attempt_activation(
+        run_id,
+        model_version=run_doc.get("modelVersion"),
+        artifact_path=run_doc.get("artifactPath"),
+        dataset_hash=run_doc.get("datasetHash"),
+    )
+
+    if activation_result.get("success"):
+        runs.mark_activated(
+            run_id,
+            activation_result["activation"],
+            activation_result["manifestGeneration"],
+            activation_result["publishedAt"],
+        )
+        log_event(
+            "activation_succeeded", runId=run_id,
+            modelVersion=run_doc.get("modelVersion"),
+            manifestGeneration=activation_result["manifestGeneration"],
+            trigger="manual_approval",
+        )
+        # Only point feedback advances to "trained"; a failure here is bookkeeping only -- model is live.
+        try:
+            finalized = feedback.finalize_trained_for_run(run_id)
+            if finalized:
+                log_event("feedback_finalized", runId=run_id, feedbackCount=finalized)
+                print(f"[approve_training_run] finalized {finalized} feedback document(s) to 'trained' for activated run {run_id}")
+        except Exception as exc:
+            try:
+                runs.mark_bookkeeping_warning(run_id, str(exc))
+            except Exception:
+                pass
+            print(
+                f"[approve_training_run] warning: run {run_id} is activated but feedback "
+                f"finalization failed ({exc}); reconciliation will finalize it later"
+            )
+
+        # Best-effort, runs after activation/finalization are terminal, so a cleanup failure can't affect either.
+        try:
+            model_cleanup.run_cleanup(
+                runs.get_run_for_model_version, runs.find_runs_by_status, dry_run=False
+            )
+        except Exception as exc:
+            print(f"[approve_training_run] warning: post-activation cleanup failed: {exc}")
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "runId": run_id,
+                "status": "activated",
+                "modelVersion": run_doc.get("modelVersion"),
+                "manifestGeneration": activation_result["manifestGeneration"],
+            }
+        )
+
+    # Any failure before a successful activation returns reservations to "pending" -- nothing switched.
+    reason = activation_result.get("reason") or "Activation failed"
+    log_event(
+        "activation_failed", level=40, runId=run_id,
+        modelVersion=run_doc.get("modelVersion"), failureType=reason,
+        trigger="manual_approval",
+    )
+    runs.mark_failed_activation(run_id, reason, activation_result.get("activation"))
+    _rollback_reserved_feedback(run_id, reason)
+    raise HTTPException(
+        status_code=422,
+        detail=sanitize_reason(reason, max_length=500),
+    )
+
+
+@app.post("/training-runs/{run_id}/reject")
+def reject_training_run(
+    run_id: str,
+    payload: Optional[ApprovalDecisionRequest] = None,
+    x_ml_operations_token: Optional[str] = Header(None),
+):
+    """
+    ML-001-T06 manual promotion gate -- records that a human explicitly
+    declined to promote a candidate sitting at "awaiting_approval".
+    Terminal ("rejected"); never touches the manifest, never touches the
+    candidate bundle on disk (it is left exactly as write_bundle left it,
+    for later inspection or, if the decision is reversed, promotion via
+    training/rollback_model.py's operator CLI -- see that module and
+    RUNBOOK.md).
+
+    Same 404/409 conventions as approve_training_run above: 404 for a
+    run_id that resolves to nothing, 409 for a run that exists but is not
+    currently "awaiting_approval".
+    """
+    _require_operations_token(x_ml_operations_token)
+
+    run_doc = runs.get_run(run_id)
+    if run_doc is None:
+        raise HTTPException(status_code=404, detail="No such training run.")
+    if run_doc.get("status") != "awaiting_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Training run {run_id} is not awaiting approval (status: {run_doc.get('status')}).",
+        )
+
+    reason = payload.reason if payload else None
+    runs.mark_rejected(run_id, reason)
+    log_event("candidate_rejected", runId=run_id, modelVersion=run_doc.get("modelVersion"))
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "runId": run_id,
+            "status": "rejected",
+            "modelVersion": run_doc.get("modelVersion"),
         }
     )
