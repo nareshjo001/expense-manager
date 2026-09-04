@@ -1,3 +1,12 @@
+// DAT-001-T03 -- the one entry point DAT-001-T02's inventory flagged as
+// having no validation boundary: this used to be a bare
+// parseFloat(rawText), which silently returns NaN (or a wrong prefix
+// value, e.g. "12.34.56" -> 12.34) for a malformed OCR match. Routed
+// through the shared parseAmountInput() so a bad match fails closed
+// (null, "couldn't extract an amount") instead of quietly writing NaN
+// or a bogus value into expenseAmount.
+const { parseAmountInput } = require("../../utils/money");
+
 // Approximate the merchant name from the first words of the receipt.
 const extractMerchant = (text) => {
   const words = text.split(" ");
@@ -24,9 +33,7 @@ const extractAmount = (text) => {
   const finalMatch =
     grandTotal || matches[matches.length - 1];
 
-  return parseFloat(
-    finalMatch[2].replace(/,/g, "")
-  );
+  return parseAmountInput(finalMatch[2]);
 };
 
 // Extract the receipt date in any supported format.

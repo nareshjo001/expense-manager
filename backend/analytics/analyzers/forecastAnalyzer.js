@@ -7,7 +7,9 @@ const { fitRobustTrend } = require("./robustTrend");
 const categoryForecastAllocator = require("./categoryForecastAllocator");
 const forecastBudgetRisk = require("./forecastBudgetRisk");
 
-const round2 = (value) => Number(Number(value).toFixed(2));
+// DAT-001-T03 -- shared with every other money-rounding call site via
+// backend/utils/money.js, instead of an independently redefined helper.
+const { roundMoney: round2 } = require("../../utils/money");
 
 const parseAnchorDate = (value) => {
   const date = value instanceof Date ? value : new Date(value);

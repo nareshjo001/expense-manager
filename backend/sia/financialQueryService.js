@@ -4,6 +4,10 @@
 
 const mongoose = require("mongoose");
 const { ExpenseModel, IncomeModel, BudgetModel } = require("../config/Schemas");
+// DAT-001-T03 -- shared with every other money-rounding call site via
+// backend/utils/money.js, instead of this file's own
+// Math.round(x * 100) / 100 pattern.
+const { roundMoney } = require("../utils/money");
 
 const MAX_CATEGORY_RESULTS = 20;
 const MAX_PERIOD_SPAN_DAYS = 366; // mirrors the 12-month history ceiling
@@ -60,7 +64,7 @@ async function getExpenseTotal(userId, period) {
   const row = rows[0];
   return {
     hasData: true,
-    value: row ? Math.round(row.total * 100) / 100 : 0,
+    value: row ? roundMoney(row.total) : 0,
     count: row ? row.count : 0,
   };
 }
@@ -77,7 +81,7 @@ async function getDailySpendingAverage(userId, period) {
   const totalResult = await getExpenseTotal(userId, period);
   const spanDays = Math.max(1, Math.round((period.end.getTime() - period.start.getTime()) / (24 * 60 * 60 * 1000)));
   const average = totalResult.value / spanDays;
-  return { hasData: true, value: Math.round(average * 100) / 100, spanDays };
+  return { hasData: true, value: roundMoney(average), spanDays };
 }
 
 // Bounded, aggregate-only per-category totals -- capped at
@@ -98,7 +102,7 @@ async function getCategoryBreakdown(userId, period, { maxCategories = MAX_CATEGO
     hasData: true,
     categories: rows.map((r) => ({
       category: typeof r._id === "string" ? r._id : "Uncategorized",
-      total: Math.round(r.total * 100) / 100,
+      total: roundMoney(r.total),
       count: r.count,
     })),
   };
@@ -136,7 +140,7 @@ async function getCategoryTotal(userId, period, categoryFilter) {
   const row = rows[0];
   return {
     hasData: true,
-    value: row ? Math.round(row.total * 100) / 100 : 0,
+    value: row ? roundMoney(row.total) : 0,
     count: row ? row.count : 0,
   };
 }
@@ -155,7 +159,7 @@ async function getIncomeTotal(userId, period) {
   const row = rows[0];
   return {
     hasData: true,
-    value: row ? Math.round(row.total * 100) / 100 : 0,
+    value: row ? roundMoney(row.total) : 0,
     count: row ? row.count : 0,
   };
 }
@@ -178,7 +182,7 @@ async function getNetCashFlow(userId, period) {
 
   return {
     hasData: true,
-    value: Math.round((incomeResult.value - expenseResult.value) * 100) / 100,
+    value: roundMoney((incomeResult.value - expenseResult.value)),
     incomeTotal: incomeResult.value,
     expenseTotal: expenseResult.value,
   };
@@ -210,14 +214,14 @@ async function getBudgetSnapshot(userId, { year, month }) {
 
   const budget = Number(doc.budget) || 0;
   const spent = Number(doc.spent) || 0;
-  const remaining = Math.round((budget - spent) * 100) / 100;
+  const remaining = roundMoney((budget - spent));
   const utilization = budget > 0 ? Math.round((spent / budget) * 10000) / 100 : null;
 
   return {
     hasData: true,
     monthKey,
-    budget: Math.round(budget * 100) / 100,
-    spent: Math.round(spent * 100) / 100,
+    budget: roundMoney(budget),
+    spent: roundMoney(spent),
     remaining,
     utilization,
     isOverspent: spent > budget,
@@ -249,7 +253,7 @@ async function getPeriodComparison(userId, period, comparisonPeriod, { categoryF
 
   const currentValue = currentResult.value !== null ? currentResult.value : 0;
   const comparisonValue = comparisonResult.value !== null ? comparisonResult.value : 0;
-  const delta = Math.round((currentValue - comparisonValue) * 100) / 100;
+  const delta = roundMoney((currentValue - comparisonValue));
   const percentChange = comparisonValue !== 0
     ? Math.round((delta / comparisonValue) * 10000) / 100
     : null;
@@ -282,7 +286,7 @@ async function getIncomeBreakdown(userId, period, { maxSources = MAX_CATEGORY_RE
     hasData: true,
     sources: rows.map((r) => ({
       source: typeof r._id === "string" ? r._id : "Other",
-      total: Math.round(r.total * 100) / 100,
+      total: roundMoney(r.total),
       count: r.count,
     })),
   };
@@ -357,7 +361,7 @@ async function getTrendSeries(userId, period, { timeZone } = {}) {
       year,
       month,
       monthLabel: `${monthName} ${year}`,
-      total: match ? Math.round(match.total * 100) / 100 : 0,
+      total: match ? roundMoney(match.total) : 0,
       count: match ? match.count : 0,
     });
 

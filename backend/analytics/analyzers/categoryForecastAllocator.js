@@ -5,7 +5,9 @@ const { forecast: RULES } = require("./scores/forecastRules");
 // Imported from the shared trend module, not forecastAnalyzer.js, so the overall forecast and this breakdown provably use the same function with no circular dependency.
 const { fitRobustTrend } = require("./robustTrend");
 
-const round2 = (value) => Number(Number(value).toFixed(2));
+// DAT-001-T03 -- shared with every other money-rounding call site via
+// backend/utils/money.js, instead of an independently redefined helper.
+const { roundMoney: round2 } = require("../../utils/money");
 
 const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
 

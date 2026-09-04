@@ -3,7 +3,9 @@ const toSafeNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
  
-const round2 = (value) => Number(Number(value).toFixed(2));
+// DAT-001-T03 -- shared with every other money-rounding call site via
+// backend/utils/money.js, instead of an independently redefined helper.
+const { roundMoney: round2 } = require("../../utils/money");
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
  
 const CLAMP_RANGE = 200; // percent — bounds any single period's influence on the composite score

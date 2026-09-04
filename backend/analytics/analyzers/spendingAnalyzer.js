@@ -3,7 +3,9 @@ const toSafeNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
  
-const round2 = (value) => Number(Number(value).toFixed(2));
+// DAT-001-T03 -- shared with every other money-rounding call site via
+// backend/utils/money.js, instead of an independently redefined helper.
+const { roundMoney: round2 } = require("../../utils/money");
  
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
