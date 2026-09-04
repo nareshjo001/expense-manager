@@ -6,11 +6,14 @@ OBS-001-T06). Alerts are always emitted as a distinct structured log event
 `OBS_ALERT_OWNER_EMAIL` is configured, also sent as an email through the
 already-approved Brevo integration (`backend/Services/AuthServices/email.service.js`).
 
-There is no third-party error-aggregation/APM vendor wired in --
-OBS-001-T04 is intentionally deferred pending an architecture/privacy
-decision on adopting one (see the OBS-001 feature spec, section 7,
-"External services"). Until that decision is made, this file is the
-runbook link every alert points to.
+There is no third-party error-aggregation/APM vendor ACTIVATED --
+OBS-001-T04 built a vendor-agnostic reporting module and a reference
+Sentry adapter (see docs/runbooks/OBS-001-T04-error-aggregation-setup.md),
+but it stays a structured no-op until an owner makes the architecture/
+privacy decision on adopting a vendor (see the OBS-001 feature spec,
+section 7, "External services") and sets ERROR_AGGREGATION_PROVIDER.
+Until that decision is made, this file is the runbook link every alert
+points to.
 
 ## high_error_rate
 
@@ -43,6 +46,41 @@ project has more than one maintainer.
    traffic spike.
 3. If sustained, consider scaling or degrading a non-critical feature, per
    the feature spec's documented-degradation requirement.
+
+**Owner:** on-call maintainer.
+
+## backup_restore_verification_failed
+
+**What it means:** OPS-002-T07's weekly restore-verification job
+(`backend/scripts/backup/verifyBackupRestore.js`) either could not find
+any backup to verify, its isolated restore
+(`backend/scripts/backup/mongoRestore.js`, OPS-002-T05) itself failed, or
+the restored document count for at least one of ADR-0002's seven
+authoritative collections did not match what OPS-002-T03's backup
+manifest recorded at backup time. This means the backup/restore chain --
+not just "is there a backup file" but "can it actually be restored,
+correctly" -- is not currently trustworthy.
+
+**Immediate steps:**
+1. Check the most recent `backup-verify` scope structured log lines
+   (`verify_no_backup_found`, `verify_restore_threw`, or
+   `verify_count_drift`) to see which failure mode this is.
+2. If `verify_no_backup_found`: check whether OPS-002-T03's daily backup
+   job (`.github/workflows/backup.yml` or wherever it is actually
+   scheduled in the real deployment -- see
+   docs/runbooks/OPS-002-backup-restore-operations.md) is still running.
+3. If `verify_restore_threw`: check the logged `errorMessage` -- common
+   causes are `RESTORE_TARGET_MONGO_CONN` misconfigured/unreachable, or
+   `mongorestore`/`mongodump` missing from the host running the job.
+4. If `verify_count_drift`: compare the mismatched collection(s)' actual
+   vs. expected counts in the log line -- this can mean the backup ran
+   against a database mid-write (rare, and not itself alarming for one
+   isolated occurrence) or a genuine restore-path bug; treat two
+   consecutive drifts on the same collection as the latter.
+5. This alert does not by itself mean data has been lost -- it means the
+   *recovery path* needs attention before it's needed for real. Treat it
+   with urgency proportional to ADR-0005's RTO target, not as an
+   emergency in itself.
 
 **Owner:** on-call maintainer.
 
