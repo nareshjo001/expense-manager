@@ -81,6 +81,24 @@ def _parse_float(value, default):
         return default, False
 
 
+def _parse_bool(value, default):
+    """
+    Same "absent -> default, present -> parse-or-report-invalid" contract
+    as _parse_int/_parse_float above, for the one boolean operational
+    setting this file validates (ML_REQUIRE_MANUAL_APPROVAL). Accepts the
+    usual case-insensitive spellings; anything else is reported as invalid
+    rather than silently coerced to a guess.
+    """
+    if value is None:
+        return default, True
+    normalized = value.strip().lower()
+    if normalized in ("1", "true", "yes", "on"):
+        return True, True
+    if normalized in ("0", "false", "no", "off"):
+        return False, True
+    return default, False
+
+
 def validate_startup_config():
     """
     Reads the current environment (not cached -- called once at startup,
@@ -169,6 +187,21 @@ def validate_startup_config():
         else:
             summary[name] = value
 
+    def _check_bool(name, default):
+        raw = os.getenv(name)
+        if raw is None:
+            summary[name] = default
+            return
+        value, parsed = _parse_bool(raw, default)
+        if not parsed:
+            errors.append(
+                f"{name}={raw!r} is explicitly set but is not a recognized "
+                f"boolean (true/false/1/0/yes/no/on/off)."
+            )
+            summary[name] = f"invalid ({raw!r})"
+        else:
+            summary[name] = value
+
     _check_positive_int("ML_RETRAIN_STALE_TIMEOUT_SECONDS", 1800)
     _check_positive_int("ML_ORPHANED_RUN_THRESHOLD_SECONDS", 300)
     _check_positive_int("ML_MANIFEST_CHECK_INTERVAL_SECONDS", 5)
@@ -176,6 +209,11 @@ def validate_startup_config():
     _check_nonnegative_int("ML_REJECTED_MODEL_RETENTION_COUNT", 3)
     _check_nonnegative_int("ML_MODEL_RETENTION_DAYS", 7)
     _check_nonnegative_int("ML_FEEDBACK_DUPLICATE_CAP", 3)
+    # ML-001-T06 -- manual promotion gate. Absent -> default False (off),
+    # i.e. today's fully-automatic activation behavior, unchanged. Explicitly
+    # set but unrecognized -> fatal startup error, same policy as every other
+    # setting above.
+    _check_bool("ML_REQUIRE_MANUAL_APPROVAL", False)
 
     raw_regression = os.getenv("ML_MAX_ACCURACY_REGRESSION")
     if raw_regression is None:
@@ -216,6 +254,34 @@ def run_and_log_startup_validation():
     for error in result["errors"]:
         print(f"[config] ERROR: {error}")
     return result
+
+
+def is_manual_approval_required():
+    """
+    ML-001-T06 manual promotion gate. Reads ML_REQUIRE_MANUAL_APPROVAL
+    fresh on every call -- same "read fresh on every call, fall back to a
+    safe default on a bad value" semantics this file's own module
+    docstring describes for every other per-module env read in this
+    project (e.g. inference/predictor_manager.py's
+    ML_MANIFEST_CHECK_INTERVAL_SECONDS) -- rather than caching it at
+    import time, so flipping it in the deployment environment takes
+    effect on the next call without requiring a fresh import.
+
+    Defaults to False (off) whenever the variable is unset OR set to an
+    unrecognized value: app.py's background_retrain must never be left
+    unable to decide which branch to take. (validate_startup_config
+    above is what turns an explicitly-set-but-unrecognized value into a
+    loud startup error -- this function's own job is only ever "what
+    should background_retrain do right now", never "was this configured
+    correctly", so it degrades to the same off/automatic default a
+    genuinely-unset variable would produce.)
+
+    False (the default) means today's fully-automatic activation
+    behavior, unchanged -- see app.py's background_retrain.
+    """
+    raw = os.getenv("ML_REQUIRE_MANUAL_APPROVAL")
+    value, parsed = _parse_bool(raw, False)
+    return value if parsed else False
 
 
 class ConfigurationError(RuntimeError):

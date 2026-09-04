@@ -88,6 +88,38 @@ the one condition where failing to start is intentional (see Phase E).
 - Expected status sequence on an activation problem:
   `queued → running → evaluating → activating → failed_activation`.
 
+### 3.1 Manual promotion gate (ML-001-T06)
+
+By default, a validated candidate activates automatically the instant
+validation succeeds (the sequence above) — this is unchanged unless you
+deliberately opt in below.
+
+- `ML_REQUIRE_MANUAL_APPROVAL` (default: unset / `false`) — set to
+  `true`/`1`/`yes`/`on` to require a human decision before a validated
+  candidate goes live. With it set, a successful validation stops at
+  `awaiting_approval` instead of activating automatically:
+  `queued → running → evaluating → awaiting_approval → activated | rejected`.
+  Nothing else about training/validation changes — the same 9 gates run
+  the same way either way; this flag only gates what happens *after* they
+  pass. See `docs/ml/ML-001-T06-promotion-and-rollback.md` for what to
+  review before approving a candidate, and note that flag stays `false` on
+  this deployment until whoever owns this service deliberately changes it
+  — this document does not itself change production behavior.
+- `POST /training-runs/{runId}/approve` (requires the operations token) —
+  only valid while the run is `awaiting_approval` (`409` otherwise, `404`
+  for an unknown run). Calls the exact same activation workflow the
+  automatic path uses (preload/validate → publish manifest → swap →
+  smoke test), so an approved run reaches the same `activated` end state.
+  `422` if activation itself fails (the candidate could not be safely
+  promoted) — the run is left `failed_activation`, same as the automatic
+  path's own failure handling.
+- `POST /training-runs/{runId}/reject` (requires the operations token,
+  optional JSON body `{"reason": "..."}`) — only valid while the run is
+  `awaiting_approval`. Sets the run to a terminal `rejected` status.
+  Never touches `active.json` and never deletes the candidate bundle —
+  it is left on disk exactly as training produced it, in case the
+  decision is later reversed (see 5.1 below).
+
 ## 4. Failure diagnosis
 
 | Status | Meaning | Where to look |
@@ -97,6 +129,8 @@ the one condition where failing to start is intentional (see Phase E).
 | `failed_activation` | Validation passed, but manifest publication / runtime swap / post-swap smoke test failed | `activation` field on the run (`failedAtStage`, `rollback` outcome) |
 | `bookkeepingWarning` present on an `activated` run | The model IS live and correct — only the "mark feedback as trained" bookkeeping step failed | Next startup's reconciliation pass finalizes this automatically; can also be checked via `GET /training-runs/{runId}` |
 | `synchronized: false` in `/ml-status` | This process's in-memory model disagrees with what `active.json` currently points at | Wait up to `ML_MANIFEST_CHECK_INTERVAL_SECONDS` for the next prediction request to trigger a lazy reload, or check `reloadDiagnostics.lastReloadError` for why it might be stuck |
+| `awaiting_approval` | Validation passed and `ML_REQUIRE_MANUAL_APPROVAL` is on; the candidate is publishable but nothing has been made live yet | `POST /training-runs/{runId}/approve` or `/reject` (section 3.1) |
+| `rejected` | A human explicitly declined to promote a candidate that was `awaiting_approval` | `rejectionReason` field on the run; candidate bundle is still on disk, untouched |
 
 ## 5. Recovery
 
@@ -116,10 +150,46 @@ the one condition where failing to start is intentional (see Phase E).
   startup — see the `feedback_reconciliation` log event (distinct from
   `run_reconciliation`, which is about training-run documents, not
   feedback documents).
-- **Manifest rollback:** if activation fails after the manifest was
-  already published, the previous manifest (or its absence, for a first
-  activation attempt) is restored automatically within the same request —
-  no manual manifest editing is ever required or supported.
+- **Automatic same-request manifest rollback:** if activation fails after
+  the manifest was already published, the previous manifest (or its
+  absence, for a first activation attempt) is restored automatically
+  within the same request — no manual manifest editing is required for
+  this case.
+
+### 5.1 Manual rollback (ML-001-T06, "break glass")
+
+For the case the automatic rollback above does NOT cover — a model that
+activated successfully, has been live for a while, and only later turns
+out to be regressing in some way the 9 validation gates didn't catch
+(they check what they check; a live-traffic issue surfacing after the
+fact is exactly what they cannot see) — `training/rollback_model.py` lets
+an operator explicitly reactivate an older, still-on-disk bundle:
+
+```bash
+cd training
+python3 rollback_model.py --list
+python3 rollback_model.py --model-version model-<runId> --reason "regressed on <category> after activation"
+```
+
+- `--list` prints every currently complete, on-disk bundle (newest first)
+  as JSON — never modifies anything.
+- `--model-version` reactivates that exact bundle: it publishes a new
+  `active.json` generation pointing at it (via the same
+  `model_bundle.build_manifest`/`write_manifest` every other activation
+  path uses), after confirming the target actually loads (the same Gate-2
+  loadability check the forward path relies on). `--reason` is optional
+  free text, echoed back in the printed result.
+- This is a filesystem-level operation, not an HTTP endpoint — it relies
+  on the same manifest-generation polling every worker already uses to
+  converge on a normal forward activation (`ML_MANIFEST_CHECK_INTERVAL_SECONDS`,
+  default 5s). See the module's own docstring for why rollback is
+  deliberately kept as an operator-run script rather than a network
+  endpoint: it is a rare, high-stakes action better gated by the same
+  access an operator already needs to touch this host's other
+  configuration, not by knowledge of one shared HTTP token.
+- Refuses (and changes nothing) if the target is already active, is not a
+  complete bundle, or fails to load — see `training/rollback_model.py`'s
+  `RollbackError` messages for exactly which.
 
 ## 6. Artifact maintenance
 

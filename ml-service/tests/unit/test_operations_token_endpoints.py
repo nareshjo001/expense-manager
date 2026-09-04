@@ -253,3 +253,82 @@ def test_token_never_appears_in_a_rejection_error_message(mocked_lifecycle_env):
     detail = str(exc_info.value.detail)
     assert CORRECT_TOKEN not in detail
     assert WRONG_TOKEN not in detail
+
+
+def test_approve_training_run_rejects_missing_token(mocked_lifecycle_env):
+    """
+    [UNIT] ML-001-T06 -- /training-runs/{run_id}/approve must require the
+    same operations token as every other mutating endpoint. The auth
+    check runs before any run lookup (same ordering as retrain_model's own
+    auth-first guarantee), so a bogus run_id is fine here -- this proves
+    only that the gate itself is unconditional.
+    """
+    ctx = mocked_lifecycle_env
+    app_module = ctx.app_module
+    app_module.os.environ["ML_OPERATIONS_TOKEN"] = CORRECT_TOKEN
+
+    HTTPException = _get_http_exception_class(app_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        app_module.approve_training_run("000000000000000000000000", x_ml_operations_token=None)
+    assert exc_info.value.status_code == 401
+
+
+def test_approve_training_run_rejects_wrong_token(mocked_lifecycle_env):
+    ctx = mocked_lifecycle_env
+    app_module = ctx.app_module
+    app_module.os.environ["ML_OPERATIONS_TOKEN"] = CORRECT_TOKEN
+
+    HTTPException = _get_http_exception_class(app_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        app_module.approve_training_run("000000000000000000000000", x_ml_operations_token=WRONG_TOKEN)
+    assert exc_info.value.status_code == 401
+
+
+def test_approve_training_run_fails_closed_when_server_token_unconfigured(mocked_lifecycle_env):
+    ctx = mocked_lifecycle_env
+    app_module = ctx.app_module
+    app_module.os.environ.pop("ML_OPERATIONS_TOKEN", None)
+
+    HTTPException = _get_http_exception_class(app_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        app_module.approve_training_run("000000000000000000000000", x_ml_operations_token="anything")
+    assert exc_info.value.status_code == 503
+
+
+def test_reject_training_run_rejects_missing_token(mocked_lifecycle_env):
+    ctx = mocked_lifecycle_env
+    app_module = ctx.app_module
+    app_module.os.environ["ML_OPERATIONS_TOKEN"] = CORRECT_TOKEN
+
+    HTTPException = _get_http_exception_class(app_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        app_module.reject_training_run("000000000000000000000000", payload=None, x_ml_operations_token=None)
+    assert exc_info.value.status_code == 401
+
+
+def test_reject_training_run_rejects_wrong_token(mocked_lifecycle_env):
+    ctx = mocked_lifecycle_env
+    app_module = ctx.app_module
+    app_module.os.environ["ML_OPERATIONS_TOKEN"] = CORRECT_TOKEN
+
+    HTTPException = _get_http_exception_class(app_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        app_module.reject_training_run("000000000000000000000000", payload=None, x_ml_operations_token=WRONG_TOKEN)
+    assert exc_info.value.status_code == 401
+
+
+def test_reject_training_run_fails_closed_when_server_token_unconfigured(mocked_lifecycle_env):
+    ctx = mocked_lifecycle_env
+    app_module = ctx.app_module
+    app_module.os.environ.pop("ML_OPERATIONS_TOKEN", None)
+
+    HTTPException = _get_http_exception_class(app_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        app_module.reject_training_run("000000000000000000000000", payload=None, x_ml_operations_token="anything")
+    assert exc_info.value.status_code == 503

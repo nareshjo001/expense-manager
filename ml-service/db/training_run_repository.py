@@ -124,6 +124,15 @@ LOCK_ID = "training_lock"
 ALLOWED_STATUSES = {
     "queued", "running", "evaluating", "completed", "failed", "failed_validation",
     "activating", "activated", "failed_activation",
+    # ML-001-T06 -- manual promotion gate (only reachable when
+    # config.is_manual_approval_required() is on; see app.py's
+    # background_retrain). "awaiting_approval" sits where "activating"
+    # would otherwise start: a publishable candidate exists but activation
+    # has not been attempted. "rejected" is its terminal counterpart when a
+    # human declines to promote it -- distinct from "failed_validation" (an
+    # automated gate rejected it) and "failed_activation" (activation was
+    # attempted and failed).
+    "awaiting_approval", "rejected",
 }
 ALLOWED_TRIGGER_SOURCES = {"cron", "manual", "api"}
 
@@ -168,6 +177,8 @@ def _serialize_run(doc):
         # Set by attach_dataset_metadata; exposed for the run-detail API.
         "datasetHash": doc.get("datasetHash"),
         "rowCounts": doc.get("rowCounts"),
+        # ML-001-T06 -- set only by mark_rejected, on a run a human declined to promote.
+        "rejectionReason": doc.get("rejectionReason"),
     }
 
 
@@ -381,6 +392,58 @@ def mark_failed_activation(run_id, reason, activation_metadata=None):
     if activation_metadata is not None:
         update["activation"] = activation_metadata
     _runs().update_one({"_id": ObjectId(run_id)}, {"$set": update})
+
+
+def mark_awaiting_approval(run_id):
+    """
+    ML-001-T06: transition a run from "evaluating" (validation just
+    passed) to "awaiting_approval" -- taken instead of mark_activating
+    ONLY when config.is_manual_approval_required() is on (see app.py's
+    background_retrain). By this point in background_retrain,
+    persist_model_candidate() and attach_dataset_metadata() have already
+    recorded modelVersion/artifactPath/datasetHash on this run document,
+    so nothing new needs to be attached here -- this only records the
+    status transition itself, mirroring mark_evaluating's shape.
+
+    Distinct from "activating": nothing durable or live has changed at
+    this point -- no manifest write, no runtime swap, no smoke test. The
+    candidate bundle is already immutable on disk (write_bundle already
+    completed); this status only means a human has not yet chosen to
+    publish it. See app.py's /training-runs/{run_id}/approve and
+    /reject endpoints for what happens next.
+    """
+    _runs().update_one(
+        {"_id": ObjectId(run_id)},
+        {"$set": {"status": "awaiting_approval", "heartbeatAt": _utcnow()}}
+    )
+
+
+def mark_rejected(run_id, reason=None):
+    """
+    ML-001-T06: terminal status recording that a human explicitly declined
+    to promote a candidate that was "awaiting_approval". Distinct from
+    every other terminal status in this module: the candidate was NOT
+    rejected by an automated gate (see mark_failed_validation) and no
+    activation was ever attempted (see mark_failed_activation) -- a human
+    reviewed a validated, publishable candidate and chose not to promote
+    it. The candidate bundle on disk is left completely untouched by this
+    call (app.py's reject endpoint never deletes it) -- only this run
+    document's own status/bookkeeping changes. `reason`, if given, is a
+    free-text operator note, sanitized the same length-capped way every
+    other reason field in this module is.
+    """
+    now = _utcnow()
+    _runs().update_one(
+        {"_id": ObjectId(run_id)},
+        {
+            "$set": {
+                "status": "rejected",
+                "completedAt": now,
+                "heartbeatAt": now,
+                "rejectionReason": (str(reason)[:2000] if reason else None),
+            }
+        }
+    )
 
 
 def mark_bookkeeping_warning(run_id, warning):
