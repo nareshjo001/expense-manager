@@ -30,6 +30,11 @@ const normalizeCategory = (category = '') => {
         .replace(/\b\w/g, c => c.toUpperCase());
 };
 
+// OCR-003 -- rounds a receipt field's OCR confidence (0-100) for display,
+// or returns null when there's nothing to show (no bill was uploaded, or
+// this particular field had nothing to look confidence up against).
+const formatFieldConfidence = (value) => (typeof value === 'number' ? Math.round(value) : null);
+
 // Expense creation/editing form with debounced ML category prediction and bill-scan/edit-load auto-fill.
 const AddExpense = ({ isEdit, setIsEdit }) => {
     const [expenseName, setName] = useState('');
@@ -315,6 +320,14 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     {isSpinnerLoading && <Spinner />}
         <div className="add-expense-wrapper">
             <form className="add-expense" onSubmit={handleSubmit}>
+                {
+                    billData?.needsReview && (
+                        <div className="receipt-review-banner" role="status">
+                            We couldn't confidently read every field on this receipt. Please double-check the fields below before saving.
+                        </div>
+                    )
+                }
+
                 <div className="field bill-upload-option">
                     <label>Do you want to upload a bill?</label>
                     <button className='open-bill-upload-btn' type="button" onClick={() => setIsBillUpload(true)}>
@@ -323,7 +336,20 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 </div>
                 
                 <div className="field">
-                    <label htmlFor="name">Name of the Expense</label>
+                    <label htmlFor="name" className="field-label-flex">
+                        Name of the Expense
+                        {
+                            formatFieldConfidence(billData?.fieldConfidence?.expenseName) !== null && (
+                                <span
+                                    className={`field-confidence${formatFieldConfidence(billData.fieldConfidence.expenseName) < 60 ? ' low' : ''}`}
+                                    aria-label={`Receipt OCR confidence for this field: ${formatFieldConfidence(billData.fieldConfidence.expenseName)}%`}
+                                >
+                                    <span>Receipt confidence</span>
+                                    <strong>· {formatFieldConfidence(billData.fieldConfidence.expenseName)}%</strong>
+                                </span>
+                            )
+                        }
+                    </label>
                     <input
                         type="text"
                         value={expenseName}
@@ -366,7 +392,20 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 </div>
 
                 <div className="field">
-                    <label htmlFor="number">Amount Spent</label>
+                    <label htmlFor="number" className="field-label-flex">
+                        Amount Spent
+                        {
+                            formatFieldConfidence(billData?.fieldConfidence?.expenseAmount) !== null && (
+                                <span
+                                    className={`field-confidence${formatFieldConfidence(billData.fieldConfidence.expenseAmount) < 60 ? ' low' : ''}`}
+                                    aria-label={`Receipt OCR confidence for this field: ${formatFieldConfidence(billData.fieldConfidence.expenseAmount)}%`}
+                                >
+                                    <span>Receipt confidence</span>
+                                    <strong>· {formatFieldConfidence(billData.fieldConfidence.expenseAmount)}%</strong>
+                                </span>
+                            )
+                        }
+                    </label>
                     <input
                         type="number"
                         value={expenseAmount}
@@ -379,7 +418,20 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 </div>
 
                 <div className="field">
-                    <label htmlFor="date">Date Spent</label>
+                    <label htmlFor="date" className="field-label-flex">
+                        Date Spent
+                        {
+                            formatFieldConfidence(billData?.fieldConfidence?.expenseDate) !== null && (
+                                <span
+                                    className={`field-confidence${formatFieldConfidence(billData.fieldConfidence.expenseDate) < 60 ? ' low' : ''}`}
+                                    aria-label={`Receipt OCR confidence for this field: ${formatFieldConfidence(billData.fieldConfidence.expenseDate)}%`}
+                                >
+                                    <span>Receipt confidence</span>
+                                    <strong>· {formatFieldConfidence(billData.fieldConfidence.expenseDate)}%</strong>
+                                </span>
+                            )
+                        }
+                    </label>
                     <input
                         type="date"
                         id="date"
