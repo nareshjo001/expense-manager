@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./Auth.css";
+import { onKeyActivate } from "../../utils/onKeyActivate";
 
 import ForgotPassword from "./passwordReset/ForgotPassword";
 import { loginSuccessToast, logInErrorToast } from '../alertsEffects/toastMessages';
@@ -101,7 +102,14 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
           />
 
           <div className="forgot-password">
-            <p onClick={() => setForgotPassword(true)}>Forgot Password ?</p>
+            <p
+              role="button"
+              tabIndex={0}
+              onClick={() => setForgotPassword(true)}
+              onKeyDown={onKeyActivate(() => setForgotPassword(true))}
+            >
+              Forgot Password ?
+            </p>
           </div>
 
           <input

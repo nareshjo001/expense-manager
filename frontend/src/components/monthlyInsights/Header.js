@@ -2,8 +2,9 @@ import { FaCalendarAlt, FaCreditCard, FaThLarge, FaArrowUp, FaArrowDown, } from 
 import { FaArrowTrendUp, FaPen  } from "react-icons/fa6";
 import { HiSparkles } from "react-icons/hi2";
 import { useBudgetSummary } from "../../hooks/queries/useBudgetSummary";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
 import { useUpdateBudgetMutation } from "../../hooks/mutations/useUpdateBudgetMutation";
 import "./Header.css";
@@ -22,6 +23,12 @@ export default function Header({ summary }) {
   const [animate, setAnimate] = useState(false);
 
   const updateBudgetMutation = useUpdateBudgetMutation();
+
+  // FE-a11y: the edit-budget overlay had no dialog semantics -- no
+  // role="dialog", no focus trap, no Escape handling -- same gap as
+  // DeleteAlert/SaveRuleAlert/IncomeModal, fixed the same way.
+  const editBudgetDialogRef = useRef(null);
+  useModalA11y(editBudgetDialogRef, () => setEditBudget(false), editBudget);
 
   useEffect(() => {
     if (summary) {
@@ -206,8 +213,13 @@ export default function Header({ summary }) {
           <div
             className="edit-budget-modal"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-budget-heading"
+            ref={editBudgetDialogRef}
+            tabIndex={-1}
           >
-            <h2>Edit Budget</h2>
+            <h2 id="edit-budget-heading">Edit Budget</h2>
 
             <div className="budget-current-value">
               <span>Current Budget</span>
@@ -216,9 +228,10 @@ export default function Header({ summary }) {
 
             <form onSubmit={handleBudgetSubmit}>
               <div className="budget-input-group">
-                <label>New Budget</label>
+                <label htmlFor="edit-budget-amount">New Budget</label>
 
                 <input
+                  id="edit-budget-amount"
                   type="number"
                   placeholder="Enter new budget"
                   value={newBudget}

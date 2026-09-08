@@ -126,14 +126,14 @@ const ExpenseItem = ({
 
           <div className="desktop-actions">
             
-            <button className="icon-btn edit" onClick={handleEdit} title="Edit">
+            <button className="icon-btn edit" onClick={handleEdit} title="Edit" aria-label="Edit expense">
               <svg viewBox="0 0 24 24" className="icon">
                 <path d="M12 20h9"></path>
                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
               </svg>
             </button>
 
-            <button className="icon-btn recurring" onClick={handleRecurring} title={isRecurring ? "Unmark recurring" : "Mark recurring"}>
+            <button className="icon-btn recurring" onClick={handleRecurring} title={isRecurring ? "Unmark recurring" : "Mark recurring"} aria-label={isRecurring ? "Unmark as recurring" : "Mark as recurring"} aria-pressed={isRecurring}>
               {!isRecurring ?
                   <svg viewBox="0 0 24 24" className="icon">
                     <path d="M17 1l4 4-4 4"></path>
@@ -150,7 +150,7 @@ const ExpenseItem = ({
               }
             </button>
             
-            <button className="icon-btn delete" onClick={() => onDelete(expense._id)} title="Delete" >
+            <button className="icon-btn delete" onClick={() => onDelete(expense._id)} title="Delete" aria-label="Delete expense">
               <svg viewBox="0 0 24 24" className="icon">
                 <polyline points="3 6 5 6 21 6"></polyline>
 
