@@ -198,6 +198,15 @@ jobs:
         run: npx playwright test
       - name: Upload Playwright report
         if: always()
+        # CI-004: this step has failed the whole job on a transient
+        # "403 Forbidden: Error from intermediary" from GitHub's artifact
+        # storage backend even when every actual e2e test (the previous
+        # step) passed -- a known GitHub Actions upload-artifact@v4
+        # flake, not something this repo controls. continue-on-error
+        # keeps that failure from blocking CI/merges; the step still
+        # shows as failed in the run so a genuinely missing report is
+        # still visible, it just doesn't fail the job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
