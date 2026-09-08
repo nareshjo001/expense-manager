@@ -186,6 +186,33 @@ const deleteSuccessToast = (isPending = false) => {
     );
 };
 
+// OCR-003 -- lets the user know a receipt parsed but some fields look
+// uncertain (low OCR confidence, or no total found), so they know to
+// double-check before saving rather than assuming everything is right.
+const receiptNeedsReviewToast = () => {
+    toast.dismiss();
+    toast.warning(
+        <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+            We couldn't confidently read every field on this receipt. Please double-check before saving.
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 4000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                backgroundColor: "#fef3c7",
+                color: "#92400e",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
 // CAT-001 -- confirms a merchant rule was saved (post-correction prompt or the rule management screen).
 const merchantRuleSaveSuccessToast = () => {
     toast.dismiss();
@@ -326,5 +353,6 @@ export {
     merchantRuleSaveSuccessToast,
     merchantRuleSaveErrorToast,
     merchantRuleDeleteSuccessToast,
-    merchantRuleDeleteErrorToast
+    merchantRuleDeleteErrorToast,
+    receiptNeedsReviewToast
 };

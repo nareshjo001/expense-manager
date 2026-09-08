@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./BillUpload.css";
 import { FaArrowLeft } from "react-icons/fa";
-import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
+import { expenseAddErrorToast, receiptNeedsReviewToast } from "../alertsEffects/toastMessages";
 import { useBillUploadMutation } from "../../hooks/mutations/useBillUploadMutation";
 
 // Bill image upload with OCR-based receipt parsing and preview lifecycle management.
@@ -63,6 +63,9 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
     billUploadMutation.mutate({ file: selectedFile, signal: abortControllerRef.current.signal }, {
       onSuccess: (result) => {
         result.parsedReceipt.expenseDate = formatDateForInput(result.parsedReceipt.expenseDate);
+        if (result.parsedReceipt.needsReview) {
+          receiptNeedsReviewToast();
+        }
         setBillData(result.parsedReceipt);
         setIsBillUpload(false);
       },
