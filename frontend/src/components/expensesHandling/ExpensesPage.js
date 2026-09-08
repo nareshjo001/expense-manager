@@ -7,6 +7,7 @@ import { ExpenseItem, SetBudget, formatDateRange } from '../imports/expensesImpo
 import { useExpensesQuery } from '../../hooks/queries/useExpensesQuery';
 import { useInfiniteExpensesQuery } from '../../hooks/queries/useInfiniteExpensesQuery';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 import { useExpenseInsights } from '../contexts/ai-contexts/ExpenseInsightsContext';
 import InlineExpenseInsight from '../insights/InlineExpenseInsight'
@@ -51,6 +52,13 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   const isExpensesError = isCustomMode ? infiniteExpensesQuery.isError : expensesQuery.isError;
   const refetchActiveExpenses = isCustomMode ? infiniteExpensesQuery.refetch : expensesQuery.refetch;
   const loadMoreRef = useRef(null);
+
+  // FE-a11y: the custom-date-range overlay had no dialog semantics -- no
+  // role="dialog", no focus trap, no Escape handling. isCustomRangeOpen
+  // mirrors the same condition the overlay itself renders under, below.
+  const customRangeDialogRef = useRef(null);
+  const isCustomRangeOpen = filter === 'custom' && (!startDate || !endDate);
+  useModalA11y(customRangeDialogRef, () => setFilter(''), isCustomRangeOpen);
   const [visibleExpenseCount, setVisibleExpenseCount] = useState(INITIAL_VISIBLE_EXPENSES);
 
   // useQuery no longer supports an onSuccess callback, so insight notifications run here instead, once per new successful fetch.
@@ -302,18 +310,25 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
           <div
             className="custom-range-modal"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-range-heading"
+            ref={customRangeDialogRef}
+            tabIndex={-1}
           >
-            <p>Choose the custom date range...</p>
+            <p id="custom-range-heading">Choose the custom date range...</p>
 
             <div className="custom-modal-inputs">
               <input
                 type="date"
+                aria-label="Start date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
 
               <input
                 type="date"
+                aria-label="End date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />

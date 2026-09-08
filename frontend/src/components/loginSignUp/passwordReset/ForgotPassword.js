@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { onKeyActivate } from "../../../utils/onKeyActivate";
 import back from '../../../icons/left-arrow.png';
 
 import ResetPassword from "./ResetPassword";
@@ -194,7 +195,14 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
                         {countdown > 0 ? (
                         <>Resend OTP in <span>{countdown}s</span></>
                         ) : (
-                        <span onClick={handleResend}>Resend OTP</span>
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={handleResend}
+                            onKeyDown={onKeyActivate(handleResend)}
+                        >
+                            Resend OTP
+                        </span>
                         )}
                     </p>
                 }

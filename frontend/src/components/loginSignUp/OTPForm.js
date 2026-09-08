@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import './OTPForm.css';
+import { onKeyActivate } from '../../utils/onKeyActivate';
 
 import { signUpSuccessToast, signUpErrorToast } from '../alertsEffects/toastMessages';
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
@@ -180,7 +181,14 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
                 {countdown > 0 ? (
                 <>Resend OTP in <span>{countdown}s</span></>
                 ) : (
-                <span onClick={handleResend}>Resend OTP</span>
+                <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleResend}
+                    onKeyDown={onKeyActivate(handleResend)}
+                >
+                    Resend OTP
+                </span>
                 )}
             </p>
         </div>

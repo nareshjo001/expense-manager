@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { onKeyActivate } from '../../utils/onKeyActivate';
 import {
     ThemeContext,
     TrendChartPage,
@@ -192,9 +193,16 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                     <div className="nav-link dropdown">
                                         <span
                                             className="nav-item dropdown-toggle"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-haspopup="true"
+                                            aria-expanded={isMobile ? showMobileDropdown : undefined}
                                             onClick={() => {
                                                 if (isMobile) setShowMobileDropdown(true);
                                             }}
+                                            onKeyDown={onKeyActivate(() => {
+                                                if (isMobile) setShowMobileDropdown(true);
+                                            })}
                                         >
                                             <FaChartBar /> Charts
                                         </span>
@@ -277,7 +285,12 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
                             <span
                                 className="mobile-chart-btn"
+                                role="button"
+                                tabIndex={0}
+                                aria-haspopup="true"
+                                aria-expanded={showMobileDropdown}
                                 onClick={() => setShowMobileDropdown(prev => !prev)}
+                                onKeyDown={onKeyActivate(() => setShowMobileDropdown(prev => !prev))}
                             >
                                 <FaChartBar />
                                 <span>Charts</span>

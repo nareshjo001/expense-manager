@@ -64,10 +64,23 @@ jobs:
       # not be verified from the sandbox this task was authored in (no
       # general internet egress there) -- verify it succeeds the first
       # time this workflow actually runs in GitHub Actions.
+      # 2026-09-08 fix: this used $(lsb_release -cs) to pick the apt
+      # codename automatically, which broke the first time this workflow
+      # actually ran -- ubuntu-latest now resolves to 24.04 "noble", and
+      # MongoDB has not published a noble/mongodb-org/7.0 apt repo yet
+      # (https://repo.mongodb.org/apt/ubuntu/dists/noble/mongodb-org/7.0/
+      # 404s: "Release" file does not exist). MongoDB's own install docs
+      # recommend using the newest Ubuntu codename they DO support when
+      # the running release is too new, since the packages themselves
+      # have no noble-specific dependency -- jammy (22.04) is that
+      # newest-supported codename for the 7.0 series as of this fix.
+      # Hardcoding it also makes this step deterministic instead of
+      # silently changing behavior whenever GitHub bumps what
+      # "ubuntu-latest" points to.
       - name: Install MongoDB Database Tools (mongodump/mongorestore)
         run: |
           curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-          echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
           sudo apt-get update
           sudo apt-get install -y mongodb-database-tools
           mongodump --version

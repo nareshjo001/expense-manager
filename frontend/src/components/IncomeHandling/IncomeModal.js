@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./IncomeModel.css";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { FaTimes, FaEdit, FaTrash } from "react-icons/fa";
 import { expenseAddErrorToast, expenseAddSuccessToast } from "../alertsEffects/toastMessages";
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
@@ -21,6 +22,27 @@ export default function IncomeModal({ isOpen, onClose, period }) {
   const [isEdit, setIsEdit] = useState(false);
   const [editIncomeId, setEditIncomeId] = useState(null);
   const [updatedAmount, setUpdatedAmount] = useState("");
+
+  // FE-a11y: the modal shell (both the list view and the edit sub-view)
+  // previously had no dialog semantics -- no role="dialog", no focus trap,
+  // no Escape handling -- even though the loading/error states inside it
+  // already got proper ARIA roles under FE-001-T08. dialogRef is attached
+  // to whichever of the two mutually-exclusive views (list vs edit) is
+  // currently rendered below. Escape backs out of the edit sub-view first
+  // (matching the Cancel button), and only closes the whole modal from the
+  // list view, matching how a nested dialog layer is expected to behave.
+  const dialogRef = useRef(null);
+  const closeModal = () => {
+    onClose();
+    setIsEdit(false);
+    setUpdatedAmount("");
+  };
+  const cancelEdit = () => {
+    setIsEdit(false);
+    setEditIncomeId(null);
+    setUpdatedAmount("");
+  };
+  useModalA11y(dialogRef, isEdit ? cancelEdit : closeModal, isOpen);
 
   useEffect(() => {
     if (!listQuery.isError) return;
@@ -126,15 +148,21 @@ export default function IncomeModal({ isOpen, onClose, period }) {
         <div
           className="income-modal-edit"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="income-edit-heading"
+          ref={dialogRef}
+          tabIndex={-1}
         >
           <div className="income-modal-edit-card">
-            <h3>Edit Income Amount</h3>
+            <h3 id="income-edit-heading">Edit Income Amount</h3>
 
             <div className="amount-input-wrapper">
-              <span>₹</span>
+              <span aria-hidden="true">₹</span>
               <input
                 type="number"
                 placeholder="Enter amount"
+                aria-label="Income amount"
                 value={updatedAmount}
                 min="0"
                 step="any"
@@ -161,10 +189,18 @@ export default function IncomeModal({ isOpen, onClose, period }) {
           </div>
         </div>
         :
-        <div className="income-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="income-modal"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="income-modal-heading"
+          ref={dialogRef}
+          tabIndex={-1}
+        >
           <div className="income-modal-header">
-            <h2>Income Sources</h2>
-            <button className="income-close-btn" onClick={onClose}>
+            <h2 id="income-modal-heading">Income Sources</h2>
+            <button className="income-close-btn" onClick={onClose} aria-label="Close">
               <FaTimes  />
             </button>
           </div>
@@ -210,6 +246,7 @@ export default function IncomeModal({ isOpen, onClose, period }) {
                       <button
                         className="income-action-btn edit"
                         onClick={() => handleEdit(income)}
+                        aria-label={`Edit income from ${income.incomeSource}`}
                       >
                         <FaEdit />
                       </button>
@@ -219,6 +256,7 @@ export default function IncomeModal({ isOpen, onClose, period }) {
                         onClick={() => {
                           handleDelete(income._id);
                         }}
+                        aria-label={`Delete income from ${income.incomeSource}`}
                       >
                         <FaTrash />
                       </button>
