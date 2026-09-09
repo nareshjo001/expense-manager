@@ -23,9 +23,17 @@ const uploadBill = async (req, res) => {
     const parsedReceipt = parseReceipt(extractedText);
     emitReceiptAuditEvent({ req, outcome: "success", code: "RECEIPT_PROCESSED" });
 
+    // OCR-003: parsedReceipt.needsReview (no amount found, or low overall
+    // OCR confidence) does not change the HTTP outcome -- the upload and
+    // OCR run genuinely succeeded -- but the message should not claim an
+    // uncertain parse was a clean success. The client already gets the
+    // full confidence detail (overallConfidence/fieldConfidence) to act
+    // on regardless of this message.
     return res.status(200).json({
       success: true,
-      message: "Receipt processed successfully.",
+      message: parsedReceipt.needsReview
+        ? "Receipt processed, but some fields may need a quick check before you save."
+        : "Receipt processed successfully.",
       parsedReceipt,
     });
   } catch (error) {

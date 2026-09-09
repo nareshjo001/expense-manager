@@ -1,4 +1,7 @@
 const Tesseract = require("tesseract.js");
+// OCR-003-T01 -- the result shape is now a versioned contract rather than an
+// ad-hoc object this module and receiptParser.js happened to agree on.
+const { buildOcrResult, buildLine } = require("./ocrContract");
 
 class OcrProcessingError extends Error {
   constructor(code, message) {
@@ -38,12 +41,21 @@ const normalizeLayout = (rawText) =>
     .join("\n")
     .trim();
 
-// Build a per-line { text, confidence } list. Prefers Tesseract's
-// block -> paragraph -> line hierarchy (only populated when recognize()
-// is called with output.blocks: true) for a real per-line confidence
-// score; falls back to the flattened text with a null confidence when
-// blocks weren't returned, so callers can always rely on `lines` being
-// an array rather than having to branch on whether OCR gave them detail.
+// Build a per-line { text, confidence, bbox } list. Prefers Tesseract's
+// block -> paragraph -> line hierarchy (only populated when recognize() is
+// called with output.blocks: true) for a real per-line confidence score;
+// falls back to the flattened text with null confidence and null bbox when
+// blocks weren't returned, so callers can always rely on `lines` being an
+// array rather than having to branch on whether OCR gave them detail.
+//
+// OCR-003-T02 -- each line now also carries its bounding box. Tesseract has
+// always returned one alongside the per-line confidence; it was simply
+// discarded here. Keeping it is what makes it possible to point at WHERE on
+// the receipt a field came from -- to highlight the total the parser used
+// when asking a user to confirm it, to crop that region for a re-read, or
+// to tell "the total is missing" apart from "the total was found in a place
+// that makes no sense". Discarding it meant every one of those needed a
+// second OCR pass to recover information the first pass already had.
 const buildLines = (blocks, normalizedText) => {
   const fromBlocks = [];
   if (Array.isArray(blocks)) {
@@ -52,8 +64,7 @@ const buildLines = (blocks, normalizedText) => {
         for (const line of paragraph?.lines || []) {
           const text = normalizeLine(line?.text || "");
           if (!text) continue;
-          const confidence = typeof line?.confidence === "number" ? line.confidence : null;
-          fromBlocks.push({ text, confidence });
+          fromBlocks.push(buildLine(text, line?.confidence, line?.bbox));
         }
       }
     }
@@ -64,7 +75,7 @@ const buildLines = (blocks, normalizedText) => {
     .split("\n")
     .map((text) => text.trim())
     .filter(Boolean)
-    .map((text) => ({ text, confidence: null }));
+    .map((text) => buildLine(text, null, null));
 };
 
 // Runs a single OCR attempt end to end: create a worker, race it (and
@@ -113,7 +124,7 @@ const attemptRecognition = async (imageBuffer, timeoutMs) => {
     const confidence = typeof result.data.confidence === "number" ? result.data.confidence : null;
     const lines = buildLines(result.data.blocks, normalizedText);
 
-    return { text: normalizedText, confidence, lines };
+    return buildOcrResult({ text: normalizedText, confidence, lines });
   } catch (error) {
     if (error instanceof OcrProcessingError) throw error;
     throw new OcrProcessingError("OCR_PROCESSING_FAILED", "Receipt processing failed.");
@@ -123,7 +134,7 @@ const attemptRecognition = async (imageBuffer, timeoutMs) => {
   }
 };
 
-// Extracts { text, confidence, lines } from a receipt image, retrying a
+// Extracts a versioned OCR result (see ocrContract.js) from a receipt image, retrying a
 // transient (non-timeout) failure up to getOcrMaxAttempts() times total.
 // Each attempt gets a fresh worker and the same per-attempt timeout
 // budget; a timeout is rethrown immediately without retrying.

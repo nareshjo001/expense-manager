@@ -167,14 +167,16 @@
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
-.category-label {
+.category-label,
+.field-label-flex {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
 }
 
-.ml-confidence {
+.ml-confidence,
+.field-confidence {
     display: inline-flex;
     align-items: baseline;
     gap: 2px;
@@ -185,8 +187,24 @@
     white-space: nowrap;
 }
 
-.ml-confidence strong {
+.ml-confidence strong,
+.field-confidence strong {
     font-weight: 700;
+}
+
+.field-confidence.low {
+    color: #92400e;
+}
+
+.receipt-review-banner {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid rgba(146, 64, 14, 0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
 }
 
 .category-input-wrapper {
