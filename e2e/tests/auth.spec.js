@@ -46,8 +46,10 @@ test.describe('Authentication', () => {
     // identity every run sidesteps that without weakening the assertion.
     const unknownEmail = `nonexistent-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 
-    await page.getByPlaceholder('Email ID').fill(unknownEmail);
-    await page.getByPlaceholder('Password').fill('totally-wrong-password');
+    // FE-002-T02 -- label-based, since the login fields no longer identify
+    // themselves by placeholder text alone.
+    await page.getByLabel(/Email ID/).fill(unknownEmail);
+    await page.getByLabel(/Password/).fill('totally-wrong-password');
     await page.getByRole('button', { name: 'Login' }).click();
 
     // backend/Services/AuthServices/security.service.js's
