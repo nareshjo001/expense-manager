@@ -11,8 +11,36 @@ const {
   MAX_LIMIT,
 } = require("../utils/pagination");
 
+describe("resolveLimit", () => {
+  const { resolveLimit, DEFAULT_LIMIT } = require("../utils/pagination");
+
+  test("returns DEFAULT_LIMIT when limit is absent -- there is no unbounded path", () => {
+    expect(resolveLimit(undefined)).toBe(DEFAULT_LIMIT);
+    expect(resolveLimit(null)).toBe(DEFAULT_LIMIT);
+    expect(resolveLimit("")).toBe(DEFAULT_LIMIT);
+  });
+
+  test("honours a valid explicit limit", () => {
+    expect(resolveLimit("10")).toBe(10);
+    expect(resolveLimit(String(MAX_LIMIT))).toBe(MAX_LIMIT);
+  });
+
+  test("rejects a present but invalid limit instead of silently defaulting", () => {
+    // Defaulting here would hide the caller's error and make the resulting
+    // page size look like something they asked for.
+    expect(() => resolveLimit("0")).toThrow(PaginationValidationError);
+    expect(() => resolveLimit("-5")).toThrow(PaginationValidationError);
+    expect(() => resolveLimit("abc")).toThrow(PaginationValidationError);
+    expect(() => resolveLimit(String(MAX_LIMIT + 1))).toThrow(PaginationValidationError);
+  });
+
+  test("respects a caller-supplied defaultLimit", () => {
+    expect(resolveLimit(undefined, { defaultLimit: 7 })).toBe(7);
+  });
+});
+
 describe("parseLimit", () => {
-  test("returns undefined when limit is absent -- caller falls back to unbounded behavior", () => {
+  test("returns undefined when limit is absent -- callers that need 'absent means absent' keep this", () => {
     expect(parseLimit(undefined)).toBeUndefined();
     expect(parseLimit(null)).toBeUndefined();
     expect(parseLimit("")).toBeUndefined();

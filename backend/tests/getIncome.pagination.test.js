@@ -81,8 +81,10 @@ const DOCS = [
   incomeDoc("2026-01-07", "64f1a2b3c4d5e6f7a8b9d004"),
 ];
 
-describe("getIncome -- backward compatibility (no pagination params)", () => {
-  test("omitting limit returns the exact previous unbounded shape", async () => {
+// EXP-003-T03 -- the unbounded path is gone; these assertions were inverted
+// deliberately, not deleted, so the change of contract stays visible here.
+describe("getIncome -- bounded by default (no pagination params)", () => {
+  test("omitting limit still returns a bounded page carrying hasMore/nextCursor", async () => {
     const { getIncome } = loadController({ allDocs: DOCS });
     const req = { userId: USER_ID, query: {} };
     const res = buildRes();
@@ -91,8 +93,28 @@ describe("getIncome -- backward compatibility (no pagination params)", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.data).toHaveLength(4);
-    expect(res.body.hasMore).toBeUndefined();
-    expect(res.body.nextCursor).toBeUndefined();
+    expect(res.body.hasMore).toBe(false);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  test("never returns more than DEFAULT_LIMIT records when limit is omitted", async () => {
+    const { DEFAULT_LIMIT } = require("../utils/pagination");
+    const many = Array.from({ length: DEFAULT_LIMIT + 10 }, (_, i) =>
+      incomeDoc(
+        new Date(Date.UTC(2026, 0, 31) - i * 86400000).toISOString().slice(0, 10),
+        `64f1a2b3c4d5e6f7a8b9${String(i).padStart(4, "0")}`
+      )
+    );
+    const { getIncome } = loadController({ allDocs: many });
+    const req = { userId: USER_ID, query: {} };
+    const res = buildRes();
+
+    await getIncome(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data).toHaveLength(DEFAULT_LIMIT);
+    expect(res.body.hasMore).toBe(true);
+    expect(typeof res.body.nextCursor).toBe("string");
   });
 });
 

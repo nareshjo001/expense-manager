@@ -15,8 +15,11 @@ export const getExpensesByCategory = async (period, signal) => {
   return data;
 };
 
-// EXP-003 -- `pagination` ({ limit, cursor }) is optional and additive; every
-// existing caller that omits it keeps getting the full, unbounded range.
+// EXP-003-T03 -- `pagination` ({ limit, cursor }) is optional to PASS, but the
+// response is bounded either way: omitting `limit` no longer returns the full
+// range, it returns the server's default page (50) plus `hasMore` and
+// `nextCursor`. A caller that needs everything must page through the cursors.
+// Callers that ignore hasMore will silently show only the first page.
 export const searchExpenses = async (startDate, endDate, signal, pagination) => {
   const { data } = await api.get("/expense/search", {
     params: {

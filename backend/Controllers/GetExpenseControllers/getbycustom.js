@@ -1,15 +1,17 @@
 const { UserModel, ExpenseModel } = require('../../config/Schemas');
-const { fetchExpense } = require('./fetchExpenses');
 const { sortAscending } = require('../../Services/HelperServices/getexpense.service');
 const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
-const { parseLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
+const { resolveLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
 
-// EXP-003 -- cursor-paginated variant of the same user-scoped date-range
-// search, used only when the caller passes `limit`. Deliberately a
-// SEPARATE query path from fetchExpense/fetchExpenseRaw (below) rather
-// than a change to that shared helper -- analytics/report/chart code also
-// calls fetchExpense for a date range and needs the COMPLETE range, never
-// a truncated page.
+// EXP-003 -- cursor-paginated, user-scoped date-range search. Since
+// EXP-003-T03 this is the ONLY query path this route takes; the previous
+// unbounded fallback through fetchExpense() is gone.
+//
+// It remains a SEPARATE query path from fetchExpense/fetchExpenseRaw rather
+// than a change to that shared helper, and that separation still matters:
+// analytics, report and chart code calls fetchExpense for a date range and
+// needs the COMPLETE range. Paging it would silently truncate the input to a
+// total and produce a confidently wrong number.
 const getByCustomPaginated = async (user, start, end, limit, cursor) => {
     const filter = {
         userId: user._id,
@@ -55,28 +57,28 @@ const getByCustom = async (req, res) => {
             return res.status(400).json({ message: 'startDate and endDate must be valid dates', success: false });
         }
 
+        // EXP-003-T03 -- `limit` is now always resolved to a bounded value.
+        // Omitting it yields DEFAULT_LIMIT, not the whole range: this route
+        // used to fall back to an unbounded fetchExpense() call, which is the
+        // "unbounded user history" the feature exists to remove. Every
+        // response from here is therefore a bounded page carrying hasMore and
+        // nextCursor, so a client that wants everything pages for it and the
+        // server never has to materialise an unknown number of documents.
+        //
+        // A cursor no longer requires an explicit limit alongside it. That
+        // rule existed because there was no default to fall back on and
+        // guessing a page size would have been arbitrary; now the default is
+        // the documented page size, so a cursor on its own is unambiguous.
         let limit;
         let cursor;
         try {
-            limit = parseLimit(rawLimit);
+            limit = resolveLimit(rawLimit);
             cursor = decodeCursor(rawCursor);
         } catch (validationErr) {
             if (validationErr instanceof PaginationValidationError) {
                 return res.status(400).json({ message: validationErr.message, success: false, errorCode: validationErr.code });
             }
             throw validationErr;
-        }
-
-        // A cursor implies pagination was already in progress -- require an
-        // explicit limit too rather than silently guessing a page size.
-        if (cursor && limit === undefined) {
-            return res.status(400).json({ message: 'limit is required when cursor is provided.', success: false, errorCode: 'INVALID_PAGINATION_PARAMS' });
-        }
-
-        // No `limit` -- exact previous behavior, unbounded within the date range.
-        if (limit === undefined) {
-            const expenses = sortAscending(await fetchExpense(start, end, user._id));
-            return res.status(200).json({ message: 'Success', data: expenses, success: true });
         }
 
         const { data, hasMore, nextCursor } = await getByCustomPaginated(user, start, end, limit, cursor);
