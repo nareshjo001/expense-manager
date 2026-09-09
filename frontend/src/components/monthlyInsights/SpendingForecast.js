@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { FaChartLine } from "react-icons/fa6";
 import "./SpendingForecast.css";
 
-const formatMoney = (value) =>
-  `₹${Math.round(Number(value) || 0).toLocaleString("en-IN")}`;
+// DAT-001-T06 -- was a private copy of this formatter; now the shared one,
+// so a value cannot round differently here than it does elsewhere.
+import { formatMoneyApprox as formatMoney } from "../../utils/money";
 const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
 
 const MONTH_LABELS = [

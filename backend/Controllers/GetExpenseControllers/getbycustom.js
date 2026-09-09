@@ -2,6 +2,9 @@ const { UserModel, ExpenseModel } = require('../../config/Schemas');
 const { sortAscending } = require('../../Services/HelperServices/getexpense.service');
 const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
 const { resolveLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
+// DAT-001-T06 -- additive minor-unit fields; see utils/moneyView.js for why
+// they are derived at read time rather than read from the shadow columns.
+const { withMinorFieldsAll } = require('../../utils/moneyView');
 
 // EXP-003 -- cursor-paginated, user-scoped date-range search. Since
 // EXP-003-T03 this is the ONLY query path this route takes; the previous
@@ -29,7 +32,7 @@ const getByCustomPaginated = async (user, start, end, limit, cursor) => {
     const { page, hasMore, nextCursor } = paginateResults(documents, limit, 'expenseDate');
     const annotated = await annotateRecurringState(user._id, page);
 
-    return { data: sortAscending(annotated), hasMore, nextCursor };
+    return { data: withMinorFieldsAll(sortAscending(annotated), ['expenseAmount']), hasMore, nextCursor };
 };
 
 const getByCustom = async (req, res) => {

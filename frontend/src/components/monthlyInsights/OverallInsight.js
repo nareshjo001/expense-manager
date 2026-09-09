@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import './OverallInsight.css';
 import { FaFire, FaAward, FaArrowRight } from "react-icons/fa";
 import { FaArrowTrendUp } from "react-icons/fa6";
@@ -71,9 +73,9 @@ export default function OverallInsight({ report }) {
                   +{insight.biggestSpendingJump.data.increasePercent}%
                 </h1>
                 <p className='overall-insights-p-text p-wrapper'>
-                  ₹{insight.biggestSpendingJump.data.previousAmount}
+                  {formatMoney(insight.biggestSpendingJump.data.previousAmount)}
                   <span> <FaArrowRight /> </span>
-                  <span style={{fontWeight: "bold", fontSize: "16px"}}>₹{insight.biggestSpendingJump.data.currentAmount}</span>
+                  <span style={{fontWeight: "bold", fontSize: "16px"}}>{formatMoney(insight.biggestSpendingJump.data.currentAmount)}</span>
                 </p>
               </div>
               <p className='overall-insights-p-text' style={{ marginTop: "10px"}}>

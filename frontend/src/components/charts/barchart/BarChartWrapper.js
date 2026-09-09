@@ -1,4 +1,6 @@
 import React from 'react';
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../../utils/money";
 import {
   BarChart,
   Bar,
@@ -42,7 +44,7 @@ const BarChartWrapper = ({
           <p><strong>{label}</strong></p>
           {payload.map((entry, index) => (
             <p key={`item-${index}`} style={{ color: entry.stroke, margin: 0 }}>
-              <strong>{entry.name}:</strong> ₹{entry.value}
+              <strong>{entry.name}:</strong> {formatMoney(entry.value)}
             </p>
           ))}
         </div>

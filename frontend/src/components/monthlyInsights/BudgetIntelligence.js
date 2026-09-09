@@ -1,4 +1,6 @@
 import { FaLightbulb, FaExclamationTriangle, FaExclamationCircle, FaMagic, FaFireAlt, FaBullseye } from "react-icons/fa";
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import "./BudgetIntelligence.css";
 
 // Falls back to a generic "no insights yet" message when no budget insight data is available.
@@ -70,8 +72,8 @@ export default function BudgetIntelligence({ data }) {
               </div>
 
               <div className="budget-bar-labels">
-                <span>₹ {spent}</span>
-                <span>₹ {budget}</span>
+                <span>{formatMoney(spent)}</span>
+                <span>{formatMoney(budget)}</span>
               </div>
             </div>
           )}

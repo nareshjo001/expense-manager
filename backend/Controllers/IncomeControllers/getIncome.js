@@ -1,6 +1,8 @@
 const { UserModel, IncomeModel } = require('../../config/Schemas');
 const { resolvePeriod } = require('../../Services/InsightServices/periodResolver');
 const { resolveLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
+// DAT-001-T06 -- additive minor-unit fields.
+const { withMinorFieldsAll } = require('../../utils/moneyView');
 
 const getIncome = async (req, res) => {
   try {
@@ -56,7 +58,7 @@ const getIncome = async (req, res) => {
 
     const { page, hasMore, nextCursor } = paginateResults(documents, limit, 'incomeDate');
 
-    res.status(200).json({ message: 'Income records retrieved successfully', success: true, data: page, hasMore, nextCursor });
+    res.status(200).json({ message: 'Income records retrieved successfully', success: true, data: withMinorFieldsAll(page, ['incomeAmount']), hasMore, nextCursor });
   } catch (err) {
     // Send generic server error response
     console.error(err);

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+// DAT-001-T06 -- all money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import "./ExpenseItem.css";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -118,9 +120,9 @@ const ExpenseItem = ({
         <div className="expense-actions">
           <span className="expense-amount">
             {isMobile ? (
-                <span>₹{expense.expenseAmount}</span>
+                <span>{formatMoney(expense.expenseAmount, expense.expenseAmountMinor)}</span>
               ) : (
-                <span>Amount: ₹{expense.expenseAmount}</span>
+                <span>Amount: {formatMoney(expense.expenseAmount, expense.expenseAmountMinor)}</span>
               )}
           </span>
 

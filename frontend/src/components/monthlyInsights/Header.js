@@ -1,4 +1,6 @@
 import { FaCalendarAlt, FaCreditCard, FaThLarge, FaArrowUp, FaArrowDown, } from "react-icons/fa";
+// DAT-001-T06 -- all money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import { FaArrowTrendUp, FaPen  } from "react-icons/fa6";
 import { HiSparkles } from "react-icons/hi2";
 import { useBudgetSummary } from "../../hooks/queries/useBudgetSummary";
@@ -111,8 +113,8 @@ export default function Header({ summary }) {
               ) : (
                 <>
                   <p>Total Budget</p>
-                  <h1>₹ {totalBudget}</h1>
-                  <span>Spent: ₹ {summary.totalSpent}</span>
+                  <h1>{formatMoney(totalBudget)}</h1>
+                  <span>Spent: {formatMoney(summary.totalSpent)}</span>
                 </>
               )}
           </div>
@@ -162,7 +164,7 @@ export default function Header({ summary }) {
                     Insufficient data
                   </span>
                 ) : (
-                  <>₹ {Math.round(summary.dailyAverage)}</>
+                  <>{formatMoney(summary.dailyAverage)}</>
                 )}
               </p>
           </div>
@@ -223,7 +225,7 @@ export default function Header({ summary }) {
 
             <div className="budget-current-value">
               <span>Current Budget</span>
-              <h3>₹ {totalBudget}</h3>
+              <h3>{formatMoney(totalBudget)}</h3>
             </div>
 
             <form onSubmit={handleBudgetSubmit}>
