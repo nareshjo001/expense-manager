@@ -9,6 +9,13 @@ const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceCl
 // count feedback and call /retrain-model on the same day (the ML service
 // itself already dedupes concurrent triggers via existingRun, but the
 // lease avoids the redundant Mongo count + HTTP call across instances too).
+//
+// REC-001-T03 -- fails CLOSED (the default). If Redis is unreachable this
+// daily job skips one run, which costs at most a day's delay in retraining.
+// The alternative -- every instance counting feedback and firing
+// /retrain-model at once -- leans entirely on the ML service's own
+// existingRun dedupe to save us, and a same-day retrain is not worth
+// betting on that.
 const { runWithLease } = require("../utils/jobLease");
 
 const JOB_NAME = "feedbackCollector";
