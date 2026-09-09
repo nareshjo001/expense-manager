@@ -9,6 +9,27 @@ in what T01-T06 actually built (not a generic "check your logs" list) --
 it is the concrete verification T07 asks for, written down so it takes
 minutes to run once someone has access, not a fresh investigation.
 
+## Update (TST-001-T07): part of this is now automated
+
+Step 2 below — correlation-ID propagation — is checked by the deployment
+smoke test, which asserts three things over HTTP: a client-supplied
+`X-Request-ID` is echoed back unchanged, one is generated when the client
+sends none, and a malformed one is **replaced rather than echoed** (the
+log-injection guard in `requestId.js`).
+
+```bash
+node backend/scripts/smokeTest.js https://your-staging-backend
+```
+
+Run that first. If it passes, step 2's HTTP half is done and what remains
+there is confirming the ID also appears on every *log line* for that
+request, and is forwarded to the ML service — both of which need log access
+and cannot be checked from outside.
+
+Steps 1, 3, 4, 5 and 6 are unchanged and still need a human with log access.
+They are about what is written to logs, and no amount of HTTP probing can
+see that. Do not treat a green smoke run as covering them.
+
 ## Prerequisites
 
 - A staging deployment running this branch's backend (and, once

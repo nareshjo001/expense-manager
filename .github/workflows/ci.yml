@@ -236,6 +236,112 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # TST-001-T07 -- run the deployment smoke test against a REAL running
+  # backend, on every push and PR.
+  #
+  # The script exists to be run against a deployment right after it ships,
+  # which means the only time it would otherwise execute is during a deploy --
+  # so a broken check would be discovered at exactly the moment it is being
+  # relied on. Worse, its failure mode is silent: a check that can no longer
+  # detect anything still prints PASS. Running it here every PR is what makes
+  # a green smoke run mean something later.
+  #
+  # This is not a second copy of the e2e job. e2e drives a browser through
+  # user journeys; this starts the backend the way the deploy target starts
+  # it (`npm start`, real process, real env) and asserts the operational
+  # contract -- health endpoints, auth enforcement, security headers,
+  # correlation IDs -- which no journey test covers.
+  deployment-smoke:
+    name: Deployment smoke test
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # NODE_ENV=production on purpose, unlike this workflow's other jobs.
+      # The point of a deployment smoke test is to exercise the configuration
+      # a deployment actually runs under, and production mode is where the
+      # rules differ: config/env.js requires CORS_ALLOWED_ORIGINS and
+      # REDIS_URL, httpSecurity.js turns on HSTS, and session cookies become
+      # secure-only. Running this job in test mode would skip exactly the
+      # branches most likely to be misconfigured on a real deploy.
+      NODE_ENV: production
+      PORT: "8082"
+      MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_smoke_ci
+      REDIS_URL: redis://127.0.0.1:6379
+      CORS_ALLOWED_ORIGINS: https://smoke.example
+      # Two distinct secrets, as config/env.js requires -- see
+      # backend/tests/env.ciContract.test.js for why sharing one is a real
+      # weakness and not just a rule.
+      JWT_SECRET: ci-smoke-test-secret-not-for-production
+      REFRESH_TOKEN_SECRET: ci-smoke-refresh-secret-distinct-from-jwt
+      # PROCESS_ROLE is set so the smoke test's --expect-role assertion has
+      # something to assert, and so this job does not schedule cron jobs it
+      # has no reason to run.
+      PROCESS_ROLE: web
+      # Nothing listens here. The ML dependency is optional, so the smoke test
+      # reports it as an advisory and the job still passes -- which is itself
+      # worth exercising, since that pass-with-advisories path is the one a
+      # real deploy most often takes.
+      ML_ROUTE: http://127.0.0.1:65535
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Start the backend the way the deploy target starts it
+        run: |
+          npm start > "$RUNNER_TEMP/backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/backend.pid"
+
+      - name: Wait for readiness
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8082/health/ready > /dev/null 2>&1; then
+              echo "Ready after ${i}s."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Backend did not become ready within 30s."
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+
+      - name: Run the deployment smoke test
+        run: node scripts/smokeTest.js --expect-role=web http://127.0.0.1:8082
+
+      - name: Backend log
+        if: always()
+        run: cat "$RUNNER_TEMP/backend.log" || true
+
+      - name: Stop the backend
+        if: always()
+        run: kill "$(cat "$RUNNER_TEMP/backend.pid")" || true
+
   ml:
     name: ML validation
     runs-on: ubuntu-latest
@@ -444,6 +550,7 @@ jobs:
       - backend-unit
       - backend-integration
       - e2e
+      - deployment-smoke
       - ml
       - dependency-audit
       - secret-scan
