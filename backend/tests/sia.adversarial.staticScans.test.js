@@ -27,6 +27,13 @@ const TOUCHED_PRODUCTION_FILES = [
   "sia/responseFormatter.js",
   "sia/responseValidator.js",
   "sia/sessionService.js",
+  // OBS-001-T05 (2026-09-09) -- added when provider metrics were wired into
+  // askLlm(). Declaring the touch is the reason it is here, but the useful
+  // side effect is larger: llmService.js is the ONE file that reads
+  // OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY, and it was not previously
+  // in this list, so the "every credential reference is a process.env read,
+  // never a literal" scan below had never been applied to it.
+  "sia/llmService.js",
   "Controllers/SiaControllers/ask.js",
   "Controllers/SiaControllers/status.js",
   "Controllers/SiaControllers/transcribe.js",

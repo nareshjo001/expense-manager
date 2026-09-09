@@ -2,6 +2,8 @@
 "use strict";
 
 const axios = require("axios");
+// OBS-001-T05 -- provider metrics; see askLlm() for the safety reasoning.
+const { recordOperation } = require("../utils/metrics");
 const config = require("./config");
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -478,9 +480,28 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
 
 // Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
 async function askLlm({ systemPrompt, context, question, history, structuredOutput } = {}) {
+  // OBS-001-T05 -- SIA provider metrics. askLlm is the single function every
+  // adapter passes through, so one wrapper here covers openai/gemini/groq
+  // and any future adapter without each having to instrument itself.
+  //
+  // Only the PROVIDER NAME, the outcome and the duration are recorded --
+  // never the question, context, answer or any provider payload. That is the
+  // same discipline safeLogger.js enforces for SIA logging, and it is why
+  // this records through metrics.recordOperation (fixed primitive fields)
+  // rather than anything that accepts arbitrary metadata.
+  const metricsStartedAt = Date.now();
   const provider = config.provider;
 
+  const recordProvider = (outcome) =>
+    recordOperation({
+      scope: "sia_provider",
+      operation: typeof provider === "string" && provider.trim() ? provider.trim() : "unconfigured",
+      outcome,
+      durationMs: Date.now() - metricsStartedAt,
+    });
+
   if (isMissingProvider(provider)) {
+    recordProvider("failure");
     throw new LlmProviderError(
       "SIA has no LLM provider configured. Set SIA_LLM_PROVIDER once a provider adapter is implemented.",
       { code: "PROVIDER_NOT_CONFIGURED", provider: null }
@@ -490,22 +511,28 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
   // A provider name is configured. Every configured value, known or unknown, fails the same explicit way unless it is normalized "openai", "gemini", or "groq", the only implemented adapters.
   const normalizedProvider = typeof provider === "string" ? provider.trim() : provider;
 
-  if (normalizedProvider === "openai") {
-    return askOpenAi({ systemPrompt, context, question, history, structuredOutput });
+  const adapters = { openai: askOpenAi, gemini: askGemini, groq: askGroq };
+  const adapter = adapters[normalizedProvider];
+
+  if (!adapter) {
+    recordProvider("failure");
+    throw new LlmProviderError(
+      "SIA has no implemented adapter for the configured LLM provider. No request was sent.",
+      { code: "PROVIDER_NOT_IMPLEMENTED", provider: normalizedProvider }
+    );
   }
 
-  if (normalizedProvider === "gemini") {
-    return askGemini({ systemPrompt, context, question, history, structuredOutput });
+  try {
+    const answer = await adapter({ systemPrompt, context, question, history, structuredOutput });
+    recordProvider("success");
+    return answer;
+  } catch (err) {
+    // Rethrown untouched -- this only classifies the attempt so a provider
+    // that starts degrading shows up as a rising failure count rather than
+    // only as individual log lines nobody is aggregating.
+    recordProvider("failure");
+    throw err;
   }
-
-  if (normalizedProvider === "groq") {
-    return askGroq({ systemPrompt, context, question, history, structuredOutput });
-  }
-
-  throw new LlmProviderError(
-    "SIA has no implemented adapter for the configured LLM provider. No request was sent.",
-    { code: "PROVIDER_NOT_IMPLEMENTED", provider: normalizedProvider }
-  );
 }
 
 module.exports = {
