@@ -27,6 +27,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # OPS-001-T06 -- blocking lint gate over application source, at zero
+      # tolerance. Test files are linted in the informational step below:
+      # `react-app/jest` enables testing-library rules that CRA's own build
+      # never applies, and the existing suites predate them.
+      - name: Lint (application source, blocking)
+        run: npm run lint:ci
+      - name: Lint (test files, informational)
+        run: npm run lint
+        continue-on-error: true
       - run: CI=true npm test -- --watchAll=false
       - run: npm run build
       - uses: actions/upload-artifact@v4
@@ -50,6 +59,12 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      # OPS-001-T06 -- fails on any lint error, and on any rise in the
+      # warning count above scripts/lint-baseline.json, so the warning
+      # list can only shrink. See backend/eslint.config.js for why each
+      # rule sits at error vs warn.
+      - name: Lint
+        run: npm run lint:ci
       - run: npm test
 
   backend-integration:
@@ -307,3 +322,135 @@ jobs:
             attempt=$((attempt + 1))
             sleep 15
           done
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      # Full history is needed for the commit-range scan below. On a
+      # pull_request event this also gives us the base branch to diff from.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # OPS-001-T06 -- pinned release binary rather than a third-party
+      # Action: the version is explicit and auditable here, the checksum is
+      # verified before anything executes, and there is no licence question
+      # about running it on this repository.
+      - name: Install gitleaks (pinned)
+        env:
+          GITLEAKS_VERSION: 8.30.0
+          # sha256 of gitleaks_8.30.0_linux_x64.tar.gz. Regenerate with:
+          #   curl -sSL <url> | sha256sum
+          GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSL --retry 3 --retry-delay 5 -o gitleaks.tar.gz "$url"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # Blocking. Scans every tracked file in the checkout, which is exactly
+      # what a fresh clone contains -- so a secret committed by this change
+      # fails the build. .env files cannot appear here; they are gitignored.
+      - name: Scan the working tree
+        run: |
+          gitleaks dir . \
+            --config .gitleaks.toml \
+            --redact \
+            --no-banner \
+            --exit-code 1 \
+            --report-path gitleaks-tree.json
+
+      # Blocking. Catches a secret that was added and then deleted within
+      # the same push or pull request -- invisible to the tree scan above,
+      # but permanently recoverable from the commit that introduced it.
+      - name: Scan the commits introduced by this change
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            range="${BASE_SHA}..${HEAD_SHA}"
+          elif [ "$EVENT" = "push" ] && [ -n "${BEFORE:-}" ] && \
+               [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            range="${BEFORE}..${HEAD_SHA}"
+          else
+            # A new branch, a tag, or workflow_dispatch: there is no
+            # meaningful "before" commit, and the tree scan above already
+            # covers the current state. Scanning all of history here would
+            # make an unrelated legacy finding block every new branch.
+            echo "No incremental commit range for event '$EVENT' -- skipping (tree scan already ran)."
+            exit 0
+          fi
+          echo "Scanning commit range: $range"
+          gitleaks git . \
+            --config .gitleaks.toml \
+            --redact \
+            --no-banner \
+            --exit-code 1 \
+            --log-opts "$range" \
+            --report-path gitleaks-range.json
+
+      - name: Verify no .env file is tracked
+        run: |
+          set -euo pipefail
+          # A committed .env defeats every other control here. Cheap to
+          # check, and unambiguous when it fires.
+          if git ls-files --error-unmatch -- '*.env' '.env' >/dev/null 2>&1; then
+            echo "::error::A .env file is tracked by git. Remove it from the index and rotate every credential it contained."
+            git ls-files -- '*.env' '.env'
+            exit 1
+          fi
+          echo "No tracked .env files."
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-reports
+          path: gitleaks-*.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # OPS-001-T07 -- one aggregate check to require in branch protection.
+  # Branch protection lists check names as literal strings, so requiring
+  # each job individually means editing the repository settings every time
+  # a job is added or renamed -- and a job that is added but not required
+  # silently protects nothing. Requiring only "CI required checks" keeps
+  # that coupling in this file, where it is reviewed with the code.
+  #
+  # `always()` plus the explicit result test is deliberate: without it a
+  # skipped or cancelled dependency would leave this job skipped, and a
+  # skipped required check is reported to branch protection as success.
+  ci-required:
+    name: CI required checks
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - frontend
+      - backend-unit
+      - backend-integration
+      - e2e
+      - ml
+      - dependency-audit
+      - secret-scan
+    steps:
+      - name: Verify every required job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "Upstream job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required CI job did not succeed (results: $RESULTS)."
+              exit 1
+            fi
+          done
+          echo "All required CI jobs succeeded."
