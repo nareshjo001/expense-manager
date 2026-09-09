@@ -96,12 +96,30 @@ as *success*.
 Enable it once, after the first successful run on `main`:
 
 ```bash
+Applied 2026-09-09 via the GitHub settings UI (no `gh` CLI available on the
+maintainer's machine); the equivalent API call is kept here for reference.
+
+NOTE on the approval count below. It is deliberately 0, not 1. GitHub does not
+let an author approve their own pull request, so on a single-maintainer
+repository `required_approving_review_count=1` combined with
+`enforce_admins=true` makes every PR permanently unmergeable. Raise it to 1
+only when there is a second maintainer who can review, or drop
+`enforce_admins` at the same time so an admin can still merge. The protection
+that actually matters here is the required `CI required checks` context, which
+gates merges regardless of the approval count.
+
+WHEN SETTING THIS IN THE UI: creating the rule and binding the check are two
+separate saves. A rule created with "Require status checks to pass before
+merging" ticked but no check selected shows "No required checks" and enforces
+nothing while looking configured. Always re-open the rule and confirm
+`CI required checks` is listed before treating this as done.
+
 gh api -X PUT repos/:owner/:repo/branches/main/protection \
   -H "Accept: application/vnd.github+json" \
   -f 'required_status_checks[strict]=true' \
   -f 'required_status_checks[contexts][]=CI required checks' \
   -F 'enforce_admins=true' \
-  -F 'required_pull_request_reviews[required_approving_review_count]=1' \
+  -F 'required_pull_request_reviews[required_approving_review_count]=0' \
   -F 'restrictions=null'
 ```
 
