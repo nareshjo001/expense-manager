@@ -177,6 +177,13 @@ jobs:
       MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_e2e_ci
       REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: ci-e2e-test-secret-not-for-production
+      # OPS-004-T06 -- required, >=32 characters, and MUST differ from
+      # JWT_SECRET. This job previously set only JWT_SECRET and relied on
+      # session.service.js falling back to it for refresh sessions, which
+      # means a leaked access token doubles as a valid refresh token. The
+      # startup validator refuses that arrangement, so the E2E run now uses
+      # the same two distinct secrets a real deployment does.
+      REFRESH_TOKEN_SECRET: ci-e2e-refresh-secret-distinct-from-jwt-secret
       # Nothing listens here on purpose -- see playwright.config.js's
       # webServer env for why a fast-failing ML_ROUTE is fine for this
       # suite's journeys.

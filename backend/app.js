@@ -17,6 +17,9 @@ const mlRouter = require("./Routes/ml.router");
 const reportRouter = require("./Routes/report.routes");
 const chartRouter = require("./Routes/chart.routes");
 const siaRouter = require("./Routes/sia.routes");
+// OPS-004-T03 -- liveness/readiness/dependency probes, kept separate from
+// /ping. See Routes/health.routes.js for why they are three endpoints.
+const healthRouter = require("./Routes/health.routes");
 
 // Middleware
 const errorHandler = require("./Middlewares/error.middleware");
@@ -69,6 +72,24 @@ app.get("/", (req, res) => {
 });
 
 
+// OPS-004-T03 -- health probes. Mounted BEFORE apiLimiter and without it:
+// a probe runs every few seconds from the platform's own network, so rate
+// limiting it would eventually start returning 429 to the health check and
+// take a healthy instance out of rotation. These handlers take no user
+// input and expose no user data.
+app.use("/health", healthRouter);
+
+
+// DO NOT point a platform health check at this endpoint. It returns 503 when
+// the ML SERVICE is down, which would make the platform restart a backend
+// that is working fine -- and restarting the backend cannot bring the ML
+// service back. Use /health/live for restart checks and /health/ready for
+// traffic routing (OPS-004-T03).
+//
+// This is kept unchanged, 503 and all, because the frontend and existing
+// monitoring already call it and read that status code. Its meaning is
+// "backend AND ML are both up", which is a useful thing for a human to ask;
+// it is just not a liveness check.
 app.get("/ping", async (req, res) => {
   // Firebase/push is an optional capability -- its status is reported
   const push = isFirebaseAvailable() ? "up" : "down";

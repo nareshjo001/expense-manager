@@ -1,0 +1,227 @@
+# OPS-004-T02 -- deployment topology as code.
+#
+# Before this file, the backend had NO deploy definition anywhere in the
+# repository. frontend/vercel.json existed, ml-service/Dockerfile existed,
+# and the backend -- the only service that owns data -- was configured by
+# hand in a dashboard. You can see the consequence in frontend/vercel.json,
+# which rewrites to a specific Render hostname that appears in no other file:
+# the deployment exists, but nothing in the repo describes it, so nobody can
+# recreate it, review a change to it, or stand up a second environment that
+# matches it. That last one is what blocks DAT-003-T07, OBS-001-T07 and
+# TST-001-T07, all of which need a staging environment that resembles
+# production closely enough for a verification there to mean anything.
+#
+# WHAT THIS FILE IS AND IS NOT
+#
+# It is the definition. It is not a running environment. Applying it creates
+# services; the T07 verifications close only after a human has actually
+# deployed and run the smoke tests in
+# docs/runbooks/OPS-004-deploy-and-rollback.md.
+#
+# THE EXISTING PRODUCTION SERVICE
+#
+# There is already a manually-created backend service on Render (see
+# frontend/vercel.json). Do NOT point this blueprint at it as a first step.
+# Stand staging up from this file, confirm it matches, and adopt production
+# into the blueprint afterwards -- a blueprint sync against a live service
+# can change env vars and restart it, and the first time you run it is the
+# worst time to find out which fields differ.
+#
+# WHY TWO SERVICES
+#
+# `web` serves HTTP. `worker` owns the scheduled jobs. They run the SAME
+# image and the same code, and differ only by PROCESS_ROLE (OPS-004-T05).
+# Splitting them means scaling the web tier does not multiply job execution:
+# before this, every instance require()d every cron module, so three web
+# instances scheduled three copies of each job and relied on REC-001's Redis
+# leases to stop them all running -- a lock covering for a topology mistake,
+# and one that is absent exactly when Redis is down.
+#
+# The worker binds a port too. It has to: Render restarts a service whose
+# health check fails, and a worker with no HTTP surface has no /health/live
+# to probe, so a wedged worker would sit there running nothing while looking
+# fine.
+#
+# WHY numInstances IS 1 ON THE WORKER
+#
+# Two workers is not an error -- the leases handle it -- but it is pointless
+# duplicate work in the normal case, and during a Redis outage the two
+# fail-closed jobs skip while recurringJob (which fails open, by design)
+# would run on both. One worker is the honest configuration.
+#
+# MANAGED DEPENDENCIES, DELIBERATELY NOT DEFINED HERE
+#
+# MongoDB is Atlas and Redis is Upstash -- both outside Render, so neither
+# appears in this file. That is the choice recorded in OPS-004-T01, and the
+# reason is that Render's own managed Postgres/Redis do not cover Mongo at
+# all, and ADR-0002's backup and restore procedures (OPS-002) are written
+# against Atlas. Their connection strings arrive as secrets below.
+
+# REGION IS AN ASSUMPTION, NOT A MEASUREMENT
+#
+# `singapore` below is inferred from APP_TIME_ZONE=Asia/Kolkata being the
+# app's default (backend/sia/config.js) -- it is the nearest Render region to
+# an India-based user base. Confirm it against where the existing production
+# service and the Atlas cluster actually live BEFORE applying: services and
+# their database should share a region, and cross-region round trips to Atlas
+# are the kind of latency you cannot tune away afterwards. All three services
+# and both managed dependencies must agree.
+
+services:
+  # ---------------------------------------------------------------------
+  # HTTP tier.
+  # ---------------------------------------------------------------------
+  - type: web
+    name: balenisa-backend
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+
+    # OPS-004-T03. /health/ready, NOT /ping.
+    #
+    # /ping returns 503 when the ML SERVICE is down. Pointing a health check
+    # at it means an ML outage makes Render mark a healthy backend unhealthy
+    # and restart it -- and restarting the backend cannot bring the ML
+    # service back, so one degraded optional dependency becomes two outages.
+    # /health/ready depends on MongoDB alone, which is the only dependency
+    # whose absence actually makes this instance unable to serve.
+    healthCheckPath: /health/ready
+
+    envVars:
+      - key: NODE_VERSION
+        # Matches the version every CI job runs on (.github/workflows/ci.yml).
+        # Left implicit, Render picks its own default, and the first time
+        # that diverges from CI you get a failure that passed every check.
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: PROCESS_ROLE
+        # Serves HTTP; schedules nothing.
+        value: web
+      - key: PORT
+        value: "8080"
+
+      # --- Required. The process refuses to start without these
+      # --- (backend/config/env.js, OPS-004-T06).
+      - key: MONGO_CONN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+
+      # --- Required in production specifically.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+      # --- Optional capabilities. Absent means the capability is disabled
+      # --- and said so once in the startup log, not that startup fails.
+      - key: ML_ROUTE
+        sync: false
+      - key: ML_OPERATIONS_TOKEN
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ERROR_AGGREGATION_PROVIDER
+        sync: false
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false
+      - key: OBS_ALERT_OWNER_EMAIL
+        sync: false
+
+      # --- Behavioural settings with real defaults in code. Pinned here so
+      # --- the deployed value is reviewable rather than implicit.
+      - key: APP_TIME_ZONE
+        value: Asia/Kolkata
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: REFRESH_SESSION_DAYS
+        value: "30"
+      - key: MONEY_MINOR_DUAL_WRITE_ENABLED
+        # DAT-001-T05. Stays false until DAT-001-T06 has soaked in production
+        # and the reconciliation script (backend/scripts/verifyMoneyMinorFields.js)
+        # reports agreement. Turning this on early writes shadow columns that
+        # nothing has verified.
+        value: "false"
+
+  # ---------------------------------------------------------------------
+  # Scheduled-job tier. Same code, same image, different role.
+  # ---------------------------------------------------------------------
+  - type: web
+    name: balenisa-worker
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    numInstances: 1
+
+    # Liveness, not readiness. This service takes no user traffic, so the
+    # only question worth asking is whether the process is alive -- and
+    # /health/live answers from process state alone, so a Mongo blip cannot
+    # trigger a restart that would not have fixed anything.
+    healthCheckPath: /health/live
+
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: PROCESS_ROLE
+        # Runs recurringJob, retryPush and feedbackCollector. This is the
+        # ONLY service in the fleet that does.
+        value: worker
+      - key: PORT
+        value: "8080"
+
+      - key: MONGO_CONN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+      # REDIS_URL matters more here than on the web tier: it is what the job
+      # leases (REC-001) use. Without it retryPush and feedbackCollector fail
+      # CLOSED and skip their cycles -- correct, and silent, so
+      # /health/deps's redis field is the thing to check when jobs stop.
+      - key: REDIS_URL
+        sync: false
+
+      - key: ML_ROUTE
+        sync: false
+      - key: ML_OPERATIONS_TOKEN
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ERROR_AGGREGATION_PROVIDER
+        sync: false
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false
+      - key: OBS_ALERT_OWNER_EMAIL
+        sync: false
+
+      - key: APP_TIME_ZONE
+        value: Asia/Kolkata
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: REFRESH_SESSION_DAYS
+        value: "30"
+      - key: MONEY_MINOR_DUAL_WRITE_ENABLED
+        value: "false"

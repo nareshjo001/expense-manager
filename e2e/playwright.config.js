@@ -27,6 +27,16 @@ const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 const MONGO_CONN = process.env.MONGO_CONN || 'mongodb://127.0.0.1:27017/expense_manager_e2e';
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const JWT_SECRET = process.env.JWT_SECRET || 'e2e-local-jwt-secret-not-for-production';
+// OPS-004-T06 -- must be set, at least 32 characters, and DIFFERENT from
+// JWT_SECRET. This config previously omitted it on the grounds that
+// session.service.js falls back to JWT_SECRET, which is true and is exactly
+// the problem: that fallback signs refresh sessions with the access-token
+// secret, so a leaked access token is also a valid refresh token. The
+// fallback made the weakness silent. Supplying a distinct secret here means
+// the E2E suite exercises the same two-secret arrangement a real deployment
+// has, rather than a degenerate one-secret case that only tests pass under.
+const REFRESH_TOKEN_SECRET =
+  process.env.REFRESH_TOKEN_SECRET || 'e2e-local-refresh-secret-distinct-from-jwt';
 
 // Shared with global-setup.js (and available to spec files) regardless of
 // how this config ends up invoked.
@@ -57,9 +67,9 @@ module.exports = defineConfig({
   // Two real servers, following the same env-var names as
   // backend/config/db.js (MONGO_CONN), backend/config/redis.js
   // (REDIS_URL), and backend/Middlewares/Auth.js (JWT_SECRET) -- not
-  // invented names. REFRESH_TOKEN_SECRET intentionally omitted:
-  // backend/Services/AuthServices/session.service.js already falls back
-  // to JWT_SECRET when it's unset.
+  // invented names. REFRESH_TOKEN_SECRET is now supplied explicitly and
+  // distinctly -- see the constant above for why leaning on
+  // session.service.js's fallback to JWT_SECRET was the wrong default.
   webServer: [
     {
       command: 'node server.js',
@@ -76,6 +86,7 @@ module.exports = defineConfig({
         MONGO_CONN,
         REDIS_URL,
         JWT_SECRET,
+        REFRESH_TOKEN_SECRET,
         // No real ML service runs in this suite -- point at a port
         // nothing listens on so backend/utils/mlServiceClient.js calls
         // fail fast (ECONNREFUSED) instead of hanging. The frontend's ML
