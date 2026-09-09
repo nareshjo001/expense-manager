@@ -1,6 +1,6 @@
 const { UserModel, IncomeModel } = require('../../config/Schemas');
 const { resolvePeriod } = require('../../Services/InsightServices/periodResolver');
-const { parseLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
+const { resolveLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
 
 const getIncome = async (req, res) => {
   try {
@@ -20,10 +20,16 @@ const getIncome = async (req, res) => {
       });
     }
 
+    // EXP-003-T03 -- `limit` always resolves to a bounded value; omitting it
+    // yields DEFAULT_LIMIT rather than the user's entire income history. The
+    // unbounded IncomeModel.find(filter) fallback that used to live below is
+    // gone, and with it the last way a client could ask this route for an
+    // unknown number of documents. A cursor no longer needs an explicit
+    // limit beside it, since the default page size now makes it unambiguous.
     let limit;
     let cursor;
     try {
-      limit = parseLimit(rawLimit);
+      limit = resolveLimit(rawLimit);
       cursor = decodeCursor(rawCursor);
     } catch (validationErr) {
       if (validationErr instanceof PaginationValidationError) {
@@ -32,24 +38,12 @@ const getIncome = async (req, res) => {
       throw validationErr;
     }
 
-    // A cursor implies pagination was already in progress -- require an
-    // explicit limit too rather than silently guessing a page size.
-    if (cursor && limit === undefined) {
-      return res.status(400).json({ message: 'limit is required when cursor is provided.', success: false, errorCode: 'INVALID_PAGINATION_PARAMS' });
-    }
-
     const filter = { userId: user._id };
     if (range) {
       filter.incomeDate = {
         $gte: range.startDate,
         $lt: range.endDate,
       };
-    }
-
-    // No `limit` -- exact previous behavior, unbounded.
-    if (limit === undefined) {
-      const incomeRecords = await IncomeModel.find(filter).sort({ incomeDate: -1 }); // Sort by date descending
-      return res.status(200).json({ message: 'Income records retrieved successfully', success: true, data: incomeRecords });
     }
 
     // EXP-003 -- cursor-paginated path. Fetch one extra document beyond the
