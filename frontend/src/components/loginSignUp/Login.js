@@ -4,6 +4,8 @@ import { onKeyActivate } from "../../utils/onKeyActivate";
 
 import ForgotPassword from "./passwordReset/ForgotPassword";
 import { loginSuccessToast, logInErrorToast } from '../alertsEffects/toastMessages';
+// FE-002-T02 -- these fields identified themselves with placeholder text only.
+import { LabeledField } from '../a11y/LabeledField';
 import { setAccessToken } from '../../api/sessionClient';
 
 // Login form with an inline Forgot Password flow.
@@ -82,22 +84,25 @@ const Login = ({setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
 
       <main className="login-form">
         <form onSubmit={handleSubmit}>
-          <input
+          <LabeledField
+            label="Email ID"
             type="email"
             name="email"
-            placeholder="Email ID"
-            className="login-input"
+            placeholder="you@example.com"
+            inputClassName="login-input"
             onChange={handleChange}
             maxLength={72}
+            autoComplete="email"
             required
           />
 
-          <input
+          <LabeledField
+            label="Password"
             type="password"
             name="password"
-            placeholder="Password"
-            className="login-input"
+            inputClassName="login-input"
             onChange={handleChange}
+            autoComplete="current-password"
             required
           />
 

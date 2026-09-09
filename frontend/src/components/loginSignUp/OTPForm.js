@@ -151,21 +151,35 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
                 Enter the 6-digit code sent to {email}
             </p>
 
-            <div className={`otp-inputs ${otpError ? "otp-shake" : ""}`}>
-                {otp.map((digit, index) => (
-                <input
-                    key={index}
-                    ref={(el) => (otpRefs.current[index] = el)}
-                    className={`otp-input ${otpError ? "error" : ""}`}
-                    type="text"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                    onPaste={handleOtpPaste}
-                />
-                ))}
-            </div>
+            {/* FE-002-T02/T05 -- six single-character boxes deliberately do NOT
+                use LabeledField: a visible label above each box would be noise,
+                and the group already has one. Instead the boxes are wrapped in a
+                real fieldset/legend so assistive tech announces the group once,
+                and each box carries an aria-label saying which digit it is --
+                without that, all six announce identically as "edit text" and a
+                screen-reader user cannot tell where they are. */}
+            <fieldset className="otp-fieldset">
+                <legend className="otp-legend">Six-digit verification code</legend>
+                <div className={`otp-inputs ${otpError ? "otp-shake" : ""}`}>
+                    {otp.map((digit, index) => (
+                    <input
+                        key={index}
+                        ref={(el) => (otpRefs.current[index] = el)}
+                        className={`otp-input ${otpError ? "error" : ""}`}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete={index === 0 ? "one-time-code" : "off"}
+                        aria-label={`Digit ${index + 1} of ${otp.length}`}
+                        aria-invalid={otpError ? "true" : undefined}
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        onPaste={handleOtpPaste}
+                    />
+                    ))}
+                </div>
+            </fieldset>
 
             <button
                 className="otp-submit"

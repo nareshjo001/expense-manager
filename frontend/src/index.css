@@ -71,3 +71,92 @@ code {
     width: 100% !important;
   }
 }
+
+/* ==========================================================================
+   FE-002-T06 -- reduced motion, applied globally.
+
+   Four stylesheets honoured prefers-reduced-motion individually
+   (SiaAskButton, SiaPanel, SplashScreen, QueryState); twenty-six define
+   transitions or animations. Per-file opt-in means every new animation is
+   inaccessible until someone remembers to add the guard, so the default is
+   inverted here: everything is damped unless a specific rule needs otherwise.
+
+   Animations are reduced to a near-zero duration rather than `none`, because
+   `animation: none` cancels animations that JavaScript waits to finish
+   (animationend), which can leave a component stuck mid-state. A 0.01ms run
+   completes instantly and still fires its events.
+
+   This matters beyond preference: motion triggers nausea and migraine for
+   people with vestibular disorders, and the OS-level setting is how they
+   tell us.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* FE-002-T02/T05 -- styles for the shared accessibility primitives.
+   :focus-visible rather than :focus so the ring appears for keyboard users
+   without outlining every mouse click. */
+.labeled-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.labeled-field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151; /* 10.31:1 on white */
+}
+
+.labeled-field-required {
+  color: #b91c1c; /* 6.47:1 on white */
+}
+
+.labeled-field-hint {
+  font-size: 12px;
+  color: #6b7280; /* 4.83:1 on white */
+  margin: 0;
+}
+
+.labeled-field-error {
+  font-size: 13px;
+  color: #b91c1c;
+  margin: 0;
+}
+
+.labeled-field-input[aria-invalid="true"] {
+  border-color: #b91c1c;
+}
+
+/* The live region is always mounted so text changes are announced; when it
+   is empty it must take up no space and expose nothing. */
+.form-status:empty {
+  display: none;
+}
+
+.form-status-error {
+  color: #b91c1c;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.form-status-info {
+  color: #374151;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+*:focus-visible {
+  outline: 3px solid #0056b3; /* 7.04:1 on white */
+  outline-offset: 2px;
+}
