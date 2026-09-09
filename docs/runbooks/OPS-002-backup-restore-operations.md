@@ -150,6 +150,24 @@ schedule. See the next section.
   approaches end up listing every included collection explicitly to stay
   scoped to just the 7 authoritative ones; the loop is simpler to reason
   about and test one collection's argv at a time).
+- **`mongorestore` is pointed at the archive's per-database directory,
+  with an explicit `--db` naming the TARGET database** -- not at the
+  archive root with `--nsFrom`/`--nsTo`. This is a fix, not a
+  preference. The connection string passed via `--config` carries a
+  database name, and mongo-tools copies that into its `--db` option
+  (`common/options/options.go`: `if opts.DB == "" && cs.Database != ""
+  { opts.DB = cs.Database }`). A non-empty `--db` makes `mongorestore`
+  treat the directory it is given as a *single-database* directory
+  containing `<collection>.bson` files directly, instead of a dump root
+  whose subdirectories are database names. Pointed at the root, it found
+  no BSON files, restored nothing, and **exited 0** -- the namespace
+  flags never got a chance to apply. Only the manifest count check
+  caught it. Passing `--db <target>` explicitly and targeting
+  `<root>/<mongoDbName>` makes the behaviour independent of whether a
+  caller's connection string happens to include a database.
+  `backend/tests/backupArchiveLayout.test.js` pins the layout the two
+  scripts must agree on, using real `tar` and no MongoDB, so it runs on
+  every PR rather than only in the weekly verification job.
 - **The Mongo connection string is never passed as a plain CLI
   argument.** Both `mongodump`/`mongorestore` invocations use `--config
   <temp-yaml-file>` (mode 0600, deleted immediately after) instead of

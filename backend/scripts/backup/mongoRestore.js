@@ -74,18 +74,73 @@ function assertSafeRestoreTarget(env = process.env) {
   return target;
 }
 
-function buildMongorestoreArgs({ configPath, sourceDbName, targetDbName, dumpDir }) {
-  return [
-    "--config",
-    configPath,
-    "--nsInclude",
-    `${sourceDbName}.*`,
-    "--nsFrom",
-    `${sourceDbName}.*`,
-    "--nsTo",
-    `${targetDbName}.*`,
-    dumpDir,
-  ];
+// Builds mongorestore's argv.
+//
+// THIS PREVIOUSLY RESTORED NOTHING, SILENTLY. The old argv was
+//
+//   --config <cfg> --nsInclude SRC.* --nsFrom SRC.* --nsTo TGT.* <dumpRoot>
+//
+// with <dumpRoot> the extracted dump root containing `SRC/<collection>.bson`.
+// It looks right, it passed its unit test (which asserted this exact argv, so
+// it agreed with the code by construction rather than with mongorestore), and
+// it restored zero documents while exiting 0.
+//
+// The mechanism, from mongo-tools' own source rather than inference:
+//
+//   1. The config file passes the target connection string as `uri:`. That
+//      URI carries a database, as essentially every real one does. In
+//      common/options/options.go, setOptionsFromURI does
+//        if opts.DB == "" && cs.Database != "" { opts.DB = cs.Database }
+//      so ToolOptions.DB is populated from the URI even though no --db flag
+//      was ever passed.
+//   2. In mongorestore.go's Restore(), the target-directory handling is a
+//      switch on exactly that field:
+//        case restore.ToolOptions.DB != "" && restore.ToolOptions.Collection == "":
+//            err = restore.CreateIntentsForDB(restore.ToolOptions.DB, target)
+//        default:
+//            err = restore.CreateAllIntents(target)
+//      CreateAllIntents treats `target` as a dump ROOT whose subdirectories
+//      are database names. CreateIntentsForDB treats it as a SINGLE-DATABASE
+//      directory containing `<collection>.bson` files directly.
+//   3. Because the URI set DB, mongorestore took the single-database branch
+//      and looked for *.bson directly inside <dumpRoot>. There are none --
+//      they are one level down, inside <dumpRoot>/SRC/. Zero intents, nothing
+//      to do, exit 0.
+//
+// So the namespace flags never came into it: mongorestore had already found
+// no files to apply them to. Nothing errored, and the only thing standing
+// between this and a silent restore failure in a real incident was the
+// document-count check in verifyRestoredCounts.
+//
+// The fix is to stop depending on the URI's shape at all. Point mongorestore
+// at the per-database directory the dump actually contains, and pass --db
+// explicitly so the single-database branch is chosen deliberately rather
+// than as a side effect of what the connection string happens to look like.
+// --db is set to the TARGET database, which is what performs the rename:
+// CreateIntentsForDB assigns that database to every .bson it finds, so
+// <dumpRoot>/SRC/users.bson is restored as TGT.users. That is the same
+// mapping --nsFrom/--nsTo was meant to express, done by a mechanism that
+// works.
+//
+// --db always equals the URI's own database here (targetDbName is extracted
+// from that same connection string), so the two can never disagree, and
+// passing it explicitly makes the behaviour identical whether or not a
+// caller's URI includes a database.
+//
+// The namespace flags are dropped rather than kept alongside --db: the dump
+// directory contains only the seven collections mongoBackup.js wrote, so
+// --nsInclude was not scoping anything, and keeping non-functional flags
+// around implies a filtering guarantee that is not there.
+function buildMongorestoreArgs({ configPath, targetDbName, sourceDumpDir }) {
+  return ["--config", configPath, "--db", targetDbName, sourceDumpDir];
+}
+
+// mongorestore reports its result on stderr and exits 0 whether it restored
+// everything or nothing. Pulling the number out is what turns "the counts
+// disagree" into "mongorestore itself says it restored 0 documents".
+function parseRestoredDocumentCount(output) {
+  const match = /(\d+)\s+document\(s\) restored successfully/.exec(output || "");
+  return match ? Number(match[1]) : null;
 }
 
 async function verifyRestoredCounts(targetConn, targetDbName, manifest) {
@@ -141,17 +196,59 @@ async function restoreBackup({ manifest, env = process.env } = {}) {
     fs.mkdirSync(dumpRoot, { recursive: true });
     await spawnProcess("tar", ["-xzf", tarPath, "-C", dumpRoot]);
 
-    await withTempMongoConfig(targetConn, async (configPath) => {
-      await spawnProcess(
-        "mongorestore",
-        buildMongorestoreArgs({
-          configPath,
-          sourceDbName: manifest.mongoDbName,
-          targetDbName,
-          dumpDir: dumpRoot,
-        })
+    // mongoBackup.js runs `mongodump --db <name> --out <dumpDir>`, which
+    // writes <dumpDir>/<name>/<collection>.bson, and archives that with
+    // `tar -C <dumpDir> .`. So after extraction the per-database directory
+    // is <dumpRoot>/<manifest.mongoDbName>.
+    const sourceDumpDir = path.join(dumpRoot, manifest.mongoDbName);
+
+    // Checked rather than assumed. If the archive's layout is not what this
+    // function expects, mongorestore's response is to restore nothing and
+    // exit 0 -- so an unchecked assumption here surfaces later as an
+    // unexplained count mismatch, which is exactly how the previous bug
+    // presented.
+    if (!fs.existsSync(sourceDumpDir)) {
+      const found = fs.readdirSync(dumpRoot).join(", ") || "(empty)";
+      throw new Error(
+        `Backup archive does not contain the expected dump directory "${manifest.mongoDbName}". ` +
+          `Found at the archive root: ${found}. The manifest records mongoDbName="${manifest.mongoDbName}", ` +
+          "so either the archive was produced by a different backup script version or it is corrupt."
       );
+    }
+
+    const restoreOutput = await withTempMongoConfig(targetConn, async (configPath) =>
+      spawnProcess(
+        "mongorestore",
+        buildMongorestoreArgs({ configPath, targetDbName, sourceDumpDir })
+      )
+    );
+
+    // mongorestore's own account of what it did, before we go and count.
+    // When these two disagree, knowing which one is wrong is the difference
+    // between "the restore silently did nothing" and "the restore worked and
+    // the manifest is stale".
+    const reportedRestored = parseRestoredDocumentCount(
+      `${restoreOutput.stderr}\n${restoreOutput.stdout}`
+    );
+    const expectedTotal = manifest.collections.reduce((sum, c) => sum + (c.documentCount || 0), 0);
+
+    logEvent({
+      level: reportedRestored === 0 && expectedTotal > 0 ? "error" : "info",
+      scope: "backup-restore",
+      event: "restore_tool_reported",
+      backupId: manifest.backupId,
+      reportedRestored: reportedRestored === null ? -1 : reportedRestored,
+      expectedTotal,
     });
+
+    if (reportedRestored === 0 && expectedTotal > 0) {
+      throw new Error(
+        `mongorestore reported restoring 0 documents while the manifest expects ${expectedTotal}. ` +
+          "It exited successfully, so it found no BSON files where it looked rather than failing to " +
+          `apply them. Check that the dump directory passed to mongorestore ("${sourceDumpDir}") is the ` +
+          "per-database directory containing <collection>.bson files."
+      );
+    }
 
     const counts = await verifyRestoredCounts(targetConn, targetDbName, manifest);
     const allMatch = counts.every((c) => c.matches);
@@ -210,6 +307,7 @@ module.exports = {
   RestoreSafetyError,
   assertSafeRestoreTarget,
   buildMongorestoreArgs,
+  parseRestoredDocumentCount,
   verifyRestoredCounts,
   restoreBackup,
   findManifest,

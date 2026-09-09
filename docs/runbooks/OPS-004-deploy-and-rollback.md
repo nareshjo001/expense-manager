@@ -123,7 +123,32 @@ the old backend — which will look like "the deploy did nothing".
 
 ## 2. Smoke test
 
-Run every check. `$BACKEND` is the service's base URL.
+**Run this first — it does §2.1 through §2.5 for you:**
+
+```bash
+cd backend
+node scripts/smokeTest.js --expect-role=web https://your-backend.onrender.com
+node scripts/smokeTest.js --expect-role=worker https://your-worker.onrender.com
+```
+
+Exit code 0 means every required check passed. It is read-only — every
+request is a GET against an endpoint that either needs no authentication or
+is expected to refuse — so it is safe to point at production immediately
+after a deploy, which is when you most want to run it.
+
+Output distinguishes `FAIL` (this deployment is broken; the exit code says
+so) from `WARN` (a real degraded state the app serves correctly through —
+Redis down, ML unreachable — not grounds to roll back, but do not leave it
+unresolved). That distinction is the point: if a Redis blip failed the smoke
+test, people would learn to ignore a red run.
+
+The script runs against a real backend in CI on every PR
+(`.github/workflows/ci.yml`'s `deployment-smoke` job), so a green run here
+means something. TST-001-T07.
+
+The manual steps below remain as the explanation of what each check is
+asking and what to do when one fails. §2.6 and §2.7 are **not** automated —
+they need a browser and a logged-in user.
 
 ### 2.1 The process is up
 

@@ -7,6 +7,39 @@ on:
     - cron: "0 4 * * 0"
   workflow_dispatch:
 
+  # TST-001-T07 -- also run as a smoke test on changes that could break
+  # backup or restore.
+  #
+  # This job was already the only place a real mongodump/mongorestore round
+  # trip is exercised, but it ran on a weekly schedule alone. So a change to
+  # the backup scripts merged on a Tuesday was unverified until Sunday, and
+  # the failure surfaced detached from the change that caused it -- as a
+  # weekend alert nobody could immediately attribute. Worse, the thing it
+  # protects is the last resort: if backup is broken, the discovery you want
+  # is on the pull request, not during the restore you are attempting because
+  # something else already went wrong.
+  #
+  # Path-filtered so it stays off the critical path for the ~95% of PRs that
+  # cannot affect backups -- this job installs the MongoDB Database Tools from
+  # apt on every run, which is slow, and a slow check on every PR is a check
+  # people start routing around. Deliberately NOT added to ci.yml's
+  # `ci-required` aggregation: a path-filtered job does not run on most PRs,
+  # and branch protection reads a required check that never reported as
+  # pending forever.
+  pull_request:
+    paths:
+      - "backend/scripts/backup/**"
+      - "backend/tests/backup*.test.js"
+      - "backend/utils/alerts.js"
+      - ".github/workflows/backup-verify.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/scripts/backup/**"
+      - "backend/tests/backup*.test.js"
+      - "backend/utils/alerts.js"
+      - ".github/workflows/backup-verify.yml"
+
 permissions:
   contents: read
 
@@ -91,6 +124,23 @@ jobs:
 
       - name: Run mongoBackup.js against the source database (OPS-002-T03)
         run: node scripts/backup/mongoBackup.js
+
+      # Diagnostic, not decorative. The first real run of this job restored
+      # zero documents and the only signal was a count mismatch several steps
+      # removed from the cause -- the archive's internal layout, which nothing
+      # printed. Listing it costs a second and makes the next layout problem
+      # self-evident from the log instead of requiring a local reproduction
+      # that needs mongod, mongodump and mongorestore installed.
+      - name: Show what the backup archive actually contains
+        run: |
+          set -euo pipefail
+          echo "Destination contents:"
+          ls -la "$BACKUP_DESTINATION_DIR"
+          echo
+          echo "Manifest (records mongoDbName, which must match the archive's"
+          echo "top-level directory, and the per-collection counts the restore"
+          echo "is verified against):"
+          cat "$BACKUP_DESTINATION_DIR"/*.manifest.json
 
       # verifyBackupRestore.js sets a non-zero process.exitCode when
       # verification fails (no backup found, restore threw, or a count
