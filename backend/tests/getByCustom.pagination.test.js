@@ -83,8 +83,12 @@ const DOCS = [
   expenseDoc("2026-01-06", "64f1a2b3c4d5e6f7a8b9c005"),
 ];
 
-describe("getByCustom -- backward compatibility (no pagination params)", () => {
-  test("omitting limit returns the exact previous unbounded shape (no hasMore/nextCursor)", async () => {
+// EXP-003-T03 -- this route no longer has an unbounded path. These tests
+// previously asserted the opposite (omitting `limit` returned the whole
+// range); that behaviour was the "unbounded user history" the feature exists
+// to remove, so the assertions were inverted rather than deleted.
+describe("getByCustom -- bounded by default (no pagination params)", () => {
+  test("omitting limit still returns a bounded page carrying hasMore/nextCursor", async () => {
     const { getByCustom } = loadController({ allDocs: DOCS });
     const req = { userId: USER_ID, query: { startDate: "2026-01-01", endDate: "2026-01-31" } };
     const res = buildRes();
@@ -93,9 +97,32 @@ describe("getByCustom -- backward compatibility (no pagination params)", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
+    // Fewer documents than DEFAULT_LIMIT exist, so all 5 come back -- but the
+    // pagination envelope is present, which is what proves the bounded path
+    // ran rather than the old unbounded one.
     expect(res.body.data).toHaveLength(5);
-    expect(res.body.hasMore).toBeUndefined();
-    expect(res.body.nextCursor).toBeUndefined();
+    expect(res.body.hasMore).toBe(false);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  test("never returns more than DEFAULT_LIMIT documents when limit is omitted", async () => {
+    const { DEFAULT_LIMIT } = require("../utils/pagination");
+    const many = Array.from({ length: DEFAULT_LIMIT + 25 }, (_, i) =>
+      expenseDoc(
+        new Date(Date.UTC(2026, 0, 31) - i * 86400000).toISOString().slice(0, 10),
+        `64f1a2b3c4d5e6f7a8b9${String(i).padStart(4, "0")}`
+      )
+    );
+    const { getByCustom } = loadController({ allDocs: many });
+    const req = { userId: USER_ID, query: { startDate: "2025-01-01", endDate: "2026-12-31" } };
+    const res = buildRes();
+
+    await getByCustom(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data).toHaveLength(DEFAULT_LIMIT);
+    expect(res.body.hasMore).toBe(true);
+    expect(typeof res.body.nextCursor).toBe("string");
   });
 });
 
@@ -144,7 +171,9 @@ describe("getByCustom -- cursor pagination", () => {
     expect(res.body.errorCode).toBe("INVALID_PAGINATION_PARAMS");
   });
 
-  test("rejects a well-formed cursor supplied without a limit", async () => {
+  // Previously a 400. With a documented default page size, a cursor on its
+  // own is no longer ambiguous, so it is accepted and uses DEFAULT_LIMIT.
+  test("accepts a well-formed cursor supplied without a limit, using the default page size", async () => {
     const { encodeCursor } = require("../utils/pagination");
     const { getByCustom } = loadController({ allDocs: DOCS });
     const validCursor = encodeCursor({ date: new Date("2026-01-08"), id: "64f1a2b3c4d5e6f7a8b9c003" });
@@ -153,7 +182,22 @@ describe("getByCustom -- cursor pagination", () => {
 
     await getByCustom(req, res);
 
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.hasMore).toBe(false);
+  });
+
+  // A present-but-invalid limit is still rejected: quietly serving the default
+  // would hide the client's mistake and make the page size look intentional.
+  test("still rejects a present but out-of-range limit rather than defaulting", async () => {
+    const { MAX_LIMIT } = require("../utils/pagination");
+    const { getByCustom } = loadController({ allDocs: DOCS });
+    const req = { userId: USER_ID, query: { startDate: "2026-01-01", endDate: "2026-01-31", limit: String(MAX_LIMIT + 1) } };
+    const res = buildRes();
+
+    await getByCustom(req, res);
+
     expect(res.statusCode).toBe(400);
-    expect(res.body.message).toMatch(/limit is required/);
+    expect(res.body.errorCode).toBe("INVALID_PAGINATION_PARAMS");
   });
 });

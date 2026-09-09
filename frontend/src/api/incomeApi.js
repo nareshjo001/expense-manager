@@ -2,8 +2,10 @@ import api from "./axios";
 
 // Thin wrappers over the /income routes, routed through the shared axios instance for centralized auth/error handling.
 
-// EXP-003 -- `pagination` ({ limit, cursor }) is optional and additive; every
-// existing caller that omits it keeps getting the full, unbounded list.
+// EXP-003-T03 -- `pagination` ({ limit, cursor }) is optional to PASS, but the
+// response is bounded either way: omitting `limit` returns the server's
+// default page (50) plus `hasMore` and `nextCursor`, not the full income
+// history. A caller that needs everything must page through the cursors.
 export const getIncome = async (period, signal, pagination) => {
   const params = { ...(period ? { period } : {}), ...(pagination?.limit ? { limit: pagination.limit } : {}), ...(pagination?.cursor ? { cursor: pagination.cursor } : {}) };
   const { data } = await api.get("/income/get", {
