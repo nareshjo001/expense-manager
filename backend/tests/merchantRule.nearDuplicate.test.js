@@ -116,6 +116,9 @@ describe("near-duplicate merchant text -- route-level precedence (CAT-001)", () 
     jest.doMock(ML_CLIENT_PATH, () => ({
       buildMlServiceUrl: (path) => `http://ml-service.test${path}`,
       mlOperationsHeaders: () => ({}),
+    // OBS-001-T05 -- the real client wraps ML calls to record metrics; the
+    // mock passes straight through, since timing is not under test here.
+    callMlService: (_operation, request) => request(),
     }));
     process.env.JWT_SECRET = TEST_JWT_SECRET;
     process.env.ML_ROUTE = "http://ml-service.test";

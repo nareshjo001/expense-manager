@@ -2,6 +2,10 @@ const Tesseract = require("tesseract.js");
 // OCR-003-T01 -- the result shape is now a versioned contract rather than an
 // ad-hoc object this module and receiptParser.js happened to agree on.
 const { buildOcrResult, buildLine } = require("./ocrContract");
+// OBS-001-T05 -- OCR metrics. Receipt processing degrades silently: it does
+// not change an HTTP status a user sees, it just starts timing out or
+// returning worse text, so request metrics can never reveal it.
+const { recordOperation } = require("../../utils/metrics");
 
 class OcrProcessingError extends Error {
   constructor(code, message) {
@@ -143,12 +147,20 @@ const extractTextFromImage = async (
   { timeoutMs = getOcrTimeoutMs(), maxAttempts = getOcrMaxAttempts() } = {}
 ) => {
   let lastError;
+  const startedAt = Date.now();
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await attemptRecognition(imageBuffer, timeoutMs);
+      const result = await attemptRecognition(imageBuffer, timeoutMs);
+      recordOperation({ scope: "ocr", operation: "recognize", outcome: "success", durationMs: Date.now() - startedAt });
+      return result;
     } catch (error) {
       lastError = error;
       if (error instanceof OcrProcessingError && error.code === "OCR_PROCESSING_TIMEOUT") {
+        // Timeouts are recorded separately from other failures: they mean
+        // "too slow", which is a capacity signal, while a generic failure
+        // usually means a decode or worker problem. Merging them would hide
+        // whichever is rarer.
+        recordOperation({ scope: "ocr", operation: "timeout", outcome: "failure", durationMs: Date.now() - startedAt });
         throw error;
       }
       // Transient failure: fall through and retry unless this was the
@@ -156,6 +168,7 @@ const extractTextFromImage = async (
       // is thrown below.
     }
   }
+  recordOperation({ scope: "ocr", operation: "recognize", outcome: "failure", durationMs: Date.now() - startedAt });
   throw lastError;
 };
 

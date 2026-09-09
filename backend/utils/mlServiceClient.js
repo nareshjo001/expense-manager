@@ -34,4 +34,30 @@ function mlOperationsHeaders(requestId) {
   return headers;
 }
 
-module.exports = { buildMlServiceUrl, mlOperationsHeaders, OPERATIONS_TOKEN_HEADER, REQUEST_ID_HEADER };
+// OBS-001-T05 -- ML service metrics.
+//
+// Wrapping the CALL rather than instrumenting each call site is deliberate:
+// there are three ML call sites today (predict-category, generate-description,
+// retrain-model) and a fourth added later would silently go unmeasured if
+// each had to remember. The ML service degrading -- slower predictions, more
+// timeouts after a retrain -- is invisible to HTTP request metrics, because
+// every one of these calls is wrapped in a try/catch that falls back
+// gracefully and still returns 200 to the user.
+//
+// Records only the endpoint path, outcome and duration. No expense text, no
+// prediction, no operations token.
+const { recordOperation } = require("./metrics");
+
+async function callMlService(operation, request) {
+  const startedAt = Date.now();
+  try {
+    const response = await request();
+    recordOperation({ scope: "ml", operation, outcome: "success", durationMs: Date.now() - startedAt });
+    return response;
+  } catch (err) {
+    recordOperation({ scope: "ml", operation, outcome: "failure", durationMs: Date.now() - startedAt });
+    throw err;
+  }
+}
+
+module.exports = { buildMlServiceUrl, mlOperationsHeaders, callMlService, OPERATIONS_TOKEN_HEADER, REQUEST_ID_HEADER };

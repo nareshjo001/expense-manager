@@ -32,6 +32,10 @@
 const crypto = require("crypto");
 const { redisClient } = require("../config/redis");
 const { logEvent } = require("./logger");
+// OBS-001-T05 -- job metrics. runWithLease is the one place every scheduled
+// job passes through, so recording here covers all three crons without each
+// having to remember to instrument itself.
+const { recordJob } = require("./metrics");
 
 const LEASE_KEY_PREFIX = "job-lease:";
 
@@ -120,6 +124,7 @@ async function runWithLease(jobName, ttlMs, fn, options = {}) {
       // exclusivity", and skip. One missed cycle of a periodic job is
       // recoverable; a duplicated one may not be.
       logEvent({ level: "error", scope: "job-lease", event: "lease_acquire_failed_skipped", jobName, errorMessage: err && err.message });
+      recordJob({ jobName, outcome: "skipped" });
       return { ran: false };
     }
     logEvent({ level: "warn", scope: "job-lease", event: "lease_acquire_failed_ran_anyway", jobName, errorMessage: err && err.message });
@@ -128,6 +133,10 @@ async function runWithLease(jobName, ttlMs, fn, options = {}) {
 
   if (owner === null) {
     logEvent({ level: "info", scope: "job-lease", event: "lease_skipped", jobName });
+    // Skipped is its own outcome, not a failure: losing the lease to another
+    // instance is the system working. See recordJob() for why it is still
+    // counted rather than ignored.
+    recordJob({ jobName, outcome: "skipped" });
     return { ran: false };
   }
 
@@ -163,10 +172,18 @@ async function runWithLease(jobName, ttlMs, fn, options = {}) {
     if (typeof timer.unref === "function") timer.unref();
   }
 
+  let jobOutcome = "success";
   try {
     await fn({ isHeld: () => held });
     return { ran: true };
+  } catch (err) {
+    // The throw is re-raised untouched; this only classifies the run so a
+    // job that starts failing every cycle becomes visible in the snapshot
+    // instead of only in whatever the caller happens to log.
+    jobOutcome = "failure";
+    throw err;
   } finally {
+    recordJob({ jobName, outcome: jobOutcome, durationMs: Date.now() - startedAt });
     if (timer) clearInterval(timer);
     if (coordinated && held) {
       await releaseLease(jobName, owner);

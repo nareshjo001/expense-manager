@@ -5,7 +5,7 @@ const router = express.Router();
 
 const verifyToken = require("../Middlewares/Auth");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
-const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
+const { buildMlServiceUrl, mlOperationsHeaders, callMlService } = require("../utils/mlServiceClient");
 // CAT-001 -- user-scoped merchant rules take precedence over the ML model.
 const {
     findRuleForMerchant,
@@ -46,15 +46,17 @@ router.post("/predict-category", verifyToken, async (req, res) => {
             });
         }
 
-        const response = await axios.post(
-            buildMlServiceUrl("/predict-category"),
-            {
-                expenseName
-            },
-            {
-                timeout: PREDICT_TIMEOUT_MS,
-                headers: mlOperationsHeaders(req.requestId)
-            }
+        const response = await callMlService("predict-category", () =>
+            axios.post(
+                buildMlServiceUrl("/predict-category"),
+                {
+                    expenseName
+                },
+                {
+                    timeout: PREDICT_TIMEOUT_MS,
+                    headers: mlOperationsHeaders(req.requestId)
+                }
+            )
         );
 
         // Preserve the existing successful response contract, only adding

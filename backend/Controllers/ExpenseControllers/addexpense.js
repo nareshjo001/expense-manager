@@ -5,7 +5,7 @@ const { normalizeCategory } = require('../../utils/categoryNormalization');
 const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
 const axios = require("axios");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
-const { buildMlServiceUrl, mlOperationsHeaders } = require('../../utils/mlServiceClient');
+const { buildMlServiceUrl, mlOperationsHeaders, callMlService } = require('../../utils/mlServiceClient');
 
 // Category Normalization -- controlled 400 for an invalid/missing category,
 const INVALID_CATEGORY_RESPONSE = {
@@ -138,14 +138,16 @@ const addExpense = async (req, res) => {
     // Generate a description via ML when none was provided.
     if (!expenseDescription || expenseDescription.trim() === '') {
         try {
-            const response = await axios.post(
-              buildMlServiceUrl("/generate-description"),
-              {
-                  expenseName,
-                  expenseCategory: normalizedCategory,
-                  expenseAmount
-              },
-              { timeout: 5000, headers: mlOperationsHeaders(req.requestId) }
+            const response = await callMlService("generate-description", () =>
+              axios.post(
+                buildMlServiceUrl("/generate-description"),
+                {
+                    expenseName,
+                    expenseCategory: normalizedCategory,
+                    expenseAmount
+                },
+                { timeout: 5000, headers: mlOperationsHeaders(req.requestId) }
+              )
             );
 
             finalDescription = response.data.description;
