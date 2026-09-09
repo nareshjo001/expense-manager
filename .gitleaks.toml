@@ -1,0 +1,65 @@
+# OPS-001-T06 -- secret scanning configuration.
+#
+# Extends gitleaks' bundled ruleset rather than replacing it: the default
+# rules already cover every credential shape this project handles (JWT
+# signing secrets, MongoDB connection strings, Google service-account
+# keys, Brevo/Groq/OpenAI/Gemini API keys), and re-deriving them by hand
+# would only ever be a worse copy.
+#
+# CI scans the checked-out tree AND the full git history. History matters
+# independently: a secret that was committed and later deleted is still
+# leaked, and only a history rewrite plus a credential rotation fixes it.
+#
+# Note for local runs: `gitleaks dir .` in a working copy will also flag
+# your real backend/.env, frontend/.env and ml-service/.env. That is
+# correct behaviour, not a false positive -- those files hold live
+# credentials. They are deliberately NOT allowlisted below, so that the
+# day one of them is accidentally `git add`-ed, the scan fails loudly.
+# CI never sees them because it scans a clean checkout of tracked files.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Verified non-secrets: generated output and values that are public by design"
+
+paths = [
+  # Lockfiles are full of base64 integrity hashes, not credentials.
+  '''.*package-lock\.json$''',
+  # Generated build output. Never a source of truth, always gitignored;
+  # it only contains what frontend/src already contains.
+  '''^frontend/build/.*''',
+  # Committed model artifacts and datasets: binary/CSV noise.
+  '''^ml-service/training/.*\.pkl$''',
+  '''^ml-service/usedDatasets/.*\.csv$''',
+  '''^ml-service/training/dataset/.*\.csv$''',
+  # Binary assets.
+  '''^frontend/public/.*\.(png|jpe?g|ico)$''',
+  '''^frontend/src/icons/.*\.png$''',
+  '''.*\.pdf$''',
+]
+
+# Allowlisted by VALUE, not by file path, deliberately: exempting whole
+# files would also hide a genuine secret added to them later. Each entry
+# below is a specific string that has been checked and is not a credential.
+regexes = [
+  # CI's own non-production values. Committed on purpose so the workflow
+  # is reproducible; they authenticate to nothing.
+  '''ci-test-secret-not-for-production''',
+  '''ci-e2e-test-secret-not-for-production''',
+  '''ci-e2e-dummy-brevo-key''',
+
+  # The Firebase *Web* API key. This is a public client identifier, not a
+  # secret: it ships in every browser bundle by design and is secured by
+  # Firebase API-key restrictions (HTTP referrer + allowed APIs), not by
+  # concealment. SEC-001 section 14 records this exception explicitly
+  # ("...except public Firebase client identifiers under API/domain
+  # restriction"). It appears in frontend/src/firebase.js and
+  # frontend/public/firebase-messaging-sw.js.
+  #
+  # This allowlist entry is NOT a licence to skip the restriction: if the
+  # key is ever unrestricted in the Firebase console, it becomes abusable
+  # (quota theft) even though it is not a credential. Keep the referrer
+  # and API allowlists in place.
+  '''AIzaSyCLdiBKVOyiSxeT9stpDjcmK5aO99ZAXtw''',
+]

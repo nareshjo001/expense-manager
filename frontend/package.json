@@ -36,6 +36,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "lint": "eslint src --ext .js",
+    "lint:ci": "eslint src --ext .js --ignore-pattern \"**/*.test.js\" --max-warnings=0",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

@@ -830,120 +830,13 @@ const ask = async (req, res) => {
     trimmedQuestion,
   });
 
-  /* Legacy intent-specific path retained for request compatibility. */
-  try {
-    // req.userId comes only from verifyToken (Middlewares/Auth.js), which ran before this controller -- the sole identity ever passed into buildContext; req.body/query/params are never read for a userId. The canonical Report is fetched fresh every turn -- conversation history is never a substitute source of current facts.
-    const contextResult = await buildContext(req.userId, intent);
-
-    if (!contextResult || contextResult.fields === null || contextResult.reason === "no_data") {
-      // No provider call happens on this path, and no session is created for a brand-new conversation either -- there's no turn to store, and an empty conversation would be noise. An EXISTING session still reports its id.
-      const noDataResponse = formatNoDataResponse(intent);
-      if (activeSession) noDataResponse.sessionId = String(activeSession._id);
-
-      // Recorded as completed so a retry with the same key replays this exact 200 rather than re-running context building.
-      if (reservation) {
-        await idempotencyService.markCompleted({
-          requestId: reservation.record._id,
-          ownerToken: reservation.ownerToken,
-          responseStatus: 200,
-          responsePayload: noDataResponse,
-          sessionId: activeSession ? activeSession._id : null,
-        });
-      }
-
-      return res.status(200).json(noDataResponse);
-    }
-
-    // Computed from the EXACT contextResult sent to the provider below -- never from the intent alone, the classifier's selection, or by parsing the provider's answer/prompt -- which is why this happens immediately after buildContext() succeeds, not after askLlm() returns.
-    const grounding = buildGroundingSnapshot(contextResult);
-
-    // Bounded recent-turn history, for conversational continuity ONLY -- buildContext() already fetched the current report fresh regardless of what loads here. See llmService.js's buildHistoryMessages() for how this stays structurally unable to override the system prompt.
-    const recentTurns = activeSession ? await safeLoadRecentTurns(activeSession._id, req.userId) : [];
-
-    const providerStartedAt = Date.now();
-    let llmResult;
-    try {
-      llmResult = await askLlm({
-        systemPrompt: SYSTEM_PROMPTS_BY_INTENT[intent],
-        context: contextResult,
-        question: trimmedQuestion,
-        history: recentTurns,
-      });
-    } catch (providerErr) {
-      // Exactly one failure record per provider attempt -- never logged again by the outer catch. Only the normalized error code and provider identifier are passed; the caught error itself is never logged and is always rethrown unchanged.
-      logSiaEvent({
-        event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
-        provider: config.provider,
-        errorCode: providerErr && providerErr.code,
-        latencyMs: Date.now() - providerStartedAt,
-      });
-      throw providerErr;
-    }
-
-    if (!llmResult || typeof llmResult.answer !== "string" || llmResult.answer.trim() === "") {
-      // Defensive: a resolved-but-unusable provider result is treated the same as a rejection -- unreachable under the current stub, but required for when a real provider exists. Not logged as a normalized-code failure since no LlmProviderError was thrown.
-      return res.status(503).json(UNAVAILABLE_RESPONSE);
-    }
-
-    // Grounded-response validation is a real deterministic gate, not just a system-prompt instruction (see responseValidator.js). A failed check is treated exactly like a failed provider result: the generic 503, never a partially-shown or rewritten answer. contextResult.fields is the exact structured context this answer was grounded in.
-    const validation = validateGroundedAnswer({
-      intent,
-      answer: llmResult.answer,
-      contextFields: contextResult.fields,
-    });
-    if (!validation.valid) {
-      logSiaEvent({
-        event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
-        provider: config.provider,
-        errorCode: `GROUNDING_${validation.reasonCode}`,
-        latencyMs: Date.now() - providerStartedAt,
-      });
-      throw new Error("GROUNDING_REJECTED");
-    }
-
-    logSiaEvent({
-      event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED,
-      provider: config.provider,
-      latencyMs: Date.now() - providerStartedAt,
-    });
-
-    // The durable checkpoint: the validated answer is committed BEFORE any session write, so if persistence fails, a retry with the same key resumes from this stored answer instead of paying for a second provider call.
-    if (reservation) {
-      await idempotencyService.markAnswerReady({
-        requestId: reservation.record._id,
-        ownerToken: reservation.ownerToken,
-        answer: llmResult.answer,
-        intent,
-        sessionId: activeSession ? activeSession._id : null,
-        grounding,
-      });
-    }
-
-    // Persisted only now that a real, usable answer exists -- a failed request never reaches this line, so it can never leave a half-written turn behind. Best-effort: a persistence failure here does not alter or retract the response already computed.
-    const finished = await finalizeAnswer({
-      req,
-      reservation,
-      activeSession,
-      intent,
-      answer: llmResult.answer,
-      clientMessageId: requestedClientMessageId,
-      grounding,
-    });
-    return res.status(finished.status).json(finished.payload);
-  } catch (err) {
-    // Release the reservation so a provider or grounding failure never permanently poisons the key -- a retry is treated as a fresh, properly-owned attempt. Only runs for failures BEFORE markAnswerReady committed; once an answer is stored, a retry resumes from it instead.
-    if (reservation) {
-      try {
-        await idempotencyService.releaseRequest({
-          requestId: reservation.record._id,
-          ownerToken: reservation.ownerToken,
-        });
-      } catch (_releaseErr) {
-        // Best-effort -- the lease's own expiry is the backstop that keeps the key retryable even if this release fails.
-      }
-    }
-    return res.status(503).json(UNAVAILABLE_RESPONSE);
-  }
+  // OPS-001-T06 -- a ~110-line legacy intent-specific block used to sit
+  // here, after the unconditional return above. It was unreachable, and
+  // it referenced an `intent` binding that does not exist in this scope,
+  // so it could only ever have thrown a ReferenceError had it run. The
+  // backend lint gate (no-unreachable + no-undef) surfaced it; removed
+  // rather than suppressed, since suppressing it would have preserved
+  // provably broken code. The live path is handleDirectAnswer above.
 };
 
 module.exports = {
