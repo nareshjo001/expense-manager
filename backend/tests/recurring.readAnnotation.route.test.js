@@ -41,13 +41,47 @@ function loadApp({ expenses, recurringDefinitions }) {
   jest.resetModules();
 
   // ExpenseModel: only find()/findOne() are needed by the endpoints under
+  // EXP-003-T03 -- find() must now support the chained
+  // .sort().limit().lean() form as well as a bare .lean(): GET
+  // /expense/search no longer has an unbounded path, so it always goes
+  // through the cursor-paginated query. A mock that only answered .lean()
+  // made this endpoint return 500, which looked like a product regression
+  // but was purely the mock being narrower than the driver it stands in for.
   const ExpenseModelMock = {
-    find: (query) => ({
-      lean: async () =>
+    find: (query) => {
+      const matches = () =>
         expenses
           .filter((e) => String(e.userId) === String(query.userId))
-          .map((e) => ({ ...e })),
-    }),
+          .filter((e) => {
+            const range = query.expenseDate;
+            if (!range) return true;
+            const at = new Date(e.expenseDate).getTime();
+            if (range.$gte && at < new Date(range.$gte).getTime()) return false;
+            if (range.$lte && at > new Date(range.$lte).getTime()) return false;
+            return true;
+          })
+          .map((e) => ({ ...e }));
+
+      const chain = {
+        _docs: null,
+        sort() {
+          // Mirrors the real (expenseDate DESC, _id DESC) keyset order.
+          this._docs = (this._docs || matches()).sort((a, b) => {
+            const diff = new Date(b.expenseDate) - new Date(a.expenseDate);
+            return diff !== 0 ? diff : String(b._id).localeCompare(String(a._id));
+          });
+          return this;
+        },
+        limit(n) {
+          this._docs = (this._docs || matches()).slice(0, n);
+          return this;
+        },
+        lean: async function () {
+          return this._docs || matches();
+        },
+      };
+      return chain;
+    },
     findOne: async (query) => {
       const doc = expenses.find(
         (e) => String(e._id) === String(query._id) && String(e.userId) === String(query.userId)
