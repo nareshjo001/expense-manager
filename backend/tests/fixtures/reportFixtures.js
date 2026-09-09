@@ -23,9 +23,16 @@ function currentMonthKey() {
   return `${now.toLocaleString("en-US", { month: "short" })} ${now.getFullYear()}`;
 }
 
+// Never returns a future date. The unclamped version returned day 10 of
+// the current month unconditionally, so on the 1st-9th it seeded expenses
+// dated in the FUTURE. That made spendingAnalyzer's tracking window <= 0,
+// and on the 9th exactly -- window zero -- the division by it threw and
+// this suite failed with a 500, one day a month, every month. The
+// analyzer's own divide-by-zero is fixed separately; this keeps the
+// fixture honest so the suite exercises a realistic past-dated expense.
 function currentMonthDate(dayOfMonth = 10) {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), dayOfMonth);
+  return new Date(now.getFullYear(), now.getMonth(), Math.min(dayOfMonth, now.getDate()));
 }
 
 // Matches dataProvider.js's getPreviousMonthExpenses range exactly
