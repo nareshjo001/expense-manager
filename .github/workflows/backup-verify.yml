@@ -125,6 +125,23 @@ jobs:
       - name: Run mongoBackup.js against the source database (OPS-002-T03)
         run: node scripts/backup/mongoBackup.js
 
+      # Diagnostic, not decorative. The first real run of this job restored
+      # zero documents and the only signal was a count mismatch several steps
+      # removed from the cause -- the archive's internal layout, which nothing
+      # printed. Listing it costs a second and makes the next layout problem
+      # self-evident from the log instead of requiring a local reproduction
+      # that needs mongod, mongodump and mongorestore installed.
+      - name: Show what the backup archive actually contains
+        run: |
+          set -euo pipefail
+          echo "Destination contents:"
+          ls -la "$BACKUP_DESTINATION_DIR"
+          echo
+          echo "Manifest (records mongoDbName, which must match the archive's"
+          echo "top-level directory, and the per-collection counts the restore"
+          echo "is verified against):"
+          cat "$BACKUP_DESTINATION_DIR"/*.manifest.json
+
       # verifyBackupRestore.js sets a non-zero process.exitCode when
       # verification fails (no backup found, restore threw, or a count
       # mismatch) -- this step's own exit code is the pass/fail signal,

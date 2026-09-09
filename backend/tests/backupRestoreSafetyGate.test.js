@@ -6,7 +6,12 @@
 // Mongo needed.
 "use strict";
 
-const { RestoreSafetyError, assertSafeRestoreTarget, buildMongorestoreArgs } = require("../scripts/backup/mongoRestore");
+const {
+  RestoreSafetyError,
+  assertSafeRestoreTarget,
+  buildMongorestoreArgs,
+  parseRestoredDocumentCount,
+} = require("../scripts/backup/mongoRestore");
 
 describe("assertSafeRestoreTarget", () => {
   test("refuses when RESTORE_TARGET_MONGO_CONN is missing entirely", () => {
@@ -70,33 +75,109 @@ describe("assertSafeRestoreTarget", () => {
 });
 
 describe("buildMongorestoreArgs", () => {
-  test("builds the expected argv, including the namespace rename from source db to target db", () => {
+  // The argv this replaces restored ZERO documents while exiting 0, and its
+  // test passed the whole time -- because the test asserted the argv the code
+  // produced rather than anything about what mongorestore does with it. See
+  // buildMongorestoreArgs' own comment for the mechanism, traced through
+  // mongo-tools' source. These tests are written to encode that mechanism, so
+  // reverting the fix fails here rather than in a weekly scheduled job.
+  test("targets the per-database dump directory, not the archive root", () => {
+    // CreateIntentsForDB looks for <collection>.bson directly inside the
+    // directory it is given. The archive root holds <dbname>/ instead, so
+    // pointing at it finds nothing and mongorestore exits successfully having
+    // done nothing at all.
     const args = buildMongorestoreArgs({
       configPath: "/tmp/mongo-config.yaml",
-      sourceDbName: "expense_manager",
       targetDbName: "expense_manager_restore_scratch",
-      dumpDir: "/tmp/dump",
+      sourceDumpDir: "/tmp/dump/expense_manager",
     });
+
+    expect(args[args.length - 1]).toBe("/tmp/dump/expense_manager");
+  });
+
+  test("passes --db explicitly rather than relying on the URI carrying one", () => {
+    // mongo-tools populates ToolOptions.DB from the connection string's
+    // database when no --db is given, and that field is what selects
+    // single-database mode. Leaving it implicit makes the restore's behaviour
+    // depend on the shape of whatever connection string the caller supplied.
+    const args = buildMongorestoreArgs({
+      configPath: "/tmp/mongo-config.yaml",
+      targetDbName: "expense_manager_restore_scratch",
+      sourceDumpDir: "/tmp/dump/expense_manager",
+    });
+
     expect(args).toEqual([
       "--config",
       "/tmp/mongo-config.yaml",
-      "--nsInclude",
-      "expense_manager.*",
-      "--nsFrom",
-      "expense_manager.*",
-      "--nsTo",
-      "expense_manager_restore_scratch.*",
-      "/tmp/dump",
+      "--db",
+      "expense_manager_restore_scratch",
+      "/tmp/dump/expense_manager",
     ]);
+  });
+
+  test("--db names the TARGET database -- that is what performs the rename", () => {
+    // CreateIntentsForDB assigns this database to every .bson it finds, so a
+    // dump of `expense_manager` lands in the scratch database. Passing the
+    // SOURCE name here would restore production data back over production.
+    const args = buildMongorestoreArgs({
+      configPath: "/tmp/cfg.yaml",
+      targetDbName: "restore_scratch",
+      sourceDumpDir: "/tmp/dump/expense_manager",
+    });
+
+    const dbIndex = args.indexOf("--db");
+    expect(args[dbIndex + 1]).toBe("restore_scratch");
+    expect(args).not.toContain("expense_manager");
+  });
+
+  test("carries no namespace-rename flags", () => {
+    // Dropped rather than kept alongside --db: they were not filtering
+    // anything (the dump holds only the seven collections mongoBackup.js
+    // wrote), and leaving them in implies a scoping guarantee that is absent.
+    const args = buildMongorestoreArgs({
+      configPath: "/tmp/cfg.yaml",
+      targetDbName: "db2",
+      sourceDumpDir: "/tmp/dump/db1",
+    });
+
+    expect(args).not.toContain("--nsFrom");
+    expect(args).not.toContain("--nsTo");
+    expect(args).not.toContain("--nsInclude");
   });
 
   test("never includes a raw connection string in argv", () => {
     const args = buildMongorestoreArgs({
       configPath: "/tmp/mongo-config.yaml",
-      sourceDbName: "db1",
       targetDbName: "db2",
-      dumpDir: "/tmp/dump",
+      sourceDumpDir: "/tmp/dump/db1",
     });
     expect(args.join(" ")).not.toMatch(/mongodb(\+srv)?:\/\//);
+  });
+});
+
+describe("parseRestoredDocumentCount", () => {
+  // mongorestore exits 0 whether it restored everything or nothing, so this
+  // line is the difference between a diagnosable failure and a mystery.
+  test("reads the count out of mongorestore's stderr summary", () => {
+    const output = [
+      "2026-09-09T19:38:28.500+0000\tfinished restoring expense_manager.users (2 documents, 0 failures)",
+      "2026-09-09T19:38:28.510+0000\t3 document(s) restored successfully. 0 document(s) failed to restore.",
+    ].join("\n");
+
+    expect(parseRestoredDocumentCount(output)).toBe(3);
+  });
+
+  test("reads a zero, which is the case that matters", () => {
+    expect(
+      parseRestoredDocumentCount("0 document(s) restored successfully. 0 document(s) failed to restore.")
+    ).toBe(0);
+  });
+
+  test("returns null when the summary is absent rather than guessing", () => {
+    // null and 0 must stay distinguishable: 0 is mongorestore telling us it
+    // did nothing, null is us not knowing. Only the first should fail a run.
+    expect(parseRestoredDocumentCount("")).toBeNull();
+    expect(parseRestoredDocumentCount("some unrelated output")).toBeNull();
+    expect(parseRestoredDocumentCount(undefined)).toBeNull();
   });
 });
