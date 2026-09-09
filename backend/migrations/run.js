@@ -57,10 +57,35 @@ async function main() {
   // but connecting here unconditionally is cheap and keeps this
   // entrypoint's startup sequence identical regardless of mode, matching
   // server.js's own pattern.
-  await connectRedis();
+  // OPS-004-T04 changed connectRedis() so it no longer throws -- the SERVER
+  // must degrade through a Redis outage rather than exit. A migration must
+  // do the opposite. The migration lock (migrations/lock.js, via
+  // utils/jobLease.js) is what stops two deploys applying the same migration
+  // to the same database concurrently, and unlike a cache miss there is no
+  // fallback for that. So this entry point re-imposes fail-closed for
+  // itself, explicitly, rather than inheriting it from a rejection that no
+  // longer happens.
+  //
+  // Without this the run would still fail -- lock acquisition against an
+  // unconnected client throws "The client is closed" -- but it would fail
+  // several frames later with a message that reads like a bug in the lock
+  // rather than a missing dependency.
+  const redis = await connectRedis();
 
   let result;
   try {
+    // Raised as a pre-flight refusal so it takes the same path, and prints
+    // the same "Migration run refused" prefix, as the environment gate --
+    // both are "this run must not start", and they should not read like two
+    // different kinds of event to whoever is looking at the output.
+    if (!redis.connected && !dryRun) {
+      throw new Error(
+        "Redis is unreachable, so the migration lock cannot be acquired. Two concurrent " +
+          "deploys could otherwise apply the same migration to the same database. " +
+          `Underlying error: ${redis.error && redis.error.message}`
+      );
+    }
+
     result = await runMigrations({ dryRun, batchSize, allowNoBackupCheck });
   } catch (err) {
     // The environment gate (and any other pre-flight rejection) throws
