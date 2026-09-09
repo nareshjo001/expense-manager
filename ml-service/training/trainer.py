@@ -304,11 +304,34 @@ try:
     proba = model.predict_proba(X_test)
     confidences = proba.max(axis=1)
 
+    # ML-001-T05 -- top-k recall needs proba's COLUMN order, which is
+    # model.classes_ (the encoded integer labels the estimator was fitted
+    # on), not encoder.classes_. Those two coincide today, but only
+    # because LabelEncoder happens to assign codes in sorted order --
+    # decoding model.classes_ makes the mapping explicit instead of
+    # relying on that coincidence, and stays correct if the estimator
+    # ever reorders or drops a class it never saw in training.
+    proba_class_names = list(encoder.inverse_transform(model.classes_))
+
     full_metrics = ml_metrics.compute_full_metrics(
-        y_test_names, y_pred_names, confidences=confidences, labels=class_names
+        y_test_names,
+        y_pred_names,
+        confidences=confidences,
+        labels=class_names,
+        proba=proba,
+        proba_labels=proba_class_names,
     )
     print("MACRO F1:", round(full_metrics["macroF1"] * 100, 2), "%")
     print("CALIBRATION (ECE):", round(full_metrics["calibration"]["expectedCalibrationError"], 4))
+    topk = full_metrics["topKRecall"]
+    print(
+        "TOP-K RECALL (overall):",
+        ", ".join("top%d=%.2f%%" % (k, topk["overall"]["top%d" % k] * 100) for k in topk["ks"]),
+    )
+    print(
+        "TOP-K RECALL (macro):",
+        ", ".join("top%d=%.2f%%" % (k, topk["macro"]["top%d" % k] * 100) for k in topk["ks"]),
+    )
 
     metrics = {
         "accuracy": float(accuracy),
@@ -316,6 +339,7 @@ try:
         "perClass": full_metrics["perClass"],
         "confusion": full_metrics["confusion"],
         "calibration": full_metrics["calibration"],
+        "topKRecall": full_metrics["topKRecall"],
         "trainRows": int(X_train.shape[0]),
         "valRows": int(X_val.shape[0]),
         "testRows": int(X_test.shape[0]),
