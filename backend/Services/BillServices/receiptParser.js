@@ -1,119 +1,60 @@
 // DAT-001-T03 -- the one entry point DAT-001-T02's inventory flagged as
-// having no validation boundary: this used to be a bare
-// parseFloat(rawText), which silently returns NaN (or a wrong prefix
-// value, e.g. "12.34.56" -> 12.34) for a malformed OCR match. Routed
-// through the shared parseAmountInput() so a bad match fails closed
-// (null, "couldn't extract an amount") instead of quietly writing NaN
-// or a bogus value into expenseAmount.
-const { parseAmountInput } = require("../../utils/money");
+// having no validation boundary: this used to be a bare parseFloat(rawText),
+// which silently returns NaN (or a wrong prefix value, e.g. "12.34.56" ->
+// 12.34) for a malformed OCR match. Amount parsing now goes through the
+// shared parseAmountInput() inside receiptExtractors.js, so a bad match
+// fails closed (null) instead of quietly writing NaN into expenseAmount.
+//
+// OCR-003-T01/T03/T04 -- this module used to own three responsibilities:
+// deciding what shape of OCR input it had been handed, extracting each
+// field, and judging whether the result was trustworthy. They are now
+// separated: ocrContract.js owns the shape, receiptExtractors.js owns the
+// field logic (and is independently testable), and this file composes them
+// and produces the review verdict.
+"use strict";
 
-// OCR-002: parseReceipt used to only ever see a single flattened string,
-// with every newline already collapsed into a space by ocrService.js.
-// ocrService.js now preserves layout and also hands back an overall
-// confidence score and a per-line { text, confidence } breakdown, as
-// { text, confidence, lines }. This module accepts either shape --
-// a bare string (the legacy contract, and what a caller with no
-// confidence data can still pass) or that object -- and normalizes to
-// one internal shape. Anything else (null, undefined, a number, a
-// malformed object) is passed through as-is: the extractors below then
-// fail exactly the way they always have (a TypeError out of
-// extractMerchant's text.trim()), not a new, silently different failure
-// mode.
-const normalizeOcrInput = (input) => {
-  if (typeof input === "string") {
-    return { text: input, confidence: null, lines: null };
-  }
-  if (input && typeof input === "object" && typeof input.text === "string") {
-    return {
-      text: input.text,
-      confidence: typeof input.confidence === "number" ? input.confidence : null,
-      lines: Array.isArray(input.lines) ? input.lines : null,
-    };
-  }
-  return { text: input, confidence: null, lines: null };
+const { toOcrResult } = require("./ocrContract");
+const {
+  extractMerchant,
+  extractAmount,
+  extractDate,
+  looksLikeHeading,
+} = require("./receiptExtractors");
+
+// Below this, a field is worth a second look. Tesseract's per-line score is
+// 0-100 and degrades gracefully, so this is a judgement call rather than a
+// derived constant: 60 is low enough that clean receipts do not trip it and
+// high enough to catch the smudged-thermal-print case that produces
+// plausible-looking wrong digits -- the failure that actually costs a user
+// money, because a wrong amount still looks like an amount.
+const LOW_CONFIDENCE_THRESHOLD = 60;
+
+// OCR-003-T04 -- machine-readable reasons, not just a boolean.
+//
+// `needsReview` alone tells a UI to show a warning but not what to say, so
+// every consumer either says something vague ("please check this receipt")
+// or re-derives the reason from the raw fields, duplicating this logic.
+// These codes let the caller point at the specific field and explain the
+// specific doubt. They are codes rather than sentences so the wording stays
+// the UI's decision and can be translated.
+const REVIEW_REASONS = {
+  NO_AMOUNT_FOUND: "NO_AMOUNT_FOUND",
+  AMBIGUOUS_AMOUNT: "AMBIGUOUS_AMOUNT",
+  NO_DATE_FOUND: "NO_DATE_FOUND",
+  LOW_OVERALL_CONFIDENCE: "LOW_OVERALL_CONFIDENCE",
+  LOW_AMOUNT_CONFIDENCE: "LOW_AMOUNT_CONFIDENCE",
+  LOW_DATE_CONFIDENCE: "LOW_DATE_CONFIDENCE",
+  MERCHANT_LOOKS_LIKE_HEADING: "MERCHANT_LOOKS_LIKE_HEADING",
+  NO_TEXT_RECOGNISED: "NO_TEXT_RECOGNISED",
 };
 
-// Approximate the merchant name from the first words of the receipt.
-const extractMerchant = (text) => {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, 2).join(" ");
-};
-
-// Extract the receipt total amount, along with the matched text so its
-// confidence can be looked up against the OCR's per-line breakdown.
-const extractAmount = (text) => {
-  const matches = [
-    ...text.matchAll(
-      /(grand total|total)[^\d]*([\d,.]+)/gi
-    ),
-  ];
-
-  if (!matches.length) {
-    return { value: null, matchedText: null };
-  }
-
-  // Prefer grand total, else use the last match.
-  const grandTotal = matches.find(match =>
-    match[1].toLowerCase().includes("grand")
-  );
-
-  const finalMatch =
-    grandTotal || matches[matches.length - 1];
-
-  return { value: parseAmountInput(finalMatch[2]), matchedText: finalMatch[0] };
-};
-
-// Extract the receipt date in any supported format, along with the
-// matched text so its confidence can be looked up against the OCR's
-// per-line breakdown.
-const extractDate = (text) => {
-  const dateRegex =
-    /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})|(\d{1,2}(st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/i;
-
-  const match = text.match(dateRegex);
-
-  if (!match) {
-    return { value: null, matchedText: null };
-  }
-
-  return { value: match[0], matchedText: match[0] };
-};
-
-// Extract the line-item section of the receipt.
-const extractItemsBlock = (text) => {
-  let itemSection = text;
-
-  const itemStart =
-    text.search(/item/i);
-
-  if (itemStart !== -1) {
-    itemSection =
-      text.substring(itemStart);
-  }
-
-  // Cut off at the totals or payment section.
-  const stopRegex =
-    /(subtotal|gst|grand total|total|payment|thank you)/i;
-
-  const stopMatch =
-    itemSection.match(stopRegex);
-
-  if (stopMatch) {
-    itemSection =
-      itemSection.substring(
-        0,
-        stopMatch.index
-      );
-  }
-
-  return itemSection.trim();
-};
-
-// OCR-002: look up the OCR confidence of whatever text a field was
-// extracted from, by finding the OCR line it came from. Returns null
-// (not a guess, not 0) whenever there's nothing to look it up against --
-// no lines available (legacy string input, or blocks weren't returned),
-// or the field itself found no match.
+// Look up the OCR confidence of whatever text a field was extracted from, by
+// finding the OCR line it came from. Returns null -- not a guess, not 0 --
+// whenever there is nothing to look it up against: no lines available
+// (legacy string input, or blocks weren't returned), or the field found no
+// match. That distinction matters downstream: "unknown confidence" must not
+// trigger a low-confidence warning, or every legacy caller would see one on
+// every receipt and learn to ignore it.
 const findFieldConfidence = (lines, matchedText) => {
   if (!Array.isArray(lines) || !lines.length || !matchedText) {
     return null;
@@ -133,11 +74,19 @@ const findFieldConfidence = (lines, matchedText) => {
   return null;
 };
 
-// Extract the expense fields the client needs from raw OCR output.
-// Accepts either a bare OCR string or ocrService.js's
-// { text, confidence, lines } result.
+// Only a NUMBER below the threshold counts as low. null means unknown and is
+// deliberately not treated as low, for the reason above.
+const isLow = (confidence) =>
+  typeof confidence === "number" && confidence < LOW_CONFIDENCE_THRESHOLD;
+
+// Extract the expense fields the client needs from OCR output. Accepts a
+// versioned OCR result, a legacy { text, confidence, lines } object, or a
+// bare string; ocrContract.toOcrResult() normalises all three.
 const parseReceipt = (input) => {
-  const { text, confidence: overallConfidence, lines } = normalizeOcrInput(input);
+  // Throws a TypeError on input that is not a string or an OCR result --
+  // see ocrContract.toOcrResult() for why that stays a throw.
+  const { result } = toOcrResult(input);
+  const { text, confidence: overallConfidence, lines } = result;
 
   const expenseName = extractMerchant(text);
   const amount = extractAmount(text);
@@ -149,13 +98,28 @@ const parseReceipt = (input) => {
     expenseDate: findFieldConfidence(lines, date.matchedText),
   };
 
-  // Best-effort review flag: no amount was found at all, or (when OCR
-  // gave us an overall confidence score) that score is low. Never
-  // treated as an error by itself -- upload still succeeds -- just
-  // surfaced so a caller can prompt the user to double-check the parse.
+  const reviewReasons = [];
+
+  // Ordered most to least consequential, so a UI that shows only the first
+  // reason still shows the one that matters most. A wrong or missing amount
+  // is the only failure here that puts a wrong number in someone's finances.
+  if (!String(text).trim()) reviewReasons.push(REVIEW_REASONS.NO_TEXT_RECOGNISED);
+  if (amount.value === null) reviewReasons.push(REVIEW_REASONS.NO_AMOUNT_FOUND);
+  if (amount.ambiguous) reviewReasons.push(REVIEW_REASONS.AMBIGUOUS_AMOUNT);
+  if (isLow(fieldConfidence.expenseAmount)) reviewReasons.push(REVIEW_REASONS.LOW_AMOUNT_CONFIDENCE);
+  if (date.value === null) reviewReasons.push(REVIEW_REASONS.NO_DATE_FOUND);
+  if (isLow(fieldConfidence.expenseDate)) reviewReasons.push(REVIEW_REASONS.LOW_DATE_CONFIDENCE);
+  if (looksLikeHeading(expenseName)) reviewReasons.push(REVIEW_REASONS.MERCHANT_LOOKS_LIKE_HEADING);
+  if (isLow(overallConfidence)) reviewReasons.push(REVIEW_REASONS.LOW_OVERALL_CONFIDENCE);
+
+  // needsReview keeps its exact previous meaning for existing callers
+  // (billController.js and the T06 review UI both read it): no amount found,
+  // or a known-low overall confidence. The richer reasons are ADDITIVE --
+  // widening needsReview to cover every new reason would have changed the
+  // behaviour of shipped UI in the same commit that introduced the reasons,
+  // making any resulting regression ambiguous between the two.
   const needsReview =
-    amount.value === null ||
-    (typeof overallConfidence === "number" && overallConfidence < 60);
+    amount.value === null || isLow(overallConfidence);
 
   return {
     expenseName,
@@ -164,9 +128,16 @@ const parseReceipt = (input) => {
     overallConfidence,
     fieldConfidence,
     needsReview,
+    // New in T04. `amountCandidates` is what makes AMBIGUOUS_AMOUNT
+    // actionable: the UI can offer the competing totals rather than telling
+    // the user something is uncertain and leaving them to find it.
+    reviewReasons,
+    amountCandidates: amount.candidates,
   };
 };
 
 module.exports = {
   parseReceipt,
+  REVIEW_REASONS,
+  LOW_CONFIDENCE_THRESHOLD,
 };

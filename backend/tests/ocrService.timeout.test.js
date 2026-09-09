@@ -74,15 +74,78 @@ describe("receipt OCR worker lifetime", () => {
     };
     const { extractTextFromImage } = loadOcrService(worker);
 
+    // OCR-003-T01/T02 -- `version` and per-line `bbox` are additive fields.
+    // bbox is null here because this mock's lines carry no box; the test
+    // below covers the case where Tesseract does return one.
     await expect(extractTextFromImage(Buffer.from("receipt"), { timeoutMs: 1_000 })).resolves.toEqual({
+      version: 1,
       text: "Fresh\nMart Total 120",
       confidence: 87.5,
       lines: [
-        { text: "Fresh", confidence: 91 },
-        { text: "Mart Total 120", confidence: 84 },
+        { text: "Fresh", confidence: 91, bbox: null },
+        { text: "Mart Total 120", confidence: 84, bbox: null },
       ],
     });
     expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  // OCR-003-T02 -- the point of the task: Tesseract always returned a box
+  // per line and this service discarded it, so anything wanting to show
+  // WHERE a field came from needed a second OCR pass.
+  it("preserves each line's bounding box when Tesseract returns one", async () => {
+    const worker = {
+      recognize: jest.fn(async () => ({
+        data: {
+          text: "Fresh\nMart Total 120",
+          confidence: 90,
+          blocks: [
+            {
+              paragraphs: [
+                {
+                  lines: [
+                    { text: "Fresh", confidence: 91, bbox: { x0: 10, y0: 20, x1: 110, y1: 44 } },
+                    { text: "Mart Total 120", confidence: 84, bbox: { x0: 10, y0: 50, x1: 240, y1: 76 } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      })),
+      terminate: jest.fn(async () => {}),
+    };
+    const { extractTextFromImage } = loadOcrService(worker);
+
+    const result = await extractTextFromImage(Buffer.from("receipt"), { timeoutMs: 1_000 });
+
+    expect(result.lines[0].bbox).toEqual({ x0: 10, y0: 20, x1: 110, y1: 44 });
+    expect(result.lines[1].bbox).toEqual({ x0: 10, y0: 50, x1: 240, y1: 76 });
+  });
+
+  it("reduces a partially-populated bounding box to null rather than keeping a half-known one", async () => {
+    const worker = {
+      recognize: jest.fn(async () => ({
+        data: {
+          text: "Fresh",
+          confidence: 90,
+          blocks: [
+            {
+              paragraphs: [
+                // x1 missing: a consumer cropping this region would silently
+                // get a wrong rectangle, so the box is dropped entirely.
+                { lines: [{ text: "Fresh", confidence: 91, bbox: { x0: 10, y0: 20, y1: 44 } }] },
+              ],
+            },
+          ],
+        },
+      })),
+      terminate: jest.fn(async () => {}),
+    };
+    const { extractTextFromImage } = loadOcrService(worker);
+
+    const result = await extractTextFromImage(Buffer.from("receipt"), { timeoutMs: 1_000 });
+
+    expect(result.lines[0].bbox).toBeNull();
   });
 
   it("falls back to null confidence and text-derived lines when blocks/confidence weren't returned", async () => {
@@ -93,11 +156,12 @@ describe("receipt OCR worker lifetime", () => {
     const { extractTextFromImage } = loadOcrService(worker);
 
     await expect(extractTextFromImage(Buffer.from("receipt"), { timeoutMs: 1_000 })).resolves.toEqual({
+      version: 1,
       text: "Fresh\nMart Total 120",
       confidence: null,
       lines: [
-        { text: "Fresh", confidence: null },
-        { text: "Mart Total 120", confidence: null },
+        { text: "Fresh", confidence: null, bbox: null },
+        { text: "Mart Total 120", confidence: null, bbox: null },
       ],
     });
     expect(worker.terminate).toHaveBeenCalledTimes(1);
