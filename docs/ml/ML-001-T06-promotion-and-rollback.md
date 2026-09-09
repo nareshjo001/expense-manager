@@ -81,17 +81,28 @@ new needs to be computed to review a pending approval:
    regression check against the *previous model* — the previous model
    could itself have been mediocre.
 
-3. **Macro-F1 / per-class / confusion / calibration breakdown
+3. **Macro-F1 / per-class / confusion / calibration / top-k breakdown
    (ML-001-T05).** `metrics.macroF1`, `metrics.perClass` (per-category
    precision/recall/F1/support), `metrics.confusion` (the confusion
-   matrix), and `metrics.calibration` (`expectedCalibrationError` +
-   per-bin reliability, from `training/metrics.py`) are all persisted on
-   the run. Overall accuracy can hide a lot: a candidate can raise
+   matrix), `metrics.calibration` (`expectedCalibrationError` +
+   per-bin reliability), and `metrics.topKRecall` (`overall`, `macro`
+   and `perClass` at k = 1, 3, 5 — all from `training/metrics.py`) are
+   persisted on the run. Overall accuracy can hide a lot: a candidate can raise
    accuracy while quietly collapsing recall on a low-support category, or
    becoming systematically overconfident (poor calibration) even while
    its point predictions look fine. `perClass` and `confusion` are the
    fields that surface exactly that; gate 7 (regression threshold) only
    ever looks at aggregate `accuracy`.
+
+   `topKRecall` answers a question none of the others can: when the
+   candidate's first guess is wrong, is the right category still ranked
+   near the top? Two candidates with identical accuracy are not equally
+   good if one keeps the truth in its top 3 and the other does not — the
+   first degrades into a usable suggestion list, the second into noise.
+   Read `topKRecall.overall.top1` as a self-check first: it is computed
+   from the probability matrix by a different code path than `accuracy`
+   and must match it exactly, so a mismatch is a bug to investigate
+   before anything else on this page is trusted.
 
 4. **What actually changed.** `run.encoderClasses` vs. the previously
    active run's (see `GET /training-runs?status=activated&limit=1` or

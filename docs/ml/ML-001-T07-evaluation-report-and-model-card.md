@@ -41,11 +41,42 @@ practice, worked through once end-to-end.
 | Accuracy | **97.01%** |
 | Macro F1 | **97.38%** |
 | Expected Calibration Error (ECE) | **0.0787** |
+| Top-k recall | *not in this run — see note below* |
 
 Macro F1 (unweighted mean across all 15 categories) is reported
 alongside accuracy specifically because accuracy alone is dominated by
 the largest categories (Bills: 3,344 test rows; Rent: 190) — see
 [§3](#3-per-class-breakdown) for the categories where the two diverge.
+
+### Note on top-k recall (added 2026-09-09)
+
+Top-k recall — the share of rows whose true category appears in the
+model's k highest-probability classes — was added to the pipeline after
+this run was executed (`training/metrics.py`'s `compute_topk_recall`,
+persisted by `trainer.py` as `metrics.topKRecall` with overall, macro
+and per-class figures at k = 1, 3, 5). **The numbers are deliberately
+left blank above rather than estimated**: this report's stated purpose
+is to be the actual output of a real run, and no run of the full
+97,056-row dataset has happened since the metric landed. The next
+training run populates them, and §6's reproduction commands emit them.
+
+What the reviewer should look for once they exist:
+
+- **top-1 must equal accuracy exactly.** It is computed from the same
+  probability matrix by a different code path, so any divergence means
+  a bug, not a finding.
+- **The top-1 → top-3 gap sizes the "did you mean…?" opportunity.** A
+  large gap means the right answer is usually the second or third guess,
+  which is what makes a suggestion list worth building — and what
+  [ML-003](../../workflow/features/P1/ML-003-prediction-confidence-and-abstention-ux.md)
+  needs before it can set abstention thresholds.
+- **Macro top-k against overall top-k, for the same reason macro-F1
+  exists.** Transport and Travel are this model's weak classes (§3); if
+  their per-class top-3 recall is also poor, the model is not merely
+  ranking them second, it is missing them entirely.
+- **Sanity floor:** a model that ranked at random would score about
+  k / 15 (6.7% / 20% / 33% at k = 1/3/5). Anything near those values is
+  a broken ranking, not a weak one.
 
 ## 3. Per-class breakdown
 

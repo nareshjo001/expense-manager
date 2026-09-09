@@ -1,6 +1,7 @@
+
 """
 [UNIT] ML-001-T05 -- training/metrics.py: macro-F1, per-class metrics,
-confusion matrix, and calibration.
+confusion matrix, top-k recall, and calibration.
 """
 
 import os
@@ -111,6 +112,108 @@ class TestComputeCalibration:
             assert b["accuracy"] is None
 
 
+
+class TestComputeTopKRecall:
+    # Three classes, columns ordered ["Food", "Rent", "Transport"].
+    LABELS = ["Food", "Rent", "Transport"]
+
+    def test_top1_matches_plain_accuracy_and_top_k_is_monotonic(self):
+        y_true = ["Food", "Rent", "Transport"]
+        proba = [
+            [0.7, 0.2, 0.1],  # Food ranked 1st -> hit at k=1
+            [0.5, 0.3, 0.2],  # Rent ranked 2nd -> miss at k=1, hit at k=2
+            [0.6, 0.3, 0.1],  # Transport ranked 3rd -> hit only at k=3
+        ]
+        result = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1, 2, 3))
+        assert result["overall"]["top1"] == pytest.approx(1 / 3)
+        assert result["overall"]["top2"] == pytest.approx(2 / 3)
+        assert result["overall"]["top3"] == pytest.approx(1.0)
+
+    def test_top1_equals_argmax_accuracy(self):
+        # The invariant that makes this metric trustworthy: top-1 recall
+        # must agree with the accuracy computed from argmax predictions.
+        y_true = ["Food", "Rent", "Transport", "Food"]
+        proba = [
+            [0.7, 0.2, 0.1],
+            [0.1, 0.8, 0.1],
+            [0.4, 0.4, 0.2],  # tie broken toward the earlier column -> Food, wrong
+            [0.2, 0.3, 0.5],  # -> Transport, wrong
+        ]
+        topk = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1,))
+        y_pred = [self.LABELS[int(np.argmax(row))] for row in proba]
+        plain = metrics.compute_classification_metrics(y_true, y_pred, labels=self.LABELS)
+        assert topk["overall"]["top1"] == pytest.approx(plain["accuracy"])
+
+    def test_macro_exposes_a_rare_class_the_overall_number_hides(self):
+        # 9 Food rows always ranked 1st, 1 Rent row ranked last. Overall
+        # top-1 is a flattering 90%; the macro average must be 50%,
+        # because Rent's own top-1 recall is 0.
+        y_true = ["Food"] * 9 + ["Rent"]
+        proba = [[0.9, 0.05, 0.05]] * 9 + [[0.8, 0.05, 0.15]]
+        result = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1,))
+        assert result["overall"]["top1"] == pytest.approx(0.9)
+        assert result["macro"]["top1"] == pytest.approx(0.5)
+        assert result["perClass"]["Rent"]["top1"] == 0.0
+        assert result["perClass"]["Food"]["top1"] == 1.0
+
+    def test_a_class_with_zero_support_reports_none_not_zero(self):
+        # None means "no rows to score", which is materially different
+        # from 0.0 ("the model always missed it").
+        y_true = ["Food", "Food"]
+        proba = [[0.9, 0.05, 0.05], [0.8, 0.1, 0.1]]
+        result = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1, 2))
+        assert result["perClass"]["Rent"]["support"] == 0
+        assert result["perClass"]["Rent"]["top1"] is None
+        assert result["perClass"]["Food"]["support"] == 2
+        # macro must average only the classes that actually had rows
+        assert result["macro"]["top1"] == pytest.approx(1.0)
+
+    def test_k_larger_than_class_count_is_clamped_and_deduplicated(self):
+        y_true = ["Food"]
+        proba = [[0.5, 0.3, 0.2]]
+        result = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1, 3, 5, 20))
+        # 5 and 20 both clamp to 3, which already exists -> [1, 3]
+        assert result["ks"] == [1, 3]
+        assert result["overall"]["top3"] == 1.0
+
+    def test_true_label_outside_the_column_set_counts_as_a_miss(self):
+        # A category the model was never trained on is a real coverage
+        # failure; dropping the row would flatter every k.
+        y_true = ["Food", "Crypto"]
+        proba = [[0.9, 0.05, 0.05], [0.4, 0.4, 0.2]]
+        result = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1, 3))
+        assert result["overall"]["top1"] == pytest.approx(0.5)
+        assert result["overall"]["top3"] == pytest.approx(0.5)  # still a miss at every k
+        assert "Crypto" not in result["perClass"]
+
+    def test_ranking_is_stable_for_tied_probabilities(self):
+        # Equal probabilities must resolve in `labels` order every run,
+        # so a persisted metric is reproducible rather than sort-dependent.
+        y_true = ["Transport"]
+        proba = [[1 / 3, 1 / 3, 1 / 3]]
+        first = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1, 2, 3))
+        second = metrics.compute_topk_recall(y_true, proba, self.LABELS, ks=(1, 2, 3))
+        assert first == second
+        assert first["overall"]["top1"] == 0.0  # Food wins the tie
+        assert first["overall"]["top3"] == 1.0
+
+    def test_rejects_a_proba_shape_that_disagrees_with_the_labels(self):
+        with pytest.raises(ValueError, match="columns"):
+            metrics.compute_topk_recall(["Food"], [[0.5, 0.5]], self.LABELS)
+
+    def test_rejects_a_row_count_mismatch(self):
+        with pytest.raises(ValueError, match="probability rows"):
+            metrics.compute_topk_recall(["Food", "Rent"], [[0.5, 0.3, 0.2]], self.LABELS)
+
+    def test_rejects_an_empty_split(self):
+        with pytest.raises(ValueError, match="empty split"):
+            metrics.compute_topk_recall([], np.empty((0, 3)), self.LABELS)
+
+    def test_rejects_a_non_2d_proba(self):
+        with pytest.raises(ValueError, match="2-D"):
+            metrics.compute_topk_recall(["Food"], [0.5, 0.3, 0.2], self.LABELS)
+
+
 class TestComputeFullMetrics:
     def test_bundles_classification_confusion_and_calibration_together(self):
         y_true = ["Food", "Transport", "Food", "Transport"]
@@ -127,3 +230,31 @@ class TestComputeFullMetrics:
         result = metrics.compute_full_metrics(["Food"], ["Food"])
         assert "calibration" not in result
         assert "confusion" in result
+
+    def test_includes_top_k_recall_when_proba_is_given(self):
+        labels = ["Food", "Transport"]
+        result = metrics.compute_full_metrics(
+            ["Food", "Transport"],
+            ["Food", "Transport"],
+            labels=labels,
+            proba=[[0.9, 0.1], [0.2, 0.8]],
+            proba_labels=labels,
+        )
+        assert result["topKRecall"]["overall"]["top1"] == 1.0
+        assert result["topKRecall"]["ks"] == [1, 2]
+
+    def test_omits_top_k_recall_when_no_proba_given(self):
+        result = metrics.compute_full_metrics(["Food"], ["Food"])
+        assert "topKRecall" not in result
+
+    def test_falls_back_to_explicit_labels_for_proba_columns(self):
+        result = metrics.compute_full_metrics(
+            ["Food"], ["Food"], labels=["Food", "Transport"], proba=[[0.9, 0.1]]
+        )
+        assert result["topKRecall"]["overall"]["top1"] == 1.0
+
+    def test_rejects_proba_when_labels_were_never_given(self):
+        # Column order would otherwise be inferred from whichever labels
+        # happen to appear in y_true/y_pred -- silently wrong.
+        with pytest.raises(ValueError, match="proba_labels"):
+            metrics.compute_full_metrics(["Food"], ["Food"], proba=[[0.9, 0.1]])
