@@ -19,7 +19,13 @@ const JOB_NAME = "recurringJob";
 const LEASE_TTL_MS = 10 * 60 * 1000;
 
 cron.schedule("30 20 * * *", async () => {
-   await runWithLease(JOB_NAME, LEASE_TTL_MS, runRecurringJob);
+   // REC-001-T03 -- the only job that opts into failing open when Redis is
+   // unreachable. That is safe HERE and nowhere else: every occurrence this
+   // job creates carries a unique occurrence ID with a uniqueness constraint
+   // behind it, so a duplicate concurrent run loses the race on insert
+   // rather than producing a duplicate expense. The lease is an efficiency
+   // measure for this job, not its correctness guarantee.
+   await runWithLease(JOB_NAME, LEASE_TTL_MS, runRecurringJob, { failOpen: true });
 });
 
 async function runRecurringJob() {

@@ -50,7 +50,12 @@ describe("jobLease.runWithLease", () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  test("fails open (still runs fn) when Redis is unavailable", async () => {
+  // REC-001-T03 -- this assertion is INVERTED from its original form, which
+  // expected the job to run anyway whenever Redis was unreachable. That
+  // default made a Redis outage cause every instance to execute the job at
+  // once: precisely the duplicate execution this feature exists to prevent.
+  // Failing open is now an explicit per-job opt-in, asserted below.
+  test("fails CLOSED by default -- skips the run when Redis is unavailable", async () => {
     const { jobLease } = loadJobLease({
       setImpl: async () => {
         throw new Error("connection closed");
@@ -60,8 +65,127 @@ describe("jobLease.runWithLease", () => {
 
     const result = await jobLease.runWithLease("test-job", 1000, fn);
 
+    expect(result).toEqual({ ran: false });
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  test("fails open only when the job explicitly opts in", async () => {
+    const { jobLease } = loadJobLease({
+      setImpl: async () => {
+        throw new Error("connection closed");
+      },
+    });
+    const fn = jest.fn(async () => "done");
+
+    const result = await jobLease.runWithLease("test-job", 1000, fn, { failOpen: true });
+
     expect(result).toEqual({ ran: true });
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  test("passes a lease handle that reports the lease as held during a normal run", async () => {
+    const { jobLease } = loadJobLease({ setImpl: async () => "OK" });
+    let seen;
+    await jobLease.runWithLease("test-job", 1000, async (lease) => {
+      seen = lease.isHeld();
+    });
+
+    expect(seen).toBe(true);
+  });
+});
+
+// REC-001-T03 -- renewal. Before this, the lease expired purely by TTL, so a
+// job running longer than its TTL kept executing after losing exclusivity.
+describe("jobLease.runWithLease -- renewal", () => {
+  test("extends the TTL while fn is still running", async () => {
+    jest.useFakeTimers();
+    try {
+      const { jobLease, redisClient } = loadJobLease({ setImpl: async () => "OK" });
+
+      let release;
+      const body = new Promise((resolve) => {
+        release = resolve;
+      });
+      const run = jobLease.runWithLease("test-job", 3000, () => body);
+
+      // TTL 3000 renews every 1000ms.
+      await jest.advanceTimersByTimeAsync(2500);
+      const renewCalls = redisClient.eval.mock.calls.filter((c) =>
+        String(c[0]).includes("PEXPIRE")
+      );
+      expect(renewCalls.length).toBeGreaterThanOrEqual(2);
+
+      release();
+      await run;
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("marks the lease lost, and stops renewing, when another owner holds it", async () => {
+    jest.useFakeTimers();
+    try {
+      // eval returns 0 for the renew script -- i.e. we are no longer owner.
+      const { jobLease } = loadJobLease({
+        setImpl: async () => "OK",
+        evalImpl: async () => 0,
+      });
+
+      const held = [];
+      let release;
+      const body = new Promise((resolve) => {
+        release = resolve;
+      });
+
+      const run = jobLease.runWithLease("test-job", 3000, async (lease) => {
+        held.push(lease.isHeld());
+        await body;
+        held.push(lease.isHeld());
+      });
+
+      await jest.advanceTimersByTimeAsync(1200);
+      release();
+      await run;
+
+      expect(held[0]).toBe(true);
+      // The renewal proved another instance owns the lease now.
+      expect(held[1]).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("a failed renewal is not treated as proof of loss", async () => {
+    jest.useFakeTimers();
+    try {
+      const { jobLease } = loadJobLease({
+        setImpl: async () => "OK",
+        evalImpl: async () => {
+          throw new Error("connection reset");
+        },
+      });
+
+      let observed;
+      let release;
+      const body = new Promise((resolve) => {
+        release = resolve;
+      });
+
+      const run = jobLease.runWithLease("test-job", 3000, async (lease) => {
+        await body;
+        observed = lease.isHeld();
+      });
+
+      await jest.advanceTimersByTimeAsync(1200);
+      release();
+      await run;
+
+      // An unreachable Redis means "unknown", not "lost" -- the lease may
+      // still be held. Declaring it lost here would stop legitimate work.
+      expect(observed).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("does not attempt to release the lease when Redis was unavailable at acquire time", async () => {
