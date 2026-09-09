@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../../utils/money";
 import '../OverallInsight.css';
 import { FaFire, FaChartPie } from "react-icons/fa";
 import { FaPiggyBank } from "react-icons/fa6";
@@ -70,7 +72,7 @@ export default function OverallInsight({ period }) {
                     fontSize: "16px"
                   }}
                 >
-                  ₹{insight?.savingsRateData?.netBalance.toLocaleString()}
+                  {formatMoney(insight?.savingsRateData?.netBalance)}
                 </span>
               </p>
             </div>

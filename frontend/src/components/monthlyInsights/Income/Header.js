@@ -1,4 +1,6 @@
 import { FaCreditCard, FaThLarge, FaPiggyBank  } from "react-icons/fa";
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../../utils/money";
 import { HiSparkles } from "react-icons/hi2";
 import { useEffect, useState } from "react";
 import "../Header.css";
@@ -89,8 +91,8 @@ export default function Header({ period, setPeriod }) {
               ) : (
                 <>
                   <p>Total Income</p>
-                  <h1>₹ {cardData.totalIncome}</h1>
-                  <span>Spent: ₹ {cardData.totalExpenses}</span>
+                  <h1>{formatMoney(cardData.totalIncome)}</h1>
+                  <span>Spent: {formatMoney(cardData.totalExpenses)}</span>
                 </>
               )}
           </div>
@@ -145,7 +147,7 @@ export default function Header({ period, setPeriod }) {
                 ) : cardData.balance < 0 ? (
                   <>
                     <span style={{ color: "red" }}>
-                      -₹ {Math.abs(Math.round(cardData.balance))}
+                      -{formatMoney(Math.abs(Math.round(cardData.balance)))}
                     </span>
                     <small style={{ color: "inherit", fontSize: "15px", display: "block" }}>
                       Expenses exceed income
@@ -153,7 +155,7 @@ export default function Header({ period, setPeriod }) {
                   </>
                 ) : (
                   <>
-                    <span>₹ {Math.round(cardData.balance)}</span>
+                    <span>{formatMoney(cardData.balance)}</span>
                   </>
                 )}
               </p>

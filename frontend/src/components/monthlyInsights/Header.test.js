@@ -98,7 +98,11 @@ describe("monthlyInsights/Header -- FE-001-T08 budget-total state matrix", () =>
     render(<Header summary={{ comparePastMonth: 12, totalSpent: 1200 }} />);
 
     expect(screen.getByText("Total Budget")).toBeInTheDocument();
-    expect(screen.getByText("₹ 5000")).toBeInTheDocument();
+    // DAT-001-T06 -- was "₹ 5000", the raw interpolation of a float. Money
+    // now renders through the shared formatter, so it carries en-IN grouping
+    // and exactly two decimals. The assertion moved with the behaviour
+    // deliberately: this is the fix, not a regression to work around.
+    expect(screen.getByText("₹5,000.00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit budget" })).not.toBeDisabled();
   });
 });

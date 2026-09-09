@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+// DAT-001-T06 -- all money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import { motion } from 'framer-motion';
 import '../common/QueryState.css';
 
@@ -290,10 +292,10 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
               </div>
 
               {filter === 'bycategory' && categoryTotals[category] !== undefined && (
-                <div className="total-section">Total ₹{categoryTotals[category].toFixed(2)}</div>
+                <div className="total-section">Total {formatMoney(categoryTotals[category])}</div>
               )}
               {(filter === '' || filter === 'custom') && (
-                <div className="total-section">Total ₹{total.toFixed(2)}</div>
+                <div className="total-section">Total {formatMoney(total)}</div>
               )}
             </div>
           ))}

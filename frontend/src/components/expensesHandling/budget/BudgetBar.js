@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+// DAT-001-T06 -- all money renders through the shared formatter.
+import { formatMoney } from "../../../utils/money";
 import { format } from 'date-fns';
 import './BudgetBar.css';
 import icons from '../../imports/iconsImport';
@@ -34,8 +36,8 @@ const BudgetBar = ({ monthlyBudgets, isStale = false }) => {
         <div className="tooltip-text">
           { percentage <=100 ? (
             <div>
-            <div><strong>Budget Set:</strong> ₹{budgetAmount}</div>
-            <div><strong>Spent:</strong> ₹{monthlyTotal}</div>
+            <div><strong>Budget Set:</strong> {formatMoney(budgetAmount)}</div>
+            <div><strong>Spent:</strong> {formatMoney(monthlyTotal)}</div>
             <div>{percentage}% of budget used</div>
             </div> ) : (
           'Uh-oh! Budget busted. Time to slow down!'

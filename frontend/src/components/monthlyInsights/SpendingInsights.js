@@ -1,4 +1,6 @@
 import './SpendingInsights.css';
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import { useMemo } from 'react';
 import { FaChartPie, FaTrophy, FaTint } from "react-icons/fa";
 import { FaArrowTrendUp } from "react-icons/fa6";
@@ -88,7 +90,7 @@ export default function SpendingInsights({ report }) {
                   <p className='spending-insights-p-text' style={{color: "#374151", fontWeight: "500", marginBottom: "12px"}}>
                     {leftPanelData.topCategory} is your top category at{" "}
                     <strong style={{ color: "var(--menu-color)" }}>
-                      ₹{leftPanelData.amount.toLocaleString()}
+                      {formatMoney(leftPanelData.amount)}
                     </strong>
                   </p>
                   <p className='spending-insights-p-text'>
@@ -135,9 +137,9 @@ export default function SpendingInsights({ report }) {
             ? (
               <div className="spending-insights-middle-body">
                 <h1 className='spending-insights-h-text' style={{color: "var(--menu-color)", fontWeight: "700", fontSize: "28px" ,textAlign: "center", marginTop: "20px"}}>
-                  ₹{middlePanelData.leakTotal.toLocaleString()}
+                  {formatMoney(middlePanelData.leakTotal)}
                 </h1>
-                <p className='spending-insights-p-text' style={{textAlign: "center"}}><strong>{middlePanelData.count}</strong> small purchases (At an avg <strong>₹{middlePanelData.averageLeak}</strong>)</p>
+                <p className='spending-insights-p-text' style={{textAlign: "center"}}><strong>{middlePanelData.count}</strong> small purchases (At an avg <strong>{formatMoney(middlePanelData.averageLeak)}</strong>)</p>
                 <p className='spending-insights-p-text' style={{marginTop: "20px", fontWeight: "500"}}>{middlePanelData.subMessage}</p>
               </div>
             ) : (
@@ -171,13 +173,13 @@ export default function SpendingInsights({ report }) {
                   <div className='spending-insights-right-stats-weekday'>
                     <p className='spending-insights-p-text'>Weekday Avg</p>
                     <h1 className='spending-insights-h-text' style={{color: "var(--menu-color)"}}>
-                      ₹{rightPanelData.weekdayAvg.toLocaleString()}
+                      {formatMoney(rightPanelData.weekdayAvg)}
                     </h1>
                   </div>
                   <div className='spending-insights-right-stats-weekend'>
                     <p className='spending-insights-p-text'>Weekend Avg</p>
                     <h1 className='spending-insights-h-text' style={{color: "var(--menu-color)"}}>
-                      ₹{rightPanelData.weekendAvg.toLocaleString()}
+                      {formatMoney(rightPanelData.weekendAvg)}
                     </h1>
                   </div>
                 </div>

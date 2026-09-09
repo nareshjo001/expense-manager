@@ -1,4 +1,8 @@
 import { FaExclamationTriangle } from "react-icons/fa";
+// DAT-001-T06 -- whole rupees, explicit en-IN grouping, but no longer a
+// private copy: the shared formatter guarantees this rounds identically to
+// every other money display in the app.
+import { formatMoneyApprox as formatMoney } from "../../utils/money";
 import "./AnomalyInsights.css";
 
 // Material spending-review surfacing only.
@@ -10,8 +14,6 @@ const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(v
 
 const isNonBlankString = (value) => typeof value === "string" && value.trim() !== "";
 
-// Whole rupees only, explicit "en-IN" locale so the grouping is identical on
-const formatMoney = (value) => `₹${Math.round(Number(value) || 0).toLocaleString("en-IN")}`;
 
 // Matches the project's established absolute-date style already used for
 const formatExpenseDate = (value) => {

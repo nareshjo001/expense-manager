@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../utils/money";
 import "./IncomeModel.css";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { FaTimes, FaEdit, FaTrash } from "react-icons/fa";
@@ -234,7 +236,7 @@ export default function IncomeModal({ isOpen, onClose, period }) {
                     </span>
 
                     <span className="income-amount">
-                      ₹{formatIncomeAmount(income.incomeAmount)}
+                      {formatMoney(formatIncomeAmount(income.incomeAmount))}
                     </span>
                   </div>
 

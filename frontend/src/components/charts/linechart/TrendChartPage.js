@@ -1,4 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
+// DAT-001-T06 -- money renders through the shared formatter.
+import { formatMoney } from "../../../utils/money";
 import Select from 'react-select';
 import { motion, AnimatePresence } from 'framer-motion'
 import '../ChartPage.css';
@@ -69,7 +71,7 @@ const TrendChartPage = ({ expenses }) => {
             </strong>
           </p>
           <p>
-            <strong>Total</strong>: ₹{item.total}
+            <strong>Total</strong>: {formatMoney(item.total)}
           </p>
         </div>
       );
