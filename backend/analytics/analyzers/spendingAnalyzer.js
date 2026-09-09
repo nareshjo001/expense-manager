@@ -90,7 +90,29 @@ const calculateTimeStatistics = (currentMonthExpenses = [], totalSpent = 0, opti
   const end = new Date(asOfDate);
   end.setHours(0, 0, 0, 0);
 
-  const trackingDays = Math.floor((end - start) / MS_PER_DAY) + 1;
+  // The observed window, in whole days, inclusive of both endpoints.
+  //
+  // This can come out zero or negative: periodStart is the EARLIEST
+  // expense date, and an expense may legitimately be dated in the future
+  // (nothing in the schema or the add-expense path forbids it -- a user
+  // logging a bill they have already scheduled is the ordinary case). If
+  // every current-month expense is dated after today, start > end and the
+  // raw window is <= 0.
+  //
+  // Zero was the dangerous value: `totalSpent / 0` is Infinity, round2()
+  // rejects any non-finite input, and the TypeError propagated all the
+  // way out of generateReport() -- so a single future-dated expense
+  // returned HTTP 500 for the user's ENTIRE report, not just this one
+  // field. A negative window was quieter but still wrong: it produced a
+  // negative "daily average".
+  //
+  // Clamping to a one-day minimum is the same guard trackingWeeks below
+  // has always had (Math.max(1, ...)); it was simply never applied to the
+  // day count. With data present, the smallest honest window is one day,
+  // and dailyAverage then equals totalSpent -- everything logged, over the
+  // shortest window that can be said to have been observed.
+  const observedDays = Math.floor((end - start) / MS_PER_DAY) + 1;
+  const trackingDays = Math.max(1, observedDays);
 
   const trackingWeeks = Math.max(1, trackingDays / 7);
 
