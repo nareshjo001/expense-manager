@@ -2,18 +2,24 @@
 
 // TST-001-T05 -- shared UI login helper so each spec's own body stays
 // about what THAT journey is asserting, not about re-deriving login
-// mechanics. Selectors below are all existing, accessible markup
-// (placeholder-based field lookup, role-based button lookup) --
-// frontend/src/components/loginSignUp/Login.js was not modified for this
-// suite; nothing here needed a data-testid.
+// mechanics. Selectors are all existing, accessible markup (label-based
+// field lookup, role-based button lookup); nothing here needs a
+// data-testid.
+//
+// FE-002-T02 (2026-09-09): these were getByPlaceholder until the login
+// fields gained real <label> elements and stopped relying on placeholder
+// text to identify themselves. getByLabel is the better selector anyway --
+// it resolves through the same label/id relationship a screen reader uses,
+// so this suite now fails if that binding is ever broken, which is exactly
+// what an end-to-end test should notice.
 const { expect } = require('@playwright/test');
 const { E2E_USER } = require('../../fixtures/testUser');
 
 async function loginAsE2EUser(page) {
   await page.goto('/');
 
-  await page.getByPlaceholder('Email ID').fill(E2E_USER.email);
-  await page.getByPlaceholder('Password').fill(E2E_USER.password);
+  await page.getByLabel(/Email ID/).fill(E2E_USER.email);
+  await page.getByLabel(/Password/).fill(E2E_USER.password);
   await page.getByRole('button', { name: 'Login' }).click();
 
   // The authenticated app shell (frontend/src/components/landingPage/LandingPage.js)

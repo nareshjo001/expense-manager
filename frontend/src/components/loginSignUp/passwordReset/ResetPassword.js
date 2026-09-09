@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+// FE-002-T02 -- placeholder-only fields replaced with real labels.
+import { LabeledField } from '../../a11y/LabeledField';
 import back from '../../../icons/left-arrow.png';
 import { signUpSuccessToast, logInErrorToast } from "../../alertsEffects/toastMessages";
 
@@ -98,23 +100,27 @@ const ResetPassword = ({ onBack, email, resetToken, setIsSpinnerLoad }) => {
             
             <main className="reset-pass">
                 <form onSubmit={handleSubmit}>
-                    <input
+                    <LabeledField
+                        label="New Password"
                         type="password"
-                        placeholder="New Password"
-                        className="reset-pass-input"
+                        name="newPassword"
+                        inputClassName="reset-pass-input"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         maxLength={72}
+                        autoComplete="new-password"
                         required
                     />
 
-                    <input
+                    <LabeledField
+                        label="Confirm Password"
                         type="password"
-                        placeholder="Confirm Password"
-                        className="reset-pass-input"
+                        name="confirmPassword"
+                        inputClassName="reset-pass-input"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         maxLength={72}
+                        autoComplete="new-password"
                         required
                     />
 

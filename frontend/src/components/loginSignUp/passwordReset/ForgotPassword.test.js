@@ -1,3 +1,6 @@
+// FE-002-T02 -- these queries were getByPlaceholderText until the fields
+// gained real labels. getByLabelText is the stronger query: it resolves
+// through the htmlFor/id binding, so it fails if the label is ever detached.
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ForgotPassword from "./ForgotPassword";
@@ -44,22 +47,22 @@ describe("AUTH-002 forgot-password workflow", () => {
     const onBack = jest.fn();
     render(<ForgotPassword onBack={onBack} setIsSpinnerLoad={jest.fn()} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Email ID"), {
+    fireEvent.change(screen.getByLabelText(/Email ID/), {
       target: { value: "Alice@Example.COM" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send OTP" }));
 
-    await screen.findByPlaceholderText("Enter OTP");
-    fireEvent.change(screen.getByPlaceholderText("Enter OTP"), {
+    await screen.findByLabelText(/One-time password/);
+    fireEvent.change(screen.getByLabelText(/One-time password/), {
       target: { value: "123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
 
-    await screen.findByPlaceholderText("New Password");
-    fireEvent.change(screen.getByPlaceholderText("New Password"), {
+    await screen.findByLabelText(/New Password/);
+    fireEvent.change(screen.getByLabelText(/New Password/), {
       target: { value: "new-password-123" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Confirm Password"), {
+    fireEvent.change(screen.getByLabelText(/Confirm Password/), {
       target: { value: "new-password-123" },
     });
     fireEvent.click(screen.getByDisplayValue("Change"));
@@ -80,18 +83,18 @@ describe("AUTH-002 forgot-password workflow", () => {
       .mockResolvedValueOnce(response({ success: true, message: "Verification successful" }));
 
     render(<ForgotPassword onBack={jest.fn()} setIsSpinnerLoad={jest.fn()} />);
-    fireEvent.change(screen.getByPlaceholderText("Email ID"), {
+    fireEvent.change(screen.getByLabelText(/Email ID/), {
       target: { value: "alice@example.com" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send OTP" }));
 
-    await screen.findByPlaceholderText("Enter OTP");
-    fireEvent.change(screen.getByPlaceholderText("Enter OTP"), {
+    await screen.findByLabelText(/One-time password/);
+    fireEvent.change(screen.getByLabelText(/One-time password/), {
       target: { value: "123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    expect(screen.queryByPlaceholderText("New Password")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/New Password/)).not.toBeInTheDocument();
   });
 });

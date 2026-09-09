@@ -1,4 +1,6 @@
 import { useState } from "react";
+// FE-002-T02/T05 -- labelled fields with errors wired through aria-describedby.
+import { LabeledField } from '../a11y/LabeledField';
 import "./SignUp.css";
 import back from '../../icons/left-arrow.png';
 
@@ -117,40 +119,46 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
                     <form onSubmit={handleSubmit}>
                         
                         <div className="field">
-                            <input
+                            <LabeledField
+                                label="Full Name"
                                 type="text"
                                 name="fullname"
-                                className={`signup-input ${errors.fullName ? "error" : ""}`}
+                                inputClassName={`signup-input ${errors.fullName ? "error" : ""}`}
                                 value={enteredUserInfo.fullName}
                                 onChange={handleChange('fullName')}
-                                placeholder="Full Name"
+                                autoComplete="name"
+                                error={errors.fullName}
+                                required
                                 />
-                                {errors.fullName && <p>{errors.fullName}</p>}
                         </div>
 
                         <div className="field">
-                            <input
+                            <LabeledField
+                                label="Email"
                                 type="email"
                                 name="email"
-                                className={`signup-input ${errors.email ? "error" : ""}`}
+                                inputClassName={`signup-input ${errors.email ? "error" : ""}`}
                                 value={enteredUserInfo.email}
                                 onChange={handleChange('email')}
-                                placeholder="Email"
+                                autoComplete="email"
+                                error={errors.email}
+                                required
                                 />
-                                {errors.email && <p>{errors.email}</p>}
                         </div>
 
                         <div className="field">
-                            <input
+                            <LabeledField
+                                label="Password"
                                 type="password"
                                 name="password"
-                                className={`signup-input ${errors.password ? "error" : ""}`}
+                                inputClassName={`signup-input ${errors.password ? "error" : ""}`}
                                 value={enteredUserInfo.password}
                                 onChange={handleChange('password')}
                                 maxLength={72}
-                                placeholder="Password"
+                                autoComplete="new-password"
+                                error={errors.password}
+                                required
                                 />
-                            {errors.password  && <p>{errors.password }</p>}
                         </div>
 
                         <button

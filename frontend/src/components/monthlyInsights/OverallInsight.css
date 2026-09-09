@@ -87,9 +87,14 @@
   background: rgba(249,115,22,0.08);
 }
 
+/* FE-002-T06 -- was #ef4444, which is 3.76:1 on white. That clears the 3:1
+   large-text bar only while this heading stays bold and >=18.66px, so the
+   text would have silently dropped below AA the moment someone changed the
+   weight or size. #dc2626 is 4.83:1 and passes at ANY size, removing the
+   dependency on typography that a colour choice should not have. */
 .spending-jump-body-time-card h1 {
   font-size: 20px;
-  color: #ef4444;
+  color: #dc2626;
   margin-bottom: 10px;
 
 }

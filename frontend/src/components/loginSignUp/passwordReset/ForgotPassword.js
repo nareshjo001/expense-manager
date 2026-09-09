@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+// FE-002-T02 -- placeholder-only fields replaced with real labels.
+import { LabeledField } from '../../a11y/LabeledField';
 import { onKeyActivate } from "../../../utils/onKeyActivate";
 import back from '../../../icons/left-arrow.png';
 
@@ -157,24 +159,29 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
             
             <main className="forgot-pass">
                 <form onSubmit={handleSubmit}>
-                    <input
+                    <LabeledField
+                        label="Email ID"
                         type="email"
-                        placeholder="Email ID"
-                        className="forgot-pass-input"
+                        name="email"
+                        inputClassName="forgot-pass-input"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        autoComplete="email"
                         required
                         disabled={isOTPSent}
                     />
 
                     <div className={`otp-wrapper ${isOTPSent ? "open" : ""}`}>
-                        <input
+                        <LabeledField
+                            label="One-time password"
+                            hint="Six digits, sent to your email."
                             type="text"
-                            placeholder="Enter OTP"
-                            className="forgot-pass-input"
+                            name="otp"
+                            inputClassName="forgot-pass-input"
                             value={otp}
                             onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
                             inputMode="numeric"
+                            autoComplete="one-time-code"
                             maxLength={6}
                             required={isOTPSent}
                         />
