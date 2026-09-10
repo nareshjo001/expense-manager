@@ -152,3 +152,42 @@ that command exits non-zero. Removing them deletes the only representation
 of every amount this application has recorded; there is no forward-fix once
 the source values are gone, which is why ADR-0006's up/verify/forward-fix
 convention has nothing to offer here.
+
+## The remaining sequence for DAT-001-T07
+
+Every step below needs a deployed environment; none of it can be done from a
+sandbox. Step 5 is calendar time and cannot be compressed.
+
+1. **Have backups running against the target environment** (OPS-002-T03).
+   The gate's backup check reads the configured destination, so without this
+   it refuses. The pipeline itself is verified by
+   `.github/workflows/backup-verify.yml`.
+2. **Apply migrations there.** The backfill
+   (`20260903-backfill-money-minor-fields`) is one of the pending
+   migrations, so this comes free with DAT-003-T07's staging apply:
+   `node migrations/run.js --dry-run`, then `node migrations/run.js`.
+3. **Set `MONEY_MINOR_DUAL_WRITE_ENABLED=true`** and redeploy. Until this is
+   on, new writes land with no integer value — so removal would lose data
+   written from that point forward, which a reconciliation against existing
+   data would not reveal.
+4. **Set `MONEY_MINOR_SOAK_STARTED_AT`** to that date, ISO format. The gate
+   does the arithmetic so the soak length is a recorded fact rather than a
+   recollection.
+5. **Wait at least 31 days.** The gate's hard floor is 14, but
+   `cron/recurringJob.js` writes monthly: a shorter window has almost
+   certainly never observed that path populating a `*Minor` field, and the
+   gate emits a warning saying so. Confirm at least one recurring
+   occurrence was created during the soak.
+6. **Run `node backend/scripts/verifyMoneyMinorFields.js` repeatedly across
+   the window.** It must stay clean — not be clean once. New writes keep
+   landing the whole time, and that is the point.
+7. **Check the gate:** `node backend/migrations/legacyMoneyRemovalGate.js`.
+   Read-only, exits 0 when every precondition holds.
+8. **Set `LEGACY_MONEY_REMOVAL_CONFIRMED=true`**, then
+   `node backend/scripts/removeLegacyMoneyFields.js --dry-run`, read the
+   report, then run it for real.
+
+Step 8's script is deliberately **not** a migration — see its header. A
+destructive irreversible operation must not sit in the sequence
+`migrations/run.js` applies on every deploy, and putting it there would also
+have blocked step 2 until the soak finished.
