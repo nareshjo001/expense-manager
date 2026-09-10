@@ -79,10 +79,17 @@ async function main() {
     // both are "this run must not start", and they should not read like two
     // different kinds of event to whoever is looking at the output.
     if (!redis.connected && !dryRun) {
+      // `redis.error` is absent when the connection TIMED OUT rather than
+      // failed -- which is the common case, since connect() against an
+      // absent Redis never settles at all. Reporting "undefined" there would
+      // send someone looking for an error that does not exist.
+      const cause = redis.timedOut
+        ? `no response within the startup timeout`
+        : `${(redis.error && (redis.error.message || redis.error.code)) || "unknown error"}`;
       throw new Error(
         "Redis is unreachable, so the migration lock cannot be acquired. Two concurrent " +
           "deploys could otherwise apply the same migration to the same database. " +
-          `Underlying error: ${redis.error && redis.error.message}`
+          `Cause: ${cause}`
       );
     }
 
