@@ -1,0 +1,151 @@
+/* REC-003-T04 -- upcoming recurring expenses list. */
+
+.upcoming-recurring {
+  padding: 1rem;
+}
+
+.upcoming-recurring__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.upcoming-recurring__muted {
+  color: #5b6472;
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.upcoming-recurring__summary {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+/* The "schedule is behind" notice. Deliberately not styled as an error --
+   nothing has failed, the job simply has not caught up, and an alarming
+   colour for a normal catch-up state trains people to ignore it. */
+.upcoming-recurring__stale {
+  background: #fff8e1;
+  border-left: 3px solid #f0ad4e;
+  border-radius: 4px;
+  color: #4a3c14;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-bottom: 0.9rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.upcoming-recurring__group {
+  margin-bottom: 1rem;
+}
+
+.upcoming-recurring__month {
+  color: #5b6472;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+}
+
+.upcoming-recurring__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.upcoming-recurring__item {
+  align-items: center;
+  border-bottom: 1px solid #eceff3;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.55rem 0;
+}
+
+.upcoming-recurring__item:last-child {
+  border-bottom: none;
+}
+
+.upcoming-recurring__item--overdue .upcoming-recurring__date {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+.upcoming-recurring__item-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upcoming-recurring__name {
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upcoming-recurring__category {
+  color: #7a8493;
+  font-size: 0.78rem;
+}
+
+.upcoming-recurring__item-meta {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.upcoming-recurring__date {
+  color: #5b6472;
+  font-size: 0.8rem;
+}
+
+.upcoming-recurring__badge {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}
+
+.upcoming-recurring__amount {
+  font-size: 0.95rem;
+  font-weight: 600;
+  /* Tabular figures so a column of amounts aligns on the decimal point. */
+  font-variant-numeric: tabular-nums;
+}
+
+.upcoming-recurring__action,
+.upcoming-recurring__retry {
+  background: none;
+  border: 1px solid #ccd3dc;
+  border-radius: 4px;
+  color: #2b3d52;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.upcoming-recurring__action:hover,
+.upcoming-recurring__retry:hover {
+  background: #f2f5f9;
+}
+
+/* FE-002 -- a visible focus ring, not just the hover affordance. */
+.upcoming-recurring__action:focus-visible,
+.upcoming-recurring__retry:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 2px;
+}
+
+.upcoming-recurring__retry {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .upcoming-recurring__item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
