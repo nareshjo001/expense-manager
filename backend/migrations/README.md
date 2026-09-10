@@ -67,3 +67,41 @@ corrects the mistake -- never an edit to the original file or a rollback
 script. A migration that has never run anywhere (still on an unmerged
 branch) may be edited or deleted freely like any other unreleased code
 change. See ADR-0006 for the full rationale.
+
+## DAT-003-T07 status: the CI half is confirmed, the staging half is not
+
+T07 is "run migrations in CI and staging". Recording where each half stands,
+because the earlier note on this task said the CI half was wired but had
+"not run yet" and that is no longer true.
+
+**CI: confirmed green.** `.github/workflows/ci.yml`'s `backend-integration`
+job runs `node migrations/run.js --dry-run` and then a real apply against
+its own throwaway `mongo:7` service container. That is the only place in
+this pipeline where the full driver + ledger + lock + a real migration
+execute against actual MongoDB rather than a fake. It has run on every push
+and pull request since 2026-09-03 and has passed on each — including the
+runs for PRs #24 through #27, where the aggregate `ci-required` job reported
+`backend-integration` as `success`.
+
+`--allow-no-backup-check` is passed there, and is legitimate *only* because
+that Mongo container is destroyed at the end of every run. Never pass it
+against an environment with data.
+
+**Staging: not run.** This needs a deployed environment, which does not yet
+exist. When it does, the sequence is:
+
+```bash
+node migrations/run.js --dry-run     # read the plan, confirm it is expected
+node migrations/run.js               # apply, WITHOUT --allow-no-backup-check
+```
+
+The second command deliberately keeps the backup safety gate
+(`environmentGate.js`) armed, so it refuses unless a recent verified backup
+exists — which OPS-002-T03 now provides and
+`.github/workflows/backup-verify.yml` exercises end to end.
+
+If Redis is unreachable the run **refuses** rather than proceeding
+unlocked: the lock is what stops two concurrent deploys applying the same
+migration to the same database, and unlike a cache miss there is no
+fallback for that. See `run.js`'s own comment — that refusal is correct
+behaviour, and the fix is to restore Redis, not to bypass it.

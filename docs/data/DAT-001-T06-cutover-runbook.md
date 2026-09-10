@@ -109,7 +109,46 @@ Not attempted here -- for whoever has staging/production access:
 Per ADR-0003, the legacy float fields cannot be removed until BOTH: (a)
 reconciliation evidence from the cutover above shows the two
 representations agreed the whole way through, and (b) OPS-002 has real
-encrypted backups in place (currently blocked -- see
-`docs/decisions/ADR-0005-backup-rpo-rto.md`, OPS-002-T02, still
-`PROPOSED` pending owner approval). Do not remove `expenseAmount`,
-`incomeAmount`, `budget`, or `spent` before both are true.
+encrypted backups in place.
+
+**Status of those two conditions (2026-09-10):**
+
+- **(b) is closer.** ADR-0005 is now `ACCEPTED` — the owner approved
+  RPO ≤ 24h / RTO ≤ 4h / 35 rolling backups, so OPS-002-T02 no longer
+  blocks this. The backup and restore pipeline is also verified end to end
+  by `.github/workflows/backup-verify.yml`, which now performs a real
+  backup, a real isolated restore, a count check *and* boots the app
+  against the restored database. What is still unproven is that those
+  backups are running against **production**, which is what "in place"
+  means here.
+- **(a) is not satisfied and cannot be from a sandbox.** It needs the
+  cutover run against real data over a real window.
+
+### This is now enforced in code, not just written down
+
+`backend/migrations/legacyMoneyRemovalGate.js` refuses the removal unless
+every precondition provably holds, and reports all failures at once:
+
+```bash
+node backend/migrations/legacyMoneyRemovalGate.js   # read-only; exit 0 = safe
+```
+
+It checks: dual-write is enabled; the `20260903-backfill-money-minor-fields`
+migration is recorded applied **in this environment's ledger**;
+reconciliation is clean *over a non-zero number of documents*; a recent
+verified backup exists; a declared soak of at least 14 days; and an explicit
+`LEGACY_MONEY_REMOVAL_CONFIRMED=true`.
+
+Two of those deserve calling out. A clean reconciliation over **zero**
+documents satisfies "clean" and proves nothing — it is the most misleading
+possible pass, so it is treated as a blocker. And a soak that meets the
+14-day floor but is under ~31 days emits a **warning**, because
+`cron/recurringJob.js` writes monthly: a two-week window has almost
+certainly never observed that path populating a `*Minor` field, and a gate
+that passed silently would imply otherwise.
+
+Do not remove `expenseAmount`, `incomeAmount`, `budget`, or `spent` while
+that command exits non-zero. Removing them deletes the only representation
+of every amount this application has recorded; there is no forward-fix once
+the source values are gone, which is why ADR-0006's up/verify/forward-fix
+convention has nothing to offer here.
