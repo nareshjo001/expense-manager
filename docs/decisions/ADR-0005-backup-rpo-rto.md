@@ -1,10 +1,24 @@
 # ADR-0005: Provisional RPO/RTO for authoritative stores (OPS-002-T02)
 
-**Status: PROPOSED -- pending owner approval.** This ADR sets *working*
-targets so OPS-002-T03 onward has something concrete to build against. It
-is deliberately not final; see "Approval" below for why.
+**Status: ACCEPTED (2026-09-10)** -- approved as drafted by the project
+owner (Naresh). The numbers below are no longer provisional working
+defaults; they are the agreed targets OPS-002 is measured against.
 
-## Decision (provisional)
+Two things this approval does NOT settle, kept visible rather than
+deleted because approving a number does not answer a question nobody has
+asked yet:
+
+- **The compliance-jurisdiction unknown remains open.** OPS-002's spec
+  marks it UNKNOWN, and if this product turns out to operate under GDPR,
+  India's DPDP Act or similar, a real retention *ceiling* could conflict
+  with the 35-backup floor below. That would require a follow-up revision
+  of this ADR, not a silent override.
+- **The 4h RTO is still a target, not a measurement.** OPS-002-T06's
+  restoration drill is what tests it. If the drill measures longer, this
+  ADR gets revised to match reality rather than the drill result being
+  quietly ignored.
+
+## Decision
 
 - **RPO (Recovery Point Objective): <= 24 hours** for the 7 authoritative
   MongoDB collections classified in
@@ -72,10 +86,16 @@ against these numbers, because:
    retention number above (both the 35-day floor and the missing
    ceiling).
 
-Until an owner records approval -- by changing this ADR's Status line to
-ACCEPTED, or via an explicit sign-off recorded in the tracker/a PR review
--- OPS-002-T03 should treat the numbers above as a working default to
-build against, not a locked requirement it cannot revisit.
+**Recorded 2026-09-10: approved as drafted.** The owner reviewed the
+three numbers (RPO <= 24h, RTO <= 4h, 35 rolling daily backups) and
+accepted them without change, on the reasoning given above -- a daily
+`mongodump` bounds worst-case loss to "at most yesterday", which is
+proportionate for a personal expense tracker with no SLA, and tightening
+the RPO would mean paying for managed continuous backup instead.
+
+This closes OPS-002-T02 ("Set provisional RPO/RTO and obtain owner
+approval"). It does not close the compliance question or validate the RTO
+-- see the Status note at the top of this file.
 
 ## Consequences
 
