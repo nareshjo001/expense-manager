@@ -1,30 +1,51 @@
 // OPS-004-T04 -- an unreachable Redis degrades the backend, it does not stop it.
 //
-// Before this change connectRedis() awaited redisClient.connect() with no
-// catch, and server.js turned the rejection into process.exit(1). Combined
-// with a platform that restarts on exit, a Redis blip produced a crash loop:
-// restart, fail on the same unreachable Redis, repeat -- so the backend was
-// DOWN for the duration of a cache outage rather than degraded through it.
+// THIS SUITE WAS WRONG AND PASSED ANYWAY. Its first version mocked
+// `connect()` as rejecting immediately and asserted connectRedis() swallowed
+// the rejection. node-redis does not reject when there is no server: the
+// default reconnect strategy retries indefinitely and the promise stays
+// PENDING. So the test verified a failure mode that does not occur, went
+// green, and the real behaviour -- startup hanging forever before
+// app.listen() -- shipped.
+//
+// It was caught by the OPS-002-T06 drill job, the first thing that ever
+// booted this backend with no Redis at all. The log was unmistakable in
+// hindsight: "DB Connected", then an endless run of connection errors, and
+// no "Server running on port" line.
+//
+// So the central test here is the one that models a connect() which NEVER
+// SETTLES, and asserts connectRedis() resolves regardless. Everything else is
+// secondary to that.
 "use strict";
 
 afterEach(() => {
   jest.resetModules();
   jest.restoreAllMocks();
+  jest.useRealTimers();
   delete process.env.REDIS_URL;
 });
 
-function loadRedisModule({ connectFails = false, isReady = true } = {}) {
+// `connectBehaviour`:
+//   "resolves" -- a healthy Redis.
+//   "pending"  -- no Redis at all. This is what actually happens, and the
+//                 case the previous suite failed to model.
+//   "rejects"  -- kept because a bad URL or auth failure can still reject,
+//                 and that path must not throw either.
+function loadRedisModule({ connectBehaviour = "resolves", isReady = true } = {}) {
   jest.resetModules();
 
-  const connect = jest.fn(async () => {
-    if (connectFails) throw new Error("ECONNREFUSED 127.0.0.1:6379");
+  const connect = jest.fn(() => {
+    if (connectBehaviour === "resolves") return Promise.resolve();
+    if (connectBehaviour === "rejects") return Promise.reject(new Error("ECONNREFUSED"));
+    // Never settles.
+    return new Promise(() => {});
   });
 
   const client = {
     connect,
     on: jest.fn(),
     get isReady() {
-      return isReady;
+      return connectBehaviour === "resolves" ? isReady : false;
     },
     isOpen: false,
   };
@@ -34,80 +55,149 @@ function loadRedisModule({ connectFails = false, isReady = true } = {}) {
   return { module: require("../config/redis"), client, connect };
 }
 
-describe("connectRedis", () => {
-  test("resolves with connected:true on success", async () => {
+describe("connectRedis -- the startup hang", () => {
+  test("resolves even when connect() never settles", async () => {
+    // The assertion the previous suite did not make, and the whole feature.
+    // If this hangs, startup hangs, and the process never binds a port.
+    jest.useFakeTimers();
+    const { module } = loadRedisModule({ connectBehaviour: "pending" });
+
+    const pending = module.connectRedis();
+    jest.advanceTimersByTime(5000);
+
+    await expect(pending).resolves.toEqual(
+      expect.objectContaining({ connected: false, timedOut: true })
+    );
+  });
+
+  test("does not wait indefinitely -- the wait is bounded by a timer", async () => {
+    jest.useFakeTimers();
+    const spy = jest.spyOn(global, "setTimeout");
+    const { module } = loadRedisModule({ connectBehaviour: "pending" });
+
+    const pending = module.connectRedis();
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), expect.any(Number));
+
+    jest.advanceTimersByTime(5000);
+    await pending;
+  });
+
+  test("the abandoned attempt cannot become an unhandled rejection", async () => {
+    // server.js's process-level unhandledRejection handler calls
+    // process.exit(1). An attempt that outlives connectRedis() and later
+    // rejects with nobody awaiting it would therefore reintroduce "Redis
+    // takes the backend down" by the back door.
+    jest.useFakeTimers();
+    const onUnhandled = jest.fn();
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      const { module } = loadRedisModule({ connectBehaviour: "rejects" });
+      await module.connectRedis();
+      jest.useRealTimers();
+      // Give the microtask queue a turn -- an unhandled rejection is reported
+      // asynchronously, so asserting synchronously would always pass.
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(onUnhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+});
+
+describe("connectRedis -- outcomes", () => {
+  test("reports connected:true on success", async () => {
     const { module } = loadRedisModule();
     await expect(module.connectRedis()).resolves.toEqual({ connected: true });
   });
 
-  test("does NOT throw when Redis is unreachable", async () => {
-    // This single assertion is the whole feature. connectRedis() rejecting
-    // is what server.js's try/catch turned into process.exit(1).
-    const { module } = loadRedisModule({ connectFails: true });
+  test("does not throw when the connection is refused", async () => {
+    const { module } = loadRedisModule({ connectBehaviour: "rejects" });
     await expect(module.connectRedis()).resolves.toEqual(
       expect.objectContaining({ connected: false })
     );
   });
 
-  test("returns the underlying error so the caller can log why", async () => {
-    const { module } = loadRedisModule({ connectFails: true });
-    const result = await module.connectRedis();
-
-    expect(result.error).toBeInstanceOf(Error);
-    expect(result.error.message).toContain("ECONNREFUSED");
+  test("reports connected:false when connect() resolves but the client is not ready", async () => {
+    // A resolved connect with isReady false would otherwise be reported as a
+    // working cache, and /health/deps would disagree with startup.
+    const { module } = loadRedisModule({ connectBehaviour: "resolves", isReady: false });
+    await expect(module.connectRedis()).resolves.toEqual(
+      expect.objectContaining({ connected: false })
+    );
   });
 
   test("registers an 'error' listener on the client", async () => {
-    // Not decoration: an EventEmitter with no "error" listener rethrows the
-    // error as an uncaught exception, which server.js's process handler
-    // turns into an exit -- reintroducing this exact crash by another route.
+    // Not decoration: an EventEmitter with no "error" listener rethrows as an
+    // uncaught exception, which server.js's handler turns into an exit.
     const { client } = loadRedisModule();
     expect(client.on).toHaveBeenCalledWith("error", expect.any(Function));
   });
 
-  test("a background retry is scheduled only when REDIS_URL was configured", async () => {
-    // Retrying against an absent REDIS_URL would log a failure every 30s
-    // forever on a machine that never intended to run Redis.
+  test("no custom retry timer is scheduled -- node-redis owns retrying", async () => {
+    // The previous version scheduled its own 30s retry interval, which was
+    // both redundant (node-redis retries the initial connection itself) and
+    // unsafe (calling connect() again while an attempt is pending throws).
     jest.useFakeTimers();
     const spy = jest.spyOn(global, "setInterval");
 
-    const { module } = loadRedisModule({ connectFails: true });
-    await module.connectRedis();
+    const { module } = loadRedisModule({ connectBehaviour: "pending" });
+    const pending = module.connectRedis();
+    jest.advanceTimersByTime(5000);
+    await pending;
+
     expect(spy).not.toHaveBeenCalled();
-
-    jest.useRealTimers();
-    spy.mockRestore();
-  });
-
-  test("schedules a retry when REDIS_URL is set, so a late-starting Redis is picked up", async () => {
-    // node-redis's own reconnectStrategy covers a connection that dropped
-    // after connecting; it does not cover a connect() that never succeeded.
-    // That is the deploy-time case -- Redis provisioned after the backend --
-    // and without this the instance stays cacheless until someone redeploys.
-    jest.useFakeTimers();
-    process.env.REDIS_URL = "redis://localhost:6379";
-    const spy = jest.spyOn(global, "setInterval");
-
-    const { module } = loadRedisModule({ connectFails: true });
-    await module.connectRedis();
-
-    expect(spy).toHaveBeenCalledWith(expect.any(Function), expect.any(Number));
-
-    jest.useRealTimers();
-    spy.mockRestore();
   });
 });
 
 describe("isRedisAvailable", () => {
-  test("reads the client's live state rather than a remembered flag", async () => {
-    // A boolean set once at connect time goes stale the moment the
-    // connection drops, and would make /health/deps confidently wrong.
+  test("reads the client's live state rather than a remembered flag", () => {
+    // A boolean set once at connect time goes stale the moment the connection
+    // drops, and would make /health/deps confidently wrong. It is also what
+    // lets a late-arriving Redis start reporting as available on its own.
     const { module } = loadRedisModule({ isReady: true });
     expect(module.isRedisAvailable()).toBe(true);
   });
 
   test("reports false when the client is not ready", () => {
-    const { module } = loadRedisModule({ isReady: false });
+    const { module } = loadRedisModule({ connectBehaviour: "pending" });
     expect(module.isRedisAvailable()).toBe(false);
+  });
+});
+
+describe("error logging", () => {
+  test("logs something identifiable when the error has no message", () => {
+    // A plain connection refusal arrives with an empty `message`, which is
+    // how this file produced twenty consecutive lines reading "Redis Error:"
+    // and nothing else -- naming neither the host nor the reason.
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const { client } = loadRedisModule();
+
+    const handler = client.on.mock.calls.find((c) => c[0] === "error")[1];
+    handler({ message: "", code: "ECONNREFUSED" });
+
+    expect(errorSpy).toHaveBeenCalledWith("Redis Error:", "ECONNREFUSED");
+  });
+
+  test("falls back to aggregated causes when there is neither message nor code", () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const { client } = loadRedisModule();
+
+    const handler = client.on.mock.calls.find((c) => c[0] === "error")[1];
+    handler({ errors: [{ code: "ECONNREFUSED" }, { code: "EAI_AGAIN" }] });
+
+    expect(errorSpy).toHaveBeenCalledWith("Redis Error:", "ECONNREFUSED,EAI_AGAIN");
+  });
+
+  test("never logs 'undefined' for an unrecognizable error", () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const { client } = loadRedisModule();
+
+    const handler = client.on.mock.calls.find((c) => c[0] === "error")[1];
+    handler(undefined);
+
+    expect(errorSpy).toHaveBeenCalledWith("Redis Error:", "unknown");
   });
 });

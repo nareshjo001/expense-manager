@@ -142,9 +142,110 @@ jobs:
           echo "is verified against):"
           cat "$BACKUP_DESTINATION_DIR"/*.manifest.json
 
+      # OPS-002-T06 -- the drill's clock starts here.
+      #
+      # ADR-0005's 4h RTO is measured from "an operator declares a recovery
+      # event" to "restored data is queryable and application-level-
+      # reconciled". Steps 1-5 of the drill runbook are what happens between
+      # those two points, so they are timed as one span rather than reported
+      # per-step.
+      - name: Start the drill clock
+        run: echo "DRILL_START=$(date +%s)" >> "$GITHUB_ENV"
+
       # verifyBackupRestore.js sets a non-zero process.exitCode when
       # verification fails (no backup found, restore threw, or a count
       # mismatch) -- this step's own exit code is the pass/fail signal,
       # no separate check needed.
       - name: Run verifyBackupRestore.js -- isolated restore + count check (OPS-002-T05/T07)
         run: node scripts/backup/verifyBackupRestore.js
+
+      # OPS-002-T06 step 5 -- APPLICATION-LEVEL RECONCILIATION.
+      #
+      # ADR-0005's RTO definition is "restored AND application-level-
+      # reconciled", not "restored". A restore that produces the right
+      # document counts but a database the app cannot actually serve from is
+      # not a recovery, and a count check cannot tell the difference.
+      #
+      # So the backend is booted against the RESTORED database and put through
+      # the deployment smoke test (TST-001-T07) -- the same script used after
+      # a real deploy. It asserts the app reaches readiness against this
+      # database, enforces auth, and serves its operational contract.
+      #
+      # NODE_ENV=test rather than production on purpose: this job has no Redis
+      # service, and production mode requires REDIS_URL. That the backend
+      # boots at all without Redis is itself the OPS-004-T04 behaviour working
+      # -- before that change an absent Redis exited the process, which would
+      # have made this step impossible without adding a container for a
+      # dependency the restore does not need.
+      - name: Boot the backend against the RESTORED database
+        env:
+          NODE_ENV: test
+          PORT: "8083"
+          PROCESS_ROLE: web
+          # The RESTORED database, spelled out rather than referenced through
+          # the env context -- this is the one line that decides whether the
+          # drill verifies the restore or accidentally re-verifies the source,
+          # and it should be readable without resolving an expression.
+          MONGO_CONN: mongodb://127.0.0.1:27017/expense_manager_verify_target_ci
+          JWT_SECRET: ci-drill-secret-not-for-production-use
+          REFRESH_TOKEN_SECRET: ci-drill-refresh-secret-distinct-from-jwt
+        run: |
+          npm start > "$RUNNER_TEMP/drill-backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/drill-backend.pid"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8083/health/ready > /dev/null 2>&1; then
+              echo "Backend serving from the restored database after ${i}s."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Backend never became ready against the restored database."
+          cat "$RUNNER_TEMP/drill-backend.log"
+          exit 1
+
+      - name: Smoke-test the restored deployment (drill step 5)
+        run: node scripts/smokeTest.js --expect-role=web http://127.0.0.1:8083
+
+      - name: Stop the backend
+        if: always()
+        run: kill "$(cat "$RUNNER_TEMP/drill-backend.pid")" || true
+
+      # OPS-002-T06 -- the recorded result.
+      #
+      # Written to the run summary so the drill record is attached to the run
+      # that produced it, rather than being a number someone transcribes into
+      # a document by hand and cannot later trace.
+      #
+      # The honesty note is part of the record on purpose. This run drills the
+      # PIPELINE, on three fixture documents, inside one job. It does not
+      # measure a recovery of production-shaped data, and reporting its
+      # elapsed time as "the RTO" would be a false reassurance of exactly the
+      # kind OPS-002 exists to prevent.
+      - name: Record the drill result
+        if: always()
+        run: |
+          ELAPSED=$(( $(date +%s) - ${DRILL_START:-$(date +%s)} ))
+          {
+            echo "## OPS-002-T06 drill record"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Run | \`${GITHUB_RUN_ID}\` (${GITHUB_EVENT_NAME} on \`${GITHUB_REF_NAME}\`) |"
+            echo "| Commit | \`${GITHUB_SHA}\` |"
+            echo "| Backup -> restore -> app-verified | **${ELAPSED}s** |"
+            echo "| ADR-0005 RTO target | 4h |"
+            echo
+            echo "**What this establishes:** the backup, encrypted-archive,"
+            echo "isolated-restore, count-verification and"
+            echo "application-reconciliation pipeline works end to end against"
+            echo "a real MongoDB, with real mongodump/mongorestore, and the"
+            echo "restored database serves the application."
+            echo
+            echo "**What it does NOT establish:** an RTO for a real recovery."
+            echo "This drills three fixture documents in one CI job. A"
+            echo "production-shaped dataset changes the dump, transfer and"
+            echo "restore times by orders of magnitude, and no operator"
+            echo "declared a recovery event here. Closing T06 needs one run of"
+            echo "docs/runbooks/OPS-002-T06-restoration-drill.md against a"
+            echo "staging copy with production-shaped data."
+          } >> "$GITHUB_STEP_SUMMARY"

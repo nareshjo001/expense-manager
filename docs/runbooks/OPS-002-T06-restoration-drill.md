@@ -104,9 +104,45 @@ correct configured value, and a recurring-expense rule is intact.
 Record the elapsed time from T=0 (step 1) to the moment step 5 passes.
 Compare against ADR-0005's provisional 4-hour RTO target.
 
+## Update (2026-09-10): steps 1–5 are now automated at CI scale
+
+`.github/workflows/backup-verify.yml` now runs this drill's whole sequence
+automatically, and records the result on the run:
+
+1. Seeds fixture data and runs the real `mongoBackup.js` (T03).
+2. Starts a clock.
+3. Runs the real isolated restore and per-collection count verification
+   (T05/T07) against a genuinely separate target database.
+4. **Boots the backend against the restored database** and runs the
+   deployment smoke test (`backend/scripts/smokeTest.js`, TST-001-T07) —
+   which is step 5's application-level reconciliation, automated. A restore
+   that produces the right document counts but a database the app cannot
+   serve from is not a recovery, and a count check cannot tell the
+   difference.
+5. Writes a drill record to the run summary: elapsed time, the commit, and
+   an explicit note on what the run does and does not establish.
+
+Trigger it from the Actions tab (`workflow_dispatch`) or by touching any
+backup file in a PR.
+
+**This does not close T06, and the run summary says so itself.** What it
+establishes is that the pipeline works end to end against a real MongoDB
+with real `mongodump`/`mongorestore`, and that the restored database serves
+the application. What it cannot establish is an RTO: it drills three fixture
+documents inside one CI job, and a production-shaped dataset changes dump,
+transfer and restore times by orders of magnitude. No operator declared a
+recovery event, either.
+
+So the remaining work is one run of steps 1–6 below against a staging copy
+with production-shaped data, with the stopwatch — which is the same staging
+gate DAT-003-T07 and OBS-001-T07 are waiting on. The automation means that
+run is a verification rather than a first attempt: anything structurally
+broken has already been caught.
+
 ## Recording the result
 
-Once run for real, record here (or in the tracker's notes for T06):
+Once run for real against production-shaped data, record here (or in the
+tracker's notes for T06):
 
 - Date run, who ran it, which environment/staging copy was used.
 - Elapsed time (T=0 to application-level-reconciled) versus the 4-hour
@@ -117,7 +153,17 @@ Once run for real, record here (or in the tracker's notes for T06):
   block when it should have, a count mismatch, anything surprising).
 - Whether T06 and OPS-002 as a whole can now be marked genuinely Done.
 
-## Why this session flags rather than runs this
+## Why this is still flagged rather than claimed
+
+Re-confirmed 2026-09-10, not assumed: this sandbox has no `mongod`, no
+`mongodump`/`mongorestore` (Ubuntu's repositories carry neither since the
+licence change, and `apt-cache policy mongodb-server` returns no candidate),
+no working Docker daemon, and MongoDB's own download hosts
+(`fastdl.mongodb.org`, `repo.mongodb.org`) are unreachable from here. So the
+drill cannot be run locally at all — which is why it was moved into CI, where
+those binaries do install.
+
+
 
 Every prior "flag, don't fake" item this session has produced followed
 the same rule: a task needing real infrastructure this sandbox does not
