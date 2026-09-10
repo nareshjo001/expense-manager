@@ -1,12 +1,14 @@
-// Fix MongoDB Atlas SRV DNS resolution before anything else
-const dns = require("dns");
-
-dns.setServers([
-  "8.8.8.8",
-  "1.1.1.1"
-]);
-
+// dotenv first: the DNS override below reads its setting from .env, and it
+// has to run before anything resolves a hostname.
 require("dotenv").config();
+
+// This file used to begin with an unconditional
+// dns.setServers(["8.8.8.8", "1.1.1.1"]) -- a local-network workaround that
+// also took effect in production, where replacing the platform resolver can
+// make every lookup fail with `querySrv ENOTFOUND`, indistinguishable from a
+// wrong hostname. It is now opt-in via DNS_SERVERS; config/dns.js has the
+// full reasoning.
+require("./config/dns").applyDnsOverride();
 
 // OBS-001-T04 -- process-level crash reporting. No uncaughtException/
 // unhandledRejection handler existed here before; Node's own default for
