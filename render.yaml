@@ -67,6 +67,41 @@
 # are the kind of latency you cannot tune away afterwards. All three services
 # and both managed dependencies must agree.
 
+# PLAN: FREE, AND WHAT THAT COSTS US
+#
+# `starter` is a PAID plan, and Render demands a card before it will create a
+# blueprint that names one -- which is a hard stop for standing staging up at
+# all. Both services are on `free` here so the blueprint applies without
+# payment details.
+#
+# Free is genuinely fine for the web tier's purpose in this repo: applying
+# migrations (DAT-003-T07), running the deployment smoke test, and giving
+# OBS-001-T07 somewhere to inspect logs. None of that cares about cold starts.
+#
+# It is NOT fine for the worker, and the reason matters. A free service spins
+# down after ~15 minutes idle, and the scheduled jobs are node-cron timers
+# INSIDE the process -- a spun-down process fires nothing. So on free:
+#
+#   - retryPush (every 15 min) and feedbackCollector (daily) will miss cycles.
+#   - recurringJob (monthly) will almost certainly never fire at all.
+#
+# That last one has a direct consequence for DAT-001-T07. The soak exists to
+# observe every money-writing path populating a *Minor field, and the monthly
+# recurring job is the slowest of them. A soak run against a free-tier worker
+# can never observe it -- so the gate's "under 31 days" warning would stay
+# true forever, no matter how long you waited.
+#
+# Which is why the DAT-001 soak belongs on PRODUCTION, where the existing
+# service runs with PROCESS_ROLE unset (defaulting to "all", so it already
+# runs the crons), not on a free staging tier. Staging proves the procedure;
+# production is where the evidence comes from.
+#
+# To move a service to a paid plan later, change `plan` here rather than in
+# the dashboard, so the blueprint stays the description of what is deployed.
+#
+# numInstances is omitted rather than set to 1: free services do not support
+# it, and Render rejects a blueprint that specifies it on a free plan.
+
 services:
   # ---------------------------------------------------------------------
   # HTTP tier.
@@ -74,7 +109,7 @@ services:
   - type: web
     name: balenisa-backend
     runtime: node
-    plan: starter
+    plan: free
     region: singapore
     rootDir: backend
     buildCommand: npm ci
@@ -159,12 +194,11 @@ services:
   - type: web
     name: balenisa-worker
     runtime: node
-    plan: starter
+    plan: free
     region: singapore
     rootDir: backend
     buildCommand: npm ci
     startCommand: npm start
-    numInstances: 1
 
     # Liveness, not readiness. This service takes no user traffic, so the
     # only question worth asking is whether the process is alive -- and
