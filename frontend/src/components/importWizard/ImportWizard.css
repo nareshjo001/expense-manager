@@ -1,0 +1,282 @@
+/* IMP-001 -- CSV import wizard. Self-contained (doesn't depend on another
+   feature's CSS being loaded alongside it, unlike ReceiptDetail.js which
+   reuses AddExpense.css) -- uses only the --text-color/--header-gradient-
+   start theme variables LandingPage.css already defines per theme, plus
+   the same neutral rgba(127,127,127, alpha) surfaces ReceiptDetail.css
+   uses so it looks right in both light and dark theme without new
+   variables. */
+
+.import-wizard {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.import-wizard-header h2 {
+    margin: 0 0 10px;
+}
+
+.import-wizard-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.import-wizard-steps li {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(127, 127, 127, 0.12);
+    opacity: 0.7;
+}
+
+.import-wizard-steps li.active {
+    opacity: 1;
+    background: rgba(59, 130, 246, 0.18);
+    color: #1d4ed8;
+}
+
+.import-wizard-upload,
+.import-wizard-mapping,
+.import-wizard-preview,
+.import-wizard-done {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.import-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.import-field label {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.import-field select,
+.import-field input[type="file"] {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    background: rgba(127, 127, 127, 0.06);
+    font-size: 0.95rem;
+}
+
+.import-wizard-hint {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin: 0;
+}
+
+.import-wizard-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid rgba(153, 27, 27, 0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.import-wizard-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.import-wizard-primary-btn,
+.import-wizard-secondary-btn {
+    padding: 12px 20px;
+    border-radius: 16px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.import-wizard-primary-btn {
+    color: #ffffff;
+    background: linear-gradient(135deg, #3B82F6, #6366f1);
+}
+
+.import-wizard-primary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.import-wizard-secondary-btn {
+    background: rgba(127, 127, 127, 0.15);
+    color: var(--text-color, inherit);
+}
+
+.import-wizard-link-btn {
+    width: fit-content;
+}
+
+.import-wizard-totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.import-wizard-total {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(127, 127, 127, 0.12);
+}
+
+.import-wizard-total--accepted {
+    background: rgba(16, 185, 129, 0.18);
+    color: #047857;
+}
+
+.import-wizard-total--skipped {
+    background: rgba(107, 114, 128, 0.18);
+    color: #374151;
+}
+
+.import-wizard-total--pending {
+    background: rgba(59, 130, 246, 0.18);
+    color: #1d4ed8;
+}
+
+.import-wizard-total--errors {
+    background: rgba(239, 68, 68, 0.18);
+    color: #991b1b;
+}
+
+.import-row-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.import-row-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(127, 127, 127, 0.08);
+    border: 1px solid rgba(127, 127, 127, 0.18);
+}
+
+.import-row-item--accept {
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+.import-row-item--skip {
+    opacity: 0.6;
+}
+
+.import-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+    flex: 1 1 220px;
+}
+
+.import-row-name {
+    font-weight: 700;
+}
+
+.import-row-meta {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.import-row-raw {
+    font-size: 0.72rem;
+    opacity: 0.6;
+}
+
+.import-row-flags {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 200px;
+}
+
+.import-row-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    width: fit-content;
+}
+
+.import-row-badge--duplicate {
+    background: rgba(245, 158, 11, 0.18);
+    color: #92400e;
+}
+
+.import-row-badge--suggestion {
+    background: rgba(59, 130, 246, 0.18);
+    color: #1d4ed8;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.import-row-errors {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.8rem;
+    color: #991b1b;
+}
+
+.import-row-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.import-row-accept-btn,
+.import-row-skip-btn {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.import-row-accept-btn {
+    background: rgba(16, 185, 129, 0.85);
+    color: #ffffff;
+}
+
+.import-row-skip-btn {
+    background: rgba(127, 127, 127, 0.2);
+    color: var(--text-color, inherit);
+}
+
+.import-row-accept-btn:disabled,
+.import-row-skip-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.import-wizard-done-summary {
+    font-size: 1.05rem;
+    font-weight: 600;
+}
