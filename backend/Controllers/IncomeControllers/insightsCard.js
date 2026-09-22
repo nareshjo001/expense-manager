@@ -1,6 +1,7 @@
 const { UserModel, IncomeModel, ExpenseModel } = require('../../config/Schemas');
 const { getFinancialRunwayData, getSavingsRateData, getIncomeDependencyData } = require('../../Services/InsightServices/income.service');
 const { resolvePeriod } = require('../../Services/InsightServices/periodResolver');
+const { sumByField } = require('../../utils/aggregationHelpers');
 
 const getInsightsCard = async (req, res) => {
   try {
@@ -43,8 +44,8 @@ const getInsightsCard = async (req, res) => {
     ]);
 
     // Aggregate period totals and the tracking window the runway is based on.
-    const totalIncome = incomeRecords.reduce((sum, record) => sum + record.incomeAmount, 0);
-    const totalExpenses = expenseRecords.reduce((sum, record) => sum + record.expenseAmount, 0);
+    const totalIncome = sumByField(incomeRecords, 'incomeAmount');
+    const totalExpenses = sumByField(expenseRecords, 'expenseAmount');
         const trackedDays = Math.max(
       1,
       Math.ceil(

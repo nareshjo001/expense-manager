@@ -5,6 +5,7 @@ const { groupByCategoryHelper, bucketByWeek } = require('../HelperServices/getex
 const { BudgetModel, ExpenseModel } = require('../../config/Schemas');
 const { resolveYearRange, resolveMonthRange, resolveMultiYearRange } = require('./chartRangeResolver');
 const syncRecoveryService = require('../syncRecoveryService');
+const { sumByField } = require('../../utils/aggregationHelpers');
 
 // Group expenses by year
 const groupByYear = (expenses = []) => {
@@ -19,7 +20,7 @@ const groupByYear = (expenses = []) => {
     });
 
     const result = Object.entries(yearlyExpenses).map(([year, yearExpenses]) => {
-        const total = yearExpenses.reduce((sum, exp) => sum + Number(exp.expenseAmount), 0);
+        const total = sumByField(yearExpenses, 'expenseAmount');
         return { year: Number(year), total };
     });
 
@@ -46,10 +47,7 @@ const monthlyTotals = (expenses = []) => {
 // To calculate category wise totals
 const categoryTotals = (groupedByCategory) => {
     const result = Object.entries(groupedByCategory).map(([category, categoryExpenses]) => {
-        const total = categoryExpenses.reduce(
-            (sum, exp) => sum + Number(exp.expenseAmount),
-            0
-        );
+        const total = sumByField(categoryExpenses, 'expenseAmount');
             return { category, total };
     });
 
