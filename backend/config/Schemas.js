@@ -45,6 +45,22 @@ const userSchema = new Schema({
     verificationExpiresAt: {
         type: Date,
         index: { expireAfterSeconds: 0 }
+    },
+
+    // PRV-001-T03 (ADR-0007) -- set together when a re-authenticated
+    // deletion request is accepted; both null means no deletion is
+    // pending. deletionScheduledPurgeAt is the grace-period end (ADR-0007:
+    // 14 days) T04's orchestration hard-deletes against; it is NOT itself
+    // a TTL index field -- purge is an explicit orchestrated action, never
+    // an implicit Mongo expiry, so a crashed/delayed orchestration run
+    // can never silently lose the record of a pending request.
+    deletionRequestedAt: {
+        type: Date,
+        default: null
+    },
+    deletionScheduledPurgeAt: {
+        type: Date,
+        default: null
     }
 });
 

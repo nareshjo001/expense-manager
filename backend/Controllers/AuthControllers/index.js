@@ -8,4 +8,8 @@ module.exports = {
   refresh: require('./session').refresh,
   logout: require('./session').logout,
   logoutAll: require('./session').logoutAll,
+  // PRV-001-T03
+  requestDeletion: require('./accountDeletion').requestDeletion,
+  cancelDeletion: require('./accountDeletion').cancelDeletion,
+  getDeletionStatus: require('./accountDeletion').getDeletionStatus,
 };

@@ -92,6 +92,31 @@ const editIncomeValidation = (req, res, next) => {
     next();
 };
 
+// PRV-001-T03 -- account-deletion request validation. Just a required,
+// non-empty password string; the controller itself re-verifies it against
+// the stored hash (this middleware only rejects an obviously-malformed
+// request before that DB round trip, same division of labor
+// expenseValidation/addIncomeValidation already use).
+const requestDeletionValidation = (req, res, next) => {
+    const schema = Joi.object({
+        password: Joi.string().min(1).required(),
+    }).unknown(true);
+
+    const { error } = schema.validate(req.body, { abortEarly: true });
+
+    if (error) {
+        const rawMessage = error.details[0].message.replace(/"/g, '');
+        const message = rawMessage.charAt(0).toUpperCase() + rawMessage.slice(1);
+
+        return res.status(400).json({
+            success: false,
+            message
+        });
+    }
+
+    next();
+};
+
 module.exports = {
     signupValidation,
     loginValidation,
@@ -100,5 +125,6 @@ module.exports = {
     resetPasswordValidation,
     expenseValidation,
     addIncomeValidation,
-    editIncomeValidation
+    editIncomeValidation,
+    requestDeletionValidation
 };
