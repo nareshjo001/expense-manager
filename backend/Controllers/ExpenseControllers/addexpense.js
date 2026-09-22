@@ -34,6 +34,15 @@ const INVALID_WAS_ML_CORRECTED_RESPONSE = {
   errorCode: 'INVALID_WAS_ML_CORRECTED',
 };
 
+// ML-003-T05 -- same optional-boolean contract as wasMlCorrected above,
+// for the abstained flag AddExpense.js now sends alongside a submission
+// (ML-003-T04's suggestion banner). Absent entirely on a legacy client.
+const INVALID_ML_ABSTAINED_RESPONSE = {
+  success: false,
+  message: 'mlAbstained must be a boolean value.',
+  errorCode: 'INVALID_ML_ABSTAINED',
+};
+
 // Phase C -- Expense Mutation Reliability: add-expense idempotency.
 const isSameExpensePayload = (stored, incoming) => {
   if (!stored) return false;
@@ -91,6 +100,18 @@ const deriveMlCorrection = (mlPredictedCategory, normalizedExpenseCategory) => {
   return { hasPrediction: true, corrected: predicted !== normalizedExpenseCategory };
 };
 
+// ML-003-T05 -- server-derived outcome label for a shown prediction, from
+// `abstained` x `corrected` (see the `outcome` field's own doc-comment in
+// backend/config/Schemas.js's MlFeedbackSchema for the full 2x2 rationale).
+// Only meaningful when a prediction actually existed -- callers must gate
+// on deriveMlCorrection's hasPrediction the same way `corrected` already is.
+const deriveMlOutcome = (abstained, corrected) => {
+  if (abstained) {
+    return corrected ? 'abstained' : 'viewed';
+  }
+  return corrected ? 'corrected' : 'accepted';
+};
+
 const addExpense = async (req, res) => {
   // Phase C.2 -- declared outside the try block so the catch below can
   let ownerUserId = null;
@@ -101,7 +122,7 @@ const addExpense = async (req, res) => {
 
   try {
     // Destructure expense data from request body
-    const { id, expenseName, expenseCategory, expenseAmount, expenseDate, expenseDescription, mlPredictedCategory, mlConfidence, wasMlCorrected } = req.body;
+    const { id, expenseName, expenseCategory, expenseAmount, expenseDate, expenseDescription, mlPredictedCategory, mlConfidence, wasMlCorrected, mlAbstained } = req.body;
 
     // Get userId from verified JWT (set in auth middleware)
     const user = await UserModel.findById(req.userId);
@@ -122,6 +143,16 @@ const addExpense = async (req, res) => {
       return res.status(400).json(INVALID_WAS_ML_CORRECTED_RESPONSE);
     }
     const normalizedWasMlCorrected = wasMlCorrectedResult.value;
+
+    // ML-003-T05 -- normalize the optional `mlAbstained` boolean the same
+    // way, and default a legacy/absent value to false: a client that
+    // predates ML-003-T04 never abstains anything, so every prediction it
+    // sends was, by construction, committed.
+    const mlAbstainedResult = normalizeOptionalBoolean(mlAbstained);
+    if (!mlAbstainedResult.valid) {
+      return res.status(400).json(INVALID_ML_ABSTAINED_RESPONSE);
+    }
+    const normalizedMlAbstained = mlAbstainedResult.value ?? false;
 
     // Idempotency check -- BEFORE any write. Ownership-scoped: the lookup
     const existingById = await ExpenseModel.findOne({ userId: user._id, id }).lean();
@@ -168,7 +199,8 @@ const addExpense = async (req, res) => {
         expenseDescription: finalDescription,
         mlPredictedCategory,
         mlConfidence,
-        wasMlCorrected: normalizedWasMlCorrected
+        wasMlCorrected: normalizedWasMlCorrected,
+        wasMlAbstained: normalizedMlAbstained
     });
 
     // Create new ML feedback document if a genuine ML prediction is available.
@@ -178,6 +210,10 @@ const addExpense = async (req, res) => {
     );
 
     if (hasPrediction && mlConfidence !== undefined) {
+        // ML-003-T05 -- abstained is only meaningful for a real prediction;
+        // gate it on hasPrediction exactly like corrected already is, so a
+        // request with no prediction at all can never produce an outcome.
+        const mlOutcome = deriveMlOutcome(normalizedMlAbstained, mlCorrected);
         const mlFeedback = new MlFeedbackModel({
             expenseName,
             predictedCategory: mlPredictedCategory,
@@ -186,7 +222,13 @@ const addExpense = async (req, res) => {
             // Backward compatibility: keep the legacy boolean aligned with
             // lifecycle status for existing backend consumers.
             corrected: mlCorrected,
+            abstained: normalizedMlAbstained,
+            outcome: mlOutcome,
             // "pending" only for a genuine, server-confirmed correction.
+            // Unchanged by ML-003-T05: an abstained-and-overridden
+            // ("abstained" outcome) prediction was already `corrected:
+            // true` under the existing comparison, so it already reaches
+            // "pending" without any change here.
             status: mlCorrected ? 'pending' : null,
             userId: user._id
         });

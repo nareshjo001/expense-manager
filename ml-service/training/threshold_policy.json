@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "task": "ML-003-T02",
+  "trustLevel": "synthetic-provisional",
+  "basedOn": {
+    "calibrationTask": "ML-003-T01",
+    "calibrationReportPath": "ml-service/training/calibration_report.json",
+    "methodologyCaveatCarriedForward": "No metadata.json/manifest exists for this legacy bundle, so this validation fold's disjointness from the legacy model's actual (unrecorded) training data cannot be proven -- only that it is disjoint under grouped_split's group key. Re-derive from a real training run's own recorded split once this model is next retrained through the versioned pipeline."
+  },
+  "metricDefinitions": {
+    "quality": "Precision among a class's COMMITTED (non-abstained) predictions only.",
+    "coverage": "Fraction of a class's predictions that are committed (confidence >= threshold) rather than abstained."
+  },
+  "qualityTargets": [
+    0.8,
+    0.9,
+    0.95
+  ],
+  "globalDefaultThreshold": 0.9,
+  "perClassThresholds": {
+    "Food": null,
+    "Transport": null,
+    "Shopping": null,
+    "Bills": null,
+    "Entertainment": null,
+    "Groceries": null,
+    "Health": null,
+    "Education": null,
+    "Travel": null,
+    "Rent": null,
+    "Investment": null,
+    "Salary": null,
+    "Personal Care": null,
+    "Gifts": null,
+    "Others": null
+  },
+  "coverageAtCandidateThresholds": [
+    {
+      "threshold": 0.8,
+      "overallCoverageFraction": 0.9983,
+      "overallPrecisionAmongCommitted": 0.9996,
+      "totalPredicted": 10348,
+      "totalCommitted": 10330,
+      "belowAverageCoverageClasses": []
+    },
+    {
+      "threshold": 0.85,
+      "overallCoverageFraction": 0.9954,
+      "overallPrecisionAmongCommitted": 0.9998,
+      "totalPredicted": 10348,
+      "totalCommitted": 10300,
+      "belowAverageCoverageClasses": []
+    },
+    {
+      "threshold": 0.9,
+      "overallCoverageFraction": 0.9893,
+      "overallPrecisionAmongCommitted": 0.9998,
+      "totalPredicted": 10348,
+      "totalCommitted": 10237,
+      "belowAverageCoverageClasses": [
+        {
+          "class": "Personal Care",
+          "coverageFraction": 0.9289,
+          "precisionAmongCommitted": 0.9954954954954955
+        }
+      ]
+    },
+    {
+      "threshold": 0.95,
+      "overallCoverageFraction": 0.9738,
+      "overallPrecisionAmongCommitted": 0.9999,
+      "totalPredicted": 10348,
+      "totalCommitted": 10077,
+      "belowAverageCoverageClasses": [
+        {
+          "class": "Food",
+          "coverageFraction": 0.9496,
+          "precisionAmongCommitted": 1.0
+        },
+        {
+          "class": "Groceries",
+          "coverageFraction": 0.9471,
+          "precisionAmongCommitted": 1.0
+        },
+        {
+          "class": "Personal Care",
+          "coverageFraction": 0.8745,
+          "precisionAmongCommitted": 1.0
+        }
+      ]
+    }
+  ],
+  "revisitTrigger": "Re-run training/calibrate_confidence.py and training/threshold_policy.py once EITHER: (1) the served model has been retrained through the versioned pipeline (training/model_bundle.py manifest), proving real train/val disjointness for the legacy bundle's successor, OR (2) enough real, non-synthetic rows have accumulated in db/feedback_repository.py to re-score confidence against input the model has not memorized a template of. Populate perClassThresholds[<category>] with a real value only once that re-run's own report supports it for that specific category.",
+  "generatedAt": "2026-09-17T17:58:53.601838+00:00"
+}
