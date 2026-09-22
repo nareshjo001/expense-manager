@@ -12,16 +12,21 @@ import { deleteSuccessToast, deleteErrorToast } from '../alertsEffects/toastMess
 import Add from '../expensesHandling/Add';
 import Spinner from '../alertsEffects/Spinner';
 import MerchantRules from '../merchantRules/MerchantRules';
+import RecurringPage from '../recurring/RecurringPage';
+import NotificationPreferences from '../notifications/NotificationPreferences';
+import DataExport from '../dataExport/DataExport';
+import ReceiptInbox from '../receiptInbox/ReceiptInbox';
+import ImportWizard from '../importWizard/ImportWizard';
 
 // Barrel re-export of top-level page/context/util modules used across the app.
 export {
     ThemeContext,
     TrendChartPage,
-    BarChartPage, 
-    PieChartPage, 
-    ExpensesPage, 
-    AddExpense, 
-    DeleteAlert, 
+    BarChartPage,
+    PieChartPage,
+    ExpensesPage,
+    AddExpense,
+    DeleteAlert,
     SplashScreen,
     ScrollToTopButton ,
     Insights,
@@ -29,5 +34,10 @@ export {
     deleteErrorToast,
     Add,
     Spinner,
-    MerchantRules
+    MerchantRules,
+    RecurringPage,
+    NotificationPreferences,
+    DataExport,
+    ReceiptInbox,
+    ImportWizard
 };

@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const cron = require('node-cron');
 
 const { RecurringExpenseModel } = require('../models/RecurringExpense');
-const { ExpenseModel } = require('../config/Schemas');
+const { ExpenseModel, UserModel } = require('../config/Schemas');
 const Notification = require("../models/Notification");
 
 const { sendPush } = require('../Services/push.service');
@@ -37,10 +37,29 @@ async function runRecurringJob() {
       // Get current time
       const now = new Date();
 
-      // Find all recurring expenses whose due date has passed
-      const dueExpenses = await RecurringExpenseModel.find({
-         nextDueDate: { $lte: now }
+      // PRV-001-T05 (ADR-0007 Tier A) -- "stop jobs first": a user with a
+      // pending account deletion must not have new recurring expenses
+      // logged for them, even during the 14-day grace period -- Tier A is
+      // meant to freeze the account's forward-going state immediately, not
+      // just its historical data at purge time. Queried fresh every cycle
+      // (not cached) so a pending set that changes between runs -- a fresh
+      // deletion request, or a cancellation -- is always current, which is
+      // simpler and safer than keeping a second signal in sync.
+      const pendingDeletionUsers = await UserModel.find({ deletionRequestedAt: { $ne: null } })
+         .select('_id')
+         .lean();
+      const pendingDeletionUserIds = new Set(pendingDeletionUsers.map((u) => String(u._id)));
+
+      // Find all recurring expenses whose due date has passed. REC-002-T03 --
+      // 'paused'/'ended' definitions are excluded up front: a paused
+      // definition must not advance or log anything while paused, and an
+      // ended one is terminal, so neither belongs in this query at all
+      // (as opposed to being fetched and then skipped per-item).
+      const dueExpensesRaw = await RecurringExpenseModel.find({
+         nextDueDate: { $lte: now },
+         status: 'active'
       }).lean();
+      const dueExpenses = dueExpensesRaw.filter((r) => !pendingDeletionUserIds.has(String(r.userId)));
 
       // If no due expenses, exit early
       if (!dueExpenses.length) return;
@@ -49,6 +68,64 @@ async function runRecurringJob() {
       for (const recurring of dueExpenses) {
 
          const originalNextDue = recurring.nextDueDate;
+
+         // REC-002-T03/T06 -- an optional endDate means this occurrence must
+         // not be created: the schedule has reached its planned end.
+         // Auto-transition to 'ended' instead (mirrors user-initiated end,
+         // see recurringLifecycleService.endDefinition) and notify the user,
+         // then move on without logging anything for this cycle.
+         // scheduleVersion is deliberately NOT incremented here -- same
+         // philosophy as this job's routine nextDueDate/lastLoggedDate
+         // advancement (see RecurringExpense.js's own comment on that
+         // field): every lifecycle mutation already re-checks `status`
+         // before trusting scheduleVersion, so a stale client is still
+         // caught correctly without this job participating in the CAS
+         // protocol.
+         if (recurring.endDate && originalNextDue > recurring.endDate) {
+            const endedResult = await RecurringExpenseModel.findOneAndUpdate(
+               { _id: recurring._id, status: 'active' },
+               { $set: { status: 'ended', endedAt: new Date() } }
+            );
+
+            if (endedResult) {
+               const endedNotification = await Notification.create({
+                  userId: recurring.userId,
+                  title: "Recurring Expense Ended",
+                  message: `${recurring.expenseName} has reached its end date and will no longer be logged.`,
+                  type: "recurring-expense-ended"
+               });
+
+               const endedPushResult = await sendPush(
+                  recurring.userId.toString(),
+                  endedNotification.title,
+                  endedNotification.message,
+                  { type: endedNotification.type }
+               );
+
+               // NOT-003-T03/T04 -- a preference-disabled type or an active
+               // quiet-hours window comes back `suppressed`, never `failed`.
+               // Recording it as "failed" would queue it into
+               // retryPush.js's retry loop, which would just re-suppress it
+               // (or, worse, could burn through the retry-count ceiling
+               // entirely during a long quiet-hours window before it ever
+               // ends -- see push.service.js's own note on this). Suppressed
+               // is a terminal, non-retried state: the user asked for this.
+               await Notification.updateOne(
+                  { _id: endedNotification._id },
+                  endedPushResult.success
+                     ? { pushStatus: "sent" }
+                     : endedPushResult.suppressed
+                     ? { pushStatus: "suppressed" }
+                     : {
+                          pushStatus: "failed",
+                          retryCount: 1,
+                          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000)
+                       }
+               );
+            }
+
+            continue;
+         }
 
          // Advance the due date to the first of next month.
          const newNextDue = new Date(Date.UTC(
@@ -163,7 +240,8 @@ async function runRecurringJob() {
          const pushResult = await sendPush(
             recurring.userId.toString(),
             notification.title,
-            notification.message
+            notification.message,
+            { type: notification.type }
          );
 
          // If push successful, mark notification as sent
@@ -173,6 +251,16 @@ async function runRecurringJob() {
                {
                   pushStatus: "sent"
                }
+            );
+
+         } else if (pushResult.suppressed) {
+            // NOT-003-T03/T04 -- preference-disabled type or quiet hours.
+            // Terminal, not retried -- see the matching comment on the
+            // ended-notification path above for why "failed" would be wrong
+            // here.
+            await Notification.updateOne(
+               { _id: notification._id },
+               { pushStatus: "suppressed" }
             );
 
          } else {

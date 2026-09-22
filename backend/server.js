@@ -68,6 +68,18 @@ if (runsScheduledJobs()) {
   require("./cron/recurringJob");
   require("./cron/retryPush");
   require("./cron/feedbackCollector");
+  // PRV-001-T04 -- account-deletion purge cron (see cron/accountDeletionJob.js).
+  require("./cron/accountDeletionJob");
+  // NOT-003-T06 -- stale device-token sweep (see cron/staleDeviceCleanup.js).
+  require("./cron/staleDeviceCleanup");
+  // DAT-004-T03 -- queued financial-export generation (see cron/exportGeneration.js).
+  require("./cron/exportGeneration");
+  // DAT-004-T06 -- expired financial-export cleanup (see cron/exportCleanup.js).
+  require("./cron/exportCleanup");
+  // OCR-004-T07 -- unlinked receipt retention sweep (see cron/receiptRetention.js).
+  require("./cron/receiptRetention");
+  // IMP-001 -- uncommitted CSV import session retention sweep (see cron/importSessionRetention.js).
+  require("./cron/importSessionRetention");
 }
 
 // Express application (routes, middleware) -- see app.js

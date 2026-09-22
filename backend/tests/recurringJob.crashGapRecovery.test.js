@@ -94,7 +94,13 @@ function loadCronJob({ dueExpenses, createBehavior, existingExpenseForDedupe, sy
     create: createMock,
     findOne: jest.fn(() => ({ lean: findOneLeanMock })),
   };
-  jest.doMock(SCHEMAS_PATH, () => ({ ExpenseModel: ExpenseModelMock }));
+  const noPendingDeletionUserModel = {
+  find: jest.fn(() => ({
+    select: jest.fn(function select() { return this; }),
+    lean: jest.fn(async () => []),
+  })),
+};
+jest.doMock(SCHEMAS_PATH, () => ({ ExpenseModel: ExpenseModelMock, UserModel: noPendingDeletionUserModel }));
 
   const notificationCreateMock = jest.fn().mockResolvedValue({ _id: "notif-1", title: "t" });
   const notificationUpdateOneMock = jest.fn().mockResolvedValue({});

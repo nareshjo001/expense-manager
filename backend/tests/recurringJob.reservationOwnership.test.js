@@ -214,7 +214,13 @@ function loadRealCronJob({ recurringInitial, recalculateBudgetImpl, refreshRepor
 
   const expenseModel = makeFakeExpenseModel();
   const budgetModelStub = { find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) };
-  jest.doMock(SCHEMAS_PATH, () => ({ ExpenseModel: expenseModel, BudgetModel: budgetModelStub }));
+  const noPendingDeletionUserModel = {
+  find: jest.fn(() => ({
+    select: jest.fn(function select() { return this; }),
+    lean: jest.fn(async () => []),
+  })),
+};
+jest.doMock(SCHEMAS_PATH, () => ({ ExpenseModel: expenseModel, BudgetModel: budgetModelStub, UserModel: noPendingDeletionUserModel }));
 
   const recurringExpenseModel = makeFakeRecurringExpenseModel(recurringInitial);
   jest.doMock(RECURRING_EXPENSE_PATH, () => ({ RecurringExpenseModel: recurringExpenseModel }));
