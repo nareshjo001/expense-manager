@@ -1,0 +1,127 @@
+/* OCR-004 -- receipt inbox list. Badge palette matches DataExport.css's
+   .data-export-badge (same amber/green/status-badge language elsewhere in
+   this app), just with receipt-specific status names. */
+
+.receipt-inbox-heading {
+    margin-bottom: 4px;
+}
+
+.receipt-inbox-subheading {
+    margin-top: 0;
+    margin-bottom: 20px;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.receipt-inbox-filters {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    max-width: 420px;
+    margin-bottom: 24px;
+}
+
+.receipt-inbox-filters .field {
+    flex: 1;
+    min-width: 160px;
+}
+
+.receipt-inbox-filters select {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 15px;
+    border-radius: 12px;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    background: rgba(127, 127, 127, 0.08);
+    color: inherit;
+    box-sizing: border-box;
+}
+
+.receipt-inbox-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.receipt-inbox-item {
+    border-radius: 10px;
+    background: rgba(127, 127, 127, 0.08);
+    overflow: hidden;
+}
+
+.receipt-inbox-item-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.receipt-thumbnail,
+.receipt-thumbnail-fallback,
+.receipt-thumbnail-loading {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    object-fit: cover;
+    background: rgba(127, 127, 127, 0.18);
+}
+
+.receipt-inbox-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.receipt-inbox-item-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.receipt-inbox-item-name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.receipt-inbox-item-meta {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.receipt-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.receipt-badge--needs_review {
+    background: rgba(245, 158, 11, 0.18);
+    color: #92400e;
+}
+
+.receipt-badge--reviewed {
+    background: rgba(16, 185, 129, 0.18);
+    color: #047857;
+}
+
+.receipt-badge--linked {
+    background: rgba(59, 130, 246, 0.18);
+    color: #1d4ed8;
+}
