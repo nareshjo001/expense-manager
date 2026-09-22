@@ -1,0 +1,7 @@
+/* REC-002-T05/REC-003 -- layout wrapper for the recurring-expenses page. */
+
+.recurring-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}

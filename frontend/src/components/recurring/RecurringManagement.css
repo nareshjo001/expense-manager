@@ -1,0 +1,127 @@
+/* REC-002-T05 -- recurring-definition management screen. */
+
+.recurring-mgmt-heading {
+    margin-bottom: 4px;
+}
+
+.recurring-mgmt-subheading {
+    margin-top: 0;
+    margin-bottom: 20px;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.recurring-mgmt-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.recurring-mgmt-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: rgba(127, 127, 127, 0.08);
+    flex-wrap: wrap;
+}
+
+.recurring-mgmt-item--paused {
+    opacity: 0.75;
+}
+
+.recurring-mgmt-item--ended {
+    opacity: 0.55;
+}
+
+.recurring-mgmt-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.recurring-mgmt-item-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recurring-mgmt-item-name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.recurring-mgmt-item-category,
+.recurring-mgmt-item-meta {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.recurring-mgmt-item-amount {
+    font-weight: 500;
+}
+
+.recurring-mgmt-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.recurring-mgmt-badge--active {
+    background: rgba(16, 185, 129, 0.18);
+    color: #047857;
+}
+
+.recurring-mgmt-badge--paused {
+    background: rgba(245, 158, 11, 0.18);
+    color: #92400e;
+}
+
+.recurring-mgmt-badge--ended {
+    background: rgba(107, 114, 128, 0.18);
+    color: #374151;
+}
+
+.recurring-mgmt-item-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.recurring-mgmt-item-actions button {
+    background: none;
+    border: 1px solid var(--text-color, #666);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+.recurring-mgmt-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.recurring-mgmt-form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.recurring-mgmt-cancel {
+    background: none;
+    border: 1px solid var(--text-color, #666);
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+}

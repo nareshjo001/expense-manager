@@ -291,3 +291,63 @@ describe("robustness", () => {
     expect(occurrences[0].expenseAmountMinor).toBeNull();
   });
 });
+
+describe("REC-002-T03 -- endDate cutoff", () => {
+  test("stops projecting once a due date would pass endDate", () => {
+    // Matches cron/recurringJob.js's own auto-end check: nextDueDate > endDate
+    // means that occurrence is never created, only earlier ones are.
+    const { occurrences } = projectUpcoming(
+      [definition({ nextDueDate: utc(2026, 10, 1), endDate: utc(2026, 11, 15) })],
+      { from: utc(2026, 9, 15), to: utc(2027, 2, 1), now: utc(2026, 9, 15), timeZone: "UTC" }
+    );
+
+    // Oct 1 and Nov 1 are both <= endDate (Nov 15); Dec 1 is not.
+    expect(occurrences.map((o) => o.dueDate)).toEqual([
+      "2026-10-01T00:00:00.000Z",
+      "2026-11-01T00:00:00.000Z",
+    ]);
+  });
+
+  test("an endDate exactly on a due date still allows that occurrence", () => {
+    const { occurrences } = projectUpcoming(
+      [definition({ nextDueDate: utc(2026, 10, 1), endDate: utc(2026, 11, 1) })],
+      { from: utc(2026, 9, 15), to: utc(2027, 2, 1), now: utc(2026, 9, 15), timeZone: "UTC" }
+    );
+
+    expect(occurrences.map((o) => o.dueDate)).toEqual([
+      "2026-10-01T00:00:00.000Z",
+      "2026-11-01T00:00:00.000Z",
+    ]);
+  });
+
+  test("an endDate before the first due date projects nothing for that definition", () => {
+    const { occurrences } = projectUpcoming(
+      [definition({ nextDueDate: utc(2026, 10, 1), endDate: utc(2026, 9, 1) })],
+      { from: utc(2026, 9, 15), to: utc(2027, 2, 1), now: utc(2026, 9, 15), timeZone: "UTC" }
+    );
+
+    expect(occurrences).toEqual([]);
+  });
+
+  test("does not count an occurrence beyond endDate towards overdueCount", () => {
+    const { summary } = projectUpcoming(
+      [definition({ nextDueDate: utc(2020, 1, 1), endDate: utc(2020, 3, 1) })],
+      { from: utc(2019, 1, 1), to: utc(2027, 1, 1), now: utc(2026, 9, 15), timeZone: "UTC" }
+    );
+
+    // Only Jan and Feb and Mar 2020 (3 occurrences, all overdue relative to
+    // "now" in 2026) count -- nothing past the March endDate contributes.
+    expect(summary.overdueCount).toBe(3);
+  });
+
+  test("a null endDate behaves exactly as before (no cutoff)", () => {
+    const { occurrences } = projectUpcoming([definition({ endDate: null })], {
+      from: utc(2026, 9, 15),
+      to: utc(2027, 1, 15),
+      now: utc(2026, 9, 15),
+      timeZone: "UTC",
+    });
+
+    expect(occurrences.length).toBeGreaterThan(1);
+  });
+});

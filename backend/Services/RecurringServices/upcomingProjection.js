@@ -42,34 +42,25 @@
 //    actually carry, because they are different fields and conflating them is
 //    how a report total stops matching a forecast.
 //
-// What this file deliberately does NOT do: model pause/resume or per-
-// definition recurrence rules. Neither exists. RecurringExpense has no
-// lifecycle state and no rule field (REC-002-T01 and REC-002-T02 are Not
-// Started), so every stored definition is unconditionally active and monthly.
-// Projecting a "paused" state would be projecting a feature.
-// The app's canonical time zone. sia/config.js owns the default and reads it
-// from APP_TIME_ZONE, but exports only a frozen config object -- its
-// normalizeAppTimeZone() is private -- so the DEFAULT is imported from there
-// (one source of truth) while validating a caller-supplied zone happens here.
-// Consolidating both into a shared util is the right follow-up; changing
-// sia/config.js's public shape is not REC-003's business.
-const siaConfig = require("../../sia/config");
-
-// Throws a RangeError for an unrecognized IANA zone, which is the only
-// reliable way to validate one. A bad zone falls back rather than failing the
-// request: a projection with the wrong presentation offset is recoverable, a
-// 500 on the upcoming list is not.
-function resolveTimeZone(candidate) {
-  const fallback = siaConfig.appTimeZone || "Asia/Kolkata";
-  if (typeof candidate !== "string" || candidate.trim() === "") return fallback;
-  const trimmed = candidate.trim();
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: trimmed });
-    return trimmed;
-  } catch {
-    return fallback;
-  }
-}
+// REC-002-T03 update: RecurringExpense now HAS a lifecycle (status:
+// active/paused/ended) and an optional endDate (REC-002-T01/T02, Done). This
+// file still does not model pause/resume itself -- there is nothing to
+// model: Controllers/RecurringExpenses/upcoming.js only ever passes this
+// file 'active' definitions (a paused or ended definition produces no
+// occurrences, so it is filtered out before projection rather than
+// special-cased inside it). What this file DOES honor directly is endDate,
+// because that is a per-occurrence cutoff a single active definition's own
+// schedule can still hit mid-projection -- see projectDefinition below, and
+// cron/recurringJob.js's matching auto-end logic. Both compare
+// `dueDate > endDate` the same way, so the projection and the job can never
+// disagree about when a schedule ends.
+// The app's canonical time zone, plus IANA-zone validation. NOT-003-T04
+// extracted this into a shared util (utils/timeZone.js) once a second
+// feature (quiet hours) needed the exact same validation this file already
+// had -- see that module's header for the fuller note. Re-exported below
+// under the same name so nothing that already imports resolveTimeZone from
+// THIS file breaks.
+const { resolveTimeZone } = require("../../utils/timeZone");
 
 // Hard cap on how far ahead a caller may project. Not a performance guard --
 // projecting 12 occurrences is trivial. It is an honesty guard: the further
@@ -135,6 +126,14 @@ function projectDefinition(definition, { from, to, now, timeZone, overdueRank })
   const MAX_ITERATIONS = 2000;
 
   while (due <= to && iterations < MAX_ITERATIONS) {
+    // REC-002-T03 -- matches cron/recurringJob.js's auto-end check exactly:
+    // once a due date passes endDate, the job never creates that occurrence
+    // (it ends the definition instead), so this projection must not predict
+    // one either. `due` only advances forward each iteration, so once it
+    // exceeds endDate every later iteration would too -- breaking here is
+    // sufficient, not just a `continue`.
+    if (definition.endDate && due > new Date(definition.endDate)) break;
+
     iterations += 1;
 
     const isOverdue = due <= now;

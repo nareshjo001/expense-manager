@@ -61,7 +61,12 @@ const getUpcoming = async (req, res) => {
 
     // User-scoped. Another user's definitions must never reach this
     // projection -- the same rule every read path in this codebase follows.
-    const definitions = await RecurringExpenseModel.find({ userId: req.userId }).lean();
+    // REC-002-T03 -- status: 'active' only. A paused definition produces no
+    // occurrences until resumed, and an ended one produces none ever again --
+    // projecting either would show occurrences the job will never create. A
+    // paused/ended definition manages its own visibility instead, through
+    // the recurring-management surface (REC-002-T05), not this projection.
+    const definitions = await RecurringExpenseModel.find({ userId: req.userId, status: 'active' }).lean();
 
     const { occurrences, summary } = projectUpcoming(definitions, { from, to, now });
 
