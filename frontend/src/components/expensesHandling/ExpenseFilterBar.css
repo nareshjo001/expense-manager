@@ -1,0 +1,114 @@
+/* EXP-002-T05 -- filter bar + active chips for the custom-date-range
+   expense search. Reuses this app's existing theme variables
+   (--text-color, --card-color) and the existing .select-button/.filter-button
+   classes (see ExpensesPage's own Filter By/View By selects) so the new
+   recurring-status dropdown looks identical to them, rather than
+   introducing a second select style. */
+
+.expense-filter-bar {
+  margin: 14px 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.expense-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.expense-filter-input {
+  background: var(--card-color, rgba(255, 255, 255, 0.15));
+  color: var(--text-color);
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.expense-filter-input::placeholder {
+  color: var(--text-color);
+  opacity: 0.6;
+}
+
+.expense-filter-input-amount {
+  flex: 1 1 110px;
+  max-width: 140px;
+}
+
+.expense-filter-recurring {
+  flex: 0 0 auto;
+}
+
+.expense-filter-clear {
+  background: none;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  color: var(--text-color);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.expense-filter-clear:hover {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.expense-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.expense-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--btn-bg, rgba(128, 128, 128, 0.2));
+  color: var(--text-color);
+  border-radius: 999px;
+  padding: 5px 6px 5px 12px;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.expense-filter-chip-label {
+  white-space: nowrap;
+}
+
+.expense-filter-chip-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.expense-filter-chip-remove:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+@media screen and (max-width: 600px) {
+  .expense-filter-input,
+  .expense-filter-input-amount {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .expense-filter-recurring {
+    flex: 1 1 100%;
+  }
+
+  .expense-filter-clear {
+    flex: 1 1 100%;
+  }
+}

@@ -11,11 +11,19 @@ import { queryKeys } from "../../query/queryKeys";
 // backend routes have no cursor support to page against.
 const PAGE_SIZE = 50;
 
-export const useInfiniteExpensesQuery = (startDate, endDate, enabled) => {
+// EXP-002-T05 -- `searchFilters` (nameContains/category/minAmount/
+// maxAmount/isRecurring) is optional and defaults to {} so every existing
+// caller keeps working unchanged. It goes into the query key alongside
+// startDate/endDate so a filter change starts a genuinely new cursor-
+// paginated query (own cache entry, own first page) rather than mixing
+// pages fetched under different filters -- TanStack Query keys on content,
+// not identity, so a fresh object here each render does not itself cause
+// refetches.
+export const useInfiniteExpensesQuery = (startDate, endDate, enabled, searchFilters = {}) => {
   return useInfiniteQuery({
-    queryKey: queryKeys.expenses.list({ mode: "custom", startDate, endDate }),
+    queryKey: queryKeys.expenses.list({ mode: "custom", startDate, endDate, ...searchFilters }),
     queryFn: ({ pageParam, signal }) =>
-      searchExpenses(startDate, endDate, signal, { limit: PAGE_SIZE, cursor: pageParam }),
+      searchExpenses(startDate, endDate, signal, { limit: PAGE_SIZE, cursor: pageParam, ...searchFilters }),
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => (lastPage?.success && lastPage.hasMore ? lastPage.nextCursor : undefined),
     enabled,

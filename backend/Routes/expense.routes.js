@@ -1,7 +1,7 @@
 const router = require('express').Router();
 
 const verifyToken = require('../Middlewares/Auth');
-const { expenseValidation } = require('../Middlewares/AuthValidation');
+const { expenseValidation, expenseSearchValidation } = require('../Middlewares/AuthValidation');
 
 const {
     lastWeekExpense,
@@ -23,7 +23,8 @@ router.get('/last-week', verifyToken, lastWeekExpense);
 router.get('/by-category', verifyToken, getByCategory);
 
 // Get expenses using custom filters
-router.get('/search', verifyToken, getByCustom);
+// EXP-002-T02 -- validates the new optional filters + enforces the max date-range span.
+router.get('/search', verifyToken, expenseSearchValidation, getByCustom);
 
 // Add new expense
 router.post('/add-expense', verifyToken, expenseValidation, addExpense);
