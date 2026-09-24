@@ -31,6 +31,9 @@ function loadLlmServiceWithMockedAxios({ configOverrides = {}, axiosPostMock } =
     provider: "gemini",
     timeoutMs: 8000,
     model: "gemini-3.6-flash",
+    // SIA-001-T02 -- output-token/context budgets.
+    maxOutputTokens: 512,
+    maxContextChars: 60000,
     ...configOverrides,
   }));
 
@@ -190,6 +193,36 @@ describe("backend/sia/llmService -- Gemini provider adapter", () => {
       expect(postMock.mock.calls[0][2].timeout).toBe(30000);
       // Exactly one outbound attempt -- no automatic retry.
       expect(postMock).toHaveBeenCalledTimes(1);
+    });
+
+    // SIA-001-T02 -- output-token budget.
+    it("sends config.maxOutputTokens as max_tokens (Gemini's compat layer silently ignores an unrecognized field name)", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_MESSAGE_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({
+        axiosPostMock: postMock,
+        configOverrides: { maxOutputTokens: 777 },
+      });
+      process.env.GEMINI_API_KEY = "gm-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      const body = postMock.mock.calls[0][1];
+      expect(body.max_tokens).toBe(777);
+      expect(body.max_completion_tokens).toBeUndefined();
+      expect(body.max_output_tokens).toBeUndefined();
+    });
+
+    it("omits max_tokens entirely when config.maxOutputTokens is not a usable positive number", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_MESSAGE_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({
+        axiosPostMock: postMock,
+        configOverrides: { maxOutputTokens: null },
+      });
+      process.env.GEMINI_API_KEY = "gm-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      expect("max_tokens" in postMock.mock.calls[0][1]).toBe(false);
     });
   });
 
