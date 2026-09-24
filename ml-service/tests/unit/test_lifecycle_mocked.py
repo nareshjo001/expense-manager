@@ -91,7 +91,16 @@ def test_predict_category_response_shape_is_unchanged(mocked_lifecycle_env):
     predictor_module.predictor_manager = mocked_lifecycle_env.predictor_manager
 
     result = predictor_module.predict_category("grocery store")
-    assert set(result.keys()) == {"expenseName", "cleanedText", "predictedCategory", "confidence"}
+    # ML-003-T03 -- abstained/abstentionReason are additive to this contract.
+    assert set(result.keys()) == {
+        "expenseName", "cleanedText", "predictedCategory", "confidence",
+        "abstained", "abstentionReason",
+    }
+    # FakeModel (tests/support/fake_ml_objects.py) always returns 100%
+    # confidence for its predicted class -- comfortably above any threshold
+    # this policy could reasonably define, so this is never abstained.
+    assert result["abstained"] is False
+    assert result["abstentionReason"] is None
 
 
 def test_mocked_fixture_does_not_leak_legacy_paths_after_teardown(mocked_lifecycle_env):

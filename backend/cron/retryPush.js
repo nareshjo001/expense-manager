@@ -91,11 +91,16 @@ async function runRetryPushJob(lease) {
       const claimed = await claimNotification(notif, now);
       if (!claimed) continue;
 
-      // Attempt to resend push notification
+      // Attempt to resend push notification. NOT-003-T03/T04 -- pass the
+      // notification's own registered type through so the preference/
+      // quiet-hours gate applies on retry exactly as it does on the first
+      // send (a user who disabled a type, or whose quiet hours are still
+      // active, must not receive it just because this is attempt 2 of 3).
       const result = await sendPush(
         notif.userId.toString(),
         notif.title,
-        notif.message
+        notif.message,
+        { type: notif.type }
       );
 
       if (result.success) {
@@ -108,10 +113,27 @@ async function runRetryPushJob(lease) {
             nextRetryAt: null
           }
         );
+      } else if (result.suppressed) {
+        // NOT-003-T03/T04 -- still gated (type disabled, or still inside
+        // quiet hours this cycle). Deliberately NOT re-armed for another
+        // retry here: retryCount was already advanced by the claim above,
+        // so this attempt is consumed either way, same as any other
+        // outcome -- but the row is moved to a terminal "suppressed" state
+        // rather than left as "failed" pushStatus with a stale
+        // nextRetryAt, so it stops being picked up as a delivery FAILURE
+        // (a suppression is not one) while still respecting the retry
+        // ceiling if it somehow keeps getting claimed.
+        await Notification.updateOne(
+          { _id: notif._id },
+          {
+            pushStatus: "suppressed",
+            nextRetryAt: null
+          }
+        );
       }
-      // On failure nothing more is written: the claim already incremented
-      // retryCount and scheduled the next attempt, so the item ages out at
-      // the retryCount < 3 ceiling on its own.
+      // On an actual send failure nothing more is written: the claim
+      // already incremented retryCount and scheduled the next attempt, so
+      // the item ages out at the retryCount < 3 ceiling on its own.
     }
 
   } catch {

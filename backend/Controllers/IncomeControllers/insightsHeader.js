@@ -1,5 +1,6 @@
 const { UserModel, IncomeModel, ExpenseModel } = require('../../config/Schemas');
 const { resolvePeriod } = require('../../Services/InsightServices/periodResolver');
+const { sumByField } = require('../../utils/aggregationHelpers');
 
 const getInsightsHeader = async (req, res) => {
   try {
@@ -42,8 +43,8 @@ const getInsightsHeader = async (req, res) => {
     ]);
 
     // Aggregate period totals and identify the single largest income source.
-    const totalIncome = incomeRecords.reduce((sum, record) => sum + record.incomeAmount, 0);
-    const totalExpenses = expenseRecords.reduce((sum, record) => sum + record.expenseAmount, 0);
+    const totalIncome = sumByField(incomeRecords, 'incomeAmount');
+    const totalExpenses = sumByField(expenseRecords, 'expenseAmount');
     const topSource = incomeRecords.reduce((top, record) => {
       if (!top || record.incomeAmount > top.incomeAmount) {
         return record;

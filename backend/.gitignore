@@ -54,3 +54,6 @@ billProcessed/
 Thumbs.db
 
 config/serviceAccountKey.json
+# DAT-004 -- generated financial-export files (never committed; expired/deleted by cron/exportCleanup.js)
+generated-exports/*
+!generated-exports/.gitkeep

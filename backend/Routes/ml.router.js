@@ -38,11 +38,17 @@ router.post("/predict-category", verifyToken, async (req, res) => {
         // this same merchant before, since it's applied deterministically.
         const rule = await findRuleForMerchant(req.userId, expenseName);
         if (rule) {
+            // ML-003-T03 -- a saved rule is never uncertain: it's a durable,
+            // user-authored mapping, not a model guess, so it's never abstained.
+            // Present here (rather than left absent) so callers can rely on
+            // both fields always existing regardless of source.
             return res.status(200).json({
                 success: true,
                 predictedCategory: rule.category,
                 confidence: 1,
                 source: "rule",
+                abstained: false,
+                abstentionReason: null,
             });
         }
 

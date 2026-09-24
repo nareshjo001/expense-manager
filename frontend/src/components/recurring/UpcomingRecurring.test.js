@@ -1,17 +1,28 @@
-// REC-003-T03/T04 -- the upcoming view and its empty, error and stale states.
+// REC-003-T03/T04/T05 -- the upcoming view, its empty/error/stale states,
+// and its pause/edit/end quick actions.
 //
-// The error test is the important one. A list component that renders a failed
-// request as an empty list tells the user "nothing is coming" when the truth
-// is "we don't know" -- and this is a screen people plan money around.
+// The error test is the important one for T03/T04. A list component that
+// renders a failed request as an empty list tells the user "nothing is
+// coming" when the truth is "we don't know" -- and this is a screen people
+// plan money around.
 import React from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import UpcomingRecurring, { groupByMonth, monthLabel } from "./UpcomingRecurring";
-import { getUpcomingRecurring } from "../../api/recurringApi";
+import {
+  getUpcomingRecurring,
+  getRecurringDefinition,
+  pauseRecurringDefinition,
+  endRecurringDefinition,
+} from "../../api/recurringApi";
 
 jest.mock("../../api/recurringApi", () => ({
   getUpcomingRecurring: jest.fn(),
+  getRecurringDefinition: jest.fn(),
+  pauseRecurringDefinition: jest.fn(),
+  endRecurringDefinition: jest.fn(),
 }));
 
 function occurrence(overrides = {}) {
@@ -47,7 +58,19 @@ function payload(occurrences, summaryOverrides = {}) {
   };
 }
 
+function renderUpcoming(props) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <UpcomingRecurring {...props} />
+    </QueryClientProvider>
+  );
+}
+
 afterEach(() => {
+  cleanup();
   jest.clearAllMocks();
 });
 
@@ -68,7 +91,7 @@ describe("ready state", () => {
       ])
     );
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText("Rent")).toBeInTheDocument();
     expect(screen.getByText("Internet")).toBeInTheDocument();
@@ -87,7 +110,7 @@ describe("ready state", () => {
       ])
     );
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     // 4030 + 70 = 4100 paise = ₹41.00. A float sum would risk ₹41.000000000000004.
     expect(await screen.findByText("₹41.00")).toBeInTheDocument();
@@ -98,7 +121,7 @@ describe("empty states are distinguished", () => {
   test("no recurring definitions at all says how to create one", async () => {
     getUpcomingRecurring.mockResolvedValue(payload([], { definitionCount: 0 }));
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText(/haven't marked any expenses as recurring/i)).toBeInTheDocument();
   });
@@ -109,7 +132,7 @@ describe("empty states are distinguished", () => {
     // further ahead.
     getUpcomingRecurring.mockResolvedValue(payload([], { definitionCount: 3 }));
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText(/nothing due in the next few months/i)).toBeInTheDocument();
     expect(screen.queryByText(/haven't marked any expenses/i)).not.toBeInTheDocument();
@@ -123,7 +146,7 @@ describe("error state", () => {
       response: { data: { message: "Internal Server Error" } },
     });
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText("Internal Server Error")).toBeInTheDocument();
     expect(screen.queryByText(/nothing due/i)).not.toBeInTheDocument();
@@ -133,7 +156,7 @@ describe("error state", () => {
   test("falls back to a readable message when the server sends none", async () => {
     getUpcomingRecurring.mockRejectedValue(new Error("Network Error"));
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText(/couldn't load your upcoming recurring expenses/i)).toBeInTheDocument();
   });
@@ -143,7 +166,7 @@ describe("error state", () => {
       .mockRejectedValueOnce(new Error("Network Error"))
       .mockResolvedValueOnce(payload([occurrence()]));
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     const retry = await screen.findByRole("button", { name: /try again/i });
 
@@ -165,7 +188,7 @@ describe("error state", () => {
     abort.name = "CanceledError";
     getUpcomingRecurring.mockRejectedValue(abort);
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
@@ -184,7 +207,7 @@ describe("stale state -- the schedule is behind", () => {
       )
     );
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText(/2 occurrences overdue/i)).toBeInTheDocument();
     expect(screen.getByText(/catches up one per day/i)).toBeInTheDocument();
@@ -195,7 +218,7 @@ describe("stale state -- the schedule is behind", () => {
       payload([occurrence({ overdue: true })], { overdueCount: 1 })
     );
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText(/1 occurrence overdue/i)).toBeInTheDocument();
   });
@@ -203,7 +226,7 @@ describe("stale state -- the schedule is behind", () => {
   test("no warning when nothing is overdue", async () => {
     getUpcomingRecurring.mockResolvedValue(payload([occurrence()], { overdueCount: 0 }));
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     await screen.findByText("Rent");
     expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
@@ -215,24 +238,73 @@ describe("actions", () => {
     const onEditExpense = jest.fn();
     getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
 
-    render(<UpcomingRecurring onEditExpense={onEditExpense} />);
+    renderUpcoming({ onEditExpense });
 
     await userEvent.click(await screen.findByRole("button", { name: /edit/i }));
     expect(onEditExpense).toHaveBeenCalledWith("exp1");
   });
 
-  test("no pause control is rendered, because pause does not exist yet", async () => {
-    // REC-003-T05 is only partly served. The existing off switch DELETES the
-    // definition, losing lastLoggedDate and resetting the schedule if it is
-    // ever re-enabled -- so calling it "pause" would promise the user a
-    // resume that does not exist. Pause/resume waits on REC-002.
+  // REC-002/REC-003-T05 update: pause/end now exist and are wired to this
+  // view. The old "no pause control is rendered" assertion documented a real
+  // gap at the time (no lifecycle API existed) -- it is superseded here now
+  // that one does.
+  test("pause and end controls are offered on every row", async () => {
     getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
 
-    render(<UpcomingRecurring onEditExpense={jest.fn()} />);
+    renderUpcoming({ onEditExpense: jest.fn() });
 
     await screen.findByText("Rent");
-    expect(screen.queryByRole("button", { name: /pause/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /pause/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /end/i })).toBeInTheDocument();
+    // Resume never appears here -- see this component's header comment on
+    // why a paused definition has no row to attach one to.
     expect(screen.queryByRole("button", { name: /resume/i })).not.toBeInTheDocument();
+  });
+
+  test("pausing re-fetches the current scheduleVersion, then pauses, then reloads the list", async () => {
+    getUpcomingRecurring
+      .mockResolvedValueOnce(payload([occurrence()]))
+      .mockResolvedValueOnce(payload([], { definitionCount: 0 }));
+    getRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", scheduleVersion: 3 } });
+    pauseRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", status: "paused" } });
+
+    renderUpcoming();
+
+    await userEvent.click(await screen.findByRole("button", { name: /pause/i }));
+
+    await waitFor(() => expect(pauseRecurringDefinition).toHaveBeenCalledWith("rec1", 3));
+    // The paused definition drops out of the next fetch -- the empty state
+    // proves this component actually reloaded rather than just trusting a
+    // local optimistic patch.
+    expect(await screen.findByText(/haven't marked any expenses as recurring/i)).toBeInTheDocument();
+  });
+
+  test("ending requires confirmation before calling the API", async () => {
+    getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
+    getRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", scheduleVersion: 5 } });
+    endRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", status: "ended" } });
+
+    renderUpcoming();
+
+    await userEvent.click(await screen.findByRole("button", { name: /end/i }));
+    // Not called yet -- a confirmation dialog must appear first for a
+    // terminal, unrecoverable action.
+    expect(endRecurringDefinition).not.toHaveBeenCalled();
+
+    await userEvent.click(await screen.findByRole("button", { name: /yes, end/i }));
+    await waitFor(() => expect(endRecurringDefinition).toHaveBeenCalledWith("rec1", 5));
+  });
+
+  test("canceling the end confirmation does not call the API", async () => {
+    getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
+
+    renderUpcoming();
+
+    await userEvent.click(await screen.findByRole("button", { name: /end/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /cancel/i }));
+
+    expect(endRecurringDefinition).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
 
@@ -247,7 +319,7 @@ describe("date handling", () => {
       ])
     );
 
-    render(<UpcomingRecurring />);
+    renderUpcoming();
 
     expect(await screen.findByText("1 Oct")).toBeInTheDocument();
   });

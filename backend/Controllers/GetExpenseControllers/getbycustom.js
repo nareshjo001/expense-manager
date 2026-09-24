@@ -1,10 +1,14 @@
-const { UserModel, ExpenseModel } = require('../../config/Schemas');
+const { UserModel } = require('../../config/Schemas');
 const { sortAscending } = require('../../Services/HelperServices/getexpense.service');
 const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
-const { resolveLimit, decodeCursor, buildCursorFilter, paginateResults, PaginationValidationError } = require('../../utils/pagination');
+const { resolveLimit, decodeCursor, PaginationValidationError } = require('../../utils/pagination');
 // DAT-001-T06 -- additive minor-unit fields; see utils/moneyView.js for why
 // they are derived at read time rather than read from the shadow columns.
 const { withMinorFieldsAll } = require('../../utils/moneyView');
+// EXP-002-T04 -- the four new optional filters + the actual filter-building
+// query logic now live in this dedicated service; see
+// docs/expense/EXP-002-T03-T04-normalized-fields-and-query-service.md.
+const { searchExpenses } = require('../../Services/ExpenseServices/expenseSearchService');
 
 // EXP-003 -- cursor-paginated, user-scoped date-range search. Since
 // EXP-003-T03 this is the ONLY query path this route takes; the previous
@@ -15,21 +19,11 @@ const { withMinorFieldsAll } = require('../../utils/moneyView');
 // analytics, report and chart code calls fetchExpense for a date range and
 // needs the COMPLETE range. Paging it would silently truncate the input to a
 // total and produce a confidently wrong number.
-const getByCustomPaginated = async (user, start, end, limit, cursor) => {
-    const filter = {
-        userId: user._id,
-        expenseDate: { $gte: start, $lte: end },
-        ...buildCursorFilter(cursor, 'expenseDate'),
-    };
-
-    // Fetch one extra document beyond the page size to detect "more pages
-    // remain" without a separate count query.
-    const documents = await ExpenseModel.find(filter)
-        .sort({ expenseDate: -1, _id: -1 })
-        .limit(limit + 1)
-        .lean();
-
-    const { page, hasMore, nextCursor } = paginateResults(documents, limit, 'expenseDate');
+const getByCustomPaginated = async (user, searchParams, limit, cursor) => {
+    // EXP-002-T04 -- filter-building (date range + the 4 new optional
+    // filters, all AND-combined per EXP-002-T01) now lives in
+    // expenseSearchService.js, not inline here.
+    const { page, hasMore, nextCursor } = await searchExpenses(user._id, searchParams, limit, cursor);
     const annotated = await annotateRecurringState(user._id, page);
 
     return { data: withMinorFieldsAll(sortAscending(annotated), ['expenseAmount']), hasMore, nextCursor };
@@ -43,8 +37,13 @@ const getByCustom = async (req, res) => {
             return res.status(401).json({ message: 'User does not exist', success: false });
         }
 
-        // Extract custom date range from query params
-        const { startDate, endDate, limit: rawLimit, cursor: rawCursor }= req.query;
+        // Extract custom date range + EXP-002's new optional filters from
+        // query params. expenseSearchValidation (Middlewares/AuthValidation.js)
+        // already validated/coerced these at the route boundary for the real
+        // HTTP route; the checks below remain as defense-in-depth for any
+        // caller that invokes this controller directly (e.g.
+        // tests/getByCustom.pagination.test.js does exactly that).
+        const { startDate, endDate, limit: rawLimit, cursor: rawCursor, nameContains, category, minAmount, maxAmount, isRecurring } = req.query;
         
         // Validate that both dates are provided
         if (!startDate || !endDate) {
@@ -59,6 +58,22 @@ const getByCustom = async (req, res) => {
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             return res.status(400).json({ message: 'startDate and endDate must be valid dates', success: false });
         }
+
+        // The 4 new optional filters: when this controller is called
+        // directly (bypassing expenseSearchValidation), values arrive as
+        // raw query strings; when called through the real route, Joi has
+        // already coerced minAmount/maxAmount to numbers and isRecurring to
+        // a boolean, so these conversions are no-ops in that path and only
+        // do real work for a direct-call caller.
+        const searchParams = {
+            startDate: start,
+            endDate: end,
+            nameContains: typeof nameContains === 'string' ? nameContains : undefined,
+            category: typeof category === 'string' ? category : undefined,
+            minAmount: minAmount !== undefined ? Number(minAmount) : undefined,
+            maxAmount: maxAmount !== undefined ? Number(maxAmount) : undefined,
+            isRecurring: isRecurring === undefined ? undefined : (isRecurring === true || isRecurring === 'true'),
+        };
 
         // EXP-003-T03 -- `limit` is now always resolved to a bounded value.
         // Omitting it yields DEFAULT_LIMIT, not the whole range: this route
@@ -84,7 +99,7 @@ const getByCustom = async (req, res) => {
             throw validationErr;
         }
 
-        const { data, hasMore, nextCursor } = await getByCustomPaginated(user, start, end, limit, cursor);
+        const { data, hasMore, nextCursor } = await getByCustomPaginated(user, searchParams, limit, cursor);
         return res.status(200).json({ message: 'Success', data, success: true, hasMore, nextCursor });
     
     } catch(err) {

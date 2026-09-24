@@ -13,16 +13,74 @@ import { useModalA11y } from '../hooks/useModalA11y';
 
 import { useExpenseInsights } from '../contexts/ai-contexts/ExpenseInsightsContext';
 import InlineExpenseInsight from '../insights/InlineExpenseInsight'
+// EXP-002-T05 -- imported directly (not via ../imports/expensesImport)
+// so existing tests that jest.mock that barrel module are unaffected;
+// this is a plain, dependency-free presentational component.
+import ExpenseFilterBar from './ExpenseFilterBar';
+// EXP-002-T06 -- ExpensesPage is mounted at "/" inside LandingPage.js's
+// <Routes> (itself inside App.js's <BrowserRouter>), so a router context
+// is always present in production. Tests mock 'react-router-dom' wholesale
+// (this codebase's established pattern -- see AddExpense.test.js/App.
+// startup.test.js) rather than wrapping in a real MemoryRouter.
+import { useSearchParams } from 'react-router-dom';
 
 const INITIAL_VISIBLE_EXPENSES = 30;
 const EXPENSE_RENDER_BATCH_SIZE = 25;
 
+// EXP-002-T05 -- the optional search-filter fields, always held as strings
+// (controlled-input shape); ExpensesPage types/trims them into the real
+// request params right before the API call. Empty string == "not set" for
+// every field, including isRecurring's third "Any" state.
+const emptySearchFilters = {
+  nameContains: '',
+  category: '',
+  minAmount: '',
+  maxAmount: '',
+  isRecurring: '',
+};
+
+// EXP-002-T06 -- only these exact values are ever written by this page, so
+// only these are trusted back out of a URL (own or shared/bookmarked);
+// anything else in the query string is silently ignored rather than
+// passed through to a query hook or the recurring-status select.
+const KNOWN_FILTER_MODES = ['bycategory', 'custom'];
+const KNOWN_PERIODS = ['thismonth', 'thisyear'];
+const KNOWN_RECURRING_VALUES = ['true', 'false'];
+
 // Displays the user's expenses with filter/date-range controls and cancellable, race-safe data fetching.
 const ExpensesPage = ({ onDelete, setIsEdit }) => {
-  const [filter, setFilter] = useState('');
-  const [period, setPeriod] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // EXP-002-T06 -- initial state loads from the URL once, synchronously,
+  // so a shared/bookmarked link reproduces the same view on first render
+  // (no flash of the default view before a correction effect fires).
+  // `searchParams` itself is never read again after this -- state stays
+  // the single source of truth and a one-way effect below (state -> URL)
+  // keeps the address bar in sync, which avoids any read/write feedback
+  // loop with react-router.
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [filter, setFilter] = useState(() => {
+    const mode = searchParams.get('mode');
+    return KNOWN_FILTER_MODES.includes(mode) ? mode : '';
+  });
+  const [period, setPeriod] = useState(() => {
+    const value = searchParams.get('period');
+    return KNOWN_PERIODS.includes(value) ? value : '';
+  });
+  const [startDate, setStartDate] = useState(() => searchParams.get('start') || '');
+  const [endDate, setEndDate] = useState(() => searchParams.get('end') || '');
+  // EXP-002-T05 -- only meaningful in custom mode (the only mode backed by
+  // GET /expense/search); reset alongside startDate/endDate whenever the
+  // filter mode changes, same as the date range itself.
+  const [searchFilters, setSearchFilters] = useState(() => {
+    const recurring = searchParams.get('recurring');
+    return {
+      nameContains: searchParams.get('name') || '',
+      category: searchParams.get('category') || '',
+      minAmount: searchParams.get('min') || '',
+      maxAmount: searchParams.get('max') || '',
+      isRecurring: KNOWN_RECURRING_VALUES.includes(recurring) ? recurring : '',
+    };
+  });
   const [openMobileMenuId, setOpenMobileMenuId] = useState(null);
   const isMobile = useIsMobile();
 
@@ -41,7 +99,67 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
   // than the plain one above, and fetches network pages on demand instead
   // of pulling the whole date range up front.
   const isCustomMode = filter === 'custom' && Boolean(startDate) && Boolean(endDate);
-  const infiniteExpensesQuery = useInfiniteExpensesQuery(startDate, endDate, isCustomMode);
+
+  // EXP-002-T05 -- types/trims the raw controlled-input strings into the
+  // real request shape right here, once, rather than in the filter bar or
+  // the API layer. `undefined` (not '') is what actually omits a param --
+  // see api/expenseApi.js's searchExpenses.
+  const trimmedNameContains = searchFilters.nameContains.trim();
+  const trimmedCategory = searchFilters.category.trim();
+  const parsedMinAmount = searchFilters.minAmount === '' ? undefined : Number(searchFilters.minAmount);
+  const parsedMaxAmount = searchFilters.maxAmount === '' ? undefined : Number(searchFilters.maxAmount);
+  const activeSearchFilters = {
+    nameContains: trimmedNameContains || undefined,
+    category: trimmedCategory || undefined,
+    minAmount: Number.isFinite(parsedMinAmount) ? parsedMinAmount : undefined,
+    maxAmount: Number.isFinite(parsedMaxAmount) ? parsedMaxAmount : undefined,
+    isRecurring: searchFilters.isRecurring === '' ? undefined : searchFilters.isRecurring === 'true',
+  };
+
+  const infiniteExpensesQuery = useInfiniteExpensesQuery(startDate, endDate, isCustomMode, activeSearchFilters);
+
+  // EXP-002-T06 -- one-way sync of the view-defining state into the URL
+  // (state -> URL only; see the state-init comment above for why this
+  // doesn't also read searchParams back). Deliberately excludes anything
+  // that isn't part of "what data am I looking at" -- openMobileMenuId,
+  // visibleExpenseCount and the raw infinite-query cursor state stay out.
+  // Deliberately INCLUDES the four EXP-002-T01 search filters (not just
+  // mode/period/dates): this is a personal, single-owner finance app (no
+  // shared workspaces), the values are the user's own search terms over
+  // their own authenticated data, and the whole point of T06 is making
+  // this feature's stated goal -- "investigate spending or find a
+  // specific transaction" -- bookmarkable/shareable, which a URL missing
+  // the actual filters wouldn't achieve. Always a replace (never push) so
+  // typing in the filter bar doesn't spam browser history.
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+
+    if (filter) nextParams.set('mode', filter);
+    if (filter === 'bycategory' && period) nextParams.set('period', period);
+
+    if (filter === 'custom') {
+      if (startDate) nextParams.set('start', startDate);
+      if (endDate) nextParams.set('end', endDate);
+      if (trimmedNameContains) nextParams.set('name', trimmedNameContains);
+      if (trimmedCategory) nextParams.set('category', trimmedCategory);
+      if (searchFilters.minAmount !== '') nextParams.set('min', searchFilters.minAmount);
+      if (searchFilters.maxAmount !== '') nextParams.set('max', searchFilters.maxAmount);
+      if (searchFilters.isRecurring !== '') nextParams.set('recurring', searchFilters.isRecurring);
+    }
+
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    filter,
+    period,
+    startDate,
+    endDate,
+    trimmedNameContains,
+    trimmedCategory,
+    searchFilters.minAmount,
+    searchFilters.maxAmount,
+    searchFilters.isRecurring,
+    setSearchParams,
+  ]);
 
   const backendExpenses = isCustomMode
     ? (infiniteExpensesQuery.data?.pages ?? []).flatMap((page) => (page?.success ? page.data : []))
@@ -227,6 +345,7 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
               setPeriod('');
               setStartDate('');
               setEndDate('');
+              setSearchFilters(emptySearchFilters);
               clearExpenseInsights();
             }}
           >
@@ -239,6 +358,14 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
       </div>
 
       {isInsightReady && <InlineExpenseInsight items={insightText} />}
+
+      {isCustomMode && (
+        <ExpenseFilterBar
+          filters={searchFilters}
+          onChange={setSearchFilters}
+          onClear={() => setSearchFilters(emptySearchFilters)}
+        />
+      )}
 
       {loading ? (
         <div className="loading-dots">

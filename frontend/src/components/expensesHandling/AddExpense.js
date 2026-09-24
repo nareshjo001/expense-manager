@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AddExpense.css';
 
 import Spinner from '../alertsEffects/Spinner';
 import { expenseAddSuccessToast, expenseAddErrorToast } from '../alertsEffects/toastMessages';
-
-import BillUpload from '../billScanner/BillUpload';
 import { forceReauth } from '../../api/handleApiError';
 import { getExpenseEditData } from '../../api/expenseApi';
 import { queryClient } from '../../query/queryClient';
@@ -16,6 +14,21 @@ import { useSaveMerchantRuleMutation } from '../../hooks/mutations/useSaveMercha
 import { getAccessToken } from '../../api/sessionClient';
 import SaveRuleAlert from '../alertsEffects/SaveRuleAlert';
 import { merchantRuleSaveSuccessToast, merchantRuleSaveErrorToast } from '../alertsEffects/toastMessages';
+
+// FE-003-T05 -- OCR bill-scanning (BillUpload) is loaded only when the user
+// actually opens it. It's a form the user opts into from a button click
+// (see the isBillUpload branch below), never rendered on the initial
+// Add Expense screen, so there's no reason to ship it in the main bundle
+// for every session that adds an expense manually. BillUpload's own CSS
+// import stays inside BillUpload.js -- unlike SiaPanel.css, nothing outside
+// BillUpload's own markup depends on it (the button that opens it,
+// .open-bill-upload-btn, is styled by this file's own AddExpense.css).
+// FE-003-T06 -- a standalone loader so it can also be called early, on
+// hover/focus of the "Upload" button below, giving the chunk a head start
+// before the click (webpack's import() cache makes the later, real load a
+// no-op if it already resolved).
+const loadBillUpload = () => import(/* webpackChunkName: "bill-upload" */ '../billScanner/BillUpload');
+const BillUpload = lazy(loadBillUpload);
 
 // Category Normalization -- moved to module scope (react-hooks/exhaustive-
 const sanitizeText = (text = '') => {
@@ -49,6 +62,13 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     const [mlLoading, setMlLoading] = useState(false);
     const [mlConfidence, setMlConfidence] = useState(null);
     const [mlPredictedCategory, setMlPredictedCategory] = useState('');
+    // ML-003-T04 -- true when the ML service itself declined to commit to
+    // this prediction (predict-category's `abstained` field, ML-003-T03).
+    // Distinguishes "the system chose this for you" (auto-filled, the
+    // existing behavior) from "this is only a guess, you choose" (shown
+    // as a suggestion the user must explicitly accept -- never silently
+    // written into the field).
+    const [mlAbstained, setMlAbstained] = useState(false);
 
     // CAT-001-T05 -- set once a just-submitted expense's category diverged from the ML prediction; drives the post-submit "save this as a rule?" prompt.
     const [ruleSavePrompt, setRuleSavePrompt] = useState(null);
@@ -90,6 +110,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         const debounceTimer = setTimeout(async () => {
             try {
                 setMlConfidence(null);
+                setMlAbstained(false);
                 setMlLoading(true);
 
                 const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
@@ -125,22 +146,36 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 console.log("ML Prediction:", data);
 
                 if (data.predictedCategory) {
-                    // Bugfix -- never clobber a category the user has already
-                    // typed by the time this debounced prediction resolves.
-                    // This used to unconditionally blank the field the moment
-                    // the request started (`setCategory('')` above, now
-                    // removed) and then unconditionally overwrite it here,
-                    // regardless of anything the user typed into Category in
-                    // the meantime. Filling Name then immediately filling
-                    // Category (well within the 500ms debounce window) wiped
-                    // out the just-typed Category value once this timer
-                    // fired, leaving a required field empty with no visible
-                    // error -- silently blocking submit via the browser's own
-                    // native required-field validation. Only auto-fill when
-                    // the user hasn't already put something there.
-                    setCategory(prev => (prev.trim() === '' ? data.predictedCategory : prev));
+                    // ML-003-T04 -- an abstained prediction (predict-category's
+                    // `abstained` field, ML-003-T03: confidence below the
+                    // model's own trust threshold) is never auto-filled, even
+                    // into an empty field. Auto-filling used to happen
+                    // unconditionally regardless of confidence -- exactly the
+                    // "forced category" problem ML-003's proposed outcome
+                    // calls out. It's still shown, just as an explicit
+                    // suggestion below the field (see the render) that the
+                    // user has to actively accept or overrule -- a confident
+                    // prediction keeps the original auto-fill-if-empty
+                    // behavior below.
+                    if (!data.abstained) {
+                        // Bugfix -- never clobber a category the user has already
+                        // typed by the time this debounced prediction resolves.
+                        // This used to unconditionally blank the field the moment
+                        // the request started (`setCategory('')` above, now
+                        // removed) and then unconditionally overwrite it here,
+                        // regardless of anything the user typed into Category in
+                        // the meantime. Filling Name then immediately filling
+                        // Category (well within the 500ms debounce window) wiped
+                        // out the just-typed Category value once this timer
+                        // fired, leaving a required field empty with no visible
+                        // error -- silently blocking submit via the browser's own
+                        // native required-field validation. Only auto-fill when
+                        // the user hasn't already put something there.
+                        setCategory(prev => (prev.trim() === '' ? data.predictedCategory : prev));
+                    }
                     setMlConfidence(data.confidence);
                     setMlPredictedCategory(data.predictedCategory);
+                    setMlAbstained(Boolean(data.abstained));
                 }
 
             } catch (err) {
@@ -223,7 +258,15 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
             expenseDescription: sanitizeText(expenseDescription),
             mlPredictedCategory,
             mlConfidence,
-            wasMlCorrected
+            wasMlCorrected,
+            // ML-003-T05 -- whether the prediction being submitted alongside
+            // was an abstained suggestion (ML-003-T04) rather than an
+            // auto-filled, committed one. `mlAbstained` reflects the
+            // original prediction and is NOT reset by accepting/typing over
+            // the suggestion, so this stays accurate even when the field
+            // was filled via "Use this" or by the user retyping the same
+            // category the suggestion offered.
+            mlAbstained
         };
 
         const mutationCallbacks = {
@@ -237,6 +280,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 // ML telemetry belongs to the expense just submitted — clear it so the next expense can't inherit a stale prediction.
                 setMlPredictedCategory('');
                 setMlConfidence(null);
+                setMlAbstained(false);
                 setIsEdit({ enableEdit: false, expense_id: '' });
                 // Committed success: this add attempt is done, whether it was
                 // a fresh create or a replay -- next submit is a new attempt.
@@ -299,6 +343,30 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
     const cancelSaveRuleHandler = () => setRuleSavePrompt(null);
 
+    // ML-003-T06 -- a shortcut for the merchants that need it most: ones the
+    // model is chronically unconfident about (abstained suggestions). Without
+    // this, saving a rule for such a merchant means accepting/typing the
+    // category, submitting the whole expense, and waiting for the separate
+    // post-submit CAT-001-T05 prompt to even offer it. This does both steps
+    // (fill the field, save the rule) from the suggestion banner itself,
+    // reusing the exact same mutation and toasts confirmSaveRuleHandler
+    // above already uses -- a faster path to the same outcome, not a new one.
+    const useSuggestionAndSaveRuleHandler = () => {
+        if (!mlPredictedCategory) return;
+        setCategory(mlPredictedCategory);
+        saveMerchantRuleMutation.mutate(
+            { merchantName: expenseName, category: mlPredictedCategory },
+            {
+                onSuccess: () => {
+                    merchantRuleSaveSuccessToast();
+                },
+                onError: (error) => {
+                    merchantRuleSaveErrorToast(error.response?.data);
+                },
+            }
+        );
+    };
+
     useEffect(() => {
         if (billData) {
             // Marks this name as programmatic so prediction doesn't overwrite the category parsed from the receipt.
@@ -312,7 +380,11 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     }, [billData]);
 
     if(isBillUpload) {
-        return <BillUpload setIsBillUpload={setIsBillUpload} setBillData={setBillData} />
+        return (
+            <Suspense fallback={<div className="bill-upload-loading" role="status" aria-live="polite">Loading…</div>}>
+                <BillUpload setIsBillUpload={setIsBillUpload} setBillData={setBillData} />
+            </Suspense>
+        );
     }
 
     return (
@@ -330,7 +402,14 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
 
                 <div className="field bill-upload-option">
                     <label>Do you want to upload a bill?</label>
-                    <button className='open-bill-upload-btn' type="button" onClick={() => setIsBillUpload(true)}>
+                    <button
+                        className='open-bill-upload-btn'
+                        type="button"
+                        onClick={() => setIsBillUpload(true)}
+                        onMouseEnter={loadBillUpload}
+                        onFocus={loadBillUpload}
+                        onTouchStart={loadBillUpload}
+                    >
                         Upload
                     </button>
                 </div>
@@ -364,7 +443,14 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         Category
 
                         {
-                            mlConfidence && (
+                            // ML-003-T04 -- the confidence badge only appears for
+                            // a COMMITTED prediction (the one already sitting in
+                            // the field, auto-filled). An abstained prediction
+                            // has its own, separate suggestion banner below --
+                            // showing both here would say "ML confidence: 62%"
+                            // right next to a field the model explicitly
+                            // declined to fill, which reads as a contradiction.
+                            mlConfidence != null && !mlAbstained && (
                                 <span className="ml-confidence" aria-label={`ML confidence score: ${mlConfidence}%`}>
                                     <span>ML confidence</span>
                                     <strong>· {mlConfidence}%</strong>
@@ -386,6 +472,44 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                                 <span></span>
                                 <span></span>
                                 <span></span>
+                            </div>
+                        )
+                    }
+                    {
+                        // ML-003-T04 -- an abstained prediction is a suggestion,
+                        // not a done choice: shown, but never written into the
+                        // field on its own. Disappears the moment the field is
+                        // non-empty, whether from clicking "Use this" or the
+                        // user typing their own category -- either way the
+                        // required choice has now been made.
+                        mlAbstained && mlPredictedCategory && expenseCategory.trim() === '' && (
+                            <div className="ml-suggestion" role="status">
+                                <span>
+                                    Not confident enough to auto-fill — did you mean{' '}
+                                    <strong>{mlPredictedCategory}</strong>?
+                                </span>
+                                <div className="ml-suggestion-actions">
+                                    <button
+                                        type="button"
+                                        className="ml-suggestion-accept-btn"
+                                        onClick={() => setCategory(mlPredictedCategory)}
+                                    >
+                                        Use this
+                                    </button>
+                                    {/* ML-003-T06 -- shortcut for chronically-unconfident
+                                        merchants: fills the field AND saves the rule in
+                                        one click, instead of waiting for the post-submit
+                                        prompt to offer it. */}
+                                    <button
+                                        type="button"
+                                        className="ml-suggestion-accept-btn ml-suggestion-save-rule-btn"
+                                        onClick={useSuggestionAndSaveRuleHandler}
+                                        disabled={saveMerchantRuleMutation.isPending}
+                                        title="Use this category and always categorize this merchant this way"
+                                    >
+                                        Save merchant rule
+                                    </button>
+                                </div>
                             </div>
                         )
                     }

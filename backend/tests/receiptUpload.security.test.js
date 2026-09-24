@@ -21,6 +21,26 @@ const loadRoute = () => {
   jest.doMock("../Services/BillServices/ocrService", () => ({
     extractTextFromImage: jest.fn(async () => "Fresh Mart Grand Total 125.50"),
   }));
+  // OCR-004 -- uploadBill now persists every successful scan (GridFS +
+  // a Receipt document) via receiptIngestService.js, which touches real
+  // Mongoose (the storage adapter's GridFSBucket, and models/Receipt.js).
+  // This suite is about upload SECURITY (validation boundaries, transcript
+  // redaction, rate limiting), not persistence -- OCR-004's own
+  // receiptIngestService.test.js/receiptStorageAdapter.test.js already
+  // cover the real persistence path in full. Mocking the storage layer
+  // here keeps this suite fast and deterministic and, concretely, avoids
+  // a real `require("mongoose")` module-load (measured 40-100s+ in this
+  // sandbox's remote-mounted filesystem) blowing Jest's default 5000ms
+  // per-test timeout on the one test below that reaches a successful
+  // upload -- that was an intermittent failure here before this mock was
+  // added, not a logic defect in either this suite or OCR-004's own code.
+  jest.doMock("../Services/ReceiptServices/receiptStorageAdapter", () => ({
+    putReceiptObject: jest.fn(async () => ({ storageKey: "aaaaaaaaaaaaaaaaaaaaaaaa" })),
+    deleteReceiptObject: jest.fn(async () => {}),
+  }));
+  jest.doMock("../models/Receipt", () => ({
+    create: jest.fn(async (doc) => ({ ...doc, _id: "aaaaaaaaaaaaaaaaaaaaaaaa" })),
+  }));
 
   const app = express();
   app.use(require("../Routes/bill.routes"));
@@ -44,6 +64,8 @@ describe("receipt upload security", () => {
     jest.dontMock("../utils/rateLimiter");
     jest.dontMock("../Services/BillServices/imageProcessor");
     jest.dontMock("../Services/BillServices/ocrService");
+    jest.dontMock("../Services/ReceiptServices/receiptStorageAdapter");
+    jest.dontMock("../models/Receipt");
   });
 
   it("processes a genuine PNG in memory and never returns its full OCR transcript", async () => {

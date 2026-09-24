@@ -253,3 +253,139 @@ class TestFeedback:
         assert finalized == 1
         doc = feedback._collection().find_one({"_id": fid})
         assert doc["status"] == "trained"
+
+
+class TestFeedbackIntegrityWithOutcomeFields:
+    """
+    [REAL-MONGODB] ML-003-T07 -- feedback_repository.py's functions
+    (reserve_pending_feedback, release_reserved_for_run,
+    finalize_trained_for_run, get_trained_feedback) were all written before
+    ML-003-T05 added `abstained`/`outcome` to MlFeedbackSchema, and none of
+    them reference either field by name (confirmed by reading the whole
+    module: zero occurrences). Every one of them also does an unprojected
+    `find`/`find_one_and_update` -- no `{"abstained": 0, "outcome": 0}`
+    style exclusion anywhere -- so the expectation is that these fields
+    pass through every lifecycle transition completely untouched, same as
+    any other field this repository doesn't itself understand. This class
+    is what actually proves that pass-through, at the one layer (a real
+    Mongo collection, not the in-memory JS mocks addexpense.js's own tests
+    use) where a real projection/exclusion bug would actually show up.
+
+    Not a test of resolve_abstention/outcome DERIVATION (that's
+    test_threshold_abstention.py, T03) and not a test of the HTTP-level
+    outcome computation (that's expense.mlOutcomeTracking.test.js, T05) --
+    this is purely: once an abstained/outcome-bearing document exists in
+    Mongo, does the retraining lifecycle preserve it correctly.
+    """
+
+    def test_abstained_and_outcome_fields_survive_reservation(self, repo_modules):
+        runs, feedback = repo_modules
+        run_id = runs.create_run("manual")
+        fid = feedback._collection().insert_one({
+            "status": "pending", "expenseName": "x", "expenseCategory": "Food",
+            "abstained": True, "outcome": "abstained",
+        }).inserted_id
+
+        reserved = feedback.reserve_pending_feedback(run_id)
+
+        assert len(reserved) == 1
+        assert reserved[0]["_id"] == fid
+        assert reserved[0]["abstained"] is True
+        assert reserved[0]["outcome"] == "abstained"
+        # Also re-read from the collection directly, not just the
+        # find_one_and_update return value -- confirms the fields weren't
+        # dropped by the $set update itself (which only touches
+        # status/trainingRunId/reservedAt, never abstained/outcome).
+        doc = feedback._collection().find_one({"_id": fid})
+        assert doc["abstained"] is True
+        assert doc["outcome"] == "abstained"
+
+    def test_abstained_and_outcome_fields_survive_rollback_to_pending(self, repo_modules):
+        runs, feedback = repo_modules
+        run_id = runs.create_run("manual")
+        fid = feedback._collection().insert_one({
+            "status": "reserved", "trainingRunId": run_id,
+            "expenseName": "x", "expenseCategory": "Food",
+            "abstained": True, "outcome": "viewed",
+        }).inserted_id
+
+        feedback.release_reserved_for_run(run_id, "test rollback")
+
+        doc = feedback._collection().find_one({"_id": fid})
+        assert doc["status"] == "pending"
+        assert doc["abstained"] is True
+        assert doc["outcome"] == "viewed"
+
+    def test_abstained_and_outcome_fields_survive_activation_to_trained(self, repo_modules):
+        runs, feedback = repo_modules
+        run_id = runs.create_run("manual")
+        fid = feedback._collection().insert_one({
+            "status": "reserved", "trainingRunId": run_id,
+            "expenseName": "x", "expenseCategory": "Food",
+            "abstained": False, "outcome": "corrected",
+        }).inserted_id
+
+        finalized = feedback.finalize_trained_for_run(run_id)
+
+        assert finalized == 1
+        doc = feedback._collection().find_one({"_id": fid})
+        assert doc["status"] == "trained"
+        assert doc["abstained"] is False
+        assert doc["outcome"] == "corrected"
+
+    def test_a_pre_T05_document_with_neither_field_is_still_reservable(self, repo_modules):
+        # Every feedback document written before ML-003-T05 shipped has
+        # neither key at all (not even a null) -- reservation must not
+        # assume either field exists.
+        runs, feedback = repo_modules
+        run_id = runs.create_run("manual")
+        fid = feedback._collection().insert_one({
+            "status": "pending", "expenseName": "x", "expenseCategory": "Food",
+        }).inserted_id
+
+        reserved = feedback.reserve_pending_feedback(run_id)
+
+        assert len(reserved) == 1
+        assert "abstained" not in reserved[0]
+        assert "outcome" not in reserved[0]
+
+    def test_KNOWN_GAP_get_trained_feedback_does_not_distinguish_by_outcome(self, repo_modules):
+        # Documents the current, deliberate-for-now behavior rather than
+        # silently leaving it ambiguous (see this task's markdown update
+        # for the full reasoning): get_trained_feedback() and
+        # dataset_builder._validate_feedback_doc() (checked by reading
+        # both directly -- neither references `outcome`/`abstained`) treat
+        # a "viewed" or "abstained" outcome identically to "accepted"/
+        # "corrected" once a document reaches "trained" -- all flow into
+        # the next retraining snapshot the same way. Whether a "viewed"
+        # outcome (the model abstained but the user's own choice matched
+        # its suggestion anyway) SHOULD count as a positive training
+        # example the same way a genuine "corrected" one does is a real
+        # product question this task is deliberately not answering --
+        # this test exists so a future change to that answer changes an
+        # explicit, named test rather than an unnoticed behavior shift.
+        runs, feedback = repo_modules
+        run_id = runs.create_run("manual")
+        docs_by_outcome = {
+            "accepted": {"abstained": False, "outcome": "accepted"},
+            "corrected": {"abstained": False, "outcome": "corrected"},
+            "viewed": {"abstained": True, "outcome": "viewed"},
+            "abstained": {"abstained": True, "outcome": "abstained"},
+        }
+        inserted_ids = {}
+        for outcome_name, fields in docs_by_outcome.items():
+            inserted_ids[outcome_name] = feedback._collection().insert_one({
+                "status": "reserved", "trainingRunId": run_id,
+                "expenseName": f"x-{outcome_name}", "expenseCategory": "Food",
+                **fields,
+            }).inserted_id
+
+        finalized = feedback.finalize_trained_for_run(run_id)
+        assert finalized == len(docs_by_outcome)
+
+        trained = feedback.get_trained_feedback()
+        trained_ids = {doc["_id"] for doc in trained}
+        assert set(inserted_ids.values()).issubset(trained_ids), (
+            "all four outcomes reached 'trained' and get_trained_feedback() "
+            "returned every one of them, with no outcome-based filtering"
+        )

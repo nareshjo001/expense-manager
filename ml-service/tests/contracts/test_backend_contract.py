@@ -156,4 +156,9 @@ class TestPredictCategoryContractLive:
         result = predict_category("test expense")
         if "error" in result:
             pytest.skip(f"predictor_manager not initialized in this process: {result['error']}")
-        assert set(result.keys()) == {"expenseName", "cleanedText", "predictedCategory", "confidence"}
+        # ML-003-T03 -- abstained/abstentionReason are additive: existing
+        # consumers reading predictedCategory/confidence are unaffected.
+        assert set(result.keys()) == {
+            "expenseName", "cleanedText", "predictedCategory", "confidence",
+            "abstained", "abstentionReason",
+        }

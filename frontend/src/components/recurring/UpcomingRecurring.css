@@ -149,3 +149,12 @@
     flex-wrap: wrap;
   }
 }
+
+/* REC-003-T05 -- multiple quick actions per row (Edit/Pause/End), replacing
+   what used to be a single bare Edit button. */
+.upcoming-recurring__actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+}

@@ -20,13 +20,25 @@ export const getExpensesByCategory = async (period, signal) => {
 // range, it returns the server's default page (50) plus `hasMore` and
 // `nextCursor`. A caller that needs everything must page through the cursors.
 // Callers that ignore hasMore will silently show only the first page.
-export const searchExpenses = async (startDate, endDate, signal, pagination) => {
+// EXP-002-T05 -- `options` now also carries the four optional search
+// filters EXP-002-T01 defined (nameContains/category/minAmount/maxAmount/
+// isRecurring), on top of the existing pagination fields. Each one is only
+// added to the request when actually set -- omitted entirely means "no
+// filter" per the backend contract (EXP-002-T02/T04), not "filter for
+// empty/zero". minAmount/maxAmount/isRecurring use `!== undefined` rather
+// than truthiness so a real 0 or `false` is never dropped.
+export const searchExpenses = async (startDate, endDate, signal, options) => {
   const { data } = await api.get("/expense/search", {
     params: {
       startDate,
       endDate,
-      ...(pagination?.limit ? { limit: pagination.limit } : {}),
-      ...(pagination?.cursor ? { cursor: pagination.cursor } : {}),
+      ...(options?.limit ? { limit: options.limit } : {}),
+      ...(options?.cursor ? { cursor: options.cursor } : {}),
+      ...(options?.nameContains ? { nameContains: options.nameContains } : {}),
+      ...(options?.category ? { category: options.category } : {}),
+      ...(options?.minAmount !== undefined ? { minAmount: options.minAmount } : {}),
+      ...(options?.maxAmount !== undefined ? { maxAmount: options.maxAmount } : {}),
+      ...(options?.isRecurring !== undefined ? { isRecurring: options.isRecurring } : {}),
     },
     signal,
   });

@@ -21,7 +21,12 @@ const notificationSchema = new mongoose.Schema({
   },
   pushStatus: {
     type: String,
-    enum: ["pending", "sent", "failed"],
+    // NOT-003-T03/T04 -- "suppressed" is distinct from "failed": a
+    // preference-disabled type or an active quiet-hours window is not a
+    // delivery FAILURE (nothing went wrong, the user asked for this), so it
+    // must never enter retryPush.js's retry queue the way "failed" does --
+    // see push.service.js's sendPush for where this is set.
+    enum: ["pending", "sent", "failed", "suppressed"],
     default: "pending"
   },
   retryCount: { 

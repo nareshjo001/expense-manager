@@ -1,12 +1,35 @@
 const { getAdmin, isFirebaseAvailable } = require("../config/firebaseAdmin");
 const DeviceToken = require('../models/DeviceToken');
+// NOT-003-T03/T04 -- the single gate consulted before a message is built:
+// is this type enabled for this user, what preview policy applies, and are
+// we inside this user's quiet hours right now.
+const { resolveSendPolicy } = require('./NotificationServices/notificationPreferenceService');
 
 const GENERIC_NOTIFICATION = Object.freeze({
     title: "Expense Manager",
     body: "A recurring expense was added."
 });
 
-const sendPush = async (userId, title, body, route = '/') => {
+// `options.type` is the notification's registered type (utils/
+// notificationTypes.js) -- optional, so every pre-NOT-003 call site and
+// every existing test keeps working exactly as before: resolveSendPolicy()
+// treats a missing/unknown type as "send, defer entirely to the device's
+// own preview setting", which is byte-identical to this function's
+// pre-NOT-003 behavior.
+const sendPush = async (userId, title, body, options = {}) => {
+    const { route = '/', type = null } = options;
+
+    // NOT-003-T03/T04 -- preference/quiet-hours gate, BEFORE anything else
+    // (before even checking for registered devices) -- a disabled type or
+    // an active quiet-hours window means "do not send", regardless of how
+    // many devices are registered.
+    const policy = await resolveSendPolicy(userId, type);
+    if (!policy.enabled) {
+        return { success: false, suppressed: true, reason: "type_disabled" };
+    }
+    if (policy.quiet) {
+        return { success: false, suppressed: true, reason: "quiet_hours" };
+    }
 
     // Fetch all device tokens associated with the user
     const tokens = await DeviceToken.find({ userId });
@@ -25,9 +48,25 @@ const sendPush = async (userId, title, body, route = '/') => {
     const messages = tokens.map(t => {
 
         const imageUrl = "https://balensia.vercel.app/images/final.jpeg";
-        const content = t.notificationPreview === "detailed"
+        // NOT-003-T03 -- preview policy resolution: a user-level per-type
+        // override (policy.preview === "generic"/"detailed") takes
+        // precedence over the device's own DeviceToken.notificationPreview;
+        // "device" (the default for every type until a user explicitly
+        // overrides it -- see DEFAULT_TYPE_PREFERENCE's own comment) defers
+        // to the device exactly as this function always has, so a user who
+        // never opens the new preferences screen sees unchanged behavior.
+        const effectivePreview = policy.preview === "device" ? t.notificationPreview : policy.preview;
+        const content = effectivePreview === "detailed"
             ? { title, body }
             : GENERIC_NOTIFICATION;
+
+        // NOT-003-T01 -- the payload's `tag` now reflects the notification's
+        // actual registered type when one was supplied (lets a client group/
+        // route notifications by real type instead of every push sharing the
+        // single literal "recurring-expense" tag regardless of what it was).
+        // Falls back to that same literal for an untyped call, so an
+        // existing/mocked client that matches on it is unaffected.
+        const tag = type || "recurring-expense";
 
         if (t.platform === "mobile") {
             return {
@@ -52,7 +91,7 @@ const sendPush = async (userId, title, body, route = '/') => {
                 // Extra data for routing
                 data: {
                     route,
-                    tag: "recurring-expense"
+                    tag
                 }
             };
         }
@@ -65,7 +104,7 @@ const sendPush = async (userId, title, body, route = '/') => {
                 body: content.body,
                 image: imageUrl,
                 route,
-                tag: "recurring-expense"
+                tag
             }
         };
     });

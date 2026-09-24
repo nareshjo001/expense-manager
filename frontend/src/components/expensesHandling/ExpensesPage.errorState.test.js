@@ -36,6 +36,16 @@ jest.mock("../contexts/ai-contexts/ExpenseInsightsContext", () => ({
 
 jest.mock("../insights/InlineExpenseInsight", () => () => null);
 
+// EXP-002-T06 -- ExpensesPage now reads/writes the URL via useSearchParams.
+// Mocked wholesale (this codebase's established pattern for
+// react-router-dom -- see AddExpense.test.js/App.startup.test.js) rather
+// than wrapping in a real Router: these tests don't exercise URL
+// persistence, so an empty, inert pair keeps existing behavior unchanged.
+// See ExpensesPage.urlState.test.js for the dedicated URL-sync tests.
+jest.mock("react-router-dom", () => ({
+  useSearchParams: () => [new URLSearchParams(), jest.fn()],
+}), { virtual: true });
+
 const mockInsights = () => ({
   notifyInitialLoad: jest.fn(),
   notifyFilterApplied: jest.fn(),

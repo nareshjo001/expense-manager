@@ -346,7 +346,14 @@ def test_full_lifecycle_reaches_activated_and_synchronized_status(client, caplog
         headers=operations_headers,
     )
     assert pred.status_code == 200
-    assert set(pred.json().keys()) == {"expenseName", "cleanedText", "predictedCategory", "confidence"}
+    # ML-003-T03 -- abstained/abstentionReason are additive to this contract;
+    # see the identical update in tests/contracts/test_backend_contract.py
+    # and tests/unit/test_lifecycle_mocked.py for the other two places this
+    # same response shape is asserted.
+    assert set(pred.json().keys()) == {
+        "expenseName", "cleanedText", "predictedCategory", "confidence",
+        "abstained", "abstentionReason",
+    }
 
     # Every inserted document must reach "trained", owned by this run, with reservation/error bookkeeping cleared.
     feedback_docs = list(

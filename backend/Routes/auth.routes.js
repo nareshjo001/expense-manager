@@ -9,6 +9,7 @@ const {
   emailOnlyValidation,
   verifyOtpValidation,
   resetPasswordValidation,
+  requestDeletionValidation,
 } = require('../Middlewares/AuthValidation');
 
 // ---------------- AUTH CONTROLLERS ----------------
@@ -23,6 +24,9 @@ const {
   refresh,
   logout,
   logoutAll,
+  requestDeletion,
+  cancelDeletion,
+  getDeletionStatus,
 } = require('../Controllers/AuthControllers');
 const verifyToken = require('../Middlewares/Auth');
 const sessionCsrf = require('../Middlewares/sessionCsrf');
@@ -43,5 +47,13 @@ router.post('/reset-password', authLimiter, resetPasswordValidation, passwordRes
 router.post('/refresh', authLimiter, sessionCsrf, refresh);
 router.post('/logout', authLimiter, sessionCsrf, logout);
 router.post('/logout-all', verifyToken, authLimiter, logoutAll);
+
+// PRV-001-T03 (ADR-0007) -- re-authenticated deletion request/cancel/status.
+// passwordResetLimiter reused deliberately: both endpoints gate a
+// password-compare against a stored hash, the same brute-force surface
+// that limiter already exists to bound.
+router.post('/request-deletion', verifyToken, authLimiter, requestDeletionValidation, passwordResetLimiter, requestDeletion);
+router.post('/cancel-deletion', verifyToken, authLimiter, cancelDeletion);
+router.get('/deletion-status', verifyToken, authLimiter, getDeletionStatus);
 
 module.exports = router;

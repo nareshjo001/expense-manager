@@ -45,6 +45,22 @@ const userSchema = new Schema({
     verificationExpiresAt: {
         type: Date,
         index: { expireAfterSeconds: 0 }
+    },
+
+    // PRV-001-T03 (ADR-0007) -- set together when a re-authenticated
+    // deletion request is accepted; both null means no deletion is
+    // pending. deletionScheduledPurgeAt is the grace-period end (ADR-0007:
+    // 14 days) T04's orchestration hard-deletes against; it is NOT itself
+    // a TTL index field -- purge is an explicit orchestrated action, never
+    // an implicit Mongo expiry, so a crashed/delayed orchestration run
+    // can never silently lose the record of a pending request.
+    deletionRequestedAt: {
+        type: Date,
+        default: null
+    },
+    deletionScheduledPurgeAt: {
+        type: Date,
+        default: null
     }
 });
 
@@ -103,6 +119,14 @@ const expenseSchema = new Schema({
         default: 0
     },
     wasMlCorrected: {
+        type: Boolean,
+        default: false
+    },
+
+    // ML-003-T05 -- mirrors MlFeedbackSchema.abstained below: whether the
+    // prediction shown for this expense was an abstained suggestion
+    // (ML-003-T03/T04) rather than an auto-filled, committed prediction.
+    wasMlAbstained: {
         type: Boolean,
         default: false
     }
@@ -192,6 +216,38 @@ const MlFeedbackSchema = new mongoose.Schema({
         // the backend collector while lifecycle status is adopted.
         type: Boolean,
         default: false
+    },
+
+    // ML-003-T05 -- whether the prediction this feedback document is about
+    // was an abstained suggestion (ML-003-T03/T04) rather than an
+    // auto-filled, committed prediction. Defaults to false so every
+    // pre-T05 document (written before this field existed) reads as a
+    // committed prediction, which is what they always were.
+    abstained: {
+        type: Boolean,
+        default: false
+    },
+
+    // ML-003-T05 -- records what happened to a shown prediction, derived
+    // server-side (never trusted from the client) from `abstained` x
+    // `corrected`:
+    //   committed (abstained=false), kept       -> "accepted"
+    //   committed (abstained=false), overridden  -> "corrected"
+    //   abstained (abstained=true),  kept as-is  -> "viewed"    (the user
+    //       viewed the suggestion and used it -- a near-miss signal that
+    //       the abstain threshold may be higher than it needs to be)
+    //   abstained (abstained=true),  overridden  -> "abstained" (the model
+    //       correctly declined to guess; the user chose independently)
+    // Left null (not backfilled) for every feedback document written
+    // before this field existed -- there is no reliable way to reconstruct
+    // whether an old document's prediction was abstained.
+    outcome: {
+        type: String,
+        enum: {
+            values: ['accepted', 'corrected', 'viewed', 'abstained'],
+            message: '{VALUE} is not a valid feedback outcome'
+        },
+        default: null
     },
 
     // --- Feedback lifecycle (Phase A) ---

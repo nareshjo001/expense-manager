@@ -4,6 +4,12 @@ import { format, parseISO } from "date-fns";
 import { formatMoney } from "../../utils/money";
 import { FormStatus } from "../a11y/FormStatus";
 import { getUpcomingRecurring } from "../../api/recurringApi";
+import { usePauseRecurringMutation } from "../../hooks/mutations/usePauseRecurringMutation";
+import { useEndRecurringMutation } from "../../hooks/mutations/useEndRecurringMutation";
+import {
+  recurringActionSuccessToast,
+  recurringActionErrorToast,
+} from "../alertsEffects/toastMessages";
 import "./UpcomingRecurring.css";
 
 // REC-003-T04 -- the upcoming recurring expenses view.
@@ -29,8 +35,33 @@ import "./UpcomingRecurring.css";
 //           overdueCount for exactly this, and the panel surfaces it rather
 //           than quietly listing past dates as though they were upcoming.
 //
-// What this component does NOT offer is pause/resume. See the actions block
-// below -- that needs REC-002.
+// REC-003-T05 update -- pause/edit actions, now that REC-002 exists:
+//
+//   EDIT    the "Edit" button below still calls onEditExpense(expenseId),
+//           i.e. it opens the ORIGINAL, already-logged expense this
+//           definition was created from -- NOT the recurring definition
+//           itself. That is a real, useful action (fixing a typo on that one
+//           historical row) but it does NOT change future occurrences:
+//           cron/recurringJob.js reads the definition's own copied
+//           expenseName/expenseCategory/expenseAmount fields when it logs
+//           each occurrence, never the original expense (see
+//           recurringLifecycleService.js's header for the full trace). A
+//           previous version of this comment claimed the opposite; it was
+//           wrong. To change what future occurrences look like, use "Pause"
+//           or the recurring-management screen's "Edit", which edits the
+//           definition itself via REC-002's editDefinition API.
+//
+//   PAUSE   every row here is, by construction, an occurrence of an ACTIVE
+//           definition -- Controllers/RecurringExpenses/upcoming.js only
+//           ever projects active ones, since a paused or ended definition
+//           produces no occurrences to project. So "Pause" is the only
+//           lifecycle action that belongs on a row here; "Resume" has
+//           nothing to attach to (a paused definition has no row), and
+//           lives on the recurring-management screen instead.
+//
+//   END     terminal, and offered here too since it is just as reachable
+//           from a due occurrence as pausing is -- with a confirmation,
+//           since it cannot be undone.
 
 const STATUS = {
   LOADING: "loading",
@@ -70,6 +101,10 @@ const UpcomingRecurring = ({ onEditExpense }) => {
   const [status, setStatus] = useState(STATUS.LOADING);
   const [payload, setPayload] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [confirmEndRecurringId, setConfirmEndRecurringId] = useState(null);
+
+  const pauseMutation = usePauseRecurringMutation();
+  const endMutation = useEndRecurringMutation();
 
   // `isLive` guards every state write against landing after unmount.
   //
@@ -110,6 +145,42 @@ const UpcomingRecurring = ({ onEditExpense }) => {
       controller.abort();
     };
   }, [load]);
+
+  // A paused/ended definition drops out of this projection entirely (see
+  // the header comment on PAUSE above), so the only way this view can stay
+  // correct after either action is to refetch it -- invalidating a
+  // TanStack Query cache does nothing here since this component does not
+  // use useQuery for its own data.
+  const handlePause = (recurringId) => {
+    pauseMutation.mutate(
+      { id: recurringId },
+      {
+        onSuccess: () => {
+          recurringActionSuccessToast("Recurring expense paused. It won't appear here until resumed.");
+          load();
+        },
+        onError: (error) => recurringActionErrorToast(error.response?.data),
+      }
+    );
+  };
+
+  const handleEndConfirmed = () => {
+    const recurringId = confirmEndRecurringId;
+    endMutation.mutate(
+      { id: recurringId },
+      {
+        onSuccess: () => {
+          recurringActionSuccessToast("Recurring expense ended.");
+          setConfirmEndRecurringId(null);
+          load();
+        },
+        onError: (error) => {
+          recurringActionErrorToast(error.response?.data);
+          setConfirmEndRecurringId(null);
+        },
+      }
+    );
+  };
 
   if (status === STATUS.LOADING) {
     return (
@@ -155,6 +226,8 @@ const UpcomingRecurring = ({ onEditExpense }) => {
       </section>
     );
   }
+
+  const confirmEndOccurrence = occurrences.find((o) => o.recurringId === confirmEndRecurringId);
 
   return (
     <section className="upcoming-recurring">
@@ -209,39 +282,57 @@ const UpcomingRecurring = ({ onEditExpense }) => {
                   </span>
                 </div>
 
-                {/*
-                  REC-003-T05 is only PARTLY served here, and the gap is
-                  deliberate rather than overlooked.
-
-                  The task is "link pause/edit actions". Edit exists -- the
-                  underlying expense is editable, and changing its amount is
-                  what changes future occurrences. PAUSE DOES NOT EXIST.
-                  RecurringExpense has no lifecycle state field and there is
-                  no pause/resume API; the only off switch is the existing
-                  toggle, which DELETES the definition. That ends a
-                  recurrence, losing lastLoggedDate and resetting the
-                  schedule if it is ever re-enabled -- so labelling it
-                  "pause" would promise the user their schedule would resume
-                  where it left off, which is false.
-
-                  So only edit is linked. Pause/resume waits on REC-002-T01
-                  (lifecycle state model) and REC-002-T02 (pause/resume APIs),
-                  both Not Started.
-                */}
-                {occurrence.expenseId && onEditExpense && (
+                <div className="upcoming-recurring__actions">
+                  {occurrence.expenseId && onEditExpense && (
+                    <button
+                      type="button"
+                      className="upcoming-recurring__action"
+                      onClick={() => onEditExpense(occurrence.expenseId)}
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="upcoming-recurring__action"
-                    onClick={() => onEditExpense(occurrence.expenseId)}
+                    disabled={pauseMutation.isPending}
+                    onClick={() => handlePause(occurrence.recurringId)}
                   >
-                    Edit
+                    Pause
                   </button>
-                )}
+                  <button
+                    type="button"
+                    className="upcoming-recurring__action"
+                    onClick={() => setConfirmEndRecurringId(occurrence.recurringId)}
+                  >
+                    End
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         </div>
       ))}
+
+      {confirmEndOccurrence && (
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="upcoming-end-recurring-message"
+          >
+            <p id="upcoming-end-recurring-message">
+              End "{confirmEndOccurrence.expenseName}"? This stops it permanently — it cannot be
+              resumed, unlike pausing.
+            </p>
+            <div className="modal-buttons">
+              <button onClick={() => setConfirmEndRecurringId(null)}>Cancel</button>
+              <button onClick={handleEndConfirmed}>Yes, End</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

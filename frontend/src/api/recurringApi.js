@@ -28,3 +28,40 @@ export const setExpenseRecurring = async (expenseId, isRecurring) => {
   const { data } = await api.patch("/api/recurring", { expenseId, isRecurring });
   return data;
 };
+
+// REC-002-T02/T05 -- lifecycle management surface (list/detail/pause/resume/
+// end/edit) over recurring definitions. Every mutation is compare-and-set:
+// the caller must pass the definition's current `scheduleVersion` (from a
+// prior list/detail read), and a stale one comes back as a 409 with
+// errorCode SCHEDULE_VERSION_CONFLICT and the server's current definition in
+// `data` -- callers refetch rather than blindly retry with the same version.
+
+export const listRecurringDefinitions = async (signal) => {
+  const { data } = await api.get("/api/recurring", { signal });
+  return data;
+};
+
+export const getRecurringDefinition = async (id, signal) => {
+  const { data } = await api.get(`/api/recurring/${id}`, { signal });
+  return data;
+};
+
+export const pauseRecurringDefinition = async (id, scheduleVersion) => {
+  const { data } = await api.patch(`/api/recurring/${id}/pause`, { scheduleVersion });
+  return data;
+};
+
+export const resumeRecurringDefinition = async (id, scheduleVersion) => {
+  const { data } = await api.patch(`/api/recurring/${id}/resume`, { scheduleVersion });
+  return data;
+};
+
+export const endRecurringDefinition = async (id, scheduleVersion) => {
+  const { data } = await api.patch(`/api/recurring/${id}/end`, { scheduleVersion });
+  return data;
+};
+
+export const editRecurringDefinition = async (id, updates, scheduleVersion) => {
+  const { data } = await api.patch(`/api/recurring/${id}`, { ...updates, scheduleVersion });
+  return data;
+};
