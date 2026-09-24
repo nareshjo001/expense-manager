@@ -21,6 +21,11 @@ jest.mock("./BudgetIntelligence", () => () => <div data-testid="mock-budget-inte
 jest.mock("./SpendingInsights", () => () => <div data-testid="mock-spending-insights" />);
 jest.mock("./SpendingForecast", () => () => <div data-testid="mock-spending-forecast" />);
 jest.mock("./OverallInsight", () => () => <div data-testid="mock-overall-insight" />);
+// AI-001-T06 -- mocked the same way as every other section: this page-wiring
+// test only cares that MonthlyInsightPage mounts it, not what it renders (it
+// has its own dedicated test coverage and its own TanStack Query hooks, which
+// need a QueryClientProvider this test file does not set up).
+jest.mock("./AiMonthlySummary", () => () => <div data-testid="mock-ai-monthly-summary" />);
 jest.mock("./AnomalyInsights", () => ({
   __esModule: true,
   default: jest.fn(),
@@ -100,6 +105,7 @@ describe("MonthlyInsightPage -- Anomaly Detection Layer V1 wiring", () => {
     expect(screen.getByTestId("mock-spending-forecast")).toBeInTheDocument();
     expect(screen.getByTestId("mock-anomaly-insights")).toBeInTheDocument();
     expect(screen.getByTestId("mock-overall-insight")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-ai-monthly-summary")).toBeInTheDocument();
   });
 
   it("does not call useReport a second time on behalf of the anomaly section (single shared query)", () => {

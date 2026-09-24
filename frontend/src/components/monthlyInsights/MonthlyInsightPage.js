@@ -4,6 +4,7 @@ import SpendingInsights from "./SpendingInsights";
 import SpendingForecast from "./SpendingForecast";
 import AnomalyInsights from "./AnomalyInsights";
 import OverallInsight from "./OverallInsight";
+import AiMonthlySummary from "./AiMonthlySummary";
 import QueryState from "../common/QueryState";
 import { useReport } from "../../hooks/useReport";
 import './Layout.css';
@@ -42,6 +43,13 @@ export default function MonthlyInsightPage () {
         <AnomalyInsights report={report} />
         <OverallInsight report={report} />
       </QueryState>
+      {/* AI-001-T06 -- opt-in AI summary card, rendered OUTSIDE the report
+          QueryState above on purpose: it fetches its own opt-in/
+          regeneration-usage state (AI-001-T05's preferences endpoint), a
+          separate backend concern from the report query every section
+          above depends on, so a report load failure/empty state should
+          not also hide the opt-in toggle. */}
+      <AiMonthlySummary />
     </div>
   )
 }
