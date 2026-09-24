@@ -22,6 +22,8 @@ const { runSemanticPipeline } = require("../../sia/semanticPipeline");
 const { buildFinancialSnapshot } = require("../../sia/financialSnapshotService");
 const { answerDirectly } = require("../../sia/directAnswerService");
 const { isClearlyProhibited } = require("../../sia/prohibitedPhrases");
+const { recordOperation } = require("../../utils/metrics");
+const { classifyProviderError, responseFor, CATEGORY } = require("../../sia/fallbackMessages");
 
 // Bounded conversation session support (additive) -- guarded by sessionStoreAvailability.js's live connection check so pre-existing tests (which don't connect to real MongoDB) never hang; unavailable is a valid, safe state, never thrown.
 // Every session-store interaction is best-effort and never fails the user's actual question, and never leaves a half-written turn -- appendTurn() only runs once a real answer exists. Session RESOLUTION and CREATION happen at two different points: an explicit session resolves up front (its history feeds the provider); a new conversation's session isn't created until a validated answer exists, so a failed first turn leaves nothing behind.
@@ -607,6 +609,8 @@ async function handleSemanticFallback({ req, res, reservation, activeSession, re
 }
 
 async function handleDirectAnswer({ req, res, reservation, activeSession, requestedClientMessageId, trimmedQuestion }) {
+  const askStartedAt = Date.now();
+  let askOutcome = "failure";
   try {
     if (isClearlyProhibited(trimmedQuestion)) {
       if (reservation) {
@@ -638,6 +642,13 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
       throw providerErr;
     }
 
+    recordOperation({
+      scope: "sia_ask",
+      operation: "answer_validation",
+      outcome: directResult.ok ? "success" : "failure",
+      durationMs: Date.now() - providerStartedAt,
+    });
+
     if (!directResult.ok) {
       logSiaEvent({
         event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
@@ -648,7 +659,8 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
       if (reservation) {
         await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
       }
-      return res.status(503).json(UNAVAILABLE_RESPONSE);
+      const { status, body } = responseFor(CATEGORY.ANSWER_UNAVAILABLE);
+      return res.status(status).json(body);
     }
 
     logSiaEvent({ event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED, provider: config.provider, latencyMs: Date.now() - providerStartedAt });
@@ -692,8 +704,9 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
         sessionId: session ? session._id : null,
       });
     }
+    askOutcome = "success";
     return res.status(200).json(payload);
-  } catch (_err) {
+  } catch (err) {
     if (reservation) {
       try {
         await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
@@ -701,7 +714,16 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
         // Lease expiry keeps the idempotency key recoverable.
       }
     }
-    return res.status(503).json(UNAVAILABLE_RESPONSE);
+    const category = classifyProviderError(err);
+    const { status, body } = responseFor(category);
+    return res.status(status).json(body);
+  } finally {
+    recordOperation({
+      scope: "sia_ask",
+      operation: "direct_answer",
+      outcome: askOutcome,
+      durationMs: Date.now() - askStartedAt,
+    });
   }
 }
 
