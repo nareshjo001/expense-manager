@@ -11,6 +11,10 @@ const expenseAnomalyAnalyzer = require("./analyzers/expenseAnomalyAnalyzer");
 const forecastAnalyzer = require("./analyzers/forecastAnalyzer");
 const currentMonthForecastAnalyzer = require("./analyzers/currentMonthForecastAnalyzer");
 const habitRules = require("./analyzers/scores/habitRules");
+const weeklyChangeAnalyzer = require("./analyzers/weeklyChangeAnalyzer");
+const categoryPatternAnalyzer = require("./analyzers/categoryPatternAnalyzer");
+const stabilityScoreAnalyzer = require("./analyzers/stabilityScoreAnalyzer");
+const chartFindingsAnalyzer = require("./analyzers/chartFindingsAnalyzer");
 const { CURRENT_REPORT_VERSION } = require("./reportContractVersion");
 
 const { generateBudgetInsights } = require('../Services/BudgetServices/budgetInsight.service');
@@ -89,6 +93,39 @@ const generateReport = async (userId) => {
     currentMonthForecast,
   };
 
+  // ANL-001-T03: deterministic facts the frontend previously recalculated
+  // itself (ANL-001-T01 mapping, ANL-001-T02 contract). Each analyzer is
+  // pure and reuses an already-computed upstream report rather than
+  // requerying the database.
+  const weeklyChangeReport = weeklyChangeAnalyzer.analyze({
+    currentWeekExpenses: analyticsContext.trendData.currentWeek,
+    previousWeekExpenses: analyticsContext.trendData.previousWeek,
+    stability: spendingReport.stability,
+  });
+
+  const categoryPatternReport = categoryPatternAnalyzer.analyze({
+    monthlyCategoryReport,
+    yearlyCategoryReport,
+    currentMonthExpenses: analyticsContext.currentMonthExpenses,
+  });
+
+  const stabilityScoreReport = stabilityScoreAnalyzer.analyze({
+    stability: spendingReport.stability,
+  });
+
+  const chartFindingsReport = chartFindingsAnalyzer.analyze({
+    trendReport,
+    budgetReport,
+    categoryReport: monthlyCategoryReport,
+  });
+
+  const insightsReport = {
+    weeklyChange: weeklyChangeReport,
+    categoryPattern: categoryPatternReport,
+    stability: stabilityScoreReport,
+    chartFindings: chartFindingsReport,
+  };
+
   const metadata = {
     // Stamped from the single shared constant so reportService.js's
     // isCurrentReport() check and this generator can never drift apart.
@@ -114,8 +151,10 @@ const generateReport = async (userId) => {
     budgetUtilization: budgetReport.utilization,
     budgetStatus: budgetReport.status,
 
-    healthScore: healthReport.healthScore,
-    riskLevel: healthReport.riskLevel,
+    // ANL-001-T02/T03: healthScore/riskLevel removed -- healthAnalyzer.analyze()
+    // has always returned `overall`/`risk`, never `healthScore`/`riskLevel`, so
+    // these two fields were undefined in every real response. financialHealth.overall
+    // and financialHealth.risk (below) are the real, populated values; read those.
   };
 
   return assembleReport({
@@ -143,6 +182,8 @@ const generateReport = async (userId) => {
     forecast: forecastReport,
 
     anomalies: anomalyReport,
+
+    insights: insightsReport,
 
   });
 };
