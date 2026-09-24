@@ -28,6 +28,18 @@ const { getFact } = require("../analytics/monthlySummaryFacts");
 // fallback logic.
 const { generateLlmMonthlySummary } = require("./monthlySummaryLlmService");
 const { validateMonthlySummaryAnswer } = require("./monthlySummaryValidator");
+// AI-001-T07 -- grounding/latency instrumentation for this feature's own
+// generate path, separate from (additive to) llmService.js's existing
+// generic "sia_provider" operation metrics (OBS-001-T05), which record
+// every SIA LLM call -- chat included -- under the provider's own name and
+// cannot distinguish a monthly-summary call from a chat call. The
+// "ai_summary" scope below exists so this feature's health (grounding
+// pass rate, latency, regeneration volume) can be read off the periodic
+// metrics_snapshot log independently of chat-path SIA traffic. Only
+// fixed, non-content primitive fields are ever passed to recordOperation
+// -- never the narrative, facts, or report -- matching the same
+// discipline llmService.js's own instrumentation follows.
+const { recordOperation } = require("../utils/metrics");
 
 // Collects every citedFactId a section actually used and resolves them
 // once, in call order, for the caller's citedFacts array -- so a fact
@@ -317,7 +329,12 @@ const buildMonthlySummary = (report) => {
 // caller never has to implement its own fallback branching. `isFallback`
 // on the returned object is the caller's single source of truth for which
 // path was actually used.
-async function generateMonthlySummary(report, { allowLlm = false } = {}) {
+// AI-001-T07 -- the actual orchestration, unwrapped. Split out from the
+// exported generateMonthlySummary() below purely so that function can
+// time and record the WHOLE call (including buildMonthlySummary()'s own
+// synchronous work) in one place, at every return path, without repeating
+// the same recordOperation call at each early return.
+async function generateMonthlySummaryInner(report, { allowLlm = false } = {}) {
   const templateResult = buildMonthlySummary(report);
 
   if (!allowLlm || templateResult.hasData !== true) {
@@ -325,6 +342,18 @@ async function generateMonthlySummary(report, { allowLlm = false } = {}) {
   }
 
   const llmResult = await generateLlmMonthlySummary(report);
+  // Grounding signal #1: did the provider even return a usable,
+  // schema-valid structured response? A failure here (unavailable, no
+  // eligible facts, provider error, malformed output) is recorded
+  // separately from a grounding-VALIDATION failure below, because they
+  // point at different things going wrong (the provider/integration vs.
+  // the content it produced).
+  recordOperation({
+    scope: "ai_summary",
+    operation: "llm_call",
+    outcome: llmResult.ok ? "success" : "failure",
+    durationMs: llmResult.latencyMs,
+  });
   if (!llmResult.ok) {
     return { ...templateResult, source: "template", llmAttempted: true, llmReasonCode: llmResult.reasonCode };
   }
@@ -333,6 +362,16 @@ async function generateMonthlySummary(report, { allowLlm = false } = {}) {
     narrative: llmResult.narrative,
     citedFactIds: llmResult.citedFactIds,
     report,
+  });
+  // Grounding signal #2: of the responses the provider actually returned,
+  // how many pass AI-001-T04's numeric-claim/citation check? This is the
+  // feature's core grounding metric -- a falling pass rate here means the
+  // provider is citing unknown facts or stating unsupported numbers, even
+  // though the call itself "succeeded" above.
+  recordOperation({
+    scope: "ai_summary",
+    operation: "grounding_validation",
+    outcome: validation.valid ? "success" : "failure",
   });
   if (!validation.valid) {
     return {
@@ -358,6 +397,28 @@ async function generateMonthlySummary(report, { allowLlm = false } = {}) {
     model: llmResult.model,
     llmLatencyMs: llmResult.latencyMs,
   };
+}
+
+async function generateMonthlySummary(report, opts = {}) {
+  const startedAt = Date.now();
+  try {
+    const result = await generateMonthlySummaryInner(report, opts);
+    // Overall wall-clock latency for this call, whichever path it took
+    // (template-only calls are cheap/synchronous; LLM calls include the
+    // provider round trip above). This is the number a "how fast is the
+    // monthly summary endpoint" dashboard should read.
+    recordOperation({ scope: "ai_summary", operation: "generate", outcome: "success", durationMs: Date.now() - startedAt });
+    return result;
+  } catch (err) {
+    // generateMonthlySummaryInner() is not expected to throw (every
+    // failure inside it is normalized to a template fallback), but this
+    // catch exists so an unexpected bug here is itself visible as a
+    // metrics failure rather than only an unhandled rejection -- and it
+    // re-throws, since swallowing an unexpected error would hide it from
+    // the caller too.
+    recordOperation({ scope: "ai_summary", operation: "generate", outcome: "failure", durationMs: Date.now() - startedAt });
+    throw err;
+  }
 }
 
 module.exports = {

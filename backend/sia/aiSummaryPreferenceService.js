@@ -18,6 +18,16 @@
 const AiSummaryPreference = require("../models/AiSummaryPreference");
 const { getZonedYMD } = require("./periodResolver");
 const config = require("./config");
+// AI-001-T07 -- a successful regeneration is the best available proxy this
+// codebase has for "was the summary useful": there is no explicit user
+// feedback mechanism (a thumbs up/down) today, so a rising regeneration
+// rate per opted-in user is read as a WEAK dissatisfaction signal (the
+// previous summary did not answer what the user wanted) rather than proof
+// of either satisfaction or dissatisfaction on its own -- see this
+// feature's T07 deliverable notes for the full caveat. Recorded only on
+// the ALLOWED path (a rejected attempt never reaches here), so this count
+// is never inflated by opt-in/limit-gate rejections.
+const { recordOperation } = require("../utils/metrics");
 
 // Same normalization discipline as sia/config.js's own normalizeTimeoutMs:
 // a missing/invalid env value falls back to a safe default, never throws,
@@ -109,6 +119,8 @@ async function recordRegeneration(userId, now = new Date()) {
     { $set: { regenerationPeriod: period, regenerationCount: nextCount }, $setOnInsert: { userId } },
     { upsert: true, new: true }
   );
+
+  recordOperation({ scope: "ai_summary", operation: "regeneration", outcome: "success" });
 
   return {
     allowed: true,
