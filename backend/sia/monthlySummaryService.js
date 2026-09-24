@@ -18,6 +18,16 @@
 // rather than fabricating it.
 
 const { getFact } = require("../analytics/monthlySummaryFacts");
+// AI-001-T03/T04 -- the optional LLM-authored path and its numeric-claim
+// validator. generateMonthlySummary() below is the single public entry
+// point later tasks (T05's opt-in/rate-limited route) should call: it
+// always has the deterministic template ready, attempts the LLM path only
+// when the caller allows it, and falls back to the template on ANY
+// failure -- provider unavailable, provider error, malformed structured
+// output, or a validation failure -- so a caller never needs its own
+// fallback logic.
+const { generateLlmMonthlySummary } = require("./monthlySummaryLlmService");
+const { validateMonthlySummaryAnswer } = require("./monthlySummaryValidator");
 
 // Collects every citedFactId a section actually used and resolves them
 // once, in call order, for the caller's citedFacts array -- so a fact
@@ -296,6 +306,61 @@ const buildMonthlySummary = (report) => {
   };
 };
 
+// AI-001-T03/T04 -- the single public entry point callers (AI-001-T05's
+// opt-in/rate-limited route) should use. Always builds the deterministic
+// template first (cheap, synchronous, always correct) so there is a
+// guaranteed result even before any LLM attempt. When `allowLlm` is true,
+// attempts the LLM path and, ONLY if it both succeeds AND passes
+// AI-001-T04's numeric-claim validator, returns that instead -- any
+// failure at any step (provider unavailable/error, malformed output,
+// failed validation) silently returns the template result unchanged, so a
+// caller never has to implement its own fallback branching. `isFallback`
+// on the returned object is the caller's single source of truth for which
+// path was actually used.
+async function generateMonthlySummary(report, { allowLlm = false } = {}) {
+  const templateResult = buildMonthlySummary(report);
+
+  if (!allowLlm || templateResult.hasData !== true) {
+    return { ...templateResult, source: "template" };
+  }
+
+  const llmResult = await generateLlmMonthlySummary(report);
+  if (!llmResult.ok) {
+    return { ...templateResult, source: "template", llmAttempted: true, llmReasonCode: llmResult.reasonCode };
+  }
+
+  const validation = validateMonthlySummaryAnswer({
+    narrative: llmResult.narrative,
+    citedFactIds: llmResult.citedFactIds,
+    report,
+  });
+  if (!validation.valid) {
+    return {
+      ...templateResult,
+      source: "template",
+      llmAttempted: true,
+      llmReasonCode: `VALIDATION_${validation.reasonCode}`,
+    };
+  }
+
+  const citedFacts = buildCitedFacts(report, llmResult.citedFactIds);
+  return {
+    hasData: true,
+    isFallback: false,
+    contractVersion: templateResult.contractVersion,
+    periodLabel: templateResult.periodLabel,
+    generatedAt: new Date().toISOString(),
+    narrative: llmResult.narrative,
+    sections: null, // no per-sentence section breakdown for LLM-authored prose -- citedFacts still supports AI-001-T06's rendering
+    citedFacts,
+    source: "llm",
+    provider: llmResult.provider,
+    model: llmResult.model,
+    llmLatencyMs: llmResult.latencyMs,
+  };
+}
+
 module.exports = {
   buildMonthlySummary,
+  generateMonthlySummary,
 };

@@ -108,6 +108,30 @@ const siaVoiceLimiter = rateLimit({
     legacyHeaders: false
 });
 
+
+// AI-001-T05 -- a DEDICATED, SEPARATE limiter for
+// POST /sia/monthly-summary/generate, mirroring siaLimiter's shape. This
+// is short-window burst protection only -- the actual monthly business
+// cap ("N regenerations per calendar month") is enforced separately and
+// persistently by aiSummaryPreferenceService.recordRegeneration(), which
+// survives restarts and outlives this 15-minute window.
+const aiSummaryLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+
+    keyGenerator: (req) => {
+        return req.userId || ipKeyGenerator(req.ip);
+    },
+
+    message: {
+        success: false,
+        message: "Too many requests. Please try again later."
+    },
+
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 module.exports = {
     apiLimiter,
     authLimiter,
@@ -117,5 +141,6 @@ module.exports = {
     passwordResetLimiter,
     receiptLimiter,
     siaLimiter,
-    siaVoiceLimiter
+    siaVoiceLimiter,
+    aiSummaryLimiter
 };
