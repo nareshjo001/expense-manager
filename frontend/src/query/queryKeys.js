@@ -50,6 +50,16 @@ export const queryKeys = {
     lists: () => [...queryKeys.exports.all, "list"],
   },
 
+  // AI-001-T06 -- opt-in + regeneration-usage state for the monthly AI
+  // summary. One document per user, so just a single key, same shape as
+  // notificationPreferences above. The generated summary itself is never
+  // cached under a query key (no GET endpoint for it) -- only the
+  // preference/regeneration state is.
+  aiSummary: {
+    all: ["aiSummary"],
+    preference: () => [...queryKeys.aiSummary.all, "preference"],
+  },
+
   // OCR-004 -- persisted receipt inbox (upload image + OCR-extracted
   // fields, review status, and expense link). list(filters) keeps each
   // reviewStatus/linked filter combination in its own cache entry, and

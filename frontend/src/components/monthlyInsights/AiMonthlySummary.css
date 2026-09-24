@@ -1,0 +1,173 @@
+.ai-summary-card {
+  border-radius: 20px;
+  border-left: 5px solid #6366f1;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.18), transparent 40%),
+    linear-gradient(#ffffff, #fafafa);
+  box-shadow: var(--card-box-shadow);
+  margin-top: 24px;
+}
+
+.ai-summary-card-head {
+  margin-bottom: 16px;
+}
+
+.ai-summary-h-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.ai-summary-p-text {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.ai-summary-optin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ai-summary-optin-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.ai-summary-regen-count {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.ai-summary-optin-hint {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.ai-summary-generate-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.ai-summary-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-summary-limit-note {
+  font-size: 13px;
+  color: #b45309;
+  margin-top: 8px;
+}
+
+.ai-summary-result {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ai-summary-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ai-summary-source-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.ai-summary-source-llm {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.ai-summary-source-template {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.ai-summary-period {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.ai-summary-narrative {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1f2937;
+}
+
+.ai-summary-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-summary-section-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1f2937;
+  margin: 0 0 6px 0;
+}
+
+.ai-summary-sources-heading {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 12px 0 6px 0;
+}
+
+.ai-summary-facts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-summary-fact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.ai-summary-fact-label {
+  color: #6b7280;
+}
+
+.ai-summary-fact-value {
+  color: #111827;
+  font-weight: 700;
+}

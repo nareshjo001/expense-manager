@@ -24,7 +24,19 @@ function loadApp({ snapshotResult, directResult } = {}) {
   jest.doMock("../sia/sessionStoreAvailability", () => ({ isSessionStoreAvailable: () => false }));
   jest.doMock("../utils/rateLimiter", () => {
     const pass = (_req, _res, next) => next();
-    return { apiLimiter: pass, authLimiter: pass, siaLimiter: pass, siaVoiceLimiter: pass };
+    // AI-001-T05 -- app.js's router tree now also loads Routes/sia.routes.js's
+    // aiSummaryLimiter (POST /sia/monthly-summary/generate); every key this
+    // factory omits becomes `undefined` when sia.routes.js destructures it,
+    // which throws "argument handler must be a function" at require time --
+    // not a real 429 test, just a route wiring load failure. Every limiter
+    // Routes/*.js currently imports from this module must stay listed here.
+    return {
+      apiLimiter: pass,
+      authLimiter: pass,
+      siaLimiter: pass,
+      siaVoiceLimiter: pass,
+      aiSummaryLimiter: pass,
+    };
   });
   jest.doMock("../sia/financialSnapshotService", () => ({ buildFinancialSnapshot }));
   jest.doMock("../sia/directAnswerService", () => ({ answerDirectly }));
