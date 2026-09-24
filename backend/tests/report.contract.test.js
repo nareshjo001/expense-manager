@@ -17,6 +17,25 @@ const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
 const PENDING_SYNC_PATH = "../models/PendingSync";
 const APP_PATH = "../app";
 
+// BUG-001 -- this file's helpers (loadAppWithMockedService /
+// loadAppWithMockedServiceDependencies) call jest.resetModules() and
+// then require("../app") inside EVERY test, exactly like
+// expense.mutationReliability.test.js's own jest.setTimeout(30000)
+// above it -- same root cause, same fix. Measured directly in this
+// environment: a cold require("../app") after jest.resetModules()
+// takes 60-85s here (mongoose's own dependency tree alone measured at
+// ~34s), far past Jest's 5000ms default -- confirmed by running a
+// single test from this file with --testTimeout=170000, which passes
+// in ~62s. Nothing in Middlewares/Auth.js, the report controller, or
+// any code under test has a real timeout/retry/backoff on this path --
+// this margin only accounts for the per-test module-reload cost this
+// file's own test-isolation strategy (fresh mocks every test) pays.
+// Observed run-to-run variance in this environment (62s/66s/91s across
+// three separate single-test runs) argues for real headroom above the
+// measured worst case rather than the tightest value that happened to
+// pass once.
+jest.setTimeout(120000);
+
 const TEST_JWT_SECRET = "report-contract-test-secret";
 let originalJwtSecret;
 
