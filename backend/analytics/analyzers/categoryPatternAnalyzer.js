@@ -20,6 +20,10 @@ const { roundMoney: round2 } = require("../../utils/money");
 // This is intentional per the ANL-001-T02 contract, not a bug.
 
 const toSafeNumber = (value, fallback = 0) => {
+  // Number() throws (rather than returning NaN) for an object with no
+  // usable valueOf/toString -- e.g. Object.create(null) -- so this can't
+  // rely on Number.isFinite alone to catch every malformed shape.
+  if (typeof value !== "number" && typeof value !== "string") return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
@@ -54,7 +58,17 @@ const classifyDominantCategory = (monthlyCategoryReport = {}, dominantCategory =
 // are skipped entirely (no meaningful average to compare against), and a
 // category is only reported when it has 3+ micro transactions.
 const detectMicroTransactions = (currentMonthExpenses = []) => {
-  const grouped = groupByCategoryHelper(Array.isArray(currentMonthExpenses) ? currentMonthExpenses : []);
+  // Malformed entries (null/undefined/non-object) can reach this analyzer
+  // directly -- unlike categoryAnalyzer's own totals, which only ever see
+  // currentMonthExpenses through this same helper, this is a second,
+  // independent call site, so it needs its own guard rather than assuming
+  // upstream already filtered. groupByCategoryHelper itself reads
+  // exp.expenseCategory unconditionally and is shared with other call
+  // sites, so the filter belongs here rather than in that shared helper.
+  const safeExpenses = (Array.isArray(currentMonthExpenses) ? currentMonthExpenses : []).filter(
+    (expense) => expense !== null && typeof expense === "object"
+  );
+  const grouped = groupByCategoryHelper(safeExpenses);
 
   return Object.entries(grouped).reduce((result, [category, expenses]) => {
     const list = Array.isArray(expenses) ? expenses : [];

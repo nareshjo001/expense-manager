@@ -23,6 +23,10 @@ const RULES = {
 };
 
 const toSafeNumber = (value, fallback = 0) => {
+  // Number() throws (rather than returning NaN) for an object with no
+  // usable valueOf/toString -- e.g. Object.create(null) -- so a malformed
+  // expenseAmount can't rely on Number.isFinite alone to catch it.
+  if (typeof value !== "number" && typeof value !== "string") return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
