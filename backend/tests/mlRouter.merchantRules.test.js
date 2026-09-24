@@ -87,7 +87,14 @@ describe("POST /ml/predict-category -- merchant rule precedence (CAT-001)", () =
       .send({ expenseName: "Whole Foods" });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, predictedCategory: "Groceries", confidence: 1, source: "rule" });
+    expect(res.body).toEqual({
+      success: true,
+      predictedCategory: "Groceries",
+      confidence: 1,
+      source: "rule",
+      abstained: false,
+      abstentionReason: null,
+    });
     expect(axiosPost).not.toHaveBeenCalled();
   });
 
