@@ -10,6 +10,9 @@ const ENV_KEYS = [
   // SIA-001-T02 -- output-token/context budgets.
   "SIA_LLM_MAX_OUTPUT_TOKENS",
   "SIA_LLM_MAX_CONTEXT_CHARS",
+  // SIA-001-T04 -- circuit breaker.
+  "SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD",
+  "SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS",
 ];
 
 let originalEnv;
@@ -55,6 +58,9 @@ describe("backend/sia/config", () => {
     // SIA-001-T02 -- output-token/context budgets, additive.
     delete process.env.SIA_LLM_MAX_OUTPUT_TOKENS;
     delete process.env.SIA_LLM_MAX_CONTEXT_CHARS;
+    // SIA-001-T04 -- circuit breaker, additive.
+    delete process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+    delete process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS;
     // Workstream 2 -- voice input variables, additive.
     delete process.env.SIA_VOICE_ENABLED;
     delete process.env.SIA_STT_PROVIDER;
@@ -73,6 +79,9 @@ describe("backend/sia/config", () => {
       // SIA-001-T02 -- output-token/context budget defaults.
       maxOutputTokens: 1024,
       maxContextChars: 60000,
+      // SIA-001-T04 -- circuit breaker defaults.
+      circuitBreakerFailureThreshold: 5,
+      circuitBreakerCooldownMs: 30000,
       appTimeZone: "Asia/Kolkata",
       // Workstream 2 -- voice input defaults, additive.
       voiceEnabled: false,
@@ -252,6 +261,66 @@ describe("backend/sia/config", () => {
     it("accepts a non-integer positive character ceiling (unlike maxOutputTokens, no integer requirement)", () => {
       process.env.SIA_LLM_MAX_CONTEXT_CHARS = "30000.5";
       expect(loadConfig().maxContextChars).toBe(30000.5);
+    });
+  });
+
+  // SIA-001-T04 -- circuit breaker.
+  describe("circuitBreakerFailureThreshold", () => {
+    it("defaults to 5 when SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD is absent", () => {
+      delete process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+      expect(loadConfig().circuitBreakerFailureThreshold).toBe(5);
+    });
+
+    it("converts a configured valid threshold to a number", () => {
+      process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD = "3";
+      const config = loadConfig();
+      expect(config.circuitBreakerFailureThreshold).toBe(3);
+      expect(typeof config.circuitBreakerFailureThreshold).toBe("number");
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["blank", "   "],
+      ["non-numeric", "many"],
+      ["zero", "0"],
+      ["negative", "-2"],
+      ["non-integer", "3.5"],
+    ])("falls back to the default when the value is %s", (_label, value) => {
+      if (value === undefined) {
+        delete process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+      } else {
+        process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD = value;
+      }
+      expect(loadConfig().circuitBreakerFailureThreshold).toBe(5);
+    });
+  });
+
+  describe("circuitBreakerCooldownMs", () => {
+    it("defaults to 30000 when SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS is absent", () => {
+      delete process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS;
+      expect(loadConfig().circuitBreakerCooldownMs).toBe(30000);
+    });
+
+    it("converts a configured valid cooldown to a number", () => {
+      process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS = "15000";
+      const config = loadConfig();
+      expect(config.circuitBreakerCooldownMs).toBe(15000);
+      expect(typeof config.circuitBreakerCooldownMs).toBe("number");
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["blank", "   "],
+      ["non-numeric", "soon"],
+      ["zero", "0"],
+      ["negative", "-500"],
+    ])("falls back to the default when the value is %s", (_label, value) => {
+      if (value === undefined) {
+        delete process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS;
+      } else {
+        process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS = value;
+      }
+      expect(loadConfig().circuitBreakerCooldownMs).toBe(30000);
     });
   });
 
