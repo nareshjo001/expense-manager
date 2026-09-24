@@ -1,7 +1,16 @@
 // Unit tests for backend/sia/config.js and backend/sia/index.js.
 "use strict";
 
-const ENV_KEYS = ["SIA_ENABLED", "SIA_LLM_PROVIDER", "SIA_LLM_TIMEOUT_MS", "SIA_LLM_MODEL", "APP_TIME_ZONE"];
+const ENV_KEYS = [
+  "SIA_ENABLED",
+  "SIA_LLM_PROVIDER",
+  "SIA_LLM_TIMEOUT_MS",
+  "SIA_LLM_MODEL",
+  "APP_TIME_ZONE",
+  // SIA-001-T02 -- output-token/context budgets.
+  "SIA_LLM_MAX_OUTPUT_TOKENS",
+  "SIA_LLM_MAX_CONTEXT_CHARS",
+];
 
 let originalEnv;
 
@@ -37,12 +46,15 @@ function loadConfig() {
 }
 
 describe("backend/sia/config", () => {
-  it("returns all five safe defaults when the SIA/APP_TIME_ZONE variables are absent", () => {
+  it("returns all safe defaults when the SIA/APP_TIME_ZONE variables are absent", () => {
     delete process.env.SIA_ENABLED;
     delete process.env.SIA_LLM_PROVIDER;
     delete process.env.SIA_LLM_TIMEOUT_MS;
     delete process.env.SIA_LLM_MODEL;
     delete process.env.APP_TIME_ZONE;
+    // SIA-001-T02 -- output-token/context budgets, additive.
+    delete process.env.SIA_LLM_MAX_OUTPUT_TOKENS;
+    delete process.env.SIA_LLM_MAX_CONTEXT_CHARS;
     // Workstream 2 -- voice input variables, additive.
     delete process.env.SIA_VOICE_ENABLED;
     delete process.env.SIA_STT_PROVIDER;
@@ -58,6 +70,9 @@ describe("backend/sia/config", () => {
       provider: null,
       timeoutMs: 8000,
       model: null,
+      // SIA-001-T02 -- output-token/context budget defaults.
+      maxOutputTokens: 1024,
+      maxContextChars: 60000,
       appTimeZone: "Asia/Kolkata",
       // Workstream 2 -- voice input defaults, additive.
       voiceEnabled: false,
@@ -172,6 +187,72 @@ describe("backend/sia/config", () => {
     }
 
     expect(loadConfig().timeoutMs).toBe(8000);
+  });
+
+  // SIA-001-T02 -- output-token budget.
+  describe("maxOutputTokens", () => {
+    it("defaults to 1024 when SIA_LLM_MAX_OUTPUT_TOKENS is absent", () => {
+      delete process.env.SIA_LLM_MAX_OUTPUT_TOKENS;
+      expect(loadConfig().maxOutputTokens).toBe(1024);
+    });
+
+    it("converts a configured valid token count to a number", () => {
+      process.env.SIA_LLM_MAX_OUTPUT_TOKENS = "512";
+      const config = loadConfig();
+      expect(config.maxOutputTokens).toBe(512);
+      expect(typeof config.maxOutputTokens).toBe("number");
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["blank", "   "],
+      ["non-numeric", "lots"],
+      ["zero", "0"],
+      ["negative", "-256"],
+      ["non-integer", "512.5"],
+    ])("falls back to the default when the value is %s", (_label, value) => {
+      if (value === undefined) {
+        delete process.env.SIA_LLM_MAX_OUTPUT_TOKENS;
+      } else {
+        process.env.SIA_LLM_MAX_OUTPUT_TOKENS = value;
+      }
+      expect(loadConfig().maxOutputTokens).toBe(1024);
+    });
+  });
+
+  // SIA-001-T02 -- context budget.
+  describe("maxContextChars", () => {
+    it("defaults to 60000 when SIA_LLM_MAX_CONTEXT_CHARS is absent", () => {
+      delete process.env.SIA_LLM_MAX_CONTEXT_CHARS;
+      expect(loadConfig().maxContextChars).toBe(60000);
+    });
+
+    it("converts a configured valid character ceiling to a number", () => {
+      process.env.SIA_LLM_MAX_CONTEXT_CHARS = "30000";
+      const config = loadConfig();
+      expect(config.maxContextChars).toBe(30000);
+      expect(typeof config.maxContextChars).toBe("number");
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["blank", "   "],
+      ["non-numeric", "big"],
+      ["zero", "0"],
+      ["negative", "-1000"],
+    ])("falls back to the default when the value is %s", (_label, value) => {
+      if (value === undefined) {
+        delete process.env.SIA_LLM_MAX_CONTEXT_CHARS;
+      } else {
+        process.env.SIA_LLM_MAX_CONTEXT_CHARS = value;
+      }
+      expect(loadConfig().maxContextChars).toBe(60000);
+    });
+
+    it("accepts a non-integer positive character ceiling (unlike maxOutputTokens, no integer requirement)", () => {
+      process.env.SIA_LLM_MAX_CONTEXT_CHARS = "30000.5";
+      expect(loadConfig().maxContextChars).toBe(30000.5);
+    });
   });
 
   it("does not throw when backend/sia/index.js is required", () => {

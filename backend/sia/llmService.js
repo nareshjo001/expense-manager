@@ -1,4 +1,4 @@
-// SIA LLM service -- real, multi-provider (OpenAI, Gemini, Groq) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai", "gemini", or "groq" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls each provider's REST API directly (Gemini via its official OpenAI-compatible Chat Completions endpoint -- https://ai.google.dev/gemini-api/docs/openai; Groq via its own OpenAI-compatible Chat Completions endpoint -- https://console.groq.com/docs/api-reference#chat-create -- neither via a Google/Groq SDK). Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, response body, or provider reasoning/thinking field is ever logged, returned, or included in an error message. OPENAI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY are read only inside their own provider boundary below, never through sia/config.js, so none of them is ever exposed via the shared config object.
+// SIA LLM service -- real, multi-provider (OpenAI, Gemini, Groq) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai", "gemini", or "groq" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls each provider's REST API directly (Gemini via its official OpenAI-compatible Chat Completions endpoint -- https://ai.google.dev/gemini-api/docs/openai; Groq via its own OpenAI-compatible Chat Completions endpoint -- https://console.groq.com/docs/api-reference#chat-create -- neither via a Google/Groq SDK). Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, response body, or provider reasoning/thinking field is ever logged, returned, or included in an error message. OPENAI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY are read only inside their own provider boundary below, never through sia/config.js, so none of them is ever exposed via the shared config object. SIA-001-T02 -- output-token/context budgets: config.maxOutputTokens is sent as each provider's own generation-length field (max_output_tokens for OpenAI's Responses API, max_tokens for Gemini's OpenAI-compatible endpoint, max_completion_tokens for Groq -- the three do NOT share a field name, and Gemini's compat layer silently ignores an unrecognized one rather than erroring, so getting this right matters); config.maxContextChars is enforced once in askLlm() itself, before any adapter is reached, by rejecting (never truncating) a request whose combined systemPrompt + history + context + question size exceeds it, with code CONTEXT_BUDGET_EXCEEDED.
 "use strict";
 
 const axios = require("axios");
@@ -252,6 +252,14 @@ async function askOpenAi({ systemPrompt, context, question, history, structuredO
       },
     ],
     store: false,
+    // SIA-001-T02 -- output-token budget. The Responses API's field is
+    // max_output_tokens specifically (Chat Completions' max_tokens is NOT
+    // a valid Responses API parameter). Omitted entirely rather than sent
+    // as undefined/invalid when config.maxOutputTokens isn't a usable
+    // positive integer.
+    ...(Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0
+      ? { max_output_tokens: config.maxOutputTokens }
+      : {}),
     ...(normalizedStructuredOutput
       ? {
           text: {
@@ -342,6 +350,14 @@ async function askGemini({ systemPrompt, context, question, history, structuredO
         content: buildUserInputContent(context, question),
       },
     ],
+    // SIA-001-T02 -- output-token budget. Gemini's OpenAI-compatible
+    // endpoint accepts max_tokens, but the compat layer SILENTLY IGNORES
+    // any field it doesn't recognize rather than erroring -- so this must
+    // be exactly "max_tokens", not "max_completion_tokens" or
+    // "max_output_tokens", or the cap would be silently dropped.
+    ...(Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0
+      ? { max_tokens: config.maxOutputTokens }
+      : {}),
     ...(normalizedStructuredOutput
       ? {
           response_format: {
@@ -425,6 +441,12 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
         content: buildUserInputContent(context, question),
       },
     ],
+    // SIA-001-T02 -- output-token budget. Groq's current recommended
+    // field is max_completion_tokens (max_tokens is deprecated there in
+    // favor of it, though still accepted) -- use the recommended name.
+    ...(Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0
+      ? { max_completion_tokens: config.maxOutputTokens }
+      : {}),
     ...(normalizedStructuredOutput
       ? {
           response_format: {
@@ -478,6 +500,35 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
   });
 }
 
+// SIA-001-T02 -- context budget. Computes the combined character length
+// of everything askLlm() is about to send to a provider: systemPrompt +
+// serialized history (via buildHistoryMessages(), the same "user"/
+// "assistant" framing every adapter actually sends -- not a raw guess at
+// history's shape) + serialized context + question. This lets
+// config.maxContextChars be enforced ONCE, in askLlm() itself, before any
+// adapter/request is built, instead of duplicating the check three times.
+// An unserializable context isn't this function's concern -- it's treated
+// as 0-length here, and the adapter's own buildUserInputContent() call
+// (JSON.stringify) will surface that real failure downstream as usual.
+function computeOutboundContentLength({ systemPrompt, context, question, history }) {
+  const systemPromptLength = typeof systemPrompt === "string" ? systemPrompt.length : 0;
+  const questionLength = typeof question === "string" ? question.length : 0;
+
+  let contextLength = 0;
+  try {
+    contextLength = JSON.stringify(context ?? {}).length;
+  } catch (_err) {
+    contextLength = 0;
+  }
+
+  const historyLength = buildHistoryMessages(history).reduce(
+    (total, message) => total + (typeof message.content === "string" ? message.content.length : 0),
+    0
+  );
+
+  return systemPromptLength + contextLength + questionLength + historyLength;
+}
+
 // Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
 async function askLlm({ systemPrompt, context, question, history, structuredOutput } = {}) {
   // OBS-001-T05 -- SIA provider metrics. askLlm is the single function every
@@ -520,6 +571,25 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
       "SIA has no implemented adapter for the configured LLM provider. No request was sent.",
       { code: "PROVIDER_NOT_IMPLEMENTED", provider: normalizedProvider }
     );
+  }
+
+  // SIA-001-T02 -- context budget, enforced once here for every provider.
+  // Fails CLOSED: an oversized request is rejected outright, never
+  // silently truncated. Truncating financial context could make SIA
+  // answer as if it saw the full picture when it didn't -- silently
+  // hiding data from the model would violate this feature's core trust
+  // principle just as much as hiding it from the user would. No adapter
+  // is ever reached once this fires, so no request (partial or
+  // otherwise) is sent to any provider.
+  if (Number.isFinite(config.maxContextChars) && config.maxContextChars > 0) {
+    const outboundContentLength = computeOutboundContentLength({ systemPrompt, context, question, history });
+    if (outboundContentLength > config.maxContextChars) {
+      recordProvider("failure");
+      throw new LlmProviderError(
+        "SIA's request exceeds the configured context budget and was not sent to any provider.",
+        { code: "CONTEXT_BUDGET_EXCEEDED", provider: normalizedProvider }
+      );
+    }
   }
 
   try {

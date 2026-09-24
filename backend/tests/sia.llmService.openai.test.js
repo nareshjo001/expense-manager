@@ -31,6 +31,9 @@ function loadLlmServiceWithMockedAxios({ configOverrides = {}, axiosPostMock } =
     provider: "openai",
     timeoutMs: 8000,
     model: "gpt-4.1-mini",
+    // SIA-001-T02 -- output-token/context budgets.
+    maxOutputTokens: 512,
+    maxContextChars: 60000,
     ...configOverrides,
   }));
 
@@ -180,6 +183,35 @@ describe("backend/sia/llmService -- OpenAI provider adapter", () => {
       await askLlm(VALID_REQUEST);
 
       expect(postMock.mock.calls[0][2].timeout).toBe(4321);
+    });
+
+    // SIA-001-T02 -- output-token budget.
+    it("sends config.maxOutputTokens as max_output_tokens (the Responses API's field, not max_tokens)", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_CHUNK_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({
+        axiosPostMock: postMock,
+        configOverrides: { maxOutputTokens: 777 },
+      });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      const body = postMock.mock.calls[0][1];
+      expect(body.max_output_tokens).toBe(777);
+      expect(body.max_tokens).toBeUndefined();
+    });
+
+    it("omits max_output_tokens entirely when config.maxOutputTokens is not a usable positive number", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_CHUNK_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({
+        axiosPostMock: postMock,
+        configOverrides: { maxOutputTokens: null },
+      });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      expect("max_output_tokens" in postMock.mock.calls[0][1]).toBe(false);
     });
   });
 

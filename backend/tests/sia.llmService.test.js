@@ -231,4 +231,81 @@ describe("backend/sia/llmService", () => {
       code: "PROVIDER_NOT_IMPLEMENTED",
     });
   });
+
+  // SIA-001-T02 -- context budget, enforced once in askLlm() for every
+  // provider, before any adapter/request is built.
+  describe("context budget", () => {
+    it("rejects with CONTEXT_BUDGET_EXCEEDED when the combined request size exceeds config.maxContextChars, and never reaches the adapter", async () => {
+      const { askLlm, LlmProviderError } = loadLlmService({ provider: "openai", maxContextChars: 100 });
+
+      const oversizedRequest = {
+        systemPrompt: "sp",
+        context: { note: "x".repeat(200) },
+        question: "q",
+      };
+
+      await expect(askLlm(oversizedRequest)).rejects.toBeInstanceOf(LlmProviderError);
+      await expect(askLlm(oversizedRequest)).rejects.toMatchObject({
+        code: "CONTEXT_BUDGET_EXCEEDED",
+        provider: "openai",
+      });
+    });
+
+    it("counts systemPrompt + serialized context + question + serialized history together, not any single field alone", async () => {
+      const { askLlm } = loadLlmService({ provider: "openai", maxContextChars: 50 });
+
+      // Individually short, but their sum exceeds the 50-char budget.
+      const requestWithHistory = {
+        systemPrompt: "a".repeat(20),
+        context: {},
+        question: "b".repeat(20),
+        history: [{ role: "user", content: "c".repeat(20) }],
+      };
+
+      await expect(askLlm(requestWithHistory)).rejects.toMatchObject({
+        code: "CONTEXT_BUDGET_EXCEEDED",
+      });
+    });
+
+    it("a request within budget is never rejected with CONTEXT_BUDGET_EXCEEDED", async () => {
+      const { askLlm } = loadLlmService({ provider: "openai", maxContextChars: 100000, model: null });
+
+      // model: null means this still rejects (MODEL_NOT_CONFIGURED, thrown
+      // by the adapter itself) -- proving the budget check let it through
+      // to the adapter rather than blocking it.
+      await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.not.toMatchObject({
+        code: "CONTEXT_BUDGET_EXCEEDED",
+      });
+      await expect(askLlm({ systemPrompt: "sp", context: {}, question: "q" })).rejects.toMatchObject({
+        code: "MODEL_NOT_CONFIGURED",
+      });
+    });
+
+    it("an unconfigured/invalid maxContextChars (defensive: bypassing config.js's own default) never blocks a request on that basis alone", async () => {
+      const { askLlm } = loadLlmService({ provider: "openai", maxContextChars: undefined, model: null });
+
+      const largeRequest = {
+        systemPrompt: "sp".repeat(5000),
+        context: { note: "x".repeat(5000) },
+        question: "q",
+      };
+
+      // Still rejects (no model configured), but never with
+      // CONTEXT_BUDGET_EXCEEDED -- an unusable budget value is permissive,
+      // not a silent block.
+      await expect(askLlm(largeRequest)).rejects.toMatchObject({
+        code: "MODEL_NOT_CONFIGURED",
+      });
+    });
+
+    it("an unimplemented provider still rejects with PROVIDER_NOT_IMPLEMENTED even for an oversized request (adapter lookup fails first)", async () => {
+      const { askLlm } = loadLlmService({ provider: "azure-openai", maxContextChars: 10 });
+
+      await expect(
+        askLlm({ systemPrompt: "sp".repeat(50), context: {}, question: "q" })
+      ).rejects.toMatchObject({
+        code: "PROVIDER_NOT_IMPLEMENTED",
+      });
+    });
+  });
 });

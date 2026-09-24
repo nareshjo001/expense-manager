@@ -31,6 +31,9 @@ function loadLlmServiceWithMockedAxios({ configOverrides = {}, axiosPostMock } =
     provider: "groq",
     timeoutMs: 8000,
     model: "openai/gpt-oss-120b",
+    // SIA-001-T02 -- output-token/context budgets.
+    maxOutputTokens: 512,
+    maxContextChars: 60000,
     ...configOverrides,
   }));
 
@@ -199,6 +202,36 @@ describe("backend/sia/llmService -- Groq provider adapter", () => {
       expect(postMock.mock.calls[0][2].timeout).toBe(30000);
       // Exactly one outbound attempt -- no automatic retry.
       expect(postMock).toHaveBeenCalledTimes(1);
+    });
+
+    // SIA-001-T02 -- output-token budget.
+    it("sends config.maxOutputTokens as max_completion_tokens (Groq's current recommended field, not the deprecated max_tokens)", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_MESSAGE_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({
+        axiosPostMock: postMock,
+        configOverrides: { maxOutputTokens: 777 },
+      });
+      process.env.GROQ_API_KEY = "gsk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      const body = postMock.mock.calls[0][1];
+      expect(body.max_completion_tokens).toBe(777);
+      expect(body.max_tokens).toBeUndefined();
+      expect(body.max_output_tokens).toBeUndefined();
+    });
+
+    it("omits max_completion_tokens entirely when config.maxOutputTokens is not a usable positive number", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_MESSAGE_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({
+        axiosPostMock: postMock,
+        configOverrides: { maxOutputTokens: null },
+      });
+      process.env.GROQ_API_KEY = "gsk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      expect("max_completion_tokens" in postMock.mock.calls[0][1]).toBe(false);
     });
   });
 

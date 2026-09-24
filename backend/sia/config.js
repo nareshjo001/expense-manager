@@ -42,6 +42,48 @@ function normalizeTimeoutMs(rawValue) {
   return parsed;
 }
 
+// SIA-001-T02 -- output-token budget. Bounds each provider's own
+// generation-length parameter so a single answer can't run away in cost
+// or latency -- see llmService.js's askOpenAi/askGemini/askGroq, which
+// each map this to their own provider-specific field name
+// (max_output_tokens / max_tokens / max_completion_tokens respectively;
+// the three providers do NOT share one field name). Same validation shape
+// as normalizeTimeoutMs -- only a finite, strictly positive integer token
+// count is accepted, anything else falls back to the safe default.
+const DEFAULT_LLM_MAX_OUTPUT_TOKENS = 1024;
+
+function normalizeMaxOutputTokens(rawValue) {
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return DEFAULT_LLM_MAX_OUTPUT_TOKENS;
+  }
+  const parsed = Number(rawValue.trim());
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
+    return DEFAULT_LLM_MAX_OUTPUT_TOKENS;
+  }
+  return parsed;
+}
+
+// SIA-001-T02 -- context budget. Caps the combined character length of
+// systemPrompt + serialized history + serialized context + question that
+// llmService.js's askLlm() will send to ANY provider -- enforced once at
+// that shared boundary, before any adapter/request is built. This is a
+// broader, request-level ceiling, deliberately not a replacement for
+// financialSnapshotService.js's own narrower snapshot-only cap (16,000
+// chars for the analytics snapshot alone); this one covers the full
+// outbound payload across every askLlm() caller.
+const DEFAULT_LLM_MAX_CONTEXT_CHARS = 60000;
+
+function normalizeMaxContextChars(rawValue) {
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return DEFAULT_LLM_MAX_CONTEXT_CHARS;
+  }
+  const parsed = Number(rawValue.trim());
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_LLM_MAX_CONTEXT_CHARS;
+  }
+  return parsed;
+}
+
 // The application's canonical IANA time zone for calendar/period
 const DEFAULT_APP_TIME_ZONE = "Asia/Kolkata";
 
@@ -123,6 +165,9 @@ const config = {
   provider: normalizeProvider(process.env.SIA_LLM_PROVIDER),
   timeoutMs: normalizeTimeoutMs(process.env.SIA_LLM_TIMEOUT_MS),
   model: normalizeModel(process.env.SIA_LLM_MODEL),
+  // SIA-001-T02 -- output-token/context budgets, additive fields.
+  maxOutputTokens: normalizeMaxOutputTokens(process.env.SIA_LLM_MAX_OUTPUT_TOKENS),
+  maxContextChars: normalizeMaxContextChars(process.env.SIA_LLM_MAX_CONTEXT_CHARS),
   appTimeZone: normalizeAppTimeZone(process.env.APP_TIME_ZONE),
   // Voice input (Workstream 2) -- additive fields only, read the same
   voiceEnabled: normalizeEnabled(process.env.SIA_VOICE_ENABLED),
