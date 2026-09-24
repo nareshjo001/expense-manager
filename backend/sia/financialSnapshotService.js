@@ -21,7 +21,18 @@ const MAX_ARRAY_ITEMS = 10;
 const MAX_OBJECT_KEYS = 25;
 const MAX_STRING_LENGTH = 500;
 const MAX_ANALYTICS_SERIALIZED_CHARS = 16000;
-const FORBIDDEN_KEY_PATTERN = /(?:^|_)(?:id|userid|user|_id|expenseid|transactionid|merchant|description|receipt|expensename|expensedate|name|title|details|note|narration)(?:$|_)/i;
+// SIA-001-T01 -- expensedescription added: the generic "description"
+// token only matches at a snake_case-style boundary ("^|_"), so it never
+// anchored inside the camelCase field expenseDescription the way
+// expensename/expensedate/expenseid already do as their own literal
+// compound tokens. Left uncaught, an expense's free-text description
+// (arbitrary user-typed text -- the highest-risk field on a raw
+// largestExpense/smallestExpense object, per spendingAnalyzer.js) could
+// reach an external LLM provider. amount/category value fields are
+// intentionally left reachable (see sia.directAnswerService.test.js's
+// copySafe expectation) -- only identifying/free-text fields are
+// stripped here.
+const FORBIDDEN_KEY_PATTERN = /(?:^|_)(?:id|userid|user|_id|expenseid|transactionid|merchant|description|expensedescription|receipt|expensename|expensedate|name|title|details|note|narration)(?:$|_)/i;
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
