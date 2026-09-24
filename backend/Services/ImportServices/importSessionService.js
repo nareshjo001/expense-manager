@@ -74,7 +74,6 @@ function assertRequiredMapping(columnMapping) {
 async function safeEnrichRows({ userId, mappedRows }) {
   const fallback = () => mappedRows.map(() => ({ duplicateCandidateExpenseId: null, suggestedCategory: null }));
   try {
-    // eslint-disable-next-line global-require
     const { enrichRowsWithSuggestions } = require("./importSuggestionService");
     if (typeof enrichRowsWithSuggestions !== "function") {
       return fallback();

@@ -292,7 +292,7 @@ describe("runReceiptRetentionJob -- race condition: relinked between find() and 
   test("a receipt that got linked between the initial find and the per-item delete is NOT deleted", async () => {
     const receipt = unlinkedReceipt({ _id: "receiptRace", storageKey: "key-race" });
 
-    const { run, store, deleteReceiptObject } = loadJob({
+    const { run, store } = loadJob({
       docs: [receipt],
       // Simulate a user linking the receipt to an expense in the window
       // between the batch find() (which already returned this doc as

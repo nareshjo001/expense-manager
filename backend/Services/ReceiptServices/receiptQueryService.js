@@ -192,12 +192,11 @@ async function unlinkReceiptFromExpense({ userId, receiptId }) {
   return toSafeShape(receipt.toObject());
 }
 
-// The three user-correctable fields of extractedFields. Everything else in
-// extractedFields (overallConfidence, fieldConfidence, reviewReasons,
-// amountCandidates) is OCR's own record of what it originally produced and
-// must never be overwritten by a user correction.
-const CORRECTABLE_FIELDS = Object.freeze(["expenseName", "expenseAmount", "expenseDate"]);
-
+// Only expenseName/expenseAmount/expenseDate (the three checks below) are
+// ever merged onto extractedFields. Everything else in extractedFields
+// (overallConfidence, fieldConfidence, reviewReasons, amountCandidates) is
+// OCR's own record of what it originally produced and must never be
+// overwritten by a user correction.
 function validateCorrections(corrections) {
   const merged = {};
 
@@ -238,7 +237,7 @@ function validateCorrections(corrections) {
 // Marks a receipt reviewed. `corrections` is an optional partial
 // {expenseName, expenseAmount, expenseDate} a user typed in while
 // reviewing a low-confidence receipt -- when provided, only those three
-// keys are merged onto extractedFields (see CORRECTABLE_FIELDS above).
+// keys are merged onto extractedFields (see validateCorrections above).
 async function markReceiptReviewed({ userId, receiptId, corrections }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`markReceiptReviewed: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);

@@ -11,7 +11,6 @@
 
 const jwt = require("jsonwebtoken");
 const request = require("supertest");
-const mongoose = require("mongoose");
 
 const SCHEMAS_PATH = "../config/Schemas";
 const SYNC_RECOVERY_SERVICE_PATH = "../Services/syncRecoveryService";
