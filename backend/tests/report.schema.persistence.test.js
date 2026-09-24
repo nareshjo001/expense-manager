@@ -297,12 +297,26 @@ describe("models/Report.js: forecast section schema round-trip (Batch 2)", () =>
   });
 
   it("removing Financial Risk Signals bumped the contract to 9 -- version 8 is stale", () => {
-    expect(CURRENT_REPORT_VERSION).toBe(9);
     expect(isCurrentReport({ metadata: { version: 4 } })).toBe(false);
     expect(isCurrentReport({ metadata: { version: 5 } })).toBe(false);
     expect(isCurrentReport({ metadata: { version: 6 } })).toBe(false);
     expect(isCurrentReport({ metadata: { version: 7 } })).toBe(false);
     expect(isCurrentReport({ metadata: { version: 8 } })).toBe(false);
-    expect(isCurrentReport({ metadata: { version: 9 } })).toBe(true);
+    // Superseded by ANL-001-T03 below, but kept as its own assertion since
+    // it documents a real, still-true historical boundary (the 8->9 bump),
+    // not just the current value.
+    expect(isCurrentReport({ metadata: { version: 9 } })).toBe(false);
+  });
+
+  // ANL-001-T03: adds report.insights (weeklyChange/categoryPattern/
+  // stability/chartFindings) and removes the dead summary.healthScore/
+  // riskLevel fields -- both an addition and a removal, so per
+  // reportContractVersion.js's own convention this is a real contract
+  // change, not a silent pass-through, and gets its own version and its
+  // own boundary test rather than just bumping the constant above.
+  it("ANL-001-T03's new insights section bumped the contract to 10 -- version 9 is stale", () => {
+    expect(CURRENT_REPORT_VERSION).toBe(10);
+    expect(isCurrentReport({ metadata: { version: 9 } })).toBe(false);
+    expect(isCurrentReport({ metadata: { version: 10 } })).toBe(true);
   });
 });

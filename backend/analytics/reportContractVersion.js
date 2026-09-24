@@ -3,7 +3,8 @@
 "use strict";
 
 // Bumped 3->4 for Prediction Layer V1: version 4 is the first contract whose `forecast` section always carries the per-category next-month breakdown, the descriptive `dataQuality` summary, `targetMonth`, and the forecast-vs-target-month `budgetRisk` block -- a stale v3 document is simply regenerated on next read via the same isCurrentReport() gate, no migration needed since models/Report.js stores every section as Mixed.
-const CURRENT_REPORT_VERSION = 9;
+// Bumped 9->10 for ANL-001-T03: adds a new top-level `insights` section (weeklyChange, categoryPattern, stability, chartFindings -- see ANL-001-T02's contract in workflow/features/P1/ANL-001-backend-authoritative-analytics.md) and removes the dead `summary.healthScore`/`summary.riskLevel` fields, which have always read as `undefined` (healthAnalyzer.analyze() returns `overall`/`risk`, never those names) -- `financialHealth.overall`/`financialHealth.risk` are the real values and are unaffected. A stale v9 document regenerates on next read via the same isCurrentReport() gate; no migration needed.
+const CURRENT_REPORT_VERSION = 10;
 
 // True only when `report` carries a numeric metadata.version at least as new as the current contract; anything else (missing report, missing/non-object metadata, missing/non-numeric/older version) is treated as stale and regenerated -- never inferred from `anomalies` or any other section's content.
 const isCurrentReport = (report) => {
