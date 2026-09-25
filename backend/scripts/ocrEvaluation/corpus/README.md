@@ -10,28 +10,48 @@ reaches a real user's receipt.
 
 ## Status
 
-The harness (this directory) is complete and runnable. The committed
-corpus (`manifest.json` + `images/`) is **synthetic smoke-test fixtures
-only** -- six generated receipt-like images, not real photographs. They
-prove the harness works end to end and catch regressions in the
-deterministic parts of the pipeline (amount selection, ambiguity
-detection, the heading-collision guess, the no-amount/no-date/no-text
-paths). They do **not** measure real-world OCR accuracy: rendered SVG text
-has none of the thermal-print fade, skew, crumpling, glare or handwriting
-variance that make real receipts hard to read -- which is exactly what
-OCR-003 (confidence, retry and review-UI behavior) exists to handle. A
-**representative** evaluation set needs real anonymized receipt
-photographs, which this environment has no way to source; see "Adding real
-receipts" below.
+The harness (this directory) is complete and runnable. The corpus
+(`manifest.json` + `images/`) now has 21 entries: 6 generated synthetic
+smoke-test fixtures (deterministic regression cases -- amount selection,
+ambiguity, the heading-collision guess, the no-amount/no-date/no-text
+paths) plus **15 real, anonymized receipt photographs** contributed by
+the maintainer on 2026-09-25 (`source: "anonymized-real"` in the
+manifest), spanning 14 different merchants, three currencies/formats
+(INR and Indonesian Rupiah), receipts from 2005 through 2026, thermal
+print, ink stamps, and a range of photo quality -- real variance no
+synthetic image can produce.
+
+Two real entries had genuine customer-identifying text (a name, a
+name+mobile line) blacked out with a solid rectangle before being
+committed; EXIF/GPS metadata was stripped from all 15 by re-encoding.
+One entry (`belgian-waffle-co`) arrived pre-redacted by the maintainer
+with a physical highlighter and was left as-is. See each entry's `notes`
+in `manifest.json` for specifics.
+
+**Not yet done, and it's a real gap, not a formality**: this evaluation
+harness has never actually been run against real Tesseract. Both
+environments available while building this (the cloud sandbox, and the
+local VM a device-bridge session's shell runs in) fail outbound requests
+to Tesseract's language-data host -- confirmed directly (`curl` to
+google.com itself returns nothing from that local VM despite a
+configured proxy, so this is a sandboxing restriction, not something
+specific to Tesseract). **`npm run eval:ocr` needs to be run from an
+ordinary terminal directly on the machine that has these files** (not
+through an AI coding assistant's sandboxed shell) to get real results.
+Four of the real entries have a `notes` field flagging a *predicted*
+failure from a known regex limitation (a receipt whose only labelled
+total is "Gross Amount" or "Bill Amt" rather than "Total"; a date
+written `12-Sep-2026` instead of numerically) -- those are informed
+guesses from reading the receipts, not measured outcomes, and the actual
+run may agree, disagree, or surface something else entirely. Once run,
+update this section, `manifest.json` (if any ground truth needs
+correcting), the feature doc, and the tracker.
 
 This tracks with the 2026-09-08 forensic audit's finding for this task
 (see `workflow/features/P0/OCR-003-ocr-accuracy-and-reliability.md`): a
-synthetic corpus was explicitly judged not representative there, for the
-same reason repeated above. What changed since then is that the harness,
-scoring and synthetic smoke corpus now exist and are unit-tested -- only
-the real-photograph corpus remains outstanding, and only a maintainer with
-actual receipts can supply that.
-
+synthetic-only corpus was explicitly judged not representative there.
+That gap is now closed on the corpus side; what's left is running the
+harness for real and acting on what it finds.
 ## Running it
 
 ```
@@ -114,10 +134,12 @@ people to ignore the gate.
   `true` for every entry; there is no path in this harness for a
   non-anonymized image.
 
-## Adding real receipts
+## Adding more real receipts
 
-This is the part that needs a maintainer, not more scripting. To add a
-real receipt:
+15 have been added so far (2026-09-25) -- more, especially covering
+merchants, layouts or conditions not already represented, are still
+welcome and follow the same process. This is the part that needs a
+maintainer, not more scripting. To add a real receipt:
 
 1. Photograph or scan the receipt the way a real user would (phone camera,
    not a flatbed scan -- skew and lighting variance are part of what's

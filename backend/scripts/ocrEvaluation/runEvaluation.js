@@ -74,11 +74,21 @@ const toMarkdown = (meta, aggregate, results) => {
   return lines.join("\n");
 };
 
-async function main() {
-  const manifest = loadManifest();
+// By default, runs the full committed manifest (what `npm run eval:ocr`
+// does). `entries`/`corpusType` can be overridden together --
+// ocrEvaluation.runEvaluation.test.js passes just the synthetic subset
+// (with corpusType: "synthetic-smoke-test") so it can mock a small, fixed
+// number of OCR calls instead of one per real photo in the manifest,
+// independent of whatever the committed manifest currently contains.
+async function main({ entries, corpusType } = {}) {
+  if (!entries) {
+    const manifest = loadManifest();
+    entries = manifest.entries;
+    corpusType = manifest.corpusType;
+  }
   const results = [];
 
-  for (const entry of manifest.entries) {
+  for (const entry of entries) {
     // Sequential on purpose: extractTextFromImage() creates and tears down
     // a real Tesseract worker per call, and running several concurrently
     // would multiply memory/CPU for no speed benefit this tool needs.
@@ -88,7 +98,7 @@ async function main() {
   }
 
   const aggregate = aggregateScores(results);
-  const meta = { runAt: new Date().toISOString(), corpusType: manifest.corpusType };
+  const meta = { runAt: new Date().toISOString(), corpusType };
 
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
   fs.writeFileSync(
