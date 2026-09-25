@@ -63,6 +63,30 @@ describe("extractAmount -- selection and ambiguity (T04)", () => {
     expect(() => extractAmount(undefined)).not.toThrow();
     expect(extractAmount(undefined).value).toBeNull();
   });
+
+  // OCR-003-T08 -- regression tests for a real gap found via OCR-003-T07's
+  // real-Tesseract evaluation run: some receipts never print "Total" at all
+  // for the true payable amount, only "Gross Amount" or "Bill Amt".
+  test("recognises 'Gross Amount' as a total label when no 'Total' line exists", () => {
+    // Mirrors limbo-premium from the evaluation corpus: the only
+    // "total"-labelled line is a pre-discount Sub Total, and the true
+    // payable amount is printed later under "Gross Amount".
+    const result = extractAmount("Sub Total 699.00\nGross Amount 640.00");
+    expect(result.value).toBe(640);
+  });
+
+  test("recognises 'Bill Amt' as a total label when no 'Total' line exists", () => {
+    // Mirrors khodiyar-dhaba: "TOTAL" is the pre-GST figure, "Bill Amt" is
+    // what the customer actually paid, printed after it.
+    const result = extractAmount("TOTAL 216.00\nBill Amt 227.00");
+    expect(result.value).toBe(227);
+  });
+
+  test("still prefers grand total over Gross Amount/Bill Amt when both are present", () => {
+    const result = extractAmount("Bill Amt 227.00\nGrand Total 250.00");
+    expect(result.value).toBe(250);
+    expect(result.matchedText.toLowerCase()).toContain("grand");
+  });
 });
 
 describe("extractMerchant and heading detection (T04)", () => {
@@ -98,6 +122,33 @@ describe("extractDate", () => {
 
   test("returns null when no date is present", () => {
     expect(extractDate("Fresh Mart Total 10").value).toBeNull();
+  });
+
+  // OCR-003-T08 -- regression tests for two real bugs found via OCR-003-T07's
+  // real-Tesseract evaluation run.
+  test("recognises an ISO-formatted date (yyyy-mm-dd)", () => {
+    expect(extractDate("Receipt 2023-08-17 Total 360").value).toBe("2023-08-17");
+  });
+
+  test("matches the WHOLE ISO date, not a misleading substring of it", () => {
+    // Mirrors belgian-waffle-co: the old regex matched "23-08-17" (starting
+    // at the year's 3rd digit) against a receipt printing "2023-08-17",
+    // silently producing the wrong date instead of the right one.
+    const result = extractDate("Bill date: 2023-08-17\nTotal 360");
+    expect(result.value).toBe("2023-08-17");
+    expect(result.value).not.toBe("23-08-17");
+  });
+
+  test("does not false-positive-match garbled OCR text spanning a line break", () => {
+    // Mirrors dindigul-thalappakatti/chidhambaram-stc: the old worded-date
+    // alternative accepted ANY word between two numbers, and its
+    // whitespace matched across newlines, so garbled OCR output like this
+    // used to be misread as a date. "FLOR" is not a month name.
+    expect(extractDate("41\nFLOR 4241").value).toBeNull();
+  });
+
+  test("still recognises an abbreviated month name", () => {
+    expect(extractDate("Receipt 5 Sep 2026 Total 10").value).toBe("5 Sep 2026");
   });
 });
 

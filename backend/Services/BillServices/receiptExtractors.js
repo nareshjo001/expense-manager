@@ -62,9 +62,18 @@ const looksLikeHeading = (merchant) => {
 // Candidates with equal values are NOT ambiguous -- "Total 45.00" repeated
 // on a customer copy is agreement, not conflict, and flagging it would train
 // people to dismiss the warning.
+// OCR-003-T08 -- widened to recognise two real-world total labels found
+// against actual receipt photos (OCR-003-T07's evaluation corpus): "Gross
+// Amount" and "Bill Amt" are the ONLY labelled payable total on some
+// receipts (limbo-premium, khodiyar-dhaba), with the sole "total"-labelled
+// line on those receipts being a pre-discount/pre-GST figure that is not
+// what the customer actually paid. The selection rule below is unchanged --
+// prefer an explicit grand total, else the LAST total-like match -- which
+// is why simply recognising these labels is enough: the true payable total
+// is printed after any subtotal/pre-tax total line on a normal receipt.
 const extractAmount = (text) => {
   const source = String(text ?? "");
-  const matches = [...source.matchAll(/(grand total|total)[^\d]*([\d,.]+)/gi)];
+  const matches = [...source.matchAll(/(grand total|gross amount|bill amt|total)[^\d]*([\d,.]+)/gi)];
 
   if (!matches.length) {
     return { value: null, matchedText: null, candidates: [], ambiguous: false };
@@ -93,9 +102,34 @@ const extractAmount = (text) => {
 
 // Extract the receipt date in any supported format, along with the matched
 // text so its confidence can be looked up against the per-line breakdown.
+// Returns the raw matched substring, not a parsed date -- nothing
+// downstream parses this into a Date object today (see receiptParser.js),
+// so the contract is only that whatever is returned here is itself
+// something `new Date(...)` can later make sense of.
+//
+// OCR-003-T08 -- two real bugs found via OCR-003-T07's real-Tesseract
+// evaluation run, both fixed here:
+//
+// 1. No support for an ISO-formatted date (`2023-08-17`), and no anchor to
+//    stop the numeric d/m/y alternative from matching a misleading
+//    SUBSTRING of one -- against "2023-08-17" the old regex matched
+//    "23-08-17" (starting at the year's 3rd digit) instead of the full
+//    date or no match at all, silently producing a wrong date. A dedicated
+//    yyyy-mm-dd alternative is tried first; because it can match starting
+//    at the year's first digit, the regex engine's normal leftmost-match
+//    behaviour picks the whole date before the d/m/y alternative gets a
+//    chance to match the tail end of it.
+// 2. The worded-date alternative (`\d{1,2} <word> \d{4}`) never checked
+//    that the middle word was an actual month name, and its whitespace
+//    matched across line breaks (`\s` includes `\n`) -- so on noisy OCR
+//    text it could false-positive-match garbage spanning two OCR lines
+//    (e.g. "41\nFLOR 4241") as if it were a date, instead of correctly
+//    reporting no date found. The month is now matched against an explicit
+//    name list (full or abbreviated), and its surrounding whitespace is
+//    restricted to spaces/tabs so it can no longer span a line break.
 const extractDate = (text) => {
   const dateRegex =
-    /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{1,2}(st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})/i;
+    /(\d{4}-\d{1,2}-\d{1,2})|(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{1,2}(?:st|nd|rd|th)?[ \t]+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[ \t]+\d{4})/i;
 
   const match = String(text ?? "").match(dateRegex);
 
