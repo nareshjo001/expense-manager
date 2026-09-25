@@ -16,7 +16,9 @@ afterEach(() => {
 });
 
 function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 describe("backend/sia/providerCircuitBreaker", () => {

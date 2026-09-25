@@ -53,6 +53,12 @@ jest.mock("../imports/Imports", () => {
     deleteErrorToast: jest.fn(),
     Add: () => null,
     MerchantRules: () => null,
+    // SIA-001-T06 -- SiaPreferences has its own real query/mutation hooks
+    // (useSiaPreferenceQuery et al.) that would mount with no
+    // QueryClientProvider in this suite if left unstubbed, and the mocked
+    // react-router-dom Route above renders every route's element
+    // unconditionally regardless of path.
+    SiaPreferences: () => null,
   };
 });
 
