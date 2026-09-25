@@ -19,6 +19,11 @@ const {
   updateAiSummaryPreference,
   generateAiMonthlySummary,
 } = require("../Controllers/AiSummaryPreferences");
+const {
+  getSiaPreference,
+  updateSiaPreference,
+  deleteSiaHistory,
+} = require("../Controllers/SiaControllers/preference");
 
 // M3-1: verifyToken first (so req.userId is always set before the limiter
 // keys on it), then the dedicated SIA limiter, then the controller.
@@ -51,5 +56,13 @@ router.post(
 router.get("/monthly-summary/preferences", verifyToken, siaLimiter, getAiSummaryPreference);
 router.put("/monthly-summary/preferences", verifyToken, siaLimiter, updateAiSummaryPreference);
 router.post("/monthly-summary/generate", verifyToken, aiSummaryLimiter, generateAiMonthlySummary);
+
+// SIA-001-T06 -- per-user SIA enable/disable, and "delete my SIA history"
+// independent of full account deletion. Cheap reads/writes/deletes, no LLM
+// call -- the shared siaLimiter is sufficient, matching the preferences
+// routes above.
+router.get("/preferences", verifyToken, siaLimiter, getSiaPreference);
+router.put("/preferences", verifyToken, siaLimiter, updateSiaPreference);
+router.delete("/history", verifyToken, siaLimiter, deleteSiaHistory);
 
 module.exports = router;

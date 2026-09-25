@@ -3,6 +3,7 @@
 
 const SiaMessage = require("../models/SiaMessage");
 const SiaSession = require("../models/SiaSession");
+const SiaPreference = require("../models/SiaPreference");
 
 describe("models/SiaMessage -- index declarations", () => {
   it("declares a unique, sparse index on (session, clientMessageId)", () => {
@@ -30,5 +31,15 @@ describe("models/SiaSession -- index declarations", () => {
     const indexes = SiaSession.schema.indexes();
     const listingIndex = indexes.find(([spec]) => spec.user === 1 && spec.updatedAt === -1);
     expect(listingIndex).toBeDefined();
+  });
+});
+
+describe("models/SiaPreference -- index declarations (SIA-001-T06)", () => {
+  it("declares a unique index on userId", () => {
+    const indexes = SiaPreference.schema.indexes();
+    const userIdIndex = indexes.find(([spec]) => spec.userId === 1);
+    expect(userIdIndex).toBeDefined();
+    const [, options] = userIdIndex;
+    expect(options.unique).toBe(true);
   });
 });

@@ -444,6 +444,107 @@ const notificationPreferencesSaveErrorToast = (data = {}) => {
     );
 };
 
+// SIA-001-T06 -- SIA enable/disable and "delete my SIA history" feedback.
+const siaPreferenceSaveSuccessToast = (enabled) => {
+    toast.dismiss();
+    toast.success(
+        <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+            {enabled ? "SIA is turned on" : "SIA is turned off"}
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                background: "linear-gradient(145deg, #d1fae5, #a7f3d0)",
+                color: "#065f46",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+const siaPreferenceSaveErrorToast = (data = {}) => {
+    toast.dismiss();
+    toast.error(
+        <div>
+            <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+                {data.message || "Couldn't save your SIA preference."}
+            </div>
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 4000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                backgroundColor: "#fee2e2",
+                color: "#991b1b",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+const siaHistoryDeleteSuccessToast = () => {
+    toast.dismiss();
+    toast.success(
+        <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+            Your SIA conversation history was deleted
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                background: "linear-gradient(145deg, #d1fae5, #a7f3d0)",
+                color: "#065f46",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+const siaHistoryDeleteErrorToast = (data = {}) => {
+    toast.dismiss();
+    toast.error(
+        <div>
+            <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+                {data.message || "Couldn't delete your SIA history."}
+            </div>
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 4000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                backgroundColor: "#fee2e2",
+                color: "#991b1b",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
 
 // DAT-004 -- financial data export feedback. A "queued" toast for the
 // background/large-export path (the request just landed in the queue; the
@@ -955,6 +1056,10 @@ export {
     recurringActionErrorToast,
     notificationPreferencesSaveSuccessToast,
     notificationPreferencesSaveErrorToast,
+    siaPreferenceSaveSuccessToast,
+    siaPreferenceSaveErrorToast,
+    siaHistoryDeleteSuccessToast,
+    siaHistoryDeleteErrorToast,
     exportQueuedToast,
     exportDownloadReadyToast,
     exportCreateErrorToast,

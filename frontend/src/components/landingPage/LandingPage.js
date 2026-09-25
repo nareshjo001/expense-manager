@@ -11,14 +11,15 @@ import {
     deleteSuccessToast,
     deleteErrorToast,
     Add,
-    MerchantRules
+    MerchantRules,
+    SiaPreferences
 } from '../imports/Imports';
 import icons from '../imports/iconsImport';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './LandingPage.css';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
-import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags } from "react-icons/fa";
+import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaRobot } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
@@ -226,6 +227,12 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         </span>
                                     </Link>
 
+                                    <Link className="nav-link" to="/sia-settings">
+                                        <span className="nav-item">
+                                            <FaRobot /> SIA Settings
+                                        </span>
+                                    </Link>
+
                                 </nav>
 
                                 <div className="header-buttons">
@@ -268,6 +275,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             <Route path="/chart/pie" element={<PieChartPage />} />
                             <Route path="/analysis" element={<Insights />} />
                             <Route path="/rules" element={<MerchantRules />} />
+                            <Route path="/sia-settings" element={<SiaPreferences />} />
                         </Routes>
                     </main>
 
@@ -304,6 +312,11 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             <Link to="/rules" className={location.pathname === "/rules" ? "active-nav" : ""}>
                                 <FaTags />
                                 <span>Rules</span>
+                            </Link>
+
+                            <Link to="/sia-settings" className={location.pathname === "/sia-settings" ? "active-nav" : ""}>
+                                <FaRobot />
+                                <span>SIA Settings</span>
                             </Link>
                         </nav>
                     }

@@ -1,0 +1,49 @@
+/* SIA-001-T06 -- SIA settings screen (enable/disable + delete history). */
+
+.sia-prefs-heading {
+    margin-bottom: 4px;
+}
+
+.sia-prefs-subheading {
+    margin-top: 0;
+    margin-bottom: 20px;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.sia-prefs-section {
+    margin-bottom: 24px;
+}
+
+.sia-prefs-section h3 {
+    margin-bottom: 10px;
+}
+
+.sia-prefs-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sia-prefs-hint {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    margin-top: 6px;
+}
+
+.sia-prefs-delete-history {
+    margin-top: 8px;
+    background: rgba(220, 38, 38, 0.1);
+    color: #991b1b;
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+}
+
+.sia-prefs-delete-history:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

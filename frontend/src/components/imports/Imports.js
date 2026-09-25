@@ -17,6 +17,7 @@ import NotificationPreferences from '../notifications/NotificationPreferences';
 import DataExport from '../dataExport/DataExport';
 import ReceiptInbox from '../receiptInbox/ReceiptInbox';
 import ImportWizard from '../importWizard/ImportWizard';
+import SiaPreferences from '../sia/SiaPreferences';
 
 // Barrel re-export of top-level page/context/util modules used across the app.
 export {
@@ -39,5 +40,6 @@ export {
     NotificationPreferences,
     DataExport,
     ReceiptInbox,
-    ImportWizard
+    ImportWizard,
+    SiaPreferences
 };

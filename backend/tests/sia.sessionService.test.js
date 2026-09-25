@@ -25,12 +25,13 @@ function loadSessionService() {
     find: jest.fn(),
     updateOne: jest.fn(async () => ({})),
     findOneAndDelete: jest.fn(),
+    deleteMany: jest.fn(async () => ({ deletedCount: 0 })),
   };
   const messageDocs = {
     findOne: jest.fn(() => chainable(null)),
     create: jest.fn(),
     find: jest.fn(),
-    deleteMany: jest.fn(async () => ({})),
+    deleteMany: jest.fn(async () => ({ deletedCount: 0 })),
   };
 
   jest.doMock(SESSION_MODEL_PATH, () => sessionDocs);
@@ -372,6 +373,26 @@ describe("sia/sessionService -- deleteSession (ownership enforcement)", () => {
 
     expect(deleted).toBe(true);
     expect(messageDocs.deleteMany).toHaveBeenCalledWith({ session: VALID_ID, user: "user-1" });
+  });
+});
+
+describe("sia/sessionService -- deleteAllSessions (SIA-001-T06)", () => {
+  it("deletes every session and message owned by the user, scoped by user", async () => {
+    const { sessionService, sessionDocs, messageDocs } = loadSessionService();
+    sessionDocs.deleteMany.mockResolvedValue({ deletedCount: 3 });
+    messageDocs.deleteMany.mockResolvedValue({ deletedCount: 17 });
+
+    const result = await sessionService.deleteAllSessions("user-1");
+
+    expect(sessionDocs.deleteMany).toHaveBeenCalledWith({ user: "user-1" });
+    expect(messageDocs.deleteMany).toHaveBeenCalledWith({ user: "user-1" });
+    expect(result).toEqual({ sessionsDeleted: 3, messagesDeleted: 17 });
+  });
+
+  it("returns zero counts for a user with no history, without throwing", async () => {
+    const { sessionService } = loadSessionService();
+    const result = await sessionService.deleteAllSessions("user-with-no-history");
+    expect(result).toEqual({ sessionsDeleted: 0, messagesDeleted: 0 });
   });
 });
 

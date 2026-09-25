@@ -117,6 +117,8 @@ export const queryKeys = {
         sessionId,
       ],
     },
+    // SIA-001-T06 -- per-user SIA enable/disable preference.
+    preference: () => [...queryKeys.sia.all, "preference"],
   },
 
   charts: {
