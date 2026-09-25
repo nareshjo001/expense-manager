@@ -10,16 +10,16 @@ reaches a real user's receipt.
 
 ## Status
 
-The harness (this directory) is complete and runnable. The corpus
-(`manifest.json` + `images/`) now has 21 entries: 6 generated synthetic
-smoke-test fixtures (deterministic regression cases -- amount selection,
-ambiguity, the heading-collision guess, the no-amount/no-date/no-text
-paths) plus **15 real, anonymized receipt photographs** contributed by
-the maintainer on 2026-09-25 (`source: "anonymized-real"` in the
-manifest), spanning 14 different merchants, three currencies/formats
-(INR and Indonesian Rupiah), receipts from 2005 through 2026, thermal
-print, ink stamps, and a range of photo quality -- real variance no
-synthetic image can produce.
+The harness is complete, runnable, and **has now been run against real
+Tesseract** (2026-09-25, from an ordinary terminal on the maintainer's own
+machine -- both the cloud sandbox and the device-bridge VM used to build
+this corpus fail all outbound network, so neither can run real OCR
+itself; see "Running it" below). The corpus (`manifest.json` + `images/`)
+has 21 entries: 6 generated synthetic smoke-test fixtures plus 15 real,
+anonymized receipt photographs spanning 14 different merchants, three
+currencies/formats (INR and Indonesian Rupiah), receipts from 2005
+through 2026, thermal print, ink stamps, and a range of photo quality --
+real variance no synthetic image can produce.
 
 Two real entries had genuine customer-identifying text (a name, a
 name+mobile line) blacked out with a solid rectangle before being
@@ -28,30 +28,66 @@ One entry (`belgian-waffle-co`) arrived pre-redacted by the maintainer
 with a physical highlighter and was left as-is. See each entry's `notes`
 in `manifest.json` for specifics.
 
-**Not yet done, and it's a real gap, not a formality**: this evaluation
-harness has never actually been run against real Tesseract. Both
-environments available while building this (the cloud sandbox, and the
-local VM a device-bridge session's shell runs in) fail outbound requests
-to Tesseract's language-data host -- confirmed directly (`curl` to
-google.com itself returns nothing from that local VM despite a
-configured proxy, so this is a sandboxing restriction, not something
-specific to Tesseract). **`npm run eval:ocr` needs to be run from an
-ordinary terminal directly on the machine that has these files** (not
-through an AI coding assistant's sandboxed shell) to get real results.
-Four of the real entries have a `notes` field flagging a *predicted*
-failure from a known regex limitation (a receipt whose only labelled
-total is "Gross Amount" or "Bill Amt" rather than "Total"; a date
-written `12-Sep-2026` instead of numerically) -- those are informed
-guesses from reading the receipts, not measured outcomes, and the actual
-run may agree, disagree, or surface something else entirely. Once run,
-update this section, `manifest.json` (if any ground truth needs
-correcting), the feature doc, and the tracker.
+**First real run: 7/21 passed (33.3%).** Digging into the failures
+surfaced a genuine bug in this harness itself, not the production
+pipeline: `scoring.js`'s date comparison used `date-fns`' `parse()` with
+a list of candidate format strings starting with `"d/M/yyyy"`, and that
+function is not strict about a token's digit width -- `parse("28/01/26",
+"d/M/yyyy", ...)` silently returned a *valid* date with the literal year
+26 (0026 AD) instead of failing over to the `"d/M/yy"` format later in
+the list. Every real receipt with a 2-digit year was misdated by this
+bug in the harness, not by anything the OCR pipeline did. Fixed by
+rewriting `parseExtractedDate` to parse explicitly (regex capture +
+manual century inference + `Date.UTC` round-trip validation) instead of
+relying on `date-fns`' format-guessing; two regression tests pin the
+2-digit-year behavior in `tests/ocrEvaluation.scoring.test.js`.
+
+**Re-run after the fix: 12/21 passed (57.1%).** The remaining 9 failures
+are real findings about the production pipeline and about this specific
+photo set, not further harness bugs:
+
+- **Confirmed regex limitations** (predicted before the run, now
+  confirmed by real output): `limbo-premium` and `khodiyar-dhaba` --
+  `extractAmount()` has no support for a "Gross Amount" / "Bill Amt"
+  total label; both receipts only print the true payable total under a
+  label the regex doesn't recognise. `a-grade-samosa` -- no "Total"
+  label at all (`NO_AMOUNT_FOUND` fires correctly). `saravana-bhavan` --
+  amount mismatch, compounded by the lowest confidence in the failing
+  set (44%).
+- **A newly-discovered regex bug** (not predicted in advance):
+  `extractDate()`'s worded-date alternative
+  (`\d{1,2}(st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}`) never validates that
+  the middle token is an actual month name, and `\s+` matches
+  newlines -- so on noisy OCR text it can false-positive-match garbage
+  spanning a line break (seen on `dindigul-thalappakatti` and
+  `chidhambaram-stc`, both low-confidence photos) instead of correctly
+  reporting no date found.
+- **A newly-discovered ISO-date bug**: `belgian-waffle-co` prints its
+  date as `2023-08-17`; `extractDate()`'s numeric-date pattern has no
+  start-of-token anchor and no support for `yyyy-mm-dd`, so it matches a
+  misleading substring (`23-08-17`) instead of the full date or no match.
+- **Genuine OCR noise on lower-quality photos, not pipeline bugs**:
+  `1947-restaurant` (date not recognised at all), `a-grade-samosa`'s
+  date (single digit misread, 6 -> 8), and `warung-leko`'s amount
+  (Tesseract dropped a zero: `107,000` read as `10,700`). In each of
+  these, the surrounding pipeline logic (grand-total priority,
+  comma-stripping) worked exactly as designed -- see each entry's
+  `notes` in `manifest.json` for the full detail.
+
+See `manifest.json`'s per-entry `notes` for the complete, confirmed
+write-up behind every bullet above. Whether to fix the confirmed
+`receiptExtractors.js` regex gaps (amount-label coverage, ISO dates, the
+worded-date false-positive) is follow-on work beyond T07's charter of
+building the evaluation set -- T07 itself is complete: the corpus exists,
+is anonymized, and has been proven against real OCR.
 
 This tracks with the 2026-09-08 forensic audit's finding for this task
 (see `workflow/features/P0/OCR-003-ocr-accuracy-and-reliability.md`): a
 synthetic-only corpus was explicitly judged not representative there.
-That gap is now closed on the corpus side; what's left is running the
-harness for real and acting on what it finds.
+That gap is now closed, and the harness has been run for real against a
+representative corpus, with its findings documented above and in
+`manifest.json`.
+
 ## Running it
 
 ```
@@ -80,10 +116,11 @@ adjusting in `manifest.json` (edit by hand, or regenerate via
 change).
 
 `OCR_EVAL_STRICT=1 npm run eval:ocr` exits non-zero on any failing entry,
-for a manual pre-release check. It is opt-in, not the default, because the
-only corpus committed today is the synthetic one above -- defaulting to a
-hard failure on a corpus that's explicitly not representative would train
-people to ignore the gate.
+for a manual pre-release check. It is opt-in, not the default: the real
+corpus (see "Status" above) currently passes 12/21, with the other 9 being
+tracked, understood limitations rather than unknowns -- defaulting to a
+hard failure here would train people to ignore the gate rather than fix
+the underlying regex gaps as their own follow-on work.
 
 ## Corpus format
 

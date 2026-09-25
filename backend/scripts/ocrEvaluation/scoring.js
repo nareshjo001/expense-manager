@@ -5,8 +5,6 @@
 // call, mirroring receiptExtractors.js's split: the smallest testable unit
 // here is one comparison rule, not a whole evaluation run.
 
-const { parse, isValid, format } = require("date-fns");
-
 // Confidence-derived review reasons depend on Tesseract's actual
 // recognition quality (font rendering, anti-aliasing -- whatever the real
 // engine decides), which this harness cannot predict for a synthetically
@@ -69,15 +67,64 @@ const amountMatches = (extracted, truth) => {
 // matching Indian date convention. That is a scoring assumption made here,
 // not a behavior of the pipeline itself, which is why it's spelled out
 // rather than left implicit.
-const DATE_FORMATS = ["d/M/yyyy", "d-M-yyyy", "d/M/yy", "d-M-yy", "do MMMM yyyy", "d MMMM yyyy"];
+//
+// This used to try a list of date-fns format strings ("d/M/yyyy" before
+// "d/M/yy") and take the first one date-fns.isValid() accepted. That was
+// wrong: date-fns' parse() is not strict about a token's digit width --
+// parse("28/01/26", "d/M/yyyy", ...) happily returns a *valid* date for
+// the literal year 26 (0026 AD) instead of failing over to "d/M/yy",
+// which would have read it as 2026. Every real, correctly-OCR'd 2-digit
+// year in the first corpus/eval:ocr run (2026-09-25) was misdated this
+// way -- an evaluation-harness bug, not a pipeline one; see
+// corpus/README.md's run history. Parsing is done explicitly here
+// instead, so the year's digit count is never ambiguous.
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+const MONTH_INDEX = new Map();
+MONTH_NAMES.forEach((name, i) => {
+  MONTH_INDEX.set(name, i);
+  MONTH_INDEX.set(name.slice(0, 3), i); // "sep", "jan", ...
+});
+
+// Builds an ISO date string and confirms day/month actually round-trip
+// (native Date silently rolls "31 Feb" over into March; comparing the
+// constructed date's own fields back against the inputs catches that).
+const toIsoIfValid = (year, monthIndex, day) => {
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || !Number.isFinite(day)) return null;
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== monthIndex || date.getUTCDate() !== day) {
+    return null;
+  }
+  return `${String(year).padStart(4, "0")}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
+const NUMERIC_DATE = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/;
+const WORDED_DATE = /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})$/;
 
 const parseExtractedDate = (matchedText) => {
   const text = String(matchedText ?? "").trim();
   if (!text) return null;
-  for (const fmt of DATE_FORMATS) {
-    const parsed = parse(text, fmt, new Date());
-    if (isValid(parsed)) return format(parsed, "yyyy-MM-dd");
+
+  const numeric = text.match(NUMERIC_DATE);
+  if (numeric) {
+    const day = Number(numeric[1]);
+    const month = Number(numeric[2]);
+    const yearDigits = numeric[3];
+    const year = yearDigits.length <= 2 ? Number(yearDigits) + 2000 : Number(yearDigits);
+    return toIsoIfValid(year, month - 1, day);
   }
+
+  const worded = text.match(WORDED_DATE);
+  if (worded) {
+    const day = Number(worded[1]);
+    const monthIndex = MONTH_INDEX.get(worded[2].toLowerCase());
+    const year = Number(worded[3]);
+    if (monthIndex === undefined) return null;
+    return toIsoIfValid(year, monthIndex, day);
+  }
+
   return null;
 };
 
@@ -165,7 +212,6 @@ module.exports = {
   normalizeMerchant,
   merchantMatches,
   amountMatches,
-  DATE_FORMATS,
   parseExtractedDate,
   dateMatches,
   reviewReasonsMatch,
