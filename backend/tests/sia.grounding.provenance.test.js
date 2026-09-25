@@ -11,6 +11,14 @@ function loadApp() {
   jest.doMock("../sia/config", () => ({ enabled: true, provider: "groq", model: "test", appTimeZone: "Asia/Kolkata" }));
   jest.doMock("../sia/readiness", () => ({ isSiaReady: () => true }));
   jest.doMock("../sia/sessionStoreAvailability", () => ({ isSessionStoreAvailable: () => false }));
+  // SIA-001-T06 -- ask() now gates every request on the caller's SIA
+  // enable/disable preference (siaPreferenceService.isEnabledForUser), a
+  // real Mongoose-backed collaborator this suite never connects a
+  // database for. Left unmocked, that call hangs against this job's
+  // unconnected mongoose instance well past Jest's default per-test
+  // timeout, so it's stubbed here the same way sessionStoreAvailability
+  // above is.
+  jest.doMock("../sia/siaPreferenceService", () => ({ isEnabledForUser: jest.fn(async () => true) }));
   jest.doMock("../sia/financialSnapshotService", () => ({ buildFinancialSnapshot }));
   jest.doMock("../sia/directAnswerService", () => ({ answerDirectly }));
   return { app: require("../app"), snapshot, answerDirectly };
