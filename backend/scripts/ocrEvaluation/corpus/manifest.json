@@ -104,7 +104,7 @@
         "expenseAmount": 819,
         "expenseDate": "2026-08-26"
       },
-      "notes": "Customer name/mobile line redacted (black bar) before committing. CONFIRMED (real eval:ocr run, 2026-09-25): genuine OCR noise on this lower-quality/redacted photo -- merchant garbled to \"Uli LGUL\" and extractDate's worded-date alternative false-positive-matched garbled text (\"41\\nFLOR 4241\") instead of returning no-date-found (see khodiyar-dhaba/chidhambaram-stc note on that regex gap). Amount (819) was actually read correctly despite 57% overall confidence -- not a pipeline bug, just noisy source text."
+      "notes": "Customer name/mobile line redacted (black bar) before committing. CONFIRMED (real eval:ocr run, 2026-09-25): genuine OCR noise on this lower-quality/redacted photo -- merchant garbled to \"Uli LGUL\", amount (819) read correctly. The date extraction was originally masked by a harness-adjacent production bug: extractDate()'s worded-date alternative used to false-positive-match garbled OCR text (\"41\\nFLOR 4241\") before the real numeric date could be found. FIXED (OCR-003-T08, 2026-09-25 later run): with that false-positive eliminated, the real numeric date now matches (\"26/08/26\" -> 2026-08-26) and this entry PASSES."
     },
     {
       "id": "hotel-vishwanand",
@@ -128,7 +128,7 @@
         "expenseAmount": 1947,
         "expenseDate": "2026-06-18"
       },
-      "notes": "Sub Total and Grand Total both present with different values -- grand-total priority should still select 1947 correctly. CONFIRMED (real eval:ocr run, 2026-09-25): grand-total priority worked exactly as intended, amount matched (1947). Failure is merchant name OCR noise (\"SSR Lo\") and NO_DATE_FOUND -- the date was not recognisable at all on this photo (64% confidence), not a regex/pipeline defect."
+      "notes": "Sub Total and Grand Total both present with different values -- grand-total priority should still select 1947 correctly. CONFIRMED (real eval:ocr run, 2026-09-25): grand-total priority worked exactly as intended, amount matched (1947). Failure is merchant name OCR noise (\"SSR Lo\") and NO_DATE_FOUND -- the date was not recognisable at all on this photo (64% confidence), not a regex/pipeline defect. Unaffected by the OCR-003-T08 regex fixes (still fails on genuine noise, as expected)."
     },
     {
       "id": "prime-roaster",
@@ -152,7 +152,7 @@
         "expenseAmount": 50.25,
         "expenseDate": "2009-04-28"
       },
-      "notes": "KNOWN LIMITATION CANDIDATE, CONFIRMED (real eval:ocr run, 2026-09-25): amountMatch fails as predicted, though the extracted value (3) doesn't match either the parenthetical-PAISA hypothesis or the true total -- this receipt has the lowest confidence in the failing set (44%), so general OCR noise on the amount line is compounding whatever the regex captures. dateMatch now passes cleanly (28-04-09 -> 2009-04-28) after the scoring-harness date bug was fixed, isolating the amount issue."
+      "notes": "KNOWN LIMITATION CANDIDATE, CONFIRMED (real eval:ocr run, 2026-09-25): amountMatch fails as predicted, though the extracted value (3) doesn't match either the parenthetical-PAISA hypothesis or the true total -- this receipt has the lowest confidence in the failing set (44%), so general OCR noise on the amount line is compounding whatever the regex captures. dateMatch now passes cleanly (28-04-09 -> 2009-04-28) after the scoring-harness date fix, isolating the amount issue. UNCHANGED by OCR-003-T08's amount-label widening (still extracts 3, confirming this was never a missing-label problem for this specific receipt -- it is OCR noise on the amount line itself, out of scope for a regex fix)."
     },
     {
       "id": "theo-cafe",
@@ -176,7 +176,7 @@
         "expenseAmount": 640,
         "expenseDate": "2025-05-12"
       },
-      "notes": "KNOWN LIMITATION, CONFIRMED (real eval:ocr run, 2026-09-25): amountMatch fails as predicted -- extractAmount's regex has no support for a \"Gross Amount\" label. The captured value (1) is smaller than even the predicted pre-discount \"Sub Total\" fallback (699), suggesting the real capture point is a quantity/line-item digit rather than either total line; pinning the exact capture point needs raw OCR text (out of scope for T07). dateMatch now passes (12/05/25 -> 2025-05-12) after the scoring-harness date fix, isolating the amount issue -- see corpus/README.md."
+      "notes": "KNOWN LIMITATION, CONFIRMED (real eval:ocr run, 2026-09-25): amountMatch fails as predicted -- extractAmount's original regex had no support for a \"Gross Amount\" label. OCR-003-T08 (2026-09-25 later run) widened the label set to recognise \"Gross Amount\"/\"Bill Amt\", which fixed the equivalent khodiyar-dhaba case, but this entry is STILL FAILING afterward (extracted value unchanged at 1) -- meaning the true root cause here is not the missing label but OCR noise/garbling on the amount line itself (the '1' is not a plausible misread of either 699 or 640). Needs raw OCR text to diagnose further; out of scope for a regex-only fix. dateMatch passes (12/05/25 -> 2025-05-12)."
     },
     {
       "id": "khodiyar-dhaba",
@@ -188,7 +188,7 @@
         "expenseAmount": 227,
         "expenseDate": "2023-12-09"
       },
-      "notes": "KNOWN LIMITATION, CONFIRMED (real eval:ocr run, 2026-09-25): amountMatch fails as predicted -- extractAmount's regex has no support for a \"Bill Amt\" label. The captured value (9) is far smaller than even the predicted pre-GST \"TOTAL\" fallback (216), suggesting the regex is picking up a quantity/table digit rather than either total line; exact capture point needs raw OCR text (out of scope for T07). dateMatch now passes (09-12-2023 -> 2023-12-09) after the scoring-harness date fix, isolating the amount issue. Customer name line redacted (black bar) before committing."
+      "notes": "KNOWN LIMITATION -- FIXED (OCR-003-T08, real eval:ocr run 2026-09-25 later): extractAmount() now recognises \"Bill Amt\" as a total label (previously only \"Total\"/\"Grand Total\" were recognised, and the only such line on this receipt was the pre-GST \"TOTAL 216.00\"). With the label widened, the correct post-GST amount (227) is now extracted and this entry PASSES -- AMBIGUOUS_AMOUNT is correctly flagged since the pre-GST Total line still also matches, which is real ambiguity worth surfacing, not a bug. Customer name line redacted (black bar) before committing."
     },
     {
       "id": "chidhambaram-stc",
@@ -200,7 +200,7 @@
         "expenseAmount": 42,
         "expenseDate": "2026-09-12"
       },
-      "notes": "KNOWN LIMITATION, CONFIRMED (real eval:ocr run, 2026-09-25): the predicted date-format gap is independently verified by reading extractDate's regex (no hyphen-before-month-name support), but this specific receipt's date output is actually dominated by a separate, newly-discovered bug: extractDate's worded-date alternative (`\\d{1,2}(st|nd|rd|th)?\\s+[A-Za-z]+\\s+\\d{4}`) never checks that the middle token is a real month name, and `\\s+` matches newlines -- so on this low-confidence (41%, lowest of all 21 entries) photo it false-positive-matched garbled text (\"31\\nPHO 1503\") instead of returning no-date-found. Amount (42) was read correctly. Name field says 'CASH CUSTOMER' (generic, not real)."
+      "notes": "KNOWN LIMITATION, PARTIALLY FIXED (OCR-003-T08, real eval:ocr run 2026-09-25 later): the newly-discovered worded-date false-positive bug (garbled OCR text matching as a fake date) is now fixed -- this entry's date output changed from garbage (\"31\\nPHO 1503\") to a correct null (NO_DATE_FOUND), which is the right behavior even though it doesn't make the entry pass. The date is printed as \"12-Sep-2026\" (abbreviated month name with hyphens), a format extractDate still does not support -- that specific gap remains open, tracked separately, not fixed by T08. Amount (42) is read correctly. Name field says 'CASH CUSTOMER' (generic, not real)."
     },
     {
       "id": "donne-biryani-palace",
@@ -236,7 +236,7 @@
         "expenseAmount": 302,
         "expenseDate": "2026-04-16"
       },
-      "notes": "KNOWN LIMITATION, CONFIRMED (real eval:ocr run, 2026-09-25): NO_AMOUNT_FOUND fires exactly as predicted -- no 'Total'/'Grand Total' label anywhere, the payable amount is only ever shown next to 'CASH'. Separately, the date also mismatches: extracted \"16-04-2028\" vs ground truth 2026-04-16 is a single OCR digit misread (year's \"6\" read as \"8\") -- genuine source-image noise, not a regex defect (the numeric-date parser handled the matched text correctly)."
+      "notes": "KNOWN LIMITATION, CONFIRMED (real eval:ocr run, 2026-09-25): NO_AMOUNT_FOUND fires exactly as predicted -- no 'Total'/'Grand Total' label anywhere, the payable amount is only ever shown next to 'CASH'; OCR-003-T08's amount-label widening (\"Gross Amount\"/\"Bill Amt\") doesn't apply here since neither of those labels is present either -- still open, tracked separately. Separately, the date also mismatches: extracted \"16-04-2028\" vs ground truth 2026-04-16 is a single OCR digit misread (year's \"6\" read as \"8\") -- genuine source-image noise, not a regex defect."
     },
     {
       "id": "belgian-waffle-co",
@@ -248,7 +248,7 @@
         "expenseAmount": 360,
         "expenseDate": "2023-08-17"
       },
-      "notes": "Customer name, mobile, part of the bill number and part of the merchant address were already redacted with a physical yellow highlighter by the maintainer before this photo was taken/shared -- left as-is, not re-redacted digitally. NEW FINDING (real eval:ocr run, 2026-09-25): extractDate's regex has no support for ISO-format (yyyy-mm-dd) dates and has no start-of-token anchor, so against the printed \"2023-08-17\" it matches a misleading substring starting at the year's 3rd digit -- \"23-08-17\" -- instead of the full date or no match at all, which downstream parses as 2017-08-23. This is a genuine, previously-undocumented production regex gap."
+      "notes": "Customer name, mobile, part of the bill number and part of the merchant address were already redacted with a physical yellow highlighter by the maintainer before this photo was taken/shared -- left as-is, not re-redacted digitally. FIXED (OCR-003-T08, real eval:ocr run 2026-09-25 later): extractDate() previously matched a misleading substring (\"23-08-17\") of the printed ISO date \"2023-08-17\" because it had no yyyy-mm-dd support and no start-of-token anchor. A dedicated ISO-date alternative, tried first, now captures the full date correctly and this entry PASSES."
     },
     {
       "id": "ratna-cafe",
@@ -272,7 +272,7 @@
         "expenseAmount": 107000,
         "expenseDate": "2026-04-15"
       },
-      "notes": "Indonesian Rupiah receipt -- comma is a thousands separator here ('107,000'), which happens to parse correctly through parseAmountInput's comma-stripping. 'Total Bill' (107,107, pre-rounding) and 'Grand Total' (107,000) both present; grand-total priority should select the right one. Guest name field says 'Umum' (Indonesian for 'general/public'), not a real name. CONFIRMED (real eval:ocr run, 2026-09-25): grand-total priority worked as intended, but Tesseract dropped a zero reading the printed amount, returning 10700 instead of 107000 -- genuine OCR digit-recognition noise on this photo (76% confidence), not a pipeline bug."
+      "notes": "Indonesian Rupiah receipt -- comma is a thousands separator here ('107,000'), which happens to parse correctly through parseAmountInput's comma-stripping. 'Total Bill' (107,107, pre-rounding) and 'Grand Total' (107,000) both present; grand-total priority should select the right one. Guest name field says 'Umum' (Indonesian for 'general/public'), not a real name. CONFIRMED (real eval:ocr run, 2026-09-25): grand-total priority worked as intended, but Tesseract dropped a zero reading the printed amount, returning 10700 instead of 107000 -- genuine OCR digit-recognition noise on this photo (76% confidence), not a pipeline bug. Unaffected by OCR-003-T08 (as expected -- this was never a regex-coverage issue)."
     }
   ]
 }
