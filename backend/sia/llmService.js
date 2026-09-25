@@ -1,10 +1,12 @@
-// SIA LLM service -- real, multi-provider (OpenAI, Gemini, Groq) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai", "gemini", or "groq" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls each provider's REST API directly (Gemini via its official OpenAI-compatible Chat Completions endpoint -- https://ai.google.dev/gemini-api/docs/openai; Groq via its own OpenAI-compatible Chat Completions endpoint -- https://console.groq.com/docs/api-reference#chat-create -- neither via a Google/Groq SDK). Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, response body, or provider reasoning/thinking field is ever logged, returned, or included in an error message. OPENAI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY are read only inside their own provider boundary below, never through sia/config.js, so none of them is ever exposed via the shared config object. SIA-001-T02 -- output-token/context budgets: config.maxOutputTokens is sent as each provider's own generation-length field (max_output_tokens for OpenAI's Responses API, max_tokens for Gemini's OpenAI-compatible endpoint, max_completion_tokens for Groq -- the three do NOT share a field name, and Gemini's compat layer silently ignores an unrecognized one rather than erroring, so getting this right matters); config.maxContextChars is enforced once in askLlm() itself, before any adapter is reached, by rejecting (never truncating) a request whose combined systemPrompt + history + context + question size exceeds it, with code CONTEXT_BUDGET_EXCEEDED.
+// SIA LLM service -- real, multi-provider (OpenAI, Gemini, Groq) implementation of askLlm(), plus the stable provider-neutral request/failure contract. Every provider other than normalized "openai", "gemini", or "groq" rejects with PROVIDER_NOT_IMPLEMENTED -- no provider is silently treated as supported. No provider SDK installed; the existing axios dependency calls each provider's REST API directly (Gemini via its official OpenAI-compatible Chat Completions endpoint -- https://ai.google.dev/gemini-api/docs/openai; Groq via its own OpenAI-compatible Chat Completions endpoint -- https://console.groq.com/docs/api-reference#chat-create -- neither via a Google/Groq SDK). Real implementations resolve to `{ answer, model, latencyMs }`; every failure (config/network/HTTP/malformed response) normalizes into LlmProviderError -- no raw provider exception, API key, auth header, financial context, question, response body, or provider reasoning/thinking field is ever logged, returned, or included in an error message. OPENAI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY are read only inside their own provider boundary below, never through sia/config.js, so none of them is ever exposed via the shared config object. SIA-001-T02 -- output-token/context budgets: config.maxOutputTokens is sent as each provider's own generation-length field (max_output_tokens for OpenAI's Responses API, max_tokens for Gemini's OpenAI-compatible endpoint, max_completion_tokens for Groq -- the three do NOT share a field name, and Gemini's compat layer silently ignores an unrecognized one rather than erroring, so getting this right matters); config.maxContextChars is enforced once in askLlm() itself, before any adapter is reached, by rejecting (never truncating) a request whose combined systemPrompt + history + context + question size exceeds it, with code CONTEXT_BUDGET_EXCEEDED. SIA-001-T04 -- a per-provider circuit breaker (providerCircuitBreaker.js) sits right after that check: once a provider accumulates enough consecutive health-signal failures (timeout/HTTP-error/network-error/malformed/empty/incomplete response), askLlm() short-circuits with code PROVIDER_CIRCUIT_OPEN and never attempts the network call at all, until a cooldown elapses and a single half-open trial call is allowed through.
 "use strict";
 
 const axios = require("axios");
 // OBS-001-T05 -- provider metrics; see askLlm() for the safety reasoning.
 const { recordOperation } = require("../utils/metrics");
 const config = require("./config");
+// SIA-001-T04 -- provider circuit breaker.
+const providerCircuitBreaker = require("./providerCircuitBreaker");
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 // Gemini's official OpenAI-compatible Chat Completions endpoint (see
@@ -592,15 +594,35 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
     }
   }
 
+  // SIA-001-T04 -- circuit breaker, the second half of "one safe retry and
+  // circuit-breaker behavior" (the retry half already existed in
+  // directAnswerService.js's askWithTransientRetry() before this task).
+  // Checked once here, after every static/input check above has already
+  // passed, so an open breaker fails FAST -- no network attempt at all --
+  // rather than waiting out another timeout against a provider already
+  // known to be unhealthy.
+  if (providerCircuitBreaker.isCircuitOpen(normalizedProvider)) {
+    recordProvider("failure");
+    throw new LlmProviderError(
+      "SIA's connection to the LLM provider is temporarily paused after repeated failures. Try again shortly.",
+      { code: "PROVIDER_CIRCUIT_OPEN", provider: normalizedProvider }
+    );
+  }
+
   try {
     const answer = await adapter({ systemPrompt, context, question, history, structuredOutput });
     recordProvider("success");
+    providerCircuitBreaker.recordOutcome(normalizedProvider, { success: true });
     return answer;
   } catch (err) {
     // Rethrown untouched -- this only classifies the attempt so a provider
     // that starts degrading shows up as a rising failure count rather than
     // only as individual log lines nobody is aggregating.
     recordProvider("failure");
+    providerCircuitBreaker.recordOutcome(normalizedProvider, {
+      success: false,
+      isHealthSignal: providerCircuitBreaker.isProviderHealthSignalError(err),
+    });
     throw err;
   }
 }

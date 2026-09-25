@@ -22,6 +22,9 @@ const { runSemanticPipeline } = require("../../sia/semanticPipeline");
 const { buildFinancialSnapshot } = require("../../sia/financialSnapshotService");
 const { answerDirectly } = require("../../sia/directAnswerService");
 const { isClearlyProhibited } = require("../../sia/prohibitedPhrases");
+const { recordOperation } = require("../../utils/metrics");
+const { classifyProviderError, responseFor, CATEGORY } = require("../../sia/fallbackMessages");
+const siaPreferenceService = require("../../sia/siaPreferenceService");
 
 // Bounded conversation session support (additive) -- guarded by sessionStoreAvailability.js's live connection check so pre-existing tests (which don't connect to real MongoDB) never hang; unavailable is a valid, safe state, never thrown.
 // Every session-store interaction is best-effort and never fails the user's actual question, and never leaves a half-written turn -- appendTurn() only runs once a real answer exists. Session RESOLUTION and CREATION happen at two different points: an explicit session resolves up front (its history feeds the provider); a new conversation's session isn't created until a validated answer exists, so a failed first turn leaves nothing behind.
@@ -60,6 +63,22 @@ async function safeLoadRecentTurns(sessionId, userId) {
     return await sessionService.loadRecentTurns(sessionId, userId);
   } catch (_err) {
     return [];
+  }
+}
+
+// SIA-001-T06 -- the enforcement point for a user's own SIA enable/disable
+// choice. Fails OPEN (returns true) on any lookup error -- this checks ONE
+// user's own opt-out choice, not deployment-level availability (isSiaReady()
+// already covers that, above, and always runs first); a transient DB hiccup
+// while reading it must not block /sia/ask for every user who never touched
+// the toggle, which is the overwhelming majority since this is opt-OUT, not
+// opt-in. Matches every other safe* helper in this file's own
+// fail-safely-rather-than-break-the-answer posture.
+async function safeIsSiaEnabledForUser(userId) {
+  try {
+    return await siaPreferenceService.isEnabledForUser(userId);
+  } catch (_err) {
+    return true;
   }
 }
 
@@ -607,6 +626,8 @@ async function handleSemanticFallback({ req, res, reservation, activeSession, re
 }
 
 async function handleDirectAnswer({ req, res, reservation, activeSession, requestedClientMessageId, trimmedQuestion }) {
+  const askStartedAt = Date.now();
+  let askOutcome = "failure";
   try {
     if (isClearlyProhibited(trimmedQuestion)) {
       if (reservation) {
@@ -638,6 +659,13 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
       throw providerErr;
     }
 
+    recordOperation({
+      scope: "sia_ask",
+      operation: "answer_validation",
+      outcome: directResult.ok ? "success" : "failure",
+      durationMs: Date.now() - providerStartedAt,
+    });
+
     if (!directResult.ok) {
       logSiaEvent({
         event: SIA_LOG_EVENTS.PROVIDER_REQUEST_FAILED,
@@ -648,7 +676,8 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
       if (reservation) {
         await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
       }
-      return res.status(503).json(UNAVAILABLE_RESPONSE);
+      const { status, body } = responseFor(CATEGORY.ANSWER_UNAVAILABLE);
+      return res.status(status).json(body);
     }
 
     logSiaEvent({ event: SIA_LOG_EVENTS.PROVIDER_REQUEST_COMPLETED, provider: config.provider, latencyMs: Date.now() - providerStartedAt });
@@ -692,8 +721,9 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
         sessionId: session ? session._id : null,
       });
     }
+    askOutcome = "success";
     return res.status(200).json(payload);
-  } catch (_err) {
+  } catch (err) {
     if (reservation) {
       try {
         await idempotencyService.releaseRequest({ requestId: reservation.record._id, ownerToken: reservation.ownerToken });
@@ -701,7 +731,16 @@ async function handleDirectAnswer({ req, res, reservation, activeSession, reques
         // Lease expiry keeps the idempotency key recoverable.
       }
     }
-    return res.status(503).json(UNAVAILABLE_RESPONSE);
+    const category = classifyProviderError(err);
+    const { status, body } = responseFor(category);
+    return res.status(status).json(body);
+  } finally {
+    recordOperation({
+      scope: "sia_ask",
+      operation: "direct_answer",
+      outcome: askOutcome,
+      durationMs: Date.now() - askStartedAt,
+    });
   }
 }
 
@@ -709,6 +748,16 @@ const ask = async (req, res) => {
   // Readiness gate: isSiaReady() (sia/readiness.js) is the SAME function GET /sia/status answers with, so the two can never disagree. Rejection is the pre-existing generic 503, happening BEFORE any validation, classification, context build, provider call, session creation, or reservation -- an unready deployment does no work and leaves no trace.
   if (!isSiaReady()) {
     return res.status(503).json(UNAVAILABLE_RESPONSE);
+  }
+
+  // SIA-001-T06 -- a user who has explicitly turned SIA off never reaches
+  // validation, classification, context building, or a provider call.
+  // Scoped to this route only -- voice transcription and the monthly AI
+  // summary each have their own independent readiness/opt-in gates.
+  const siaEnabledForUser = await safeIsSiaEnabledForUser(req.userId);
+  if (!siaEnabledForUser) {
+    const { status, body } = responseFor(CATEGORY.SIA_DISABLED_BY_USER);
+    return res.status(status).json(body);
   }
 
   const { question, sessionId, clientMessageId } = req.body || {};

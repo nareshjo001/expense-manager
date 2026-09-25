@@ -84,6 +84,42 @@ function normalizeMaxContextChars(rawValue) {
   return parsed;
 }
 
+// SIA-001-T04 -- provider circuit breaker. After this many CONSECUTIVE
+// provider-health-signal failures (timeout/HTTP-error/network-error/
+// malformed/empty/incomplete response -- see providerCircuitBreaker.js's
+// own HEALTH_SIGNAL_CODES; a static config/input problem like a missing
+// model or CONTEXT_BUDGET_EXCEEDED never counts, since those fail
+// identically every time and a cooldown would never fix them), the
+// breaker opens and short-circuits further calls without hitting the
+// network. Same validation shape as normalizeTimeoutMs.
+const DEFAULT_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5;
+
+function normalizeCircuitBreakerFailureThreshold(rawValue) {
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return DEFAULT_CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+  }
+  const parsed = Number(rawValue.trim());
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
+    return DEFAULT_CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+  }
+  return parsed;
+}
+
+// SIA-001-T04 -- how long the breaker stays OPEN before allowing a single
+// half-open trial call through again.
+const DEFAULT_CIRCUIT_BREAKER_COOLDOWN_MS = 30000;
+
+function normalizeCircuitBreakerCooldownMs(rawValue) {
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return DEFAULT_CIRCUIT_BREAKER_COOLDOWN_MS;
+  }
+  const parsed = Number(rawValue.trim());
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_CIRCUIT_BREAKER_COOLDOWN_MS;
+  }
+  return parsed;
+}
+
 // The application's canonical IANA time zone for calendar/period
 const DEFAULT_APP_TIME_ZONE = "Asia/Kolkata";
 
@@ -168,6 +204,9 @@ const config = {
   // SIA-001-T02 -- output-token/context budgets, additive fields.
   maxOutputTokens: normalizeMaxOutputTokens(process.env.SIA_LLM_MAX_OUTPUT_TOKENS),
   maxContextChars: normalizeMaxContextChars(process.env.SIA_LLM_MAX_CONTEXT_CHARS),
+  // SIA-001-T04 -- provider circuit breaker, additive fields.
+  circuitBreakerFailureThreshold: normalizeCircuitBreakerFailureThreshold(process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD),
+  circuitBreakerCooldownMs: normalizeCircuitBreakerCooldownMs(process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS),
   appTimeZone: normalizeAppTimeZone(process.env.APP_TIME_ZONE),
   // Voice input (Workstream 2) -- additive fields only, read the same
   voiceEnabled: normalizeEnabled(process.env.SIA_VOICE_ENABLED),

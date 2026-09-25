@@ -176,6 +176,27 @@ async function deleteSession(sessionId, userId) {
   return true;
 }
 
+// SIA-001-T06 -- bulk deletion for "delete my SIA history", a user-
+// initiated action independent of full account deletion (PRV-001's
+// accountDeletionTierBSteps.js already covers that separate path via its
+// own deleteSiaSessionsStep/deleteSiaMessagesStep, run only as part of the
+// account-deletion cascade). Deliberately scoped to SiaSession + SiaMessage
+// ONLY -- never SiaRequest: that model is a short-lived (24h TTL)
+// idempotency/coordination record (idempotencyService.js), not conversation
+// content, and clearing it here would risk breaking an in-flight keyed
+// request's own replay guarantee for no user-visible benefit. Every user
+// of this app can only ever own their own sessions/messages (both
+// documents carry `user`), so this is scoped by construction, the same as
+// every other function in this file.
+async function deleteAllSessions(userId) {
+  const sessionResult = await SiaSession.deleteMany({ user: userId });
+  const messageResult = await SiaMessage.deleteMany({ user: userId });
+  return {
+    sessionsDeleted: sessionResult.deletedCount || 0,
+    messagesDeleted: messageResult.deletedCount || 0,
+  };
+}
+
 // Bounded recent turns for LLM conversational continuity ONLY -- never a source of current financial facts (buildContext() is always called separately every turn). Content is already schema-bounded (SiaMessage.js's maxlength), and only role/content/intent are returned -- no metadata, no ids.
 async function loadRecentTurns(sessionId, userId, limit = MAX_RECENT_TURNS_FOR_LLM) {
   if (!isValidObjectId(sessionId)) return [];
@@ -214,6 +235,7 @@ module.exports = {
   listSessions,
   listMessages,
   deleteSession,
+  deleteAllSessions,
   loadRecentTurns,
   loadLastPlanSummary,
   MAX_RECENT_TURNS_FOR_LLM,
