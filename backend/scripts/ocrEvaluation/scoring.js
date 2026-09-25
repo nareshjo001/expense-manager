@@ -100,12 +100,26 @@ const toIsoIfValid = (year, monthIndex, day) => {
   return `${String(year).padStart(4, "0")}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 };
 
+const ISO_DATE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
 const NUMERIC_DATE = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/;
 const WORDED_DATE = /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})$/;
 
 const parseExtractedDate = (matchedText) => {
   const text = String(matchedText ?? "").trim();
   if (!text) return null;
+
+  // OCR-003-T08 -- extractDate() now also recognises an ISO-formatted
+  // (yyyy-mm-dd) date on the receipt itself (see receiptExtractors.js);
+  // this harness must be able to read that shape back too, or a correctly
+  // extracted ISO date would be mis-scored as a mismatch by the day-first
+  // numeric parsing below.
+  const iso = text.match(ISO_DATE);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    return toIsoIfValid(year, month - 1, day);
+  }
 
   const numeric = text.match(NUMERIC_DATE);
   if (numeric) {

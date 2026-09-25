@@ -88,6 +88,13 @@ describe("parseExtractedDate / dateMatches", () => {
     expect(parseExtractedDate("31/02/2026")).toBeNull(); // February has no 31st
   });
 
+  // OCR-003-T08 -- extractDate() now recognises ISO-formatted (yyyy-mm-dd)
+  // dates on the receipt itself; this harness needs to read that shape back
+  // too, or a correctly extracted ISO date would be mis-scored as wrong.
+  test("reads an ISO-formatted (yyyy-mm-dd) date correctly", () => {
+    expect(parseExtractedDate("2023-08-17")).toBe("2023-08-17");
+  });
+
   test("parses a dash-separated day-first date", () => {
     expect(parseExtractedDate("05-01-2026")).toBe("2026-01-05");
   });
