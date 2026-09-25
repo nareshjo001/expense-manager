@@ -69,6 +69,25 @@ describe("parseExtractedDate / dateMatches", () => {
     expect(parseExtractedDate("12/03/2026")).toBe("2026-03-12");
   });
 
+  // Regression test for a real bug found running `npm run eval:ocr` for the
+  // first time (2026-09-25): date-fns' parse() is not strict about a
+  // token's digit width, so trying the "d/M/yyyy" format string first
+  // against a 2-digit year silently accepted it as the literal year 26
+  // (0026 AD) instead of falling through to "d/M/yy". Every real 2-digit-
+  // year receipt in that run was misdated by this bug in the harness, not
+  // by the OCR pipeline. parseExtractedDate no longer uses date-fns'
+  // format-guessing at all -- see its own comment -- but this pins the
+  // century behavior so it can't regress silently again.
+  test("reads a 2-digit year in the 2000s, not literally", () => {
+    expect(parseExtractedDate("28/01/26")).toBe("2026-01-28");
+    expect(parseExtractedDate("12/05/25")).toBe("2025-05-12");
+    expect(parseExtractedDate("28-04-09")).toBe("2009-04-28");
+  });
+
+  test("rejects a calendar-invalid date instead of rolling it over", () => {
+    expect(parseExtractedDate("31/02/2026")).toBeNull(); // February has no 31st
+  });
+
   test("parses a dash-separated day-first date", () => {
     expect(parseExtractedDate("05-01-2026")).toBe("2026-01-05");
   });

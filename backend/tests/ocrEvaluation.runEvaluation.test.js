@@ -1,6 +1,12 @@
-// OCR-003-T07 -- tests the evaluation harness's orchestration (reading the
+// OCR-003-T07 -- tests the evaluation harness's orchestration (reading a
 // manifest, calling the OCR + parse pipeline per entry, scoring, writing a
-// report) against the real committed synthetic corpus.
+// report). Runs deliberately against just the six synthetic fixtures, not
+// the full committed corpus.json (which also has real, anonymized receipt
+// photos as of 2026-09-25) -- there is no canned OCR text for a real photo
+// without actually running Tesseract on it, and mocking real Tesseract
+// output convincingly isn't the point of this suite. runEvaluation.main()
+// accepts an explicit { entries, corpusType } override for exactly this
+// reason; `npm run eval:ocr` (no override) still reads the full manifest.
 //
 // tesseract.js is never invoked for real here, for the same reason
 // ocrService.timeout.test.js never invokes it: a real OCR pass is slow and
@@ -21,6 +27,20 @@ const { FIXTURES } = require("../scripts/ocrEvaluation/generateSyntheticFixtures
 
 const OCR_SERVICE_PATH = "../Services/BillServices/ocrService";
 const RUN_EVALUATION_PATH = "../scripts/ocrEvaluation/runEvaluation";
+const MANIFEST_PATH = "../scripts/ocrEvaluation/corpus/manifest.json";
+
+// Mirrors the entry shape generateSyntheticFixtures.js writes into
+// corpus/manifest.json for each fixture -- built directly from FIXTURES
+// rather than read from the live manifest, so this suite stays correct
+// regardless of how many real entries have since been appended to it.
+const SYNTHETIC_ENTRIES = FIXTURES.map((f) => ({
+  id: f.id,
+  image: `images/${f.id}.png`,
+  source: "synthetic",
+  anonymized: true,
+  groundTruth: f.groundTruth,
+  notes: f.notes,
+}));
 
 // Builds a canned OCR result for one fixture, mirroring what
 // ocrService.buildLines() would produce for cleanly recognised text: one
@@ -34,9 +54,7 @@ const ocrResultForFixture = (fixture) =>
   });
 
 // Loads runEvaluation.js fresh, with extractTextFromImage mocked to return
-// one canned result per manifest entry, in manifest order (matches
-// FIXTURES order -- generateSyntheticFixtures.js writes the manifest by
-// iterating FIXTURES).
+// one canned result per call, in the order given.
 const loadRunEvaluation = (resultsInOrder) => {
   jest.resetModules();
   const extractTextFromImage = jest.fn();
@@ -45,22 +63,29 @@ const loadRunEvaluation = (resultsInOrder) => {
   return { runEvaluation: require(RUN_EVALUATION_PATH), extractTextFromImage };
 };
 
-describe("runEvaluation against the committed synthetic corpus", () => {
+const runSynthetic = (runEvaluation) =>
+  runEvaluation.main({ entries: SYNTHETIC_ENTRIES, corpusType: "synthetic-smoke-test" });
+
+describe("runEvaluation against the synthetic fixtures", () => {
   afterEach(() => {
     jest.dontMock(OCR_SERVICE_PATH);
     delete process.env.OCR_EVAL_STRICT;
   });
 
-  test("the manifest has exactly one entry per FIXTURES item, in the same order", () => {
-    const { loadManifest } = loadRunEvaluation(FIXTURES.map(ocrResultForFixture)).runEvaluation;
-    const manifest = loadManifest();
-    expect(manifest.entries.map((e) => e.id)).toEqual(FIXTURES.map((f) => f.id));
+  test("the committed manifest's synthetic entries match FIXTURES, in order", () => {
+    // A regression check on the committed corpus/manifest.json itself: its
+    // synthetic-sourced entries should never drift from generateSyntheticFixtures.js's
+    // FIXTURES (real, anonymized entries are appended after them and are not
+    // asserted on here -- see the module comment above).
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, MANIFEST_PATH), "utf8"));
+    const syntheticIds = manifest.entries.filter((e) => e.source === "synthetic").map((e) => e.id);
+    expect(syntheticIds).toEqual(FIXTURES.map((f) => f.id));
   });
 
   test("every synthetic fixture passes when OCR reads its rendered text back cleanly", async () => {
     const { runEvaluation, extractTextFromImage } = loadRunEvaluation(FIXTURES.map(ocrResultForFixture));
 
-    const { aggregate, results } = await runEvaluation.main();
+    const { aggregate, results } = await runSynthetic(runEvaluation);
 
     expect(extractTextFromImage).toHaveBeenCalledTimes(FIXTURES.length);
     expect(aggregate.total).toBe(FIXTURES.length);
@@ -78,7 +103,7 @@ describe("runEvaluation against the committed synthetic corpus", () => {
 
   test("writes a JSON and a Markdown report to results/", async () => {
     const { runEvaluation } = loadRunEvaluation(FIXTURES.map(ocrResultForFixture));
-    await runEvaluation.main();
+    await runSynthetic(runEvaluation);
 
     const jsonPath = path.join(runEvaluation.RESULTS_DIR, "latest.json");
     const mdPath = path.join(runEvaluation.RESULTS_DIR, "latest.md");
@@ -101,7 +126,7 @@ describe("runEvaluation against the committed synthetic corpus", () => {
     canned[cleanSimpleIndex] = buildOcrResult({ text: "Coffee House\n1 Latte", confidence: 95, lines: [] });
 
     const { runEvaluation } = loadRunEvaluation(canned);
-    const { aggregate } = await runEvaluation.main();
+    const { aggregate } = await runSynthetic(runEvaluation);
 
     expect(aggregate.failed).toBe(1);
     expect(aggregate.failingIds).toEqual(["clean-simple"]);
@@ -113,7 +138,7 @@ describe("runEvaluation against the committed synthetic corpus", () => {
     process.env.OCR_EVAL_STRICT = "1";
     const passingRun = loadRunEvaluation(canned);
     delete process.exitCode;
-    await passingRun.runEvaluation.main();
+    await runSynthetic(passingRun.runEvaluation);
     expect(process.exitCode).toBeUndefined();
 
     const cleanSimpleIndex = FIXTURES.findIndex((f) => f.id === "clean-simple");
@@ -121,7 +146,7 @@ describe("runEvaluation against the committed synthetic corpus", () => {
     failingCanned[cleanSimpleIndex] = buildOcrResult({ text: "no total here", confidence: 95, lines: [] });
     const failingRun = loadRunEvaluation(failingCanned);
     delete process.exitCode;
-    await failingRun.runEvaluation.main();
+    await runSynthetic(failingRun.runEvaluation);
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined;
   });
@@ -133,7 +158,7 @@ describe("runEvaluation against the committed synthetic corpus", () => {
 
     const { runEvaluation } = loadRunEvaluation(canned);
     delete process.exitCode;
-    const { aggregate } = await runEvaluation.main();
+    const { aggregate } = await runSynthetic(runEvaluation);
 
     expect(aggregate.failed).toBe(1);
     expect(process.exitCode).toBeUndefined();
