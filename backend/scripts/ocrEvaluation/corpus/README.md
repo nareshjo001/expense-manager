@@ -43,43 +43,53 @@ relying on `date-fns`' format-guessing; two regression tests pin the
 2-digit-year behavior in `tests/ocrEvaluation.scoring.test.js`.
 
 **Re-run after the fix: 12/21 passed (57.1%).** The remaining 9 failures
-are real findings about the production pipeline and about this specific
-photo set, not further harness bugs:
+were real findings about the production pipeline and about this specific
+photo set, not further harness bugs -- three confirmed regex gaps in
+`receiptExtractors.js` (see OCR-003-T08 below) plus genuine OCR noise on
+a few lower-quality photos.
 
-- **Confirmed regex limitations** (predicted before the run, now
-  confirmed by real output): `limbo-premium` and `khodiyar-dhaba` --
-  `extractAmount()` has no support for a "Gross Amount" / "Bill Amt"
-  total label; both receipts only print the true payable total under a
-  label the regex doesn't recognise. `a-grade-samosa` -- no "Total"
-  label at all (`NO_AMOUNT_FOUND` fires correctly). `saravana-bhavan` --
-  amount mismatch, compounded by the lowest confidence in the failing
-  set (44%).
-- **A newly-discovered regex bug** (not predicted in advance):
-  `extractDate()`'s worded-date alternative
-  (`\d{1,2}(st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}`) never validates that
-  the middle token is an actual month name, and `\s+` matches
-  newlines -- so on noisy OCR text it can false-positive-match garbage
-  spanning a line break (seen on `dindigul-thalappakatti` and
-  `chidhambaram-stc`, both low-confidence photos) instead of correctly
-  reporting no date found.
-- **A newly-discovered ISO-date bug**: `belgian-waffle-co` prints its
-  date as `2023-08-17`; `extractDate()`'s numeric-date pattern has no
-  start-of-token anchor and no support for `yyyy-mm-dd`, so it matches a
-  misleading substring (`23-08-17`) instead of the full date or no match.
-- **Genuine OCR noise on lower-quality photos, not pipeline bugs**:
-  `1947-restaurant` (date not recognised at all), `a-grade-samosa`'s
-  date (single digit misread, 6 -> 8), and `warung-leko`'s amount
-  (Tesseract dropped a zero: `107,000` read as `10,700`). In each of
-  these, the surrounding pipeline logic (grand-total priority,
-  comma-stripping) worked exactly as designed -- see each entry's
-  `notes` in `manifest.json` for the full detail.
+### OCR-003-T08: fixing the confirmed regex gaps
+
+Follow-on work (`feature/OCR-003-T08-extractor-regex-fixes`, merged
+2026-09-25) fixed the three confirmed `receiptExtractors.js` gaps:
+
+- `extractAmount()` now also recognises "Gross Amount" and "Bill Amt" as
+  total labels, not just "Total"/"Grand Total".
+- `extractDate()` now has a dedicated `yyyy-mm-dd` (ISO) alternative,
+  tried first, so it can no longer match a misleading substring of an
+  ISO-formatted date (it used to match `23-08-17` out of `2023-08-17`).
+- `extractDate()`'s worded-date alternative now validates the middle
+  token against a real month-name list and can no longer match across a
+  line break, so it stops false-positive-matching garbled OCR text as if
+  it were a date.
+
+**Re-run with the T08 fix: 15/21 passed (71.4%).** All three fixes were
+independently confirmed against the real corpus: `khodiyar-dhaba` now
+extracts the correct post-GST amount via the "Bill Amt" label and
+passes; `belgian-waffle-co` now extracts the full ISO date and passes;
+`dindigul-thalappakatti`'s false-positive date match is gone, letting
+the real numeric date on that receipt match correctly, and it passes.
+
+The remaining 6 failures are genuine, not regex gaps this fix could
+reach:
+
+- `limbo-premium` -- amount-label widening did NOT fix this one; the
+  extracted value is unchanged, meaning the real root cause here is OCR
+  noise on the amount line itself, not the missing label. Needs raw OCR
+  text to diagnose further.
+- `chidhambaram-stc` -- the false-positive date bug is fixed (output is
+  now a correct `null` instead of garbage), but the date is printed as
+  `12-Sep-2026` (hyphenated abbreviated month), a format `extractDate()`
+  still doesn't support. Open, not addressed by T08.
+- `a-grade-samosa` -- `NO_AMOUNT_FOUND` as predicted (no recognised
+  total label of any kind is present); its date mismatch is a separate
+  single-digit OCR misread (6 -> 8), not a regex issue.
+- `1947-restaurant`, `saravana-bhavan`, `warung-leko` -- genuine OCR
+  recognition noise (an unreadable date, a garbled amount, a dropped
+  zero) on lower-quality photos, confirmed unaffected by the T08 fixes.
 
 See `manifest.json`'s per-entry `notes` for the complete, confirmed
-write-up behind every bullet above. Whether to fix the confirmed
-`receiptExtractors.js` regex gaps (amount-label coverage, ISO dates, the
-worded-date false-positive) is follow-on work beyond T07's charter of
-building the evaluation set -- T07 itself is complete: the corpus exists,
-is anonymized, and has been proven against real OCR.
+write-up behind every bullet above.
 
 This tracks with the 2026-09-08 forensic audit's finding for this task
 (see `workflow/features/P0/OCR-003-ocr-accuracy-and-reliability.md`): a
@@ -117,10 +127,11 @@ change).
 
 `OCR_EVAL_STRICT=1 npm run eval:ocr` exits non-zero on any failing entry,
 for a manual pre-release check. It is opt-in, not the default: the real
-corpus (see "Status" above) currently passes 12/21, with the other 9 being
-tracked, understood limitations rather than unknowns -- defaulting to a
-hard failure here would train people to ignore the gate rather than fix
-the underlying regex gaps as their own follow-on work.
+corpus (see "Status" above) currently passes 15/21, with the other 6 being
+tracked, understood limitations (OCR noise, or a documented open regex
+gap) rather than unknowns -- defaulting to a hard failure here would
+train people to ignore the gate rather than fix the underlying gaps as
+their own follow-on work.
 
 ## Corpus format
 
