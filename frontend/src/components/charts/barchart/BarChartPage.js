@@ -13,29 +13,105 @@ import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContex
 import InlineChartInsight from '../../insights/InlineChartInsight';
 import QueryState from '../../common/QueryState';
 import { useBarChartQuery } from '../../../hooks/queries/useBarChartQuery';
+import { useReport } from '../../../hooks/useReport';
 
 // Bar chart view of expenses by month or category, with cancellable data fetching per filter change.
 const BarChartPage = ({ expenses }) => {
   const { theme } = useContext(ThemeContext);
   const { notifyChartFilterApplied, clearChartInsights, isChartInsightReady, chartInsightText } =  useChartInsights();
+  // ANL-001-T04 -- optional enhancement only: report has its own loading/error
+  // state, but the bar chart itself is already fully covered by
+  // barChartQuery's QueryState below, so an unready report just means "fall
+  // back to the frontend rule", not a second spinner.
+  const { data: report } = useReport();
 
   const [viewBy, setViewBy] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
   const [month, setMonth] = useState('');
   const [specificMonth, setSpecificMonth] = useState(false);
+  // ANL-001-T04 -- holds the backend-derived insight (see the effect below)
+  // when the current filter matches the backend's computed scope. Null
+  // means "use the frontend rules engine's chartInsightText" instead.
+  const [backendInsight, setBackendInsight] = useState(null);
 
   useEffect(() => {
     clearChartInsights();
+    setBackendInsight(null);
   }, [clearChartInsights]);
 
   const barChartQuery = useBarChartQuery(viewBy, month, specificMonth, selectedYear);
 
   // useQuery no longer supports an onSuccess callback, so the chart insight notification runs here instead, once per new successful fetch.
   useEffect(() => {
-    if (barChartQuery.data?.success && Array.isArray(barChartQuery.data.data)) {
-      notifyChartFilterApplied(barChartQuery.data.data, 'bar', viewBy);
+    if (!(barChartQuery.data?.success && Array.isArray(barChartQuery.data.data))) {
+      return;
     }
-  }, [barChartQuery.data, viewBy, notifyChartFilterApplied]);
+
+    // ANL-001-T04 -- report.insights.chartFindings.bar (backend/analytics/
+    // analyzers/chartFindingsAnalyzer.js's buildBarFindings) is fed by the
+    // CURRENT calendar month's budget status and category breakdown only.
+    // That backend snapshot is a faithful match for what this chart is
+    // showing in exactly one state: "bycategory" with a specific month
+    // selected, and that month being the current one. Every other
+    // viewBy/filter combination (bymonth, bycategory-for-the-whole-year, or
+    // a non-current specific month) has no backend equivalent, so it keeps
+    // using the frontend rules engine (notifyChartFilterApplied) exactly as
+    // before.
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const isCurrentMonthCategoryView =
+      viewBy === 'bycategory' && specificMonth === true && month === currentYearMonth;
+
+    if (isCurrentMonthCategoryView) {
+      const barFindings = report?.insights?.chartFindings?.bar;
+
+      // Gotcha (verified directly against chartFindingsAnalyzer.js, which is
+      // out of scope for this migration): hasData is false whenever the user
+      // has no budget configured at all (budgetReport.hasBudget !== true),
+      // REGARDLESS of whether category data exists -- it's a budget-status
+      // gate, not a category-data gate. concentrationRatio ends up
+      // unavailable purely because of that unrelated gate, so this is
+      // treated as "no backend data to use" and falls back to the frontend
+      // rule below, not as an error.
+      if (barFindings?.hasData === true) {
+        const { concentrationRatio } = barFindings;
+        const top = report?.categories?.monthly?.categoryDistribution?.[0];
+
+        // top can be undefined even when concentrationRatio exists (edge
+        // cases in the backend's category report); without a category name
+        // there's no honest text to build, so fall back below instead.
+        if (top) {
+          // These thresholds are a fresh mapping for concentrationRatio (a
+          // top-3-category-share ratio) -- a genuinely different metric from
+          // the old frontend rule's gini/dominance-ratio math -- not an
+          // attempt to reproduce the old rule's output under a new name.
+          let insight;
+          if (concentrationRatio >= 0.70) {
+            insight = {
+              severity: 'HIGH',
+              text: `A large share of spending was concentrated in ${top.category}, accounting for ${top.percentage}% of the total.`,
+            };
+          } else if (concentrationRatio >= 0.50) {
+            insight = {
+              severity: 'MEDIUM',
+              text: `${top.category} was the largest spending category during this period at ${top.percentage}% of total spending.`,
+            };
+          } else {
+            insight = {
+              severity: 'LOW',
+              text: 'Spending was fairly balanced across categories during this period.',
+            };
+          }
+
+          setBackendInsight(insight);
+          return;
+        }
+      }
+    }
+
+    setBackendInsight(null);
+    notifyChartFilterApplied(barChartQuery.data.data, 'bar', viewBy);
+  }, [barChartQuery.data, viewBy, specificMonth, month, report, notifyChartFilterApplied]);
 
   const data =
     barChartQuery.data?.success && Array.isArray(barChartQuery.data.data)
@@ -50,6 +126,7 @@ const BarChartPage = ({ expenses }) => {
     setSpecificMonth(false);
 
     clearChartInsights();
+    setBackendInsight(null);
   };
 
   const shouldRenderChart = data.length > 0;
@@ -89,6 +166,7 @@ const BarChartPage = ({ expenses }) => {
             <input
               type="month"
               className="select-button filter-button"
+              aria-label="Select month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
             />
@@ -138,6 +216,7 @@ const BarChartPage = ({ expenses }) => {
               setSpecificMonth(checked);
 
               clearChartInsights();
+              setBackendInsight(null);
             }}
           />
           <label htmlFor="compare-checkbox">View for specific month</label>
@@ -192,7 +271,9 @@ const BarChartPage = ({ expenses }) => {
           </AnimatePresence>
         </QueryState>
       )}
-      {isChartInsightReady && <InlineChartInsight item={chartInsightText} />}
+      {backendInsight
+        ? <InlineChartInsight item={backendInsight} />
+        : (isChartInsightReady && <InlineChartInsight item={chartInsightText} />)}
     </div>
   );
 };
