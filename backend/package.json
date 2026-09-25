@@ -9,7 +9,8 @@
     "test": "jest --runInBand --detectOpenHandles",
     "test:integration": "jest --config jest.integration.config.js --runInBand --detectOpenHandles",
     "lint": "eslint .",
-    "lint:ci": "node scripts/lintBaseline.js --run"
+    "lint:ci": "node scripts/lintBaseline.js --run",
+    "eval:ocr": "node scripts/ocrEvaluation/runEvaluation.js"
   },
   "keywords": [],
   "author": "",

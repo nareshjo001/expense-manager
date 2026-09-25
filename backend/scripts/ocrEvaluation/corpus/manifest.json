@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "generatedBy": "scripts/ocrEvaluation/generateSyntheticFixtures.js",
+  "corpusType": "synthetic-smoke-test",
+  "note": "SYNTHETIC ONLY -- not a representative evaluation set. See corpus/README.md.",
+  "entries": [
+    {
+      "id": "clean-simple",
+      "image": "images/clean-simple.png",
+      "source": "synthetic",
+      "anonymized": true,
+      "groundTruth": {
+        "expenseName": "Coffee House",
+        "expenseAmount": 245,
+        "expenseDate": "2026-03-12",
+        "expectReviewReasons": []
+      },
+      "notes": "Baseline: clean single total, unambiguous date, no heading collision."
+    },
+    {
+      "id": "ambiguous-total",
+      "image": "images/ambiguous-total.png",
+      "source": "synthetic",
+      "anonymized": true,
+      "groundTruth": {
+        "expenseName": "Green Grocer",
+        "expenseAmount": 118,
+        "expenseDate": "2026-01-05",
+        "expectReviewReasons": [
+          "AMBIGUOUS_AMOUNT"
+        ]
+      },
+      "notes": "Two differing Total lines -- exercises extractAmount's ambiguity flag."
+    },
+    {
+      "id": "no-amount",
+      "image": "images/no-amount.png",
+      "source": "synthetic",
+      "anonymized": true,
+      "groundTruth": {
+        "expenseName": "Book Nook",
+        "expenseAmount": null,
+        "expenseDate": "2026-07-18",
+        "expectReviewReasons": [
+          "NO_AMOUNT_FOUND"
+        ]
+      },
+      "notes": "No total/grand total keyword anywhere -- exercises NO_AMOUNT_FOUND."
+    },
+    {
+      "id": "no-date",
+      "image": "images/no-date.png",
+      "source": "synthetic",
+      "anonymized": true,
+      "groundTruth": {
+        "expenseName": "Corner Bakery",
+        "expenseAmount": 60,
+        "expenseDate": null,
+        "expectReviewReasons": [
+          "NO_DATE_FOUND"
+        ]
+      },
+      "notes": "No date pattern anywhere -- exercises NO_DATE_FOUND."
+    },
+    {
+      "id": "heading-collision",
+      "image": "images/heading-collision.png",
+      "source": "synthetic",
+      "anonymized": true,
+      "groundTruth": {
+        "expenseName": "Star Mart",
+        "expenseAmount": 320.5,
+        "expenseDate": "2026-09-22",
+        "expectReviewReasons": [
+          "MERCHANT_LOOKS_LIKE_HEADING"
+        ]
+      },
+      "notes": "First line is a document heading -- exercises MERCHANT_LOOKS_LIKE_HEADING."
+    },
+    {
+      "id": "blank-image",
+      "image": "images/blank-image.png",
+      "source": "synthetic",
+      "anonymized": true,
+      "groundTruth": {
+        "expenseName": "",
+        "expenseAmount": null,
+        "expenseDate": null,
+        "expectReviewReasons": [
+          "NO_TEXT_RECOGNISED",
+          "NO_AMOUNT_FOUND",
+          "NO_DATE_FOUND"
+        ]
+      },
+      "notes": "No text at all -- exercises NO_TEXT_RECOGNISED (and the amount/date reasons it implies)."
+    }
+  ]
+}
