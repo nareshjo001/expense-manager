@@ -2,6 +2,7 @@ const { UserModel, ExpenseModel, MlFeedbackModel } = require('../../config/Schem
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 const { synchronizeAfterMutation, reserve, abandon } = require('../../Services/syncRecoveryService');
 const { normalizeCategory } = require('../../utils/categoryNormalization');
+const { logEvent } = require('../../utils/logger');
 const { annotateRecurringState } = require('../../Services/RecurringServices/recurringStateService');
 const axios = require("axios");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
@@ -183,7 +184,7 @@ const addExpense = async (req, res) => {
 
             finalDescription = response.data.description;
         } catch (mlErr) {
-            console.error('ML description generation failed, falling back to "Others":', mlErr.message);
+            logEvent({ level: 'warn', scope: 'ml', event: 'description_generation_failed', requestId: req.requestId, errorName: mlErr && mlErr.name, fallback: 'empty_description' });
             finalDescription = "";
         }
     }
@@ -310,7 +311,9 @@ const addExpense = async (req, res) => {
     }
 
     // Send generic server error response.
-    console.error(err);
+    // Name/code only -- a raw Mongo error can echo the submitted document's
+    // values (amount, name, description) back in its message.
+    logEvent({ level: 'error', scope: 'expense', event: 'add_expense_failed', requestId: req.requestId, errorName: err && err.name, errorCode: err && err.code });
     res.status(500).json({ message: 'Internal Server Error', success: false });
   }
 };

@@ -337,7 +337,9 @@ describe("AUTH-002 rate limits and audit privacy", () => {
 
   test("emits correlatable audit events without raw email or IP", () => {
     process.env.JWT_SECRET = "audit-test-secret";
-    const info = jest.spyOn(console, "info").mockImplementation(() => {});
+    // Audit events go through utils/logger.js (console.log) with the
+    // standard timestamp/level/scope envelope around the audit fields.
+    const info = jest.spyOn(console, "log").mockImplementation(() => {});
     const { emitAuthAuditEvent } = require("../Services/AuthServices/security.service");
 
     emitAuthAuditEvent({
@@ -354,5 +356,9 @@ describe("AUTH-002 rate limits and audit privacy", () => {
     expect(event.identityHash).toMatch(/^[a-f0-9]{24}$/);
     expect(event.ipHash).toMatch(/^[a-f0-9]{24}$/);
     expect(event.featureId).toBe("AUTH-002");
+    expect(event.type).toBe("auth_security_event");
+    expect(event.scope).toBe("auth_audit");
+    expect(event.level).toBe("info");
+    expect(event.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });

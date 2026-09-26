@@ -1,6 +1,7 @@
 // Import jsonwebtoken library
 const jwt = require('jsonwebtoken');
 const { isSessionActive } = require('../Services/AuthServices/session.service');
+const { logEvent } = require('../utils/logger');
 
 // Middleware to verify JWT token
 const verifyToken = async (req, res, next) => {
@@ -44,7 +45,7 @@ const verifyToken = async (req, res, next) => {
     next();
   } catch (err) {
     // Token verification failed (expired or invalid)
-    console.error("JWT verification failed");
+    logEvent({ level: "warn", scope: "auth", event: "jwt_verification_failed", requestId: req.requestId, errorName: err && err.name });
     return res.status(401).json({ 
       success: false,
       message: "Invalid or expired token"

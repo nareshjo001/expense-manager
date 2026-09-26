@@ -1,4 +1,11 @@
 const admin = require("firebase-admin");
+const { logEvent } = require("../utils/logger");
+
+// One structured line per reason. `reason` is always one of the fixed
+// strings below -- never the raw value or the SDK error (see the notes
+// at each call site for why).
+const logUnavailable = (reason) =>
+  logEvent({ level: "warn", scope: "push", event: "firebase_unavailable", reason, impact: "push notifications disabled" });
 
 // Firebase is an OPTIONAL capability (push notifications only -- see
 class FirebaseUnavailableError extends Error {
@@ -20,7 +27,7 @@ const ensureInitialized = () => {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) {
     unavailableReason = "FIREBASE_SERVICE_ACCOUNT is not set";
-    console.error("[firebaseAdmin] Firebase unavailable: FIREBASE_SERVICE_ACCOUNT is not set. Push notifications are disabled.");
+    logUnavailable(unavailableReason);
     return;
   }
 
@@ -31,7 +38,7 @@ const ensureInitialized = () => {
     serviceAccount = JSON.parse(raw);
   } catch {
     unavailableReason = "FIREBASE_SERVICE_ACCOUNT is not valid JSON";
-    console.error("[firebaseAdmin] Firebase unavailable: FIREBASE_SERVICE_ACCOUNT is not valid JSON. Push notifications are disabled.");
+    logUnavailable(unavailableReason);
     return;
   }
 
@@ -43,7 +50,7 @@ const ensureInitialized = () => {
     !serviceAccount.private_key
   ) {
     unavailableReason = "FIREBASE_SERVICE_ACCOUNT is missing required fields";
-    console.error("[firebaseAdmin] Firebase unavailable: FIREBASE_SERVICE_ACCOUNT is missing required fields (project_id/client_email/private_key). Push notifications are disabled.");
+    logUnavailable(unavailableReason);
     return;
   }
 
@@ -56,7 +63,7 @@ const ensureInitialized = () => {
   } catch {
     unavailableReason = "Firebase SDK failed to initialize";
     firebaseApp = null;
-    console.error("[firebaseAdmin] Firebase unavailable: SDK initialization failed. Push notifications are disabled.");
+    logUnavailable(unavailableReason);
   }
 };
 

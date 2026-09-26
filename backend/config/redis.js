@@ -54,7 +54,7 @@ redisClient.on("error", (err) => {
     (err && (err.message || err.code)) ||
     (err && Array.isArray(err.errors) && err.errors.map((e) => e.code || e.message).join(",")) ||
     "unknown";
-  console.error("Redis Error:", detail);
+  logEvent({ level: "error", scope: "redis", event: "redis_client_error", detail });
 });
 
 // Truthful, not remembered. node-redis maintains `isReady` itself and flips
@@ -136,7 +136,6 @@ async function connectRedis() {
   clearTimeout(timer);
 
   if (outcome.settled && !outcome.error && redisClient.isReady) {
-    console.log("Redis Connected");
     logEvent({ level: "info", scope: "redis", event: "redis_connected" });
     return { connected: true };
   }

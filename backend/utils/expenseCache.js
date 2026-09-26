@@ -1,9 +1,12 @@
 const { redisClient } = require('../config/redis');
+const { logEvent } = require('./logger');
 
 const DEFAULT_TTL_SECONDS = 300;
 
 // Cache keys follow "<feature>:<userId>[:<variant>]".
 const getUserIdFromKey = (key) => key.split(':')[1];
+// Logged instead of the key itself: the key embeds the user's id.
+const featureOf = (key) => String(key).split(':')[0];
 const userKeySetName = (userId) => `cachekeys:${userId}`;
 
 // Set Cache
@@ -20,9 +23,9 @@ const setCache = async (key, data, ttl = DEFAULT_TTL_SECONDS) => {
 
         await multi.exec();
 
-        console.log(`Cache set: ${key}`);
+        logEvent({ level: 'info', scope: 'cache', event: 'cache_set', feature: featureOf(key) });
     } catch (err) {
-        console.error(`Cache set failed for ${key}:`, err.message);
+        logEvent({ level: 'error', scope: 'cache', event: 'cache_set_failed', feature: featureOf(key), errorName: err && err.name });
     }
 };
 
@@ -33,10 +36,10 @@ const getCache = async (key) => {
 
         if (!raw) return null;
 
-        console.log(`Cache hit: ${key}`);
+        logEvent({ level: 'info', scope: 'cache', event: 'cache_hit', feature: featureOf(key) });
         return JSON.parse(raw);
     } catch (err) {
-        console.error(`Cache get failed for ${key}:`, err.message);
+        logEvent({ level: 'error', scope: 'cache', event: 'cache_get_failed', feature: featureOf(key), errorName: err && err.name });
         return null;
     }
 };
@@ -53,9 +56,9 @@ const clearUserExpenseCache = async (userId) => {
 
         await redisClient.del(setKey);
 
-        console.log(`Cache cleared for user: ${userId}`);
+        logEvent({ level: 'info', scope: 'cache', event: 'cache_cleared' });
     } catch (err) {
-        console.error(`Cache clear failed for user ${userId}:`, err.message);
+        logEvent({ level: 'error', scope: 'cache', event: 'cache_clear_failed', errorName: err && err.name });
     }
 };
 

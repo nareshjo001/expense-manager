@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { logEvent } = require("../../utils/logger");
 
 const RECOVERY_RESPONSE = Object.freeze({
   success: true,
@@ -53,11 +54,16 @@ const emitAuthAuditEvent = ({ event, outcome, req, email, reason }) => {
     reason,
     identityHash: fingerprint(normalizeEmail(email)),
     ipHash: fingerprint(req?.ip),
-    requestId: String(req?.get?.("X-Request-ID") || "").slice(0, 128) || undefined,
+    // req.requestId is the ID requestId.js validated or generated, so every
+    // audit event is correlatable -- including requests that sent no
+    // X-Request-ID, which the raw header alone left untagged.
+    requestId: req?.requestId || String(req?.get?.("X-Request-ID") || "").slice(0, 128) || undefined,
     occurredAt: new Date().toISOString(),
   };
 
-  console.info(JSON.stringify(auditEvent));
+  // Written through the OBS-001 logger so the line carries the standard
+  // timestamp/level/scope envelope (T03) alongside the audit fields.
+  logEvent({ level: "info", scope: "auth_audit", ...auditEvent });
 };
 
 const getRecoveryMinDelayMs = (env = process.env) => {

@@ -1,4 +1,5 @@
 const { UserModel } = require('../../config/Schemas');
+const { logEvent } = require('../../utils/logger');
 const passwordService = require('../../Services/AuthServices/password.service');
 const { createLoginSession } = require('./session');
 const {
@@ -28,7 +29,7 @@ const login = async (req, res) => {
         emitAuthAuditEvent({ event: 'login', outcome: 'success', req, email });
         res.status(200).json({ message: 'Login Successful', success: true, token, email: user.email, firstname: user.fullName });
     } catch (err) {
-        console.error('Login failed:', err.message);
+        logEvent({ level: 'error', scope: 'auth', event: 'login_failed', requestId: req.requestId, errorName: err && err.name });
         res.status(500).json({ message: 'Internal Server Error', success: false });
     }
 };

@@ -30,16 +30,21 @@ const { apiLimiter } = require("./utils/rateLimiter");
 // Create app
 const app = express();
 
+// OBS-001-T07 -- request ID and metrics run FIRST, before helmet/cors/body
+// parsing. They used to be registered after express.json(), so a request
+// rejected by the JSON parser (malformed body) never got an ID: its error
+// log line carried requestId null, its response had no X-Request-ID, and it
+// was missing from the request/error counts entirely. Found by
+// scripts/verifyObservability.js.
+app.use(requestIdMiddleware);
+app.use(requestMetricsMiddleware);
+
 
 // Apply security headers before cross-origin and request parsing middleware.
 app.use(helmet(createHelmetOptions()));
 app.use(cors(createCorsOptions()));
 app.use(express.json());
 
-// OBS-001 -- correlation ID first (so every later log line can carry it),
-// then request-latency/error metrics collection.
-app.use(requestIdMiddleware);
-app.use(requestMetricsMiddleware);
 
 // Periodic aggregate metrics snapshot. Guarded against NODE_ENV === "test":
 // startMetricsReporting()'s own internal guard only no-ops a *second* call

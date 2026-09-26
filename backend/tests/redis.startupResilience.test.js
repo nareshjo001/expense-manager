@@ -168,6 +168,14 @@ describe("isRedisAvailable", () => {
 });
 
 describe("error logging", () => {
+  // The handler writes one structured JSON line through utils/logger.js
+  // (OBS-001-T03), so assert on the parsed record rather than on a raw
+  // console.error("Redis Error:", ...) argument list.
+  const loggedEvents = (spy) =>
+    spy.mock.calls
+      .map((c) => { try { return JSON.parse(c[0]); } catch { return null; } })
+      .filter(Boolean);
+
   test("logs something identifiable when the error has no message", () => {
     // A plain connection refusal arrives with an empty `message`, which is
     // how this file produced twenty consecutive lines reading "Redis Error:"
@@ -178,7 +186,9 @@ describe("error logging", () => {
     const handler = client.on.mock.calls.find((c) => c[0] === "error")[1];
     handler({ message: "", code: "ECONNREFUSED" });
 
-    expect(errorSpy).toHaveBeenCalledWith("Redis Error:", "ECONNREFUSED");
+    expect(loggedEvents(errorSpy)).toContainEqual(
+      expect.objectContaining({ scope: "redis", event: "redis_client_error", detail: "ECONNREFUSED" })
+    );
   });
 
   test("falls back to aggregated causes when there is neither message nor code", () => {
@@ -188,7 +198,9 @@ describe("error logging", () => {
     const handler = client.on.mock.calls.find((c) => c[0] === "error")[1];
     handler({ errors: [{ code: "ECONNREFUSED" }, { code: "EAI_AGAIN" }] });
 
-    expect(errorSpy).toHaveBeenCalledWith("Redis Error:", "ECONNREFUSED,EAI_AGAIN");
+    expect(loggedEvents(errorSpy)).toContainEqual(
+      expect.objectContaining({ scope: "redis", event: "redis_client_error", detail: "ECONNREFUSED,EAI_AGAIN" })
+    );
   });
 
   test("never logs 'undefined' for an unrecognizable error", () => {
@@ -198,6 +210,8 @@ describe("error logging", () => {
     const handler = client.on.mock.calls.find((c) => c[0] === "error")[1];
     handler(undefined);
 
-    expect(errorSpy).toHaveBeenCalledWith("Redis Error:", "unknown");
+    expect(loggedEvents(errorSpy)).toContainEqual(
+      expect.objectContaining({ scope: "redis", event: "redis_client_error", detail: "unknown" })
+    );
   });
 });

@@ -217,8 +217,9 @@ describe("GET /report -- additional authentication failures (B)", () => {
   });
 
   it("returns 401 Invalid or expired token for a garbage JWT, and never calls reportService", async () => {
-    // Middlewares/Auth.js intentionally logs console.error("JWT verification
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    // Middlewares/Auth.js logs a structured jwt_verification_failed warn
+    // line (utils/logger.js -> console.log) -- silenced and asserted here.
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
 
     try {
       const { app, getReportMock } = loadAppWithMockedService();
@@ -230,9 +231,14 @@ describe("GET /report -- additional authentication failures (B)", () => {
       expect(res.status).toBe(401);
       expect(res.body).toEqual({ success: false, message: "Invalid or expired token" });
       expect(getReportMock).not.toHaveBeenCalled();
-      expect(consoleErrorSpy).toHaveBeenCalledWith("JWT verification failed");
+      const logged = consoleLogSpy.mock.calls
+        .map((c) => { try { return JSON.parse(c[0]); } catch { return null; } })
+        .filter(Boolean);
+      expect(logged).toContainEqual(
+        expect.objectContaining({ level: "warn", scope: "auth", event: "jwt_verification_failed" })
+      );
     } finally {
-      consoleErrorSpy.mockRestore();
+      consoleLogSpy.mockRestore();
     }
   });
 
