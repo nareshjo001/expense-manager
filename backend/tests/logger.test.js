@@ -102,6 +102,23 @@ describe("logEvent", () => {
     expect(record.stack).toBeUndefined();
   });
 
+  test("serializes object and array fields as JSON text instead of \"[object Object]\"", () => {
+    logEvent({ scope: "metrics", event: "metrics_snapshot", jobs: { recurringJob: { runs: 2 } }, examples: [{ docId: "a" }] });
+    const record = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+    expect(JSON.parse(record.jobs)).toEqual({ recurringJob: { runs: 2 } });
+    expect(JSON.parse(record.examples)).toEqual([{ docId: "a" }]);
+  });
+
+  test("caps a large structured field and survives a circular one", () => {
+    const big = { list: Array.from({ length: 1000 }, (_, i) => `item-${i}`) };
+    const circular = {};
+    circular.self = circular;
+    logEvent({ scope: "t", event: "e", big, circular });
+    const record = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+    expect(record.big.length).toBeLessThanOrEqual(2000);
+    expect(record.circular).toBe("[unserializable]");
+  });
+
   test("defaults to info level and safe fallbacks when scope/event omitted", () => {
     logEvent({});
     const record = JSON.parse(consoleLogSpy.mock.calls[0][0]);

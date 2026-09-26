@@ -9,6 +9,21 @@
 
 const MAX_SAFE_STRING_LENGTH = 500;
 const MAX_ROUTE_LENGTH = 200;
+// Structured values (metrics_snapshot's jobs/operations, a migration
+// report's examples) are serialized to JSON text. Before this they went
+// through String(), so every one of them was logged as "[object Object]"
+// -- found by the DAT-002-T07 staging run. Capped like any other string.
+const MAX_STRUCTURED_LENGTH = 2000;
+
+function safeStructured(value) {
+  let text;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+  return safeString(text, MAX_STRUCTURED_LENGTH);
+}
 
 // Collapses newlines (log-injection risk) and truncates so a single field
 // can never dominate or corrupt a log line.
@@ -49,6 +64,8 @@ function logEvent({ level = "info", scope, event, requestId, ...fields } = {}) {
         record[key] = safeNumber(value);
       } else if (typeof value === "boolean") {
         record[key] = value;
+      } else if (value !== null && typeof value === "object") {
+        record[key] = safeStructured(value);
       } else if (value !== undefined) {
         record[key] = key === "route" || key === "path"
           ? safeString(value, MAX_ROUTE_LENGTH)

@@ -99,8 +99,10 @@ describe("migration 20260921-report-email-and-month-normalization-gaps", () => {
     expect(collision.normalized).toBe("foo@example.com");
     expect(collision.docs.map((d) => d.docId).sort()).toEqual(["u1", "u2"]);
     expect(ctx.logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "email_collision", normalized: "foo@example.com" })
+      expect.objectContaining({ event: "email_collision", docIds: ["u1", "u2"], docCount: 2 })
     );
+    // The log line names documents, never addresses (OBS-001-T01).
+    expect(JSON.stringify(ctx.logger.warn.mock.calls)).not.toMatch(/@example\.com/);
   });
 
   test("never calls anything but find on the users/budget collections (report-only, no mutation)", async () => {
