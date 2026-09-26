@@ -1,6 +1,6 @@
 "use strict";
 
-// PRV-001-T06 (ADR-0007 Tier B) -- hard-deletes the 13 user-linked
+// PRV-001-T06 (ADR-0007 Tier B) -- hard-deletes the 14 user-linked
 // collections not already handled by Tier A (see accountDeletionTierASteps
 // .js), plus the `users` document itself last. Every step here is a plain
 // deleteMany scoped to the user's ownership field -- idempotent by
@@ -45,11 +45,14 @@ const SiaSession = require("../../models/SiaSession");
 const SiaMessage = require("../../models/SiaMessage");
 const SiaRequest = require("../../models/SiaRequest");
 const Receipt = require("../../models/Receipt");
+const { CategoryBudgetModel } = require("../../models/CategoryBudget");
 const { deleteReceiptObject } = require("../ReceiptServices/receiptStorageAdapter");
 
 async function deleteExpensesStep(userId) { await ExpenseModel.deleteMany({ userId }); }
 async function deleteIncomesStep(userId) { await IncomeModel.deleteMany({ userId }); }
 async function deleteBudgetsStep(userId) { await BudgetModel.deleteMany({ userId }); }
+// BUD-001 (I15) -- per-category allocations, owned by `userId`.
+async function deleteCategoryBudgetsStep(userId) { await CategoryBudgetModel.deleteMany({ userId }); }
 async function deleteMerchantCategoryRulesStep(userId) { await MerchantCategoryRule.deleteMany({ userId }); }
 async function deleteRecurringExpensesStep(userId) { await RecurringExpenseModel.deleteMany({ userId }); }
 
@@ -112,6 +115,7 @@ const TIER_B_STEPS = [
   { name: "delete-expenses", run: deleteExpensesStep },
   { name: "delete-incomes", run: deleteIncomesStep },
   { name: "delete-budgets", run: deleteBudgetsStep },
+  { name: "delete-category-budgets", run: deleteCategoryBudgetsStep },
   { name: "delete-merchant-category-rules", run: deleteMerchantCategoryRulesStep },
   { name: "delete-recurring-expenses", run: deleteRecurringExpensesStep },
   { name: "delete-receipts", run: deleteReceiptsStep },
@@ -130,6 +134,7 @@ module.exports = {
   deleteExpensesStep,
   deleteIncomesStep,
   deleteBudgetsStep,
+  deleteCategoryBudgetsStep,
   deleteMerchantCategoryRulesStep,
   deleteRecurringExpensesStep,
   deleteReceiptsStep,

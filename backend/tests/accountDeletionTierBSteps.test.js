@@ -18,6 +18,7 @@ const SIA_MESSAGE_PATH = "../models/SiaMessage";
 const SIA_REQUEST_PATH = "../models/SiaRequest";
 const MODULE_PATH = "../Services/PrivacyServices/accountDeletionTierBSteps";
 const RECEIPT_PATH = "../models/Receipt";
+const CATEGORY_BUDGET_PATH = "../models/CategoryBudget";
 const RECEIPT_STORAGE_ADAPTER_PATH = "../Services/ReceiptServices/receiptStorageAdapter";
 
 function makeDeleteManyModel() {
@@ -76,13 +77,16 @@ function loadModule() {
   const deleteReceiptObject = jest.fn(async () => {});
   jest.doMock(RECEIPT_STORAGE_ADAPTER_PATH, () => ({ deleteReceiptObject }));
 
+  const CategoryBudgetModel = makeDeleteManyModel();
+  jest.doMock(CATEGORY_BUDGET_PATH, () => ({ CategoryBudgetModel }));
+
   const mod = require(MODULE_PATH);
   return {
     ...mod,
     models: {
       ExpenseModel, IncomeModel, BudgetModel, MlFeedbackModel, UserModel,
       MerchantCategoryRule, RecurringExpenseModel, FinancialReport, PendingSync,
-      Notification, SiaSession, SiaMessage, SiaRequest, Receipt,
+      Notification, SiaSession, SiaMessage, SiaRequest, Receipt, CategoryBudgetModel,
     },
     deleteReceiptObject,
   };
@@ -95,7 +99,7 @@ afterEach(() => {
 
 describe("PRV-001-T06 Tier B step -> model/field mapping", () => {
   test("userId-scoped collections", async () => {
-    const { models, deleteExpensesStep, deleteIncomesStep, deleteBudgetsStep,
+    const { models, deleteExpensesStep, deleteIncomesStep, deleteBudgetsStep, deleteCategoryBudgetsStep,
       deleteMerchantCategoryRulesStep, deleteRecurringExpensesStep, deleteMlFeedbackStep,
       deleteNotificationsStep } = loadModule();
 
@@ -107,6 +111,9 @@ describe("PRV-001-T06 Tier B step -> model/field mapping", () => {
 
     await deleteBudgetsStep("user-1");
     expect(models.BudgetModel.deleteMany).toHaveBeenCalledWith({ userId: "user-1" });
+
+    await deleteCategoryBudgetsStep("user-1");
+    expect(models.CategoryBudgetModel.deleteMany).toHaveBeenCalledWith({ userId: "user-1" });
 
     await deleteMerchantCategoryRulesStep("user-1");
     expect(models.MerchantCategoryRule.deleteMany).toHaveBeenCalledWith({ userId: "user-1" });
@@ -205,13 +212,14 @@ describe("PRV-001-T06 TIER_B_STEPS ordering contract", () => {
     expect(TIER_B_STEPS[TIER_B_STEPS.length - 1].name).toBe("delete-user");
   });
 
-  test("lists exactly the 13 Tier B collections plus users (14 steps total)", () => {
+  test("lists exactly the 14 Tier B collections plus users (15 steps total)", () => {
     const { TIER_B_STEPS } = loadModule();
-    expect(TIER_B_STEPS).toHaveLength(14);
+    expect(TIER_B_STEPS).toHaveLength(15);
     expect(TIER_B_STEPS.map((s) => s.name)).toEqual([
       "delete-expenses",
       "delete-incomes",
       "delete-budgets",
+      "delete-category-budgets",
       "delete-merchant-category-rules",
       "delete-recurring-expenses",
       "delete-receipts",
