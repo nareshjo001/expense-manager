@@ -37,6 +37,10 @@ jest.mock("../contexts/ai-contexts/ExpenseInsightsContext", () => ({
 
 jest.mock("../insights/InlineExpenseInsight", () => () => null);
 
+// BUD-001-T05 -- CategoryBudgets has its own suite (budget/CategoryBudgets.test.js)
+// and needs a QueryClientProvider; not under test here.
+jest.mock("./budget/CategoryBudgets", () => () => null);
+
 // A controllable pair (unlike the other ExpensesPage test files' static
 // inert mock): lets each test supply the URL ExpensesPage should read on
 // mount, and inspect what it writes back.
