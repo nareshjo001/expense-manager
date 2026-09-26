@@ -29,7 +29,32 @@ function buildStreak(budgets) {
   return { streak: budgets.currentStreak ?? 0 };
 }
 
-function buildStability(spending) {
+// ANL-001-T04 -- backend tier codes ("HighlyStable" etc, from
+// stabilityScoreAnalyzer.js) map to the same display labels/messages this
+// component has always shown.
+const STABILITY_TIER_LABELS = {
+  HighlyStable: { label: "Highly Stable", message: "Your daily spending is very consistent." },
+  ModeratelyStable: { label: "Moderately Stable", message: "Your daily spending is fairly consistent." },
+  LowStability: { label: "Low Stability", message: "Your spending varies a lot day to day." },
+};
+
+// ANL-001-T04 -- prefers report.insights.stability (backend-computed by
+// stabilityScoreAnalyzer.js) when it has data: verified byte-for-byte
+// identical formula/thresholds to the client-side computation below
+// (Math.max(0, Math.min(100, Math.round(100 - cov * 100))), 75/50 cutoffs),
+// so this is a genuine 1:1 swap, not an approximation. Falls back to
+// recomputing from report.spending.stability, UNCHANGED, for reports
+// generated before ANL-001-T03/T04 added backend insights (legacy cached
+// reports have insights: {} per the Report model's schema default, so
+// insightsStability?.hasData will be falsy there).
+function buildStability(spending, insightsStability) {
+  if (insightsStability?.hasData) {
+    const tier = STABILITY_TIER_LABELS[insightsStability.tier];
+    if (tier && Number.isFinite(insightsStability.score)) {
+      return { stabilityScore: insightsStability.score, stabilityInsight: tier };
+    }
+  }
+
   const stability = spending?.stability;
   if (!stability || !Number.isFinite(stability.coefficientOfVariation)) return null;
   const score = Math.max(0, Math.min(100, Math.round(100 - stability.coefficientOfVariation * 100)));
@@ -51,7 +76,7 @@ export default function OverallInsight({ report }) {
   const insight = useMemo(() => ({
     biggestSpendingJump: buildSpendingJump(report?.categories?.monthly),
     streak: buildStreak(report?.budgets),
-    stabilityDetails: buildStability(report?.spending),
+    stabilityDetails: buildStability(report?.spending, report?.insights?.stability),
   }), [report]);
 
   return (

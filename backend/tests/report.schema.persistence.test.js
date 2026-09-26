@@ -235,6 +235,117 @@ describe("models/Report.js + reportContractVersion.js: legacy-document staleness
   });
 });
 
+// ANL-001-T04 -- regression test for a real bug found while starting this
+// task: analytics/reportGenerator.js has computed and attached `insights`
+// to every generated report since ANL-001-T03, but models/Report.js never
+// declared the field. Mongoose's default `strict: true` mode silently
+// drops any undeclared path from a document/update, so `report.insights`
+// never actually survived a write -- confirmed here the same way the rest
+// of this file confirms every other section, by constructing a document
+// straight from attrs and checking what comes back, no live MongoDB
+// needed. Before the fix (models/Report.js gaining an `insights` field,
+// Mixed-typed and defaulted to `{}` like every sibling section), the
+// `toEqual` assertions below would fail with `rehydrated.insights` being
+// `undefined`.
+describe("models/Report.js: insights section schema round-trip (ANL-001-T04)", () => {
+  it("a populated insights section (all four ANL-001-T03 sub-reports) survives the schema round-trip", () => {
+    const insights = {
+      weeklyChange: {
+        hasData: true,
+        reasonCode: null,
+        currentWeekTotal: 1200,
+        previousWeekTotal: 900,
+        changeRatio: 0.3333,
+        adaptiveThreshold: 0.3,
+        volatility: 0.18,
+        isSignificant: true,
+        direction: "up",
+        anomalySource: "CURRENT_WEEK",
+      },
+      categoryPattern: {
+        hasData: true,
+        reasonCode: null,
+        dominantCategory: "Food",
+        classification: "Habit",
+        microTransactionCategories: [{ category: "Food", count: 12, totalAmount: 340 }],
+        yearlyStability: 0.72,
+        yearlyConcentration: 0.41,
+      },
+      stability: {
+        hasData: true,
+        coefficientOfVariation: 0.22,
+        score: 78,
+        tier: "HighlyStable",
+      },
+      chartFindings: {
+        line: { hasData: true, direction: "up", volatility: 18.5 },
+        bar: { hasData: true, pressureCategory: "Safe", concentrationRatio: 0.62 },
+        pie: { hasData: true, concentrationRatio: 0.41, topSlice: "Food" },
+      },
+    };
+
+    const attrs = {
+      user: new mongoose.Types.ObjectId(),
+      metadata: baseMetadata(),
+      insights,
+    };
+
+    const rehydrated = roundTripThroughSchemaAndCache(attrs);
+
+    expect(rehydrated.insights).toEqual(insights);
+    expect(rehydrated.insights.chartFindings.bar.pressureCategory).toBe("Safe");
+    expect(rehydrated.insights.stability.tier).toBe("HighlyStable");
+  });
+
+  it("the no-data shape of each sub-report survives the schema round-trip", () => {
+    const insights = {
+      weeklyChange: {
+        hasData: false,
+        reasonCode: "NO_WEEKLY_EXPENSE_DATA",
+        currentWeekTotal: 0,
+        previousWeekTotal: 0,
+        changeRatio: null,
+        adaptiveThreshold: 0.3,
+        volatility: null,
+        isSignificant: false,
+        direction: "same",
+        anomalySource: null,
+      },
+      categoryPattern: { hasData: false, reasonCode: "NO_MONTHLY_CATEGORY_DATA" },
+      stability: { hasData: false, coefficientOfVariation: null, score: null, tier: null },
+      chartFindings: {
+        line: { hasData: false, direction: null, volatility: null },
+        bar: { hasData: false, pressureCategory: null, concentrationRatio: null },
+        pie: { hasData: false, concentrationRatio: null, topSlice: null },
+      },
+    };
+
+    const attrs = {
+      user: new mongoose.Types.ObjectId(),
+      metadata: baseMetadata(),
+      insights,
+    };
+
+    const rehydrated = roundTripThroughSchemaAndCache(attrs);
+
+    expect(rehydrated.insights).toEqual(insights);
+  });
+
+  it("a legacy document with no insights field at all reads back with the schema default, not an error", () => {
+    // Simulates a report persisted before this field was declared -- no
+    // `insights` key is passed in at all, same convention as the
+    // equivalent "legacy document" test for `anomalies` above.
+    const attrs = {
+      user: new mongoose.Types.ObjectId(),
+      metadata: baseMetadata(),
+    };
+
+    const rehydrated = roundTripThroughSchemaAndCache(attrs);
+
+    expect(rehydrated.insights).toEqual({});
+  });
+});
+
 describe("models/Report.js: forecast section schema round-trip (Batch 2)", () => {
   const { analyze: analyzeForecast } = require("../analytics/analyzers/forecastAnalyzer");
 

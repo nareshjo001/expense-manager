@@ -17,6 +17,7 @@ import InlineChartInsight from '../../insights/InlineChartInsight';
 import QueryState from '../../common/QueryState';
 import { useTrendChartQuery } from '../../../hooks/queries/useTrendChartQuery';
 import { useLoggedYearsQuery } from '../../../hooks/queries/useLoggedYearsQuery';
+import { useReport } from '../../../hooks/useReport';
 
 // Trend line chart (week/month/year, with optional multi-year comparison) with cancellable data fetching per filter change.
 const TrendChartPage = ({ expenses }) => {
@@ -30,6 +31,7 @@ const TrendChartPage = ({ expenses }) => {
   const [selectedYears, setSelectedYears] = useState([]);
 
   const { notifyChartFilterApplied, clearChartInsights, isChartInsightReady, chartInsightText } =  useChartInsights();
+  const { data: report } = useReport();
 
   useEffect(() => {
     clearChartInsights();
@@ -37,12 +39,63 @@ const TrendChartPage = ({ expenses }) => {
 
   const trendChartQuery = useTrendChartQuery(viewBy, selectedMonthYear, selectedYear, compareByYear, selectedYears);
 
+  // ANL-001-T04 -- backend-authoritative line-chart insight.
+  // report.insights.chartFindings.line is derived from trendReport.monthlyTrend,
+  // a CURRENT-MONTH-vs-PREVIOUS-MONTH comparison (backend/analytics/analyzers/
+  // trendAnalyzer.js). That snapshot is only a faithful description of what
+  // THIS chart is showing when the chart itself is plotting the current
+  // calendar year's month-by-month trend (viewBy === 'bymonth' with
+  // selectedYear === the current year). In every other view (week, byyear in
+  // any form, or bymonth with a past/future/unset year) the chart is showing
+  // a different slice of data than the backend snapshot was computed over, so
+  // those cases keep using the existing frontend rule via
+  // notifyChartFilterApplied, unchanged.
+  const currentYear = new Date().getFullYear();
+  const isCurrentYearMonthlyView =
+    viewBy === 'bymonth' &&
+    selectedYear !== '' &&
+    Number(selectedYear) === currentYear;
+
+  const lineFindings = report?.insights?.chartFindings?.line;
+  const hasBackendLineInsight = isCurrentYearMonthlyView && lineFindings?.hasData === true;
+
+  let backendLineInsight = null;
+  if (hasBackendLineInsight) {
+    const { direction, volatility } = lineFindings;
+    // NOTE: this `volatility` is trendReport.spendingDirectionStrength, a
+    // signed, multi-period weighted-trend signal computed by the backend --
+    // it is NOT the same metric as the old frontend rule's `isVolatile`
+    // (which averaged the absolute percent-change between consecutive points
+    // of whichever data array the currently-selected filter returned). These
+    // are two genuinely different measurements, so the >= 30 threshold below
+    // was chosen fresh for this field, not reused from the old rule or from
+    // this same backend file's unrelated 15/-15 "Increasing"/"Decreasing"
+    // summary-label cutoffs.
+    const isStrong = typeof volatility === 'number' && Math.abs(volatility) >= 30;
+
+    if (direction === 'up') {
+      backendLineInsight = isStrong
+        ? { severity: 'HIGH', trend: 'UP', text: 'Spending has been trending upward recently.' }
+        : { severity: 'MEDIUM', trend: 'UP', text: 'Spending has shown an upward pattern in recent periods.' };
+    } else if (direction === 'down') {
+      backendLineInsight = isStrong
+        ? { severity: 'MEDIUM', trend: 'DOWN', text: 'Spending has been trending downward recently.' }
+        : { severity: 'LOW', trend: 'DOWN', text: 'Spending has shown a downward pattern in recent periods.' };
+    } else {
+      // "same", null, or any unexpected value
+      backendLineInsight = { severity: 'LOW', trend: 'FLAT', text: 'Your spending stayed at similar levels during this period.' };
+    }
+  }
+
   // useQuery no longer supports an onSuccess callback, so the chart insight notification runs here instead, once per new successful fetch.
+  // Skipped when the backend-derived insight above already applies (matching filter + hasData), since that fully replaces the frontend rule's output for this case.
   useEffect(() => {
     if (trendChartQuery.data?.success && Array.isArray(trendChartQuery.data.data)) {
-      notifyChartFilterApplied(trendChartQuery.data.data, 'line', viewBy, compareByYear);
+      if (!hasBackendLineInsight) {
+        notifyChartFilterApplied(trendChartQuery.data.data, 'line', viewBy, compareByYear);
+      }
     }
-  }, [trendChartQuery.data, viewBy, compareByYear, notifyChartFilterApplied]);
+  }, [trendChartQuery.data, viewBy, compareByYear, notifyChartFilterApplied, hasBackendLineInsight]);
 
   const loggedYearsQuery = useLoggedYearsQuery();
   const availableYears = loggedYearsQuery.data?.success ? loggedYearsQuery.data.data : [];
@@ -272,7 +325,12 @@ const TrendChartPage = ({ expenses }) => {
           </AnimatePresence>
         </QueryState>
       )}
-      {isChartInsightReady && !compareByYear && <InlineChartInsight item={chartInsightText} />}
+      {!compareByYear && backendLineInsight && (
+        <InlineChartInsight item={backendLineInsight} />
+      )}
+      {!compareByYear && !backendLineInsight && isChartInsightReady && (
+        <InlineChartInsight item={chartInsightText} />
+      )}
     </div>
   );
 }

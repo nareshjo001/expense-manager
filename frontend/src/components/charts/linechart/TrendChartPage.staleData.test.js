@@ -4,6 +4,7 @@ import TrendChartPage from './TrendChartPage';
 import { useTrendChartQuery } from '../../../hooks/queries/useTrendChartQuery';
 import { useLoggedYearsQuery } from '../../../hooks/queries/useLoggedYearsQuery';
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
+import { useReport } from '../../../hooks/useReport';
 
 // Real framer-motion's AnimatePresence keeps an exiting element mounted
 // until its exit animation completes, which doesn't resolve synchronously
@@ -32,6 +33,16 @@ jest.mock('../../../hooks/queries/useLoggedYearsQuery', () => ({
 
 jest.mock('../../contexts/ai-contexts/ChartInsightsContext', () => ({
   useChartInsights: jest.fn(),
+}));
+
+// ANL-001-T04 -- TrendChartPage now also calls useReport() (for the
+// backend-driven line insight); mocked here purely so the component can
+// render without a real QueryClientProvider/network call -- this file's
+// own scenarios are about stale-data/placeholder-data chart behavior and
+// are unaffected by the insight source, so a plain "no report yet" value
+// (matching the component's own fallback semantics) is enough.
+jest.mock('../../../hooks/useReport', () => ({
+  useReport: jest.fn(),
 }));
 
 jest.mock('../../imports/chartsImport', () => ({
@@ -70,6 +81,7 @@ describe('TrendChartPage -- stale chart preserved during background refetch (FE-
   beforeEach(() => {
     useChartInsights.mockReturnValue(mockChartInsights());
     useLoggedYearsQuery.mockReturnValue({ data: { success: true, data: [2025, 2026] } });
+    useReport.mockReturnValue({ data: undefined });
   });
 
   it('keeps rendering the previous chart (not the loading state) while a filter change refetches in the background', () => {

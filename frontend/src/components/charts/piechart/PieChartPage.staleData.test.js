@@ -3,6 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import PieChartPage from './PieChartPage';
 import { usePieChartQuery } from '../../../hooks/queries/usePieChartQuery';
 import { useChartInsights } from '../../contexts/ai-contexts/ChartInsightsContext';
+import { useReport } from '../../../hooks/useReport';
 
 // Real framer-motion's AnimatePresence keeps an exiting element mounted
 // until its exit animation completes, which doesn't resolve synchronously
@@ -29,6 +30,16 @@ jest.mock('../../contexts/ai-contexts/ChartInsightsContext', () => ({
   useChartInsights: jest.fn(),
 }));
 
+// ANL-001-T05 -- PieChartPage now also calls useReport() (for the
+// backend-driven pie insight added in ANL-001-T04); mock it so this file's
+// real-hook-free rendering convention holds. None of the scenarios below
+// ever select the 'distribution' + 'thismonth' filter, so the backend
+// insight path is never exercised here -- this mock only exists so the
+// component doesn't crash for lack of a QueryClientProvider.
+jest.mock('../../../hooks/useReport', () => ({
+  useReport: jest.fn(),
+}));
+
 jest.mock('../../imports/chartsImport', () => ({
   PieChartWrapper: ({ data, show }) => (
     <div data-testid="mock-pie-chart-wrapper" data-show={show} data-count={data.length} />
@@ -51,6 +62,7 @@ afterEach(() => {
 describe('PieChartPage -- stale chart preserved during background refetch (FE-001-T05)', () => {
   beforeEach(() => {
     useChartInsights.mockReturnValue(mockChartInsights());
+    useReport.mockReturnValue({ data: undefined });
   });
 
   it('keeps rendering the previous chart (not the loading state) while a filter change refetches in the background', () => {
