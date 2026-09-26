@@ -68,5 +68,10 @@
   },
   "devDependencies": {
     "jest-axe": "^11.0.0"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^axios$": "axios/dist/browser/axios.cjs"
+    }
   }
 }
