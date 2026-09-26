@@ -3,40 +3,41 @@
   "allowedGrowthPercent": 10,
   "budgets": {
     "main": {
-      "description": "Initial JS entry bundle -- everything loaded on first paint, after FE-003-T03..T06 moved charts, insights, SIA, bill-upload/OCR and firebase-push into separate lazy chunks.",
-      "maxGzipKB": 378,
-      "maxGzipKBNote": "378 KB is the pre-optimization figure already recorded in this feature's 2026-09-08 audit (section 4 of the feature doc), from BEFORE the FE-003-T03..T06 lazy-loading split. It is a not-to-regress-past ceiling, not a target -- the main bundle should now be well under this. Tighten this once FE-003-T01/T07 can run a full production build and capture a real post-split number (blocked in the sandbox this was authored in by CPU/IO limits, not by anything production-related -- see that task's notes).",
-      "baselineGzipKB": null
+      "description": "Initial JS entry bundle -- the only JS loaded on first paint (CRA 5 uses webpack's default splitChunks: 'async', so every other chunk is on-demand). Includes the webpack runtime.",
+      "maxGzipKB": 250,
+      "maxGzipKBNote": "FE-003-T07 (2026-09-26): tightened from 378 KB (the pre-split audit figure) to 250 KB after the first real post-split CI build measured main at 194.54 KB. Everyday growth is enforced by baselineGzipKB + allowedGrowthPercent (~214 KB); this ceiling is an independent backstop that still holds if a baseline is later raised with --update-baseline --force, so main can never drift back toward its pre-split size unnoticed.",
+      "baselineGzipKB": 194.54
     },
     "charts": {
       "description": "TrendChartPage + BarChartPage + PieChartPage, lazy-loaded together from LandingPage.js (webpackChunkName: \"charts\") since FE-003-T06's prefetchCharts() already loads them as a group.",
       "maxGzipKB": null,
-      "baselineGzipKB": null
+      "baselineGzipKB": 9.54
     },
     "insights": {
       "description": "Insights, lazy-loaded from LandingPage.js (webpackChunkName: \"insights\").",
       "maxGzipKB": null,
-      "baselineGzipKB": null
+      "baselineGzipKB": 13.1
     },
     "sia": {
       "description": "SiaPanel (conversation UI + voice recording controls), lazy-loaded from SiaEntryPoint.js (webpackChunkName: \"sia\").",
       "maxGzipKB": null,
-      "baselineGzipKB": null
+      "baselineGzipKB": 8.75
     },
     "bill-upload": {
       "description": "BillUpload (OCR bill-scanning flow), lazy-loaded from AddExpense.js (webpackChunkName: \"bill-upload\").",
       "maxGzipKB": null,
-      "baselineGzipKB": null
+      "baselineGzipKB": 1.25
     },
     "firebase-push": {
       "description": "The Firebase SDK + pushNotification module, dynamically imported from useWebPush.js's registerToken() (webpackChunkName: \"firebase-push\") so it only loads when a token is actually requested.",
       "maxGzipKB": null,
-      "baselineGzipKB": null
+      "baselineGzipKB": 0.62
     },
     "other-chunks": {
-      "description": "Aggregate of any build output chunk that doesn't match a named category above (webpack's automatic vendor/runtime splits, or a future lazy import not yet given a webpackChunkName). Tracked in total so a new, unnamed chunk can't grow unbounded without ever being counted.",
+      "description": "Aggregate of any build output chunk that doesn't match a named category above (webpack's automatic vendor/runtime splits, or a future lazy import not yet given a webpackChunkName). Tracked in total so a new, unnamed chunk can't grow unbounded without ever being counted. With CRA 5's default async-only splitChunks these are the heavy vendor libraries (recharts/d3, Firebase SDK, etc.) split out of the named lazy chunks -- loaded on demand alongside them, never on first paint.",
       "maxGzipKB": null,
-      "baselineGzipKB": null
+      "baselineGzipKB": 178.52
     }
-  }
+  },
+  "baselineSource": "Baselines are the real gzip sizes from the first CI production build after FE-003-T02..T06 merged (commit 6e057f0, 'Performance budget check' step). See docs/frontend/FE-003-T07-before-after-bundle-measurements.md."
 }
