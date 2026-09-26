@@ -62,7 +62,12 @@
 
 .app-navigation {
   display: flex;
+  /* Wrap rather than overflow the header: with the Recurring, Notifications,
+     Export, Receipts and Import links the row no longer fits on narrower
+     desktop/tablet widths. */
+  flex-wrap: wrap;
   gap: 15px;
+  row-gap: 8px;
   align-items: center;
 }
 
@@ -399,7 +404,15 @@ select > option {
 /* Bottom Nav */
 .mobile-bottom-nav {
   display: flex;
-  justify-content: space-around;
+  /* 11 destinations no longer fit a phone's width, so the bar scrolls
+     horizontally instead of squashing every item. flex-start (not
+     space-around) so no leading item is clipped off-screen once the row
+     overflows; each item still grows to share spare width when it fits. */
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
   align-items: center;
   position: fixed;
   bottom: 0;
@@ -409,6 +422,17 @@ select > option {
   border-top: 1px solid rgba(0,0,0,0.1);
   padding: 8px 0;
   z-index: 9995 !important;
+}
+
+.mobile-bottom-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-bottom-nav > * {
+  flex: 1 0 auto;
+  min-width: 64px;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 .dark-theme .mobile-bottom-nav {

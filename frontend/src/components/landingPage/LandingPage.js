@@ -8,14 +8,19 @@ import {
     deleteErrorToast,
     Add,
     MerchantRules,
-    SiaPreferences
+    RecurringPage,
+    NotificationPreferences,
+    SiaPreferences,
+    DataExport,
+    ReceiptInbox,
+    ImportWizard
 } from '../imports/Imports';
 import icons from '../imports/iconsImport';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import './LandingPage.css';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
-import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaRobot } from "react-icons/fa";
+import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaFileExport, FaReceipt, FaFileImport, FaRobot } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
@@ -76,6 +81,18 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
     });
 
     const location = useLocation();
+    const navigate = useNavigate();
+
+    // REC-003-T05 -- the upcoming-recurring view's "Edit" action opens the
+    // underlying historical expense (see UpcomingRecurring.js's own header
+    // comment on why that is a real, but different, action from editing the
+    // recurring definition itself). Same enableEdit/navigate pattern
+    // ExpenseItem.js already uses for the identical action from the
+    // expenses list.
+    const handleEditFromRecurring = (expenseId) => {
+        setIsEdit({ enableEdit: true, expense_id: expenseId });
+        navigate('/add');
+    };
 
     // Clears edit mode whenever the user navigates away from the Add Expense page.
     useEffect(() => {
@@ -278,9 +295,39 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         </span>
                                     </Link>
 
+                                    <Link className="nav-link" to="/recurring">
+                                        <span className="nav-item">
+                                            <FaSyncAlt /> Recurring
+                                        </span>
+                                    </Link>
+
+                                    <Link className="nav-link" to="/notification-preferences">
+                                        <span className="nav-item">
+                                            <FaBell /> Notifications
+                                        </span>
+                                    </Link>
+
                                     <Link className="nav-link" to="/sia-settings">
                                         <span className="nav-item">
                                             <FaRobot /> SIA Settings
+                                        </span>
+                                    </Link>
+
+                                    <Link className="nav-link" to="/export">
+                                        <span className="nav-item">
+                                            <FaFileExport /> Export
+                                        </span>
+                                    </Link>
+
+                                    <Link className="nav-link" to="/receipts">
+                                        <span className="nav-item">
+                                            <FaReceipt /> Receipts
+                                        </span>
+                                    </Link>
+
+                                    <Link className="nav-link" to="/import">
+                                        <span className="nav-item">
+                                            <FaFileImport /> Import
                                         </span>
                                     </Link>
 
@@ -331,7 +378,12 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <Route path="/chart/pie" element={<PieChartPage />} />
                                 <Route path="/analysis" element={<Insights />} />
                                 <Route path="/rules" element={<MerchantRules />} />
+                                <Route path="/recurring" element={<RecurringPage onEditExpense={handleEditFromRecurring} />} />
+                                <Route path="/notification-preferences" element={<NotificationPreferences />} />
                                 <Route path="/sia-settings" element={<SiaPreferences />} />
+                                <Route path="/export" element={<DataExport />} />
+                                <Route path="/receipts" element={<ReceiptInbox />} />
+                                <Route path="/import" element={<ImportWizard />} />
                             </Routes>
                         </Suspense>
                     </main>
@@ -376,9 +428,34 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <span>Rules</span>
                             </Link>
 
+                            <Link to="/recurring" className={location.pathname === "/recurring" ? "active-nav" : ""}>
+                                <FaSyncAlt />
+                                <span>Recurring</span>
+                            </Link>
+
+                            <Link to="/notification-preferences" className={location.pathname === "/notification-preferences" ? "active-nav" : ""}>
+                                <FaBell />
+                                <span>Notifications</span>
+                            </Link>
+
                             <Link to="/sia-settings" className={location.pathname === "/sia-settings" ? "active-nav" : ""}>
                                 <FaRobot />
                                 <span>SIA Settings</span>
+                            </Link>
+
+                            <Link to="/export" className={location.pathname === "/export" ? "active-nav" : ""}>
+                                <FaFileExport />
+                                <span>Export</span>
+                            </Link>
+
+                            <Link to="/receipts" className={location.pathname === "/receipts" ? "active-nav" : ""}>
+                                <FaReceipt />
+                                <span>Receipts</span>
+                            </Link>
+
+                            <Link to="/import" className={location.pathname === "/import" ? "active-nav" : ""}>
+                                <FaFileImport />
+                                <span>Import</span>
                             </Link>
                         </nav>
                     }
