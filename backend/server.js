@@ -1,6 +1,8 @@
 // dotenv first: the DNS override below reads its setting from .env, and it
 // has to run before anything resolves a hostname.
-require("dotenv").config();
+// quiet: dotenv 17 otherwise prints an unstructured "injecting env" banner
+// to stdout on every start (OBS-001-T03: every line is a JSON record).
+require("dotenv").config({ quiet: true });
 
 // This file used to begin with an unconditional
 // dns.setServers(["8.8.8.8", "1.1.1.1"]) -- a local-network workaround that
@@ -111,7 +113,6 @@ const startServer = async () => {
     const redis = await connectRedis();
 
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on port ${PORT}`);
       logEvent({
         level: "info",
         scope: "process",
@@ -126,7 +127,10 @@ const startServer = async () => {
 
   } catch (err) {
 
-    console.error("Failed to start server:", err);
+    // Name only, never the raw error: a startup failure object can carry a
+    // connection string (see OBS-001-T01). reportError() below forwards the
+    // redaction-safe detail.
+    logEvent({ level: "error", scope: "process", event: "startup_failed", errorName: err && err.name });
 
     reportError(err, { scope: "process", event: "startup_failed" });
 

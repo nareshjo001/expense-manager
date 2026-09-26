@@ -3,6 +3,7 @@ const { fetchExpense } = require('./fetchExpenses');
 const { getLastWeekQueryDates } = require('../../Services/HelperServices/datecal.service');
 const { sortDescending, sortAscending, bucketByWeek } = require('../../Services/HelperServices/getexpense.service');
 const { getCache, setCache } = require('../../utils/expenseCache');
+const { logEvent } = require('../../utils/logger');
 
 const lastWeekExpense = async (req, res) => {
     try {
@@ -73,7 +74,7 @@ const lastWeekExpense = async (req, res) => {
     
     } catch (err) {
         // Handle server errors
-        console.error(err);
+        logEvent({ level: 'error', scope: 'expense', event: 'last_week_failed', requestId: req.requestId, errorName: err && err.name, errorCode: err && err.code });
         res.status(500).json({ message: 'Internal Server Error', success: false });
     }
 };

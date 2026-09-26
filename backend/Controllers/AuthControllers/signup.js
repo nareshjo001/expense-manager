@@ -14,6 +14,7 @@ const {
 // Password utility functions for hashing and comparing
 const { hashPassword } = require('../../Services/AuthServices/password.service');
 const { emitAuthAuditEvent } = require('../../Services/AuthServices/security.service');
+const { logEvent } = require('../../utils/logger');
 
 const signup = async (req, res) => {
   try {
@@ -73,7 +74,7 @@ const signup = async (req, res) => {
         { $unset: { otp: '', otpExpiry: '', lastOtpSent: '', verificationExpiresAt: '' } }
       );
       emitAuthAuditEvent({ event: 'signup_otp_issued', outcome: 'failure', reason: 'email_delivery_failed', req, email });
-      console.error('Signup verification email failed:', emailError.message);
+      logEvent({ level: 'error', scope: 'auth', event: 'signup_email_failed', requestId: req.requestId, errorName: emailError && emailError.name });
       return res.status(503).json({ message: 'Verification email could not be sent. Please try again.', success: false });
     }
 
@@ -82,7 +83,7 @@ const signup = async (req, res) => {
   
   } catch (err) {
     emitAuthAuditEvent({ event: 'signup_otp_issued', outcome: 'failure', reason: 'internal_error', req, email: req.body?.email });
-    console.error('Signup failed:', err.message);
+    logEvent({ level: 'error', scope: 'auth', event: 'signup_failed', requestId: req.requestId, errorName: err && err.name });
     res.status(500).json({ message: 'Internal Server Error', success: false });
   }
 };

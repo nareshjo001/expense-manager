@@ -30,6 +30,33 @@ Steps 1, 3, 4, 5 and 6 are unchanged and still need a human with log access.
 They are about what is written to logs, and no amount of HTTP probing can
 see that. Do not treat a green smoke run as covering them.
 
+## Update (OBS-001-T07): all six steps are now executable
+
+`backend/scripts/verifyObservability.js` runs this whole checklist against a
+real server process. It starts `server.js` unmodified as a child process,
+captures every line it writes, drives real traffic (signup, a failed and a
+successful login, two expenses, an authenticated read, a malformed JSON body,
+six forced 5xx responses, requests with no or a malformed `X-Request-ID`),
+waits for the real 5-minute metrics snapshot, and then checks the captured
+lines against steps 1-6 below. A fake ML service on localhost stands in for
+the real one so the forwarded `X-Request-ID` can be observed, and the
+error-rate alert threshold is lowered for that child process only.
+
+```bash
+cd backend
+MONGO_CONN=<staging copy, e.g. .../expense_manager_staging> \
+REDIS_URL=redis://127.0.0.1:6379 \
+node scripts/verifyObservability.js
+```
+
+It refuses a database whose name does not look disposable (it creates a
+throwaway user and deletes everything tied to it afterwards), prints a
+PASS/FAIL per step, and writes the raw server log and a JSON report for the
+evidence. Exit code 0 means every required check passed. What it cannot see
+is an external vendor dashboard or an inbox: with `ERROR_AGGREGATION_PROVIDER`
+or `OBS_ALERT_OWNER_EMAIL` set, those checks turn into MANUAL items in the
+report.
+
 ## Prerequisites
 
 - A staging deployment running this branch's backend (and, once

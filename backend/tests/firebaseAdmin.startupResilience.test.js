@@ -126,13 +126,16 @@ describe("firebaseAdmin -- startup resilience", () => {
     expect(() => getAdmin()).not.toThrow();
   });
 
-  it("8. no credential/private-key value ever reaches console.error, even when the SDK's own error message contains one", () => {
+  it("8. no credential/private-key value ever reaches the logs, even when the SDK's own error message contains one", () => {
     process.env.FIREBASE_SERVICE_ACCOUNT = VALID_SERVICE_ACCOUNT_JSON.replace(
       "FAKE_KEY_MATERIAL",
       "SUPER-SECRET-KEY-MATERIAL"
     );
 
+    // firebaseAdmin.js logs a structured warn line (utils/logger.js ->
+    // console.log); spy on both streams so a leak through either fails.
     const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
 
     const mod = loadFirebaseAdmin({
       initializeAppImpl: () => {
@@ -144,23 +147,30 @@ describe("firebaseAdmin -- startup resilience", () => {
 
     mod.isFirebaseAvailable();
 
-    const loggedText = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    const loggedText = [...errorSpy.mock.calls, ...logSpy.mock.calls].map((call) => call.join(" ")).join("\n");
+    expect(loggedText).toContain("firebase_unavailable");
     expect(loggedText).not.toContain("SUPER-SECRET-KEY-MATERIAL");
 
     errorSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
-  it("9. no credential value ever reaches console.error for a malformed-JSON env var containing secret-shaped text", () => {
+  it("9. no credential value ever reaches the logs for a malformed-JSON env var containing secret-shaped text", () => {
     process.env.FIREBASE_SERVICE_ACCOUNT = '{"private_key":"SUPER-SECRET-KEY-MATERIAL", not valid json past here';
 
+    // firebaseAdmin.js logs a structured warn line (utils/logger.js ->
+    // console.log); spy on both streams so a leak through either fails.
     const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
     const mod = loadFirebaseAdmin();
     mod.isFirebaseAvailable();
 
-    const loggedText = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    const loggedText = [...errorSpy.mock.calls, ...logSpy.mock.calls].map((call) => call.join(" ")).join("\n");
+    expect(loggedText).toContain("firebase_unavailable");
     expect(loggedText).not.toContain("SUPER-SECRET-KEY-MATERIAL");
 
     errorSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
 
