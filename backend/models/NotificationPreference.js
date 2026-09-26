@@ -23,7 +23,10 @@ const notificationPreferenceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "users",
     required: true,
-    unique: true,
+    // Uniqueness comes from the explicit schema.index() below. Declaring
+    // `unique: true` here as well defined the same index twice, which made
+    // Mongoose print a plain-text duplicate-index warning on every start
+    // (found by scripts/verifyObservability.js, OBS-001-T07).
   },
   // { [notificationType]: { enabled: Boolean, preview: "device"|"generic"|"detailed" } }
   // Never trusted as-is on read -- always merged over

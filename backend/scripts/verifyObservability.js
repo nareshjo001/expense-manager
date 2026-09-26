@@ -122,7 +122,10 @@ function structuralProblems(record) {
 function groupUnstructured(lines) {
   const groups = new Map();
   for (const line of lines) {
-    const key = line.raw.split(/[:{(]/)[0].trim().slice(0, 60) || "(blank)";
+    // Node prefixes its own warnings with "(node:<pid>)"; drop that so they
+    // group by the warning text rather than all collapsing into "(node".
+    const text = line.raw.replace(/^\(node:\d+\)\s*/, "");
+    const key = text.split(/[:{(]/)[0].trim().slice(0, 60) || "(blank)";
     const entry = groups.get(key) || { key, count: 0, example: line.raw.slice(0, 160), stream: line.stream };
     entry.count += 1;
     groups.set(key, entry);

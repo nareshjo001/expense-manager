@@ -4,6 +4,26 @@
 // to stdout on every start (OBS-001-T03: every line is a JSON record).
 require("dotenv").config({ quiet: true });
 
+// OBS-001-T07 -- Node's default warning handler prints process warnings
+// (deprecations, library notices such as Mongoose's) as plain text on
+// stderr. Route them through the structured logger so every line this
+// process writes is a JSON record. Messages come from Node and libraries,
+// not from request data.
+{
+  const { logEvent: logWarning } = require("./utils/logger");
+  process.removeAllListeners("warning");
+  process.on("warning", (warning) => {
+    logWarning({
+      level: "warn",
+      scope: "process",
+      event: "node_warning",
+      warningName: warning && warning.name,
+      code: warning && warning.code,
+      message: warning && warning.message,
+    });
+  });
+}
+
 // This file used to begin with an unconditional
 // dns.setServers(["8.8.8.8", "1.1.1.1"]) -- a local-network workaround that
 // also took effect in production, where replacing the platform resolver can
