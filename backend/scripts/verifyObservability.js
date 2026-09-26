@@ -348,6 +348,15 @@ function formatReport(results, meta) {
   out.push(`OBS-001-T07 observability verification -- run ${meta.runId}`);
   out.push(`database: ${meta.dbName}   NODE_ENV: ${meta.nodeEnv}   lines captured: ${meta.lineCount}`);
   out.push("");
+  // An aborted run never produced the traffic the checks judge, so its
+  // "results" would be verdicts about nothing -- a structured-format PASS
+  // over five startup lines, say. Report the abort, not those.
+  if (meta.abortReason) {
+    out.push(`RUN ABORTED: ${meta.abortReason}`);
+    out.push("");
+    out.push("RESULT: run aborted -- no check was evaluated against real traffic");
+    return out.join("\n");
+  }
   for (const r of results) {
     out.push(`[${r.status}] ${r.id}${r.required ? "" : " (informational)"} -- ${r.title}`);
     for (const d of r.details || []) {
@@ -506,6 +515,26 @@ async function main() {
     process.exit(1);
   }
 
+  if (/<[^>]*>/.test(mongoConn)) {
+    console.error("MONGO_CONN still contains a <placeholder> (e.g. <user>:<pass>) -- put the real credentials in.");
+    process.exit(1);
+  }
+  // Fail fast on credentials/network before starting a server whose own
+  // failure would only show up as an opaque startup_failed line.
+  {
+    const { MongoClient } = require("mongodb");
+    const client = new MongoClient(mongoConn, { serverSelectionTimeoutMS: 15000 });
+    try {
+      await client.connect();
+      await client.db().command({ ping: 1 });
+    } catch (err) {
+      console.error(`Cannot connect to "${dbName}": ${err && err.message}`);
+      process.exit(1);
+    } finally {
+      await client.close().catch(() => {});
+    }
+  }
+
   const runId = crypto.randomBytes(4).toString("hex");
   const nodeEnv = process.env.NODE_ENV && process.env.NODE_ENV !== "production" ? process.env.NODE_ENV : "staging";
   const baseUrl = `http://127.0.0.1:${args.port}`;
@@ -547,6 +576,7 @@ async function main() {
   const requests = {};
   let smoke = { exitCode: null, output: "" };
   let cleanup = null;
+  let abortReason = null;
   const startedAt = Date.now();
 
   try {
@@ -652,6 +682,7 @@ async function main() {
     // best-effort email) a moment to be written.
     await sleep(3000);
   } catch (err) {
+    abortReason = err.message;
     console.error(`[obs-verify ${runId}] run aborted: ${err.message}`);
   } finally {
     server.kill();
@@ -684,9 +715,9 @@ async function main() {
     pingCount: PING_COUNT,
   });
 
-  const report = formatReport(results, { runId, dbName, nodeEnv, lineCount: lines.length });
+  const report = formatReport(results, { runId, dbName, nodeEnv, lineCount: lines.length, abortReason });
   fs.writeFileSync(logPath, lines.map((l) => `[${l.stream}] ${l.raw}`).join("\n") + "\n");
-  fs.writeFileSync(reportPath, JSON.stringify({ runId, dbName, nodeEnv, startedAt: new Date(startedAt).toISOString(), results, cleanup, smokeOutput: smoke.output }, null, 2));
+  fs.writeFileSync(reportPath, JSON.stringify({ runId, dbName, nodeEnv, startedAt: new Date(startedAt).toISOString(), abortReason, results, cleanup, smokeOutput: smoke.output }, null, 2));
 
   console.log(report);
   console.log("");
@@ -694,7 +725,7 @@ async function main() {
   console.log(`raw server log: ${logPath}`);
   console.log(`JSON report:    ${reportPath}`);
 
-  const failed = results.some((r) => r.required && r.status === "FAIL");
+  const failed = abortReason !== null || results.some((r) => r.required && r.status === "FAIL");
   process.exit(failed ? 1 : 0);
 }
 

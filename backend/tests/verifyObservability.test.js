@@ -196,6 +196,15 @@ describe("analyzeRun", () => {
     expect(byId(analyzeRun(goodEvidence({ smoke: { exitCode: 1, output: "" } })))["smoke"].status).toBe("FAIL");
   });
 
+  test("formatReport reports an aborted run instead of verdicts about no traffic", () => {
+    const text = formatReport(analyzeRun(goodEvidence()), {
+      runId: "x", dbName: "d", nodeEnv: "staging", lineCount: 5, abortReason: "server did not become live",
+    });
+    expect(text).toContain("RUN ABORTED: server did not become live");
+    expect(text).toContain("RESULT: run aborted");
+    expect(text).not.toContain("[PASS]");
+  });
+
   test("formatReport states the overall result", () => {
     const text = formatReport(analyzeRun(goodEvidence()), { runId: "x", dbName: "expense_manager_staging", nodeEnv: "staging", lineCount: 7 });
     expect(text).toContain("RESULT: all required checks passed");
