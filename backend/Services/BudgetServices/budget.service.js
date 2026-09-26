@@ -1,15 +1,14 @@
 const { ExpenseModel, BudgetModel } = require('../../config/Schemas');
 const { getMonthRange } = require('../HelperServices/datecal.service');
+// DAT-002-T02 -- the "MMM YYYY" Budget.month key's canonical definition now
+// lives in utils/monthKeyNormalization.js (shared with setbudget.js/
+// updatebudget.js/sia/financialQueryService.js/config/Schemas.js's schema
+// validator), instead of being defined independently in this file. getMonthKey
+// and getMonthAnchorFromKey below keep their existing names/signatures --
+// this module's established public API, already imported by
+// Services/syncRecoveryService.js -- as thin wrappers over the shared util.
+const { getMonthKey, parseMonthKey } = require('../../utils/monthKeyNormalization');
 // Phase C.2 -- the fenceRevision guard is now enforced entirely inside the
-
-// Phase C -- Expense Mutation Reliability: the SAME "MMM YYYY" convention
-const getMonthKey = (date) => {
-    const { monthStart } = getMonthRange(date);
-    return monthStart.toLocaleString('default', {
-        month: 'short',
-        year: 'numeric'
-    });
-};
 
 // First-instant-of-month anchor for a given date -- the stable value
 const getMonthAnchor = (date) => {
@@ -17,24 +16,13 @@ const getMonthAnchor = (date) => {
     return monthStart;
 };
 
-const MONTH_ABBREVIATIONS = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 // Phase C.3 -- the exact inverse of getMonthKey/recalculateBudget's own
+// construction, now delegating to the shared parseMonthKey so this and the
+// schema validator can never drift apart.
 const getMonthAnchorFromKey = (monthKey) => {
-    if (typeof monthKey !== 'string') return null;
-    const match = monthKey.trim().match(/^([A-Za-z]{3})\s+(\d{4})$/);
-    if (!match) return null;
-
-    const monthIndex = MONTH_ABBREVIATIONS.indexOf(match[1]);
-    if (monthIndex === -1) return null;
-
-    const year = Number(match[2]);
-    if (!Number.isFinite(year)) return null;
-
-    return new Date(year, monthIndex, 1);
+    const parsed = parseMonthKey(monthKey);
+    if (!parsed) return null;
+    return new Date(parsed.year, parsed.monthIndex0Based, 1);
 };
 
 // Phase C.2 -- `options.fenceRevision`: an optimistic-concurrency fence
@@ -63,10 +51,7 @@ const recalculateBudget = async (userId, date, options = {}) => {
     const spentAmount = totalSpent.length > 0 ? totalSpent[0].total : 0;
 
     // Build the month key used by the Budget collection.
-    const month = monthStart.toLocaleString('default', {
-        month: 'short',
-        year: 'numeric'
-    });
+    const month = getMonthKey(monthStart);
 
     if (fenceRevision === undefined || fenceRevision === null) {
         // Store the recalculated spend on the budget document -- original,
@@ -111,10 +96,7 @@ const setBudgetForCurrentMonth = async (userId, budgetAmount) => {
   const { monthStart } = getMonthRange(new Date());
 
   // Month Key
-  const month = monthStart.toLocaleString('default', {
-    month: 'short',
-    year: 'numeric'
-  });
+  const month = getMonthKey(monthStart);
 
   // Ensure budget exists (upsert)
   await BudgetModel.findOneAndUpdate(

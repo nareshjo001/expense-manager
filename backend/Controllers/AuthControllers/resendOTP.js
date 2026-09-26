@@ -10,6 +10,7 @@ const {
 const {
     RECOVERY_RESPONSE,
     emitAuthAuditEvent,
+    normalizeEmail,
     waitForRecoveryResponse,
 } = require('../../Services/AuthServices/security.service');
 
@@ -24,7 +25,9 @@ const resendOTP = async (req, res) => {
     const startedAt = Date.now();
 
     try {
-        const { email } = req.body;
+        const { email: rawEmail } = req.body;
+        // DAT-002-T02 -- normalize before the query.
+        const email = normalizeEmail(rawEmail);
         const user = await UserModel.findOne({ email });
 
         if (!user || user.isVerified || !canResendOtp(user.lastOtpSent, COOLDOWN_MS).allowed) {

@@ -5,12 +5,15 @@ const {
     emitAuthAuditEvent,
     generateResetToken,
     hashResetToken,
+    normalizeEmail,
     safeHashEqual,
 } = require('../../Services/AuthServices/security.service');
 
 const verifyOTP = async (req, res) => {
     try {
-        const { email, otp } = req.body;
+        const { email: rawEmail, otp } = req.body;
+        // DAT-002-T02 -- normalize before the query.
+        const email = normalizeEmail(rawEmail);
         const user = await UserModel.findOne({ email });
         const inputOtpHash = hashOTP(otp);
         const isResetFlow = Boolean(user?.isVerified && user?.isPasswordReset);

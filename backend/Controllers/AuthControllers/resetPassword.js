@@ -4,12 +4,15 @@ const {
     INVALID_RESET_RESPONSE,
     emitAuthAuditEvent,
     hashResetToken,
+    normalizeEmail,
 } = require('../../Services/AuthServices/security.service');
 const { revokeAllSessions } = require('../../Services/AuthServices/session.service');
 
 const resetPassword = async (req, res) => {
     try {
-        const { email, password, resetToken } = req.body;
+        const { email: rawEmail, password, resetToken } = req.body;
+        // DAT-002-T02 -- normalize before the query.
+        const email = normalizeEmail(rawEmail);
         const hashedPassword = await hashPassword(password);
         const user = await UserModel.findOneAndUpdate(
             {

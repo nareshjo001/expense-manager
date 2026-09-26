@@ -13,13 +13,18 @@ const {
 
 // Password utility functions for hashing and comparing
 const { hashPassword } = require('../../Services/AuthServices/password.service');
-const { emitAuthAuditEvent } = require('../../Services/AuthServices/security.service');
+const { emitAuthAuditEvent, normalizeEmail } = require('../../Services/AuthServices/security.service');
 const { logEvent } = require('../../utils/logger');
 
 const signup = async (req, res) => {
   try {
     // Extract user input from request body
-    const { fullName, email, password } = req.body;
+    const { fullName, email: rawEmail, password } = req.body;
+    // DAT-002-T02 -- normalize before both the existence check and the
+    // document write, so "Foo@x.com" and "foo@x.com" resolve to the same
+    // account instead of the unique index (case-sensitive, no collation)
+    // allowing two separate ones.
+    const email = normalizeEmail(rawEmail);
 
     // Check if a user already exists with the given email
     let user = await UserModel.findOne({ email });
