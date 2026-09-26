@@ -6,6 +6,7 @@ const toSafeNumber = (value, fallback = 0) => {
 // DAT-001-T03 -- shared with every other money-rounding call site via
 // backend/utils/money.js, instead of an independently redefined helper.
 const { roundMoney: round2 } = require("../../utils/money");
+const { getMonthKey } = require("../../utils/monthKeyNormalization");
 
 const calculateBudgetUtilization = ({ budget = 0, spent = 0 } = {}) => {
   const safeBudget = toSafeNumber(budget);
@@ -157,9 +158,8 @@ const analyze = ({ history = [], spending = {}, daysInMonth = 30, asOfDate } = {
 
   const now = asOfDate instanceof Date && !Number.isNaN(asOfDate.getTime()) ? asOfDate : new Date();
 
-  const currentMonthKey = `${now.toLocaleString("en-US", {
-    month: "short",
-  })} ${now.getFullYear()}`;
+  // Canonical "MMM YYYY" key (DAT-002), the form budgets are stored under.
+  const currentMonthKey = getMonthKey(now);
 
   const currentMonth =
     history.find(({ month }) => month === currentMonthKey) ??

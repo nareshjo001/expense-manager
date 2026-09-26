@@ -8,8 +8,9 @@ jest.mock("./useBudgetsQuery", () => ({
 
 const { useBudgetsQuery } = require("./useBudgetsQuery");
 
-const CURRENT_MONTH =
-  new Date().toLocaleString("default", { month: "short" }) + " " + new Date().getFullYear();
+// Canonical server key: fixed English abbreviation, independent of locale.
+const MONTH_ABBREVIATIONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const CURRENT_MONTH = `${MONTH_ABBREVIATIONS[new Date().getMonth()]} ${new Date().getFullYear()}`;
 
 afterEach(() => {
   jest.clearAllMocks();
@@ -84,5 +85,17 @@ describe("useBudgetSummary -- Phase C.2 stale-state derivation", () => {
     const { result } = renderHook(() => useBudgetSummary());
 
     expect(result.current.isCurrentMonthStale).toBe(false);
+  });
+});
+
+describe("current-month key (DAT-002)", () => {
+  test("matches a budget stored under the canonical English key, whatever the browser locale", () => {
+    useBudgetsQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { success: true, data: [{ month: CURRENT_MONTH, budget: 777, spent: 0 }] },
+    });
+    const { result } = renderHook(() => useBudgetSummary());
+    expect(result.current.totalBudget).toBe(777);
   });
 });

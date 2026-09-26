@@ -1,6 +1,10 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
 const { MONTH_ORDER } = require('../../Services/ChartServices/chartConstants');
 const syncRecoveryService = require('../../Services/syncRecoveryService');
+// DAT-002 -- stale-month labels must use the same canonical key the budgets
+// are stored under; toLocaleString('default') varies with the server's locale
+// data ("Sept" vs "Sep") and would never match.
+const { getMonthKey } = require('../../utils/monthKeyNormalization');
 
 // Order budget records chronologically by month key.
 const sortByMonthKey = (a, b) => {
@@ -32,14 +36,10 @@ const getbudgets = async (req, res) => {
         // Phase C.1 -- known-stale budget data must not be presented as
         const pendingAfterRepair = await syncRecoveryService.getPendingSync(user._id);
         const stalePendingMonthKeys = new Set(
-            ((pendingAfterRepair && pendingAfterRepair.pendingBudgetMonths) || []).map((d) =>
-                new Date(d).toLocaleString('default', { month: 'short', year: 'numeric' })
-            )
+            ((pendingAfterRepair && pendingAfterRepair.pendingBudgetMonths) || []).map((d) => getMonthKey(new Date(d)))
         );
         const staleReservedMonthKeys = new Set(
-            ((pendingAfterRepair && pendingAfterRepair.reservedBudgetMonths) || []).map((r) =>
-                new Date(r.month).toLocaleString('default', { month: 'short', year: 'numeric' })
-            )
+            ((pendingAfterRepair && pendingAfterRepair.reservedBudgetMonths) || []).map((r) => getMonthKey(new Date(r.month)))
         );
         const staleMonths = [...new Set([...stalePendingMonthKeys, ...staleReservedMonthKeys])];
         const recoveryPending = staleMonths.length > 0;

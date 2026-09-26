@@ -1,11 +1,12 @@
 const { UserModel } = require('../../config/Schemas');
 const { getBudgetComparison } = require('../../Services/ChartServices/chart.service');
 const { getCache, setCache } = require('../../utils/expenseCache');
+const { getMonthKey } = require('../../utils/monthKeyNormalization');
 
 const getcomparisonforpie = async (req, res) => {
     try {
-        // Get current month in format: "Feb 2026"
-        const currentMonth = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        // Canonical "MMM YYYY" key, the form budgets are stored under (DAT-002).
+        const currentMonth = getMonthKey(new Date());
 
         const cacheKey = `pieComparison:${req.userId}:${currentMonth}`;
 
