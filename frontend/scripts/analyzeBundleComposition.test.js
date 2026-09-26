@@ -185,27 +185,40 @@ test("packageInstalledSizeBytes: a package not present on disk (against the real
 // same way checkPerformanceBudgets.test.js runs its CLI cases against real
 // fixtures rather than only pure-function unit tests. ---
 
-test("buildReport (real repo): discovers every FE-003-T02 budget category as a lazy chunk entry", () => {
+test("buildReport (real repo): discovers at least one lazy chunk, and only under known FE-003-T02 category names", () => {
+  // Deliberately NOT a hardcoded "every category must exist" list: which
+  // lazy splits exist depends on which FE-003-T03..T06 changes have actually
+  // landed on the branch under test (at the time of writing, only
+  // bill-upload is committed on main). Asserting the full set here would
+  // make this test pass or fail based on unrelated feature progress rather
+  // than on this script's own correctness. What IS checked: discovery finds
+  // something, and never invents a category name that doesn't match one of
+  // the FE-003-T02 budget categories (catches a typo'd webpackChunkName that
+  // would otherwise silently fall into checkPerformanceBudgets.js's
+  // "other-chunks" bucket).
+  const KNOWN = new Set(["charts", "insights", "sia", "bill-upload", "firebase-push"]);
   const report = buildReport();
   const categories = Object.keys(report.categories);
-  for (const expected of ["charts", "insights", "sia", "bill-upload", "firebase-push"]) {
-    assert.equal(categories.includes(expected), true, `expected category "${expected}" to be discovered`);
+  assert.ok(categories.length > 0, "expected at least one webpackChunkName-tagged lazy chunk");
+  for (const category of categories) {
+    assert.ok(KNOWN.has(category), `unexpected lazy chunk category "${category}" (typo'd webpackChunkName?)`);
   }
 });
 
 test("buildReport (real repo): no lazy chunk's entry file is also eagerly reachable from src/index.js", () => {
-  // Regression test for a real bug this script found: frontend/src/components/
-  // imports/Imports.js (the barrel) still statically imported TrendChartPage/
-  // BarChartPage/PieChartPage/Insights from FE-003-T03, even though neither of
-  // its two consumers (App.js, LandingPage.js) used those names from the
-  // barrel anymore -- LandingPage.js had its own separate React.lazy() call
-  // sites for them instead. That left the barrel's own imports of them as
-  // dead code webpack would have to prove was dead before tree-shaking it out
-  // of the main bundle, defeating the point of the FE-003-T03..T06 split
-  // unless production tree-shaking happened to catch it. Fixed by removing
-  // the four unused imports/exports from Imports.js directly. This test
-  // fails if that regresses (e.g. a future change re-adds one of them to the
-  // barrel, or adds a new lazy chunk with the same problem).
+  // Guards the whole point of a lazy split: if a chunk's entry file is also
+  // reachable from src/index.js through a plain static import, webpack pulls
+  // it into main anyway and the React.lazy() wrapper saves nothing.
+  //
+  // Concrete case this is designed to catch: components/imports/Imports.js
+  // (the barrel) statically imports TrendChartPage/BarChartPage/PieChartPage/
+  // Insights, and App.js imports that barrel eagerly. When FE-003-T03's
+  // LandingPage.js change (lazy-load those four directly) lands, it must
+  // remove those four imports/exports from the barrel in the same change --
+  // otherwise this test fails, because the "charts"/"insights" chunk entries
+  // would still be eagerly reachable through the barrel. On a branch where
+  // T03 hasn't landed yet, those components aren't lazy chunks at all, so
+  // there is nothing to leak and this test passes trivially for them.
   const report = buildReport();
   for (const [category, data] of Object.entries(report.categories)) {
     assert.equal(
