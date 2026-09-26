@@ -1,16 +1,27 @@
 import { act, renderHook } from "@testing-library/react";
 import { useWebPush } from "./useWebPush";
-import { requestPushToken } from "../../pushNotification";
 import api from "../../api/axios";
 
-jest.mock("../../pushNotification", () => ({ requestPushToken: jest.fn() }));
+// FE-003-T05 -- useWebPush.js now loads "../../pushNotification" (and the
+// Firebase SDK behind it) via a dynamic import() instead of a static one,
+// so it's only pulled in when a push token is actually requested. Jest 27
+// hangs indefinitely if a test file BOTH statically imports a named export
+// from a jest.mock()'d module AND the code under test dynamically
+// import()s that same specifier -- confirmed in isolation, unrelated to
+// fake timers or React. The `mock`-prefixed-variable pattern below is
+// Jest's own documented way to reference a mock's jest.fn() without a
+// static import of the mocked module itself, which sidesteps the hang
+// entirely (babel-plugin-jest-hoist allows `mock`-prefixed bindings to be
+// referenced inside the hoisted jest.mock() factory below).
+const mockRequestPushToken = jest.fn();
+jest.mock("../../pushNotification", () => ({ requestPushToken: mockRequestPushToken }));
 jest.mock("../../api/axios", () => ({ post: jest.fn() }));
 jest.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false } }));
 
 beforeEach(() => {
   jest.useFakeTimers();
   localStorage.clear();
-  requestPushToken.mockResolvedValue("device-token");
+  mockRequestPushToken.mockResolvedValue("device-token");
   api.post.mockResolvedValue({ data: {} });
 });
 
