@@ -92,6 +92,14 @@ describe("line parsing and structure", () => {
     expect(groups[0]).toEqual(expect.objectContaining({ key: "Redis Error", count: 2 }));
     expect(groups[1]).toEqual(expect.objectContaining({ key: "DB Connected", count: 1 }));
   });
+
+  test("groupUnstructured groups Node warnings by their text, not by the pid prefix", () => {
+    const lines = [
+      "(node:123) [MONGOOSE] Warning: Duplicate schema index",
+      "(node:123) [DEP0040] DeprecationWarning: The `punycode` module is deprecated.",
+    ].map((l) => parseLine(l, "stderr"));
+    expect(groupUnstructured(lines).map((g) => g.key)).toEqual(["[MONGOOSE] Warning", "[DEP0040] DeprecationWarning"]);
+  });
 });
 
 describe("analyzeRun", () => {
