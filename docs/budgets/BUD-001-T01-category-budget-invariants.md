@@ -46,6 +46,46 @@ here and enforced in one place in code, named next to it.
 | I15 | **Deletion and retention.** Kept for the life of the account (same as `BudgetModel`); removed by the account-deletion orchestrator's Tier-B steps. | `accountDeletionTierBSteps.js` |
 | I16 | **Versioned responses.** Every category-budget response carries `contractVersion: 1`. | Controllers |
 
+## 2a. Refinements made during implementation (2026-09-26)
+
+These refine the invariants above. They came out of implementation and
+review, and each is enforced and tested.
+
+- **I4 (amount precision).** The "at most 2 decimals" check counts decimals
+  on the text for string input (trailing zeros ignored, so `"1500.500"` is
+  valid) and allows only float-representation noise for numeric input. The
+  first version used a fixed float tolerance, which rejected valid 2-dp
+  amounts above about 13.4 crore rupees.
+- **I7 (reconciliation).** Only a write that *increases* an allocation is
+  checked against the total. Lowering or keeping an allocation is always
+  allowed, so a user whose month became over-allocated (because the total
+  was lowered) can always reduce allocations step by step. I8's
+  compensation likewise only undoes a write that increased the amount, and
+  only if the document still holds that request's value, so a newer write
+  is never overwritten.
+- **I10 (status).** Status and alert level are classified from the *exact*
+  integer ratio (`spentMinor * 100 <= max * amountMinor`,
+  `statusForMinor` / `alertLevelForMinor`), not from the 2-dp rounded
+  `utilization`. Spend of 1 paisa over a large allocation rounds to 100.00%
+  but is `Overspent`. `utilization` is a display value only.
+- **atRisk.** Only a month still in progress can be `atRisk`. A closed month's
+  projection equals its actual, so flagging it would describe a risk that can
+  no longer be acted on.
+- **I14 (alerts).** Alerts are evaluated for the **current month only**. A
+  future month has no spend yet, and a past month is closed. Without this, a
+  historical import (which passes many past dates) would send alerts about
+  months the user can no longer do anything about. Generic-preview pushes
+  for this type say "You have a new budget alert.", never the category or
+  percentage (`push.service.js` previously showed every generic push as
+  "A recurring expense was added.").
+- **Post-write summary.** If building the fresh summary fails *after* a
+  successful upsert/delete, the response is still `200` with
+  `summary: null`. A 500 would invite a retry, and a retried delete would
+  then return a misleading 404.
+- **409 UX.** The category-budget PUT opts out of the shared axios
+  interceptor's generic 409 toast (`suppressConflictToast`) because the UI
+  shows the specific reason inline. 401/429 handling is unchanged.
+
 ## 3. API contract
 
 All routes are mounted on the existing authenticated `/api` router
