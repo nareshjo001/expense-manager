@@ -21,6 +21,14 @@ const originalFlag = process.env[ENV_KEY];
 
 // This jsdom environment exposes no `crypto` global at all, so a Web Crypto
 const originalCrypto = window.crypto;
+// FE-003-T04 made SiaPanel React.lazy(). The first open in a file suspends
+// until its module tree is compiled and loaded; on a loaded CI runner with a
+// cold transform cache that alone can outlast waitFor's 1s default and the
+// test's 5s budget, leaving the panel on its "Loading..." fallback. Load the
+// module once up front, with its own timeout, so every open afterwards
+// resolves on the next microtask.
+beforeAll(() => import("./SiaPanel"), 30000);
+
 beforeAll(() => {
   Object.defineProperty(window, "crypto", {
     value: {

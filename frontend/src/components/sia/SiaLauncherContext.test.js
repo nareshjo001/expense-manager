@@ -31,6 +31,14 @@ const ENV_KEY = "REACT_APP_SIA_ENABLED";
 const originalFlag = process.env[ENV_KEY];
 
 const originalCrypto = window.crypto;
+// FE-003-T04 made SiaPanel React.lazy(). The first open in a file suspends
+// until its module tree is compiled and loaded; on a loaded CI runner with a
+// cold transform cache that alone can outlast waitFor's 1s default and the
+// test's 5s budget, leaving the panel on its "Loading..." fallback. Load the
+// module once up front, with its own timeout, so every open afterwards
+// resolves on the next microtask.
+beforeAll(() => import("./SiaPanel"), 30000);
+
 beforeAll(() => {
   Object.defineProperty(window, "crypto", {
     value: {
@@ -105,6 +113,11 @@ const askButtonEl = () => screen.getByRole("button", { name: "Ask" });
 // The status query is only started (not necessarily settled) by the time
 async function settleAvailability() {
   fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+  // Flush React.lazy's retry inside act() (see the preload beforeAll above);
+  // outside act() nothing guarantees the Suspense boundary re-renders.
+  await act(async () => {
+    await import("./SiaPanel");
+  });
   await waitFor(() => expect(composer()).not.toBeDisabled());
   fireEvent.click(screen.getByRole("button", { name: "Close SIA" }));
   await waitFor(() => expect(screen.queryByLabelText(/your question/i)).not.toBeInTheDocument());
