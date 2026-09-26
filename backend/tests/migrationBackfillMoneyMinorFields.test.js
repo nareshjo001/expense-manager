@@ -96,12 +96,12 @@ describe("migration 20260903-backfill-money-minor-fields", () => {
 
   test("backfills both budgetMinor and spentMinor for the budget collection in one pass", async () => {
     const ctx = makeContext({
-      budget: [{ _id: "b1", budget: 10000, spent: 2500.5 }],
+      budgets: [{ _id: "b1", budget: 10000, spent: 2500.5 }],
     });
 
     await migration.up(ctx);
 
-    const doc = ctx.db.collection("budget").__docs[0];
+    const doc = ctx.db.collection("budgets").__docs[0];
     expect(doc.budgetMinor).toBe(1000000);
     expect(doc.spentMinor).toBe(250050);
   });
@@ -160,8 +160,8 @@ describe("migration 20260903-backfill-money-minor-fields", () => {
     const ctx = makeContext({
       expenses: [{ _id: "e1", expenseAmount: 100 }],
       incomes: [{ _id: "i1", incomeAmount: 100 }],
-      budget: [{ _id: "b1", budget: 100, spent: 50 }],
-      recurringExpenses: [{ _id: "r1", expenseAmount: 100 }],
+      budgets: [{ _id: "b1", budget: 100, spent: 50 }],
+      recurringexpenses: [{ _id: "r1", expenseAmount: 100 }],
     });
 
     await migration.up(ctx);
