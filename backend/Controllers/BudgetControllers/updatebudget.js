@@ -1,4 +1,8 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
+// DAT-002-T02 -- canonical "MMM YYYY" builder, shared with setbudget.js/
+// budget.service.js/sia/financialQueryService.js, instead of this file's
+// own inline toLocaleString call.
+const { getMonthKey } = require('../../Services/BudgetServices/budget.service');
 const syncRecoveryService = require('../../Services/syncRecoveryService');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');
 
@@ -31,10 +35,7 @@ const updatebudget = async (req, res) => {
         }
 
         const now = new Date();
-        const currentMonthYear = now.toLocaleString("default", {
-          month: "short",
-          year: "numeric",
-        });
+        const currentMonthYear = getMonthKey(now);
 
         // Reserve BEFORE the primary write -- a crash before confirm() still
         // leaves durable Tier-2 evidence for repairIfPending() to find.

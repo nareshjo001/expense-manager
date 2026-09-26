@@ -157,7 +157,7 @@ const generateReport = async (userId) => {
     // and financialHealth.risk (below) are the real, populated values; read those.
   };
 
-  return assembleReport({
+  const assembled = assembleReport({
     metadata,
 
     summary,
@@ -186,6 +186,18 @@ const generateReport = async (userId) => {
     insights: insightsReport,
 
   });
+
+  // DAT-002-T04 -- top-level, typed sibling of the pre-existing
+  // metadata.version stamp (models/Report.js's new `schemaVersion` field).
+  // Added here rather than inside reportAssembler.js's own object literal
+  // so the assembler's existing allowlisted-params contract for the
+  // analyzer sections stays untouched; sourced from the same shared
+  // CURRENT_REPORT_VERSION constant as `metadata.version` above, so the
+  // two can never drift apart.
+  return {
+    ...assembled,
+    schemaVersion: CURRENT_REPORT_VERSION,
+  };
 };
 
 module.exports = {

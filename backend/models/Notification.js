@@ -41,6 +41,13 @@ const notificationSchema = new mongoose.Schema({
     type: Date, 
     default: Date.now 
   }
-});
+}, { timestamps: true });
+
+// DAT-002-T03 -- userId was previously entirely unindexed on this user-owned
+// collection (gap 3.3, docs/data/DAT-002-T01-schema-and-index-inventory.md).
+// Real query patterns here are single-field equality on userId (Notification.deleteMany({ userId })
+// in accountDeletionTierBSteps.js) -- no code filters Notification by a second field alongside userId,
+// so a plain field index matches actual usage rather than a speculative compound key.
+notificationSchema.index({ userId: 1 });
 
 module.exports = mongoose.model("Notification", notificationSchema);

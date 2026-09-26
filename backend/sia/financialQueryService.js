@@ -8,6 +8,10 @@ const { ExpenseModel, IncomeModel, BudgetModel } = require("../config/Schemas");
 // backend/utils/money.js, instead of this file's own
 // Math.round(x * 100) / 100 pattern.
 const { roundMoney } = require("../utils/money");
+// DAT-002-T02 -- canonical "MMM YYYY" builder, shared with
+// Services/BudgetServices/budget.service.js/Controllers/BudgetControllers/
+// setbudget.js/updatebudget.js, instead of this file's own MONTH_NAMES array.
+const { buildMonthKeyFromParts } = require("../utils/monthKeyNormalization");
 
 const MAX_CATEGORY_RESULTS = 20;
 const MAX_PERIOD_SPAN_DAYS = 366; // mirrors the 12-month history ceiling
@@ -190,11 +194,9 @@ async function getNetCashFlow(userId, period) {
 
 // ---- budget -----------------------------------------------------------
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 // budgetSchema.month is a free-form "MMM YYYY" string keyed to a single
 function monthKeyFromZonedYearMonth(year, month) {
-  return `${MONTH_NAMES[month - 1]} ${year}`;
+  return buildMonthKeyFromParts(year, month);
 }
 
 // Real "no budget configured" vs "0 spent" distinction lives here: a
@@ -356,11 +358,10 @@ async function getTrendSeries(userId, period, { timeZone } = {}) {
     const monthKey = `${year}-${String(month).padStart(2, "0")}`;
     const match = rows.find((r) => r._id === monthKey);
 
-    const monthName = MONTH_NAMES[month - 1];
     series.push({
       year,
       month,
-      monthLabel: `${monthName} ${year}`,
+      monthLabel: buildMonthKeyFromParts(year, month),
       total: match ? roundMoney(match.total) : 0,
       count: match ? match.count : 0,
     });
