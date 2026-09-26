@@ -28,6 +28,18 @@ const COLLECTION = "expenses";
 const LEGACY_INDEX = "id_1";
 const REPLACEMENT_INDEX = "userId_1_id_1";
 
+// A fresh database (CI's ephemeral Mongo, a new environment) may not have
+// an expenses collection yet, and listing indexes of a missing collection
+// throws NamespaceNotFound (code 26). No collection means no legacy index.
+async function listIndexes(coll) {
+  try {
+    return await coll.indexes();
+  } catch (err) {
+    if (err && (err.code === 26 || err.codeName === "NamespaceNotFound")) return [];
+    throw err;
+  }
+}
+
 function isLegacyIdIndex(idx) {
   return idx.name === LEGACY_INDEX && JSON.stringify(idx.key) === JSON.stringify({ id: 1 });
 }
@@ -39,7 +51,7 @@ module.exports = {
 
   async up({ mongoose, logger, dryRun }) {
     const coll = mongoose.connection.db.collection(COLLECTION);
-    const indexes = await coll.indexes();
+    const indexes = await listIndexes(coll);
     const legacy = indexes.find(isLegacyIdIndex);
 
     if (!legacy) {
@@ -60,7 +72,7 @@ module.exports = {
   },
 
   async verify({ mongoose, logger }) {
-    const indexes = await mongoose.connection.db.collection(COLLECTION).indexes();
+    const indexes = await listIndexes(mongoose.connection.db.collection(COLLECTION));
     if (indexes.some(isLegacyIdIndex)) {
       throw new Error(`${LEGACY_INDEX} is still present on ${COLLECTION} after up()`);
     }

@@ -62,4 +62,19 @@ describe("20260926-drop-legacy-expense-id-index", () => {
     const { ctx } = makeContext([ID._id, LEGACY, COMPOUND]);
     await expect(migration.verify(ctx)).rejects.toThrow(/still present/);
   });
+
+  test("a database without an expenses collection is a no-op (CI's fresh Mongo)", async () => {
+    const nsErr = Object.assign(new Error("ns does not exist: db.expenses"), { code: 26, codeName: "NamespaceNotFound" });
+    const coll = { indexes: jest.fn(async () => { throw nsErr; }), dropIndex: jest.fn() };
+    const ctx = { mongoose: { connection: { db: { collection: () => coll } } }, logger: { info: jest.fn() }, dryRun: true };
+    await expect(migration.up(ctx)).resolves.toBeUndefined();
+    expect(coll.dropIndex).not.toHaveBeenCalled();
+    expect(ctx.logger.info).toHaveBeenCalledWith(expect.objectContaining({ event: "legacy_index_absent" }));
+  });
+
+  test("any other error from listing indexes still fails the migration", async () => {
+    const coll = { indexes: jest.fn(async () => { throw new Error("connection reset"); }), dropIndex: jest.fn() };
+    const ctx = { mongoose: { connection: { db: { collection: () => coll } } }, logger: { info: jest.fn() }, dryRun: false };
+    await expect(migration.up(ctx)).rejects.toThrow("connection reset");
+  });
 });
