@@ -19,7 +19,10 @@ import {
   MAX_QUESTION_LENGTH,
   normalizeServerMessages,
 } from "./useSiaConversation";
-import "./SiaPanel.css";
+// FE-003-T04 -- SiaPanel.css is imported eagerly by SiaEntryPoint.js instead
+// of here, because it also styles the always-rendered .sia-root/
+// .sia-entry-point launcher; this file (SiaPanel.js itself) is now the lazy
+// chunk, and the launcher must not lose its styling before that chunk loads.
 
 // Workstream 3, part A: recorder states in which a recording or an
 const VOICE_ACTIVE_STATES = new Set([

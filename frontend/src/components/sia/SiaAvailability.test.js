@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SiaEntryPoint from "./SiaEntryPoint";
 import { getSiaStatus, getSiaSessions, getSiaSessionMessages, deleteSiaSession } from "../../api/siaSessionsApi";
@@ -124,6 +124,16 @@ describe("SIA availability -- checking state", () => {
     getSiaStatus.mockImplementation(() => new Promise(() => {}));
     renderEntryPoint();
     openPanel();
+
+    // FE-003-T04 -- SiaPanel is React.lazy()-loaded, so opening the panel
+    // first renders the Suspense "Loading…" fallback. React's retry once the
+    // chunk resolves is only flushed inside act(), and in this test nothing
+    // else re-renders (the status query never settles, by design), so
+    // resolve the lazy module inside act() explicitly. Deterministic, no
+    // timing assumption.
+    await act(async () => {
+      await import("./SiaPanel");
+    });
 
     expect(screen.getByRole("status")).toHaveTextContent(CHECKING_TEXT);
     expect(composer()).toBeDisabled();

@@ -1,13 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, Suspense, lazy } from 'react';
 import { onKeyActivate } from '../../utils/onKeyActivate';
 import {
     ThemeContext,
-    TrendChartPage,
-    BarChartPage,
-    PieChartPage,
     ExpensesPage,
     DeleteAlert,
-    Insights,
     deleteSuccessToast,
     deleteErrorToast,
     Add,
@@ -23,6 +19,43 @@ import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoo
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
+
+// FE-003-T03 -- lazy-loaded route-level pages.
+//
+// These four are the heaviest thing this app ships (recharts + its d3
+// sub-dependencies for the three chart pages, the AI-insights machinery for
+// Insights) and, before this, all four downloaded as part of the MAIN bundle
+// on every login even for a session that never opens a chart. Importing them
+// directly here -- not through '../imports/Imports' -- is required: a lazy()
+// call needs its own dynamic import() so webpack can split it into a
+// separate chunk; going through the barrel would just re-bundle it with
+// everything else the barrel re-exports. (The barrel's own imports of these
+// four are removed in the same change -- see Imports.js -- otherwise App.js's
+// eager import of the barrel would still pull them into main.)
+//
+// FE-003-T06 -- each loader is its own named function (not inlined into
+// lazy()) so the exact same function can be called early, on hover/focus of
+// the link that leads to it (see prefetch* below): webpack's import() cache
+// is keyed on the module, so calling the loader again once React actually
+// renders the route is a no-op cache hit instead of a second network
+// request -- the chunk is already downloading (or done) by the time it's
+// needed, without changing what gets rendered or when.
+const loadTrendChartPage = () => import(/* webpackChunkName: "charts" */ '../charts/linechart/TrendChartPage');
+const loadBarChartPage = () => import(/* webpackChunkName: "charts" */ '../charts/barchart/BarChartPage');
+const loadPieChartPage = () => import(/* webpackChunkName: "charts" */ '../charts/piechart/PieChartPage');
+const loadInsights = () => import(/* webpackChunkName: "insights" */ '../monthlyInsights/Insights');
+const TrendChartPage = lazy(loadTrendChartPage);
+const BarChartPage = lazy(loadBarChartPage);
+const PieChartPage = lazy(loadPieChartPage);
+const Insights = lazy(loadInsights);
+
+// Fires all three chart loaders at once -- cheap (webpack dedupes/caches),
+// and simpler than tracking which single chart link was hovered.
+const prefetchCharts = () => {
+    loadTrendChartPage();
+    loadBarChartPage();
+    loadPieChartPage();
+};
 
 // Main authenticated app shell: header/nav, mobile menus, routed pages, and expense-delete confirmation flow.
 const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
@@ -103,6 +136,9 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                 to="/chart/line"
                 className="dropdown-item"
                 onClick={() => setShowMobileDropdown(false)}
+                onMouseEnter={loadTrendChartPage}
+                onFocus={loadTrendChartPage}
+                onTouchStart={loadTrendChartPage}
                 >
                 Trend Flow
                 <img className="icon-button" src={icons.trendChart} alt="icon" />
@@ -112,6 +148,9 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                 to="/chart/bar"
                 className="dropdown-item"
                 onClick={() => setShowMobileDropdown(false)}
+                onMouseEnter={loadBarChartPage}
+                onFocus={loadBarChartPage}
+                onTouchStart={loadBarChartPage}
                 >
                 Bars View
                 <img className="icon-button" src={icons.barChart} alt="icon" />
@@ -121,6 +160,9 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                 to="/chart/pie"
                 className="dropdown-item"
                 onClick={() => setShowMobileDropdown(false)}
+                onMouseEnter={loadPieChartPage}
+                onFocus={loadPieChartPage}
+                onTouchStart={loadPieChartPage}
                 >
                 Pie Scope
                 <img className="icon-button" src={icons.pieChart} alt="icon" />
@@ -204,6 +246,9 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                             onKeyDown={onKeyActivate(() => {
                                                 if (isMobile) setShowMobileDropdown(true);
                                             })}
+                                            onMouseEnter={prefetchCharts}
+                                            onFocus={prefetchCharts}
+                                            onTouchStart={prefetchCharts}
                                         >
                                             <FaChartBar /> Charts
                                         </span>
@@ -215,7 +260,13 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         )}
                                     </div>
 
-                                    <Link className="nav-link" to="/analysis">
+                                    <Link
+                                        className="nav-link"
+                                        to="/analysis"
+                                        onMouseEnter={loadInsights}
+                                        onFocus={loadInsights}
+                                        onTouchStart={loadInsights}
+                                    >
                                         <span className="nav-item">
                                             <FaSearchDollar /> Analysis
                                         </span>
@@ -267,16 +318,22 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                     </header>
 
                     <main className="app-main">
-                        <Routes>
-                            <Route path="/" element={<ExpensesPage onDelete={onDelete} setIsEdit={setIsEdit} />} />
-                            <Route path="/add" element={<Add isEdit={isEdit} setIsEdit={setIsEdit} />} />
-                            <Route path="/chart/line" element={<TrendChartPage />} />
-                            <Route path="/chart/bar" element={<BarChartPage />} />
-                            <Route path="/chart/pie" element={<PieChartPage />} />
-                            <Route path="/analysis" element={<Insights />} />
-                            <Route path="/rules" element={<MerchantRules />} />
-                            <Route path="/sia-settings" element={<SiaPreferences />} />
-                        </Routes>
+                        {/* FE-003-T03/T06 -- only the four lazy routes above can actually
+                            suspend; the other routes render synchronously as before and
+                            never show this fallback. role="status"/aria-live so a screen
+                            reader announces the wait instead of going silent. */}
+                        <Suspense fallback={<div className="route-loading" role="status" aria-live="polite">Loading…</div>}>
+                            <Routes>
+                                <Route path="/" element={<ExpensesPage onDelete={onDelete} setIsEdit={setIsEdit} />} />
+                                <Route path="/add" element={<Add isEdit={isEdit} setIsEdit={setIsEdit} />} />
+                                <Route path="/chart/line" element={<TrendChartPage />} />
+                                <Route path="/chart/bar" element={<BarChartPage />} />
+                                <Route path="/chart/pie" element={<PieChartPage />} />
+                                <Route path="/analysis" element={<Insights />} />
+                                <Route path="/rules" element={<MerchantRules />} />
+                                <Route path="/sia-settings" element={<SiaPreferences />} />
+                            </Routes>
+                        </Suspense>
                     </main>
 
                     {isMobile && 
@@ -299,12 +356,17 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 aria-expanded={showMobileDropdown}
                                 onClick={() => setShowMobileDropdown(prev => !prev)}
                                 onKeyDown={onKeyActivate(() => setShowMobileDropdown(prev => !prev))}
+                                onTouchStart={prefetchCharts}
                             >
                                 <FaChartBar />
                                 <span>Charts</span>
                             </span>
                             
-                            <Link to="/analysis" className={location.pathname === "/analysis" ? "active-nav" : ""}>
+                            <Link
+                                to="/analysis"
+                                className={location.pathname === "/analysis" ? "active-nav" : ""}
+                                onTouchStart={loadInsights}
+                            >
                                 <FaSearchDollar />
                                 <span>Analysis</span>
                             </Link>

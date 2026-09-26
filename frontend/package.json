@@ -39,6 +39,9 @@
     "lint": "eslint src --ext .js",
     "lint:ci": "eslint src --ext .js --ignore-pattern \"**/*.test.js\" --max-warnings=0",
     "eject": "react-scripts eject",
+    "perf:budgets": "node scripts/checkPerformanceBudgets.js",
+    "perf:budgets:update-baseline": "node scripts/checkPerformanceBudgets.js --update-baseline",
+    "test:perf-budgets": "node --test scripts/checkPerformanceBudgets.test.js",
     "analyze:bundle-composition": "node scripts/analyzeBundleComposition.js",
     "test:bundle-composition": "node --test scripts/analyzeBundleComposition.test.js"
   },
@@ -68,5 +71,10 @@
   },
   "devDependencies": {
     "jest-axe": "^11.0.0"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^axios$": "axios/dist/browser/axios.cjs"
+    }
   }
 }

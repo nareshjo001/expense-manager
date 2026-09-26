@@ -35,9 +35,6 @@ jest.mock("../imports/Imports", () => {
   const React = require("react");
   return {
     ThemeContext: React.createContext({ theme: "light-theme", toggleTheme: jest.fn() }),
-    TrendChartPage: () => null,
-    BarChartPage: () => null,
-    PieChartPage: () => null,
     ExpensesPage: ({ onDelete }) => (
       <button onClick={() => onDelete("expense-1")}>trigger-delete</button>
     ),
@@ -48,7 +45,6 @@ jest.mock("../imports/Imports", () => {
         <button onClick={cancelDeleteHandler}>cancel-delete</button>
       </div>
     ),
-    Insights: () => null,
     deleteSuccessToast: jest.fn(),
     deleteErrorToast: jest.fn(),
     Add: () => null,
@@ -61,6 +57,20 @@ jest.mock("../imports/Imports", () => {
     SiaPreferences: () => null,
   };
 });
+
+// FE-003-T03 -- TrendChartPage/BarChartPage/PieChartPage/Insights are no
+// longer re-exported through '../imports/Imports' (they're lazy-loaded
+// directly in LandingPage.js so webpack can split them into separate
+// chunks), so the barrel mock above no longer stubs them. The mocked
+// react-router-dom above renders every <Route>'s element unconditionally
+// (it ignores `path`), so without these mocks the real, heavy chart/
+// insights components -- and their real network calls -- would mount on
+// every render of LandingPage in this suite, which is unrelated to what
+// these tests actually assert on.
+jest.mock("../charts/linechart/TrendChartPage", () => () => null);
+jest.mock("../charts/barchart/BarChartPage", () => () => null);
+jest.mock("../charts/piechart/PieChartPage", () => () => null);
+jest.mock("../monthlyInsights/Insights", () => () => null);
 
 beforeEach(() => {
   setAccessToken("fake-test-token");

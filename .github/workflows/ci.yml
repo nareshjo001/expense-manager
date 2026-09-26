@@ -37,6 +37,12 @@ jobs:
         run: npm run lint
         continue-on-error: true
       - run: CI=true npm test -- --watchAll=false
+      # FE-003-T02 -- unit tests for the budget checker itself (Node's
+      # built-in test runner, not react-scripts/Jest: this script lives
+      # outside src/ on purpose, see scripts/checkPerformanceBudgets.test.js's
+      # own header comment for why).
+      - name: Performance budget checker unit tests
+        run: npm run test:perf-budgets
       # FE-003-T01 -- static bundle composition analysis. Needs no build (it
       # reads src/ directly), so it runs before `npm run build` below and
       # doesn't depend on it -- see scripts/analyzeBundleComposition.js's own
@@ -59,6 +65,17 @@ jobs:
           path: frontend/build
           if-no-files-found: error
           retention-days: 7
+      # FE-003-T02 -- enforce frontend/performance-budgets.json against this
+      # build's real gzip sizes. Most categories start in "RECORD" mode (no
+      # baseline yet -- see that file and scripts/checkPerformanceBudgets.js
+      # for why) and do not fail the build; the "main" bundle has a hard
+      # ceiling from day one, carried over from this feature's own
+      # pre-optimization audit figure. A maintainer promotes a category out
+      # of RECORD mode by running `npm run perf:budgets:update-baseline`
+      # locally (or in a real build environment) once its size has been
+      # reviewed, and committing the updated performance-budgets.json.
+      - name: Performance budget check
+        run: npm run perf:budgets
 
   backend-unit:
     name: Backend unit validation
