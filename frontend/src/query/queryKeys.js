@@ -17,6 +17,11 @@ export const queryKeys = {
 
   budgets: {
     all: ["budgets"],
+    // BUD-001-T05 -- per-month category-budget summaries. Nested under
+    // budgets.all so the expense/total-budget mutations that already
+    // invalidate ["budgets"] also refresh category spend and status.
+    categoryAll: () => [...queryKeys.budgets.all, "category"],
+    category: (month) => [...queryKeys.budgets.categoryAll(), month],
   },
 
   // CAT-001 -- saved merchant category rules.

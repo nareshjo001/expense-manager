@@ -92,6 +92,30 @@ describe("push.service.sendPush -- NOT-003 preference gate", () => {
     }));
   });
 
+  // BUD-001-T06 -- generic preview text is per type. A category budget
+  // alert must never be disguised as "A recurring expense was added." on a
+  // device using the default generic preview.
+  test("generic preview of a category-budget-alert uses budget-specific generic text", async () => {
+    const { sendPush, sendMock } = loadPushService({
+      tokens: [{ token: "t1", platform: "mobile", notificationPreview: "generic" }],
+      policy: { enabled: true, preview: "device", quiet: false },
+    });
+
+    await sendPush("user-1", "Budget alert: Food", "You've used 92% of your Food budget for September.", {
+      type: "category-budget-alert",
+    });
+
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+      notification: expect.objectContaining({
+        title: "Expense Manager",
+        body: "You have a new budget alert.",
+      }),
+    }));
+    const sent = JSON.stringify(sendMock.mock.calls[0][0]);
+    expect(sent).not.toContain("Food");
+    expect(sent).not.toContain("92%");
+  });
+
   test("preview:'detailed' override sends real content even to a device that never opted in", async () => {
     const { sendPush, sendMock } = loadPushService({
       tokens: [{ token: "t1", platform: "web" }], // no notificationPreview -- defaults generic on the device

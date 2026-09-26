@@ -6,6 +6,13 @@ const {
     setbudget,
     updatebudget,
 } = require('../Controllers/BudgetControllers');
+// BUD-001-T03 -- optional per-category monthly allocations (see
+// docs/budgets/BUD-001-T01-category-budget-invariants.md).
+const {
+    getCategoryBudgets,
+    upsertCategoryBudget,
+    deleteCategoryBudget,
+} = require('../Controllers/CategoryBudgetControllers');
 
 // ---------------- AUTH MIDDLEWARE ----------------
 // Verifies JWT token before allowing access
@@ -100,6 +107,12 @@ router.post('/setbudget', verifyToken, setbudget);
 
 // Update budget
 router.put('/update-budget', verifyToken, updatebudget);
+
+// Category budgets (BUD-001) -- additive to the total budget above, which
+// these routes never modify.
+router.get('/category-budgets', verifyToken, getCategoryBudgets);
+router.put('/category-budgets', verifyToken, upsertCategoryBudget);
+router.delete('/category-budgets/:id', verifyToken, deleteCategoryBudget);
 
 // ================= DEVICE / RECURRING ROUTES =================
 

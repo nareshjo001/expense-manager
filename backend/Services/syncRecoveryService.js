@@ -626,19 +626,37 @@ async function synchronizeDerivedData({
   };
 }
 
+// BUD-001-T06 -- optional category budget alerts (invariant I14), run after the derived-data sync on BOTH its success and its failure path (alerts read spend straight from expenses, not from the derived budget, so a pending sync doesn't make them wrong). Required lazily and fully isolated: it can never throw into, delay the return shape of, or change the outcome of the mutation that triggered it. The alert service is itself no-throw; this try/catch is defense-in-depth (e.g. a require-time failure).
+async function evaluateCategoryBudgetAlertsSafely(options) {
+  try {
+    // No affected month (e.g. a total-budget-only mutation) -> nothing to evaluate; don't even load the alert module.
+    if (!options || !Array.isArray(options.budgetDates) || options.budgetDates.length === 0) return;
+    const { evaluateCategoryBudgetAlerts } = require("./BudgetServices/categoryBudgetAlert.service");
+    await evaluateCategoryBudgetAlerts({
+      userId: options.userId,
+      dates: options.budgetDates,
+    });
+  } catch (err) {
+    console.error("syncRecoveryService: category budget alert evaluation failed:", sanitizeError(err));
+  }
+}
+
 // Keeps a committed financial write successful when secondary synchronization cannot start or finish.
 async function synchronizeAfterMutation(options = {}) {
+  let result;
   try {
-    return await synchronizeDerivedData(options);
+    result = await synchronizeDerivedData(options);
   } catch (err) {
     console.error("syncRecoveryService.synchronizeAfterMutation deferred:", sanitizeError(err));
-    return {
+    result = {
       status: "pending",
       budget: "pending",
       report: "pending",
       recoveryPending: true,
     };
   }
+  await evaluateCategoryBudgetAlertsSafely(options);
+  return result;
 }
 
 module.exports = {

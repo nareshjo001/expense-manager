@@ -21,9 +21,16 @@
 // notification type registers it here first (this is the ONE place a new
 // type needs to be added for the preference system below to know it
 // exists) and only then starts calling Notification.create with it.
+//
+// BUD-001-T06 added a third call site:
+//   "category-budget-alert"   -- spending in a category crossed its
+//                                 Critical (> 90%) or Overspent (> 100%)
+//                                 threshold (Services/BudgetServices/
+//                                 categoryBudgetAlert.service.js).
 const NOTIFICATION_TYPES = Object.freeze({
   RECURRING_EXPENSE: "recurring-expense",
   RECURRING_EXPENSE_ENDED: "recurring-expense-ended",
+  CATEGORY_BUDGET_ALERT: "category-budget-alert",
 });
 
 const NOTIFICATION_TYPE_VALUES = Object.freeze(Object.values(NOTIFICATION_TYPES));
@@ -40,6 +47,10 @@ const NOTIFICATION_TYPE_META = Object.freeze({
   [NOTIFICATION_TYPES.RECURRING_EXPENSE_ENDED]: Object.freeze({
     label: "Recurring expense ended",
     description: "When a recurring expense reaches its end date and stops.",
+  }),
+  [NOTIFICATION_TYPES.CATEGORY_BUDGET_ALERT]: Object.freeze({
+    label: "Category budget alerts",
+    description: "When spending in a category reaches 90% of its budget or goes over it.",
   }),
 });
 

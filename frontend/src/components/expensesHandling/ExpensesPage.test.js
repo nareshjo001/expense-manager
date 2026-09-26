@@ -38,6 +38,10 @@ jest.mock("../contexts/ai-contexts/ExpenseInsightsContext", () => ({
 
 jest.mock("../insights/InlineExpenseInsight", () => () => null);
 
+// BUD-001-T05 -- CategoryBudgets has its own suite (budget/CategoryBudgets.test.js)
+// and needs a QueryClientProvider; not under test here.
+jest.mock("./budget/CategoryBudgets", () => () => null);
+
 // EXP-002-T06 -- ExpensesPage now reads/writes the URL via useSearchParams.
 // Mocked wholesale (this codebase's established pattern for
 // react-router-dom -- see AddExpense.test.js/App.startup.test.js) rather
