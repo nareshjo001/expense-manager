@@ -131,6 +131,29 @@
   z-index: 10000;
 }
 
+/* FE-003-T04 -- Suspense fallback shown for the brief window while the
+   lazy-loaded SiaPanel chunk downloads. Mirrors .sia-panel's position/size
+   so the launcher-to-panel transition doesn't jump around. */
+.sia-panel-loading {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: clamp(360px, 32vw, 480px);
+  max-width: calc(100vw - 40px);
+  height: calc(100vh - 130px);
+  height: calc(100dvh - 130px);
+  max-height: 640px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sia-bg);
+  color: var(--sia-text);
+  border: 1px solid var(--sia-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  z-index: 10000;
+}
+
 .sia-panel-header {
   display: flex;
   align-items: center;
