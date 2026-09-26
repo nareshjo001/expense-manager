@@ -1,0 +1,42 @@
+{
+  "description": "FE-003-T02 performance budgets for the frontend production bundle. Enforced by frontend/scripts/checkPerformanceBudgets.js (npm run perf:budgets), wired into the \"frontend\" job of .github/workflows/ci.yml right after `npm run build`. See workflow/features/P2/FE-003-frontend-route-performance.md for the full rationale, including why most categories below start with baselineGzipKB: null instead of an invented target size.",
+  "allowedGrowthPercent": 10,
+  "budgets": {
+    "main": {
+      "description": "Initial JS entry bundle -- everything loaded on first paint, after FE-003-T03..T06 moved charts, insights, SIA, bill-upload/OCR and firebase-push into separate lazy chunks.",
+      "maxGzipKB": 378,
+      "maxGzipKBNote": "378 KB is the pre-optimization figure already recorded in this feature's 2026-09-08 audit (section 4 of the feature doc), from BEFORE the FE-003-T03..T06 lazy-loading split. It is a not-to-regress-past ceiling, not a target -- the main bundle should now be well under this. Tighten this once FE-003-T01/T07 can run a full production build and capture a real post-split number (blocked in the sandbox this was authored in by CPU/IO limits, not by anything production-related -- see that task's notes).",
+      "baselineGzipKB": null
+    },
+    "charts": {
+      "description": "TrendChartPage + BarChartPage + PieChartPage, lazy-loaded together from LandingPage.js (webpackChunkName: \"charts\") since FE-003-T06's prefetchCharts() already loads them as a group.",
+      "maxGzipKB": null,
+      "baselineGzipKB": null
+    },
+    "insights": {
+      "description": "Insights, lazy-loaded from LandingPage.js (webpackChunkName: \"insights\").",
+      "maxGzipKB": null,
+      "baselineGzipKB": null
+    },
+    "sia": {
+      "description": "SiaPanel (conversation UI + voice recording controls), lazy-loaded from SiaEntryPoint.js (webpackChunkName: \"sia\").",
+      "maxGzipKB": null,
+      "baselineGzipKB": null
+    },
+    "bill-upload": {
+      "description": "BillUpload (OCR bill-scanning flow), lazy-loaded from AddExpense.js (webpackChunkName: \"bill-upload\").",
+      "maxGzipKB": null,
+      "baselineGzipKB": null
+    },
+    "firebase-push": {
+      "description": "The Firebase SDK + pushNotification module, dynamically imported from useWebPush.js's registerToken() (webpackChunkName: \"firebase-push\") so it only loads when a token is actually requested.",
+      "maxGzipKB": null,
+      "baselineGzipKB": null
+    },
+    "other-chunks": {
+      "description": "Aggregate of any build output chunk that doesn't match a named category above (webpack's automatic vendor/runtime splits, or a future lazy import not yet given a webpackChunkName). Tracked in total so a new, unnamed chunk can't grow unbounded without ever being counted.",
+      "maxGzipKB": null,
+      "baselineGzipKB": null
+    }
+  }
+}
