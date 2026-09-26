@@ -16,6 +16,11 @@ function makeContext(docs, { dryRun = false } = {}) {
       },
     }),
     findOne: async (filter) => store.find((d) => d.userId === filter.userId && d.month === filter.month) || null,
+    deleteOne: jest.fn(async (filter) => {
+      const i = store.findIndex((x) => x._id === filter._id && x.month === filter.month && x.budget === filter.budget);
+      if (i !== -1) store.splice(i, 1);
+      return { deletedCount: i !== -1 ? 1 : 0 };
+    }),
     updateOne: jest.fn(async (filter, update) => {
       const d = store.find((x) => x._id === filter._id && x.month === filter.month);
       if (d) Object.assign(d, update.$set);
@@ -64,10 +69,38 @@ describe("20260926-canonicalize-budget-month-keys", () => {
     await expect(migration.verify(ctx)).resolves.toBeUndefined();
   });
 
-  test("does not overwrite when the user already has the canonical month; verify fails", async () => {
+  test("deletes a pure duplicate (same budget amount) and keeps the canonical document -- the production case", async () => {
     const { ctx, store, coll } = makeContext([
-      { _id: "b1", userId: "u1", month: "Sept 2026" },
-      { _id: "b2", userId: "u1", month: "Sep 2026" },
+      { _id: "b1", userId: "u1", month: "Sept 2026", budget: 4000, budgetMinor: 400000, spent: 0 },
+      { _id: "b2", userId: "u1", month: "Sep 2026", budget: 4000, budgetMinor: 400000, spent: 2891 },
+    ]);
+    const result = await migration.up(ctx);
+    expect(result.duplicatesDeleted).toBe(1);
+    expect(coll.deleteOne).toHaveBeenCalledWith({ _id: "b1", month: "Sept 2026", budget: 4000 });
+    expect(store).toEqual([{ _id: "b2", userId: "u1", month: "Sep 2026", budget: 4000, budgetMinor: 400000, spent: 2891 }]);
+    expect(coll.updateOne).not.toHaveBeenCalled();
+    await expect(migration.verify(ctx)).resolves.toBeUndefined();
+  });
+
+  test("a duplicate is only reported (not deleted) in a dry run", async () => {
+    const { ctx, coll } = makeContext(
+      [
+        { _id: "b1", userId: "u1", month: "Sept 2026", budget: 4000, budgetMinor: 400000 },
+        { _id: "b2", userId: "u1", month: "Sep 2026", budget: 4000, budgetMinor: 400000 },
+      ],
+      { dryRun: true }
+    );
+    await migration.up(ctx);
+    expect(coll.deleteOne).not.toHaveBeenCalled();
+    expect(ctx.logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "would_delete_duplicate_month", docId: "b1", keptDocId: "b2" })
+    );
+  });
+
+  test("different budget amounts are a conflict: nothing is changed and verify fails", async () => {
+    const { ctx, store, coll } = makeContext([
+      { _id: "b1", userId: "u1", month: "Sept 2026", budget: 5000, budgetMinor: 500000 },
+      { _id: "b2", userId: "u1", month: "Sep 2026", budget: 4000, budgetMinor: 400000 },
     ]);
     const result = await migration.up(ctx);
     expect(result.renamed).toBe(0);
@@ -75,6 +108,7 @@ describe("20260926-canonicalize-budget-month-keys", () => {
       expect.objectContaining({ docId: "b1", conflictsWith: "b2", from: "Sept 2026", to: "Sep 2026" }),
     ]);
     expect(coll.updateOne).not.toHaveBeenCalled();
+    expect(coll.deleteOne).not.toHaveBeenCalled();
     expect(store.find((d) => d._id === "b1").month).toBe("Sept 2026");
     await expect(migration.verify(ctx)).rejects.toThrow(/1 conflicting/);
   });
