@@ -73,7 +73,7 @@ const QUERY_SPECS = [
   {
     label: "budgets: point lookup by owner + canonical month key",
     collection: "budgets",
-    filter: { userId: "REPRESENTATIVE_USER_ID", month: "Jan 2026" },
+    filter: { userId: "REPRESENTATIVE_USER_ID", month: "REPRESENTATIVE_MONTH" },
     expectedIndexName: "userId_1_month_1",
   },
   {

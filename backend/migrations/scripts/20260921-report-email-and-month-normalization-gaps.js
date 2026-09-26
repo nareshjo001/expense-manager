@@ -76,7 +76,9 @@ async function scanEmailGaps({ db, logger }) {
     collisionGroupCount: collisions.length,
   });
   collisions.forEach((collision) => {
-    logger.warn({ event: "email_collision", normalized: collision.normalized, docs: collision.docs });
+    // Document ids only -- never the email addresses themselves (OBS-001-T01
+    // redaction). An operator resolves a collision by looking the ids up.
+    logger.warn({ event: "email_collision", docIds: collision.docs.map((d) => d.docId), docCount: collision.docs.length });
   });
 
   return { scanned, nonCanonicalCount, collisions };
