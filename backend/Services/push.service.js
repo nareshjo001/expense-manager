@@ -10,6 +10,21 @@ const GENERIC_NOTIFICATION = Object.freeze({
     body: "A recurring expense was added."
 });
 
+// BUD-001-T06 -- the generic (no-detail) preview text is chosen per type.
+// Before this, every generic-preview push said "A recurring expense was
+// added." whatever its type, so a category budget alert on a device using
+// the default "generic" preview would have been shown as a recurring
+// expense. Types without an entry here keep GENERIC_NOTIFICATION's text,
+// byte-identical to before.
+const GENERIC_BODY_BY_TYPE = Object.freeze({
+    "category-budget-alert": "You have a new budget alert.",
+});
+
+function genericContentFor(type) {
+    const body = type && GENERIC_BODY_BY_TYPE[type];
+    return body ? { title: GENERIC_NOTIFICATION.title, body } : GENERIC_NOTIFICATION;
+}
+
 // `options.type` is the notification's registered type (utils/
 // notificationTypes.js) -- optional, so every pre-NOT-003 call site and
 // every existing test keeps working exactly as before: resolveSendPolicy()
@@ -58,7 +73,7 @@ const sendPush = async (userId, title, body, options = {}) => {
         const effectivePreview = policy.preview === "device" ? t.notificationPreview : policy.preview;
         const content = effectivePreview === "detailed"
             ? { title, body }
-            : GENERIC_NOTIFICATION;
+            : genericContentFor(type);
 
         // NOT-003-T01 -- the payload's `tag` now reflects the notification's
         // actual registered type when one was supplied (lets a client group/
