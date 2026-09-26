@@ -23,6 +23,14 @@ const originalFlag = process.env[ENV_KEY];
 
 // This jsdom environment exposes no `crypto` global at all, so a Web
 const originalCrypto = window.crypto;
+// FE-003-T04 made SiaPanel React.lazy(). The first open in a file suspends
+// until its module tree is compiled and loaded; on a loaded CI runner with a
+// cold transform cache that alone can outlast waitFor's 1s default and the
+// test's 5s budget, leaving the panel on its "Loading..." fallback. Load the
+// module once up front, with its own timeout, so every open afterwards
+// resolves on the next microtask.
+beforeAll(() => import("./SiaPanel"), 30000);
+
 beforeAll(() => {
   Object.defineProperty(window, "crypto", {
     value: {
@@ -108,6 +116,11 @@ function renderEntryPoint() {
 // Batch 3E: opening the panel now also waits for the runtime availability
 const openPanel = async () => {
   fireEvent.click(screen.getByRole("button", { name: "Ask SIA" }));
+  // Flush React.lazy's retry inside act() (see the preload beforeAll above);
+  // outside act() nothing guarantees the Suspense boundary re-renders.
+  await act(async () => {
+    await import("./SiaPanel");
+  });
   await waitFor(() => expect(composer()).not.toBeDisabled());
 };
 const composer = () => screen.getByLabelText(/your question/i);

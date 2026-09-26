@@ -23,6 +23,9 @@ jest.mock(
       </a>
     ),
     useLocation: () => ({ pathname: "/" }),
+    // LandingPage.js calls useNavigate() unconditionally (for the
+    // /recurring route's handleEditFromRecurring, REC-003-T05).
+    useNavigate: () => jest.fn(),
   }),
   { virtual: true }
 );
@@ -49,6 +52,14 @@ jest.mock("../imports/Imports", () => {
     deleteErrorToast: jest.fn(),
     Add: () => null,
     MerchantRules: () => null,
+    // The mocked react-router-dom Route above renders every route's element
+    // unconditionally, so each routed page with its own real query/mutation
+    // hooks is stubbed here, or it would mount with no QueryClientProvider.
+    RecurringPage: () => null,
+    NotificationPreferences: () => null,
+    DataExport: () => null,
+    ReceiptInbox: () => null,
+    ImportWizard: () => null,
     // SIA-001-T06 -- SiaPreferences has its own real query/mutation hooks
     // (useSiaPreferenceQuery et al.) that would mount with no
     // QueryClientProvider in this suite if left unstubbed, and the mocked
