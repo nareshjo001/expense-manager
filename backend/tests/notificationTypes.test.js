@@ -12,10 +12,20 @@ const {
 } = require("../utils/notificationTypes");
 
 describe("notification type registry", () => {
-  test("registers exactly the two real call sites confirmed in cron/recurringJob.js", () => {
+  test("registers exactly the real call sites (cron/recurringJob.js and the BUD-001 category budget alert service)", () => {
     expect([...NOTIFICATION_TYPE_VALUES].sort()).toEqual(
-      ["recurring-expense", "recurring-expense-ended"].sort()
+      ["recurring-expense", "recurring-expense-ended", "category-budget-alert"].sort()
     );
+  });
+
+  test("BUD-001-T06 registers the category budget alert type with its settings copy", () => {
+    expect(NOTIFICATION_TYPES.CATEGORY_BUDGET_ALERT).toBe("category-budget-alert");
+    expect(NOTIFICATION_TYPE_META["category-budget-alert"]).toEqual({
+      label: "Category budget alerts",
+      description: "When spending in a category reaches 90% of its budget or goes over it.",
+    });
+    expect(DEFAULT_TYPE_PREFERENCE).toEqual({ enabled: true, preview: "device" });
+    expect(defaultPreferencesByType()["category-budget-alert"]).toEqual(DEFAULT_TYPE_PREFERENCE);
   });
 
   test("every registered type has label/description metadata", () => {
@@ -29,6 +39,7 @@ describe("notification type registry", () => {
   test("isKnownType is true only for registered types", () => {
     expect(isKnownType(NOTIFICATION_TYPES.RECURRING_EXPENSE)).toBe(true);
     expect(isKnownType(NOTIFICATION_TYPES.RECURRING_EXPENSE_ENDED)).toBe(true);
+    expect(isKnownType(NOTIFICATION_TYPES.CATEGORY_BUDGET_ALERT)).toBe(true);
     expect(isKnownType("something-unregistered")).toBe(false);
     expect(isKnownType(null)).toBe(false);
     expect(isKnownType(undefined)).toBe(false);

@@ -98,6 +98,8 @@ function seedDatabase() {
     ExpenseModel: makeCollection([{ _id: "e1", userId: "user-1" }, { _id: "e2", userId: "user-2" }]),
     IncomeModel: makeCollection([{ _id: "i1", userId: "user-1" }, { _id: "i2", userId: "user-2" }]),
     BudgetModel: makeCollection([{ _id: "b1", userId: "user-1" }, { _id: "b2", userId: "user-2" }]),
+    // BUD-001 (I15) -- per-category allocations, a separate collection.
+    CategoryBudgetModel: makeCollection([{ _id: "cb1", userId: "user-1" }, { _id: "cb2", userId: "user-2" }]),
     MlFeedbackModel: makeCollection([
       { _id: "f1", userId: "user-1" },
       { _id: "f2", userId: "user-2" },
@@ -149,6 +151,7 @@ function loadPipeline(collections) {
   jest.doMock("../models/RefreshSession", () => collections.RefreshSession);
   jest.doMock("../models/DeviceToken", () => collections.DeviceToken);
   jest.doMock("../models/Receipt", () => collections.ReceiptModel);
+  jest.doMock("../models/CategoryBudget", () => ({ CategoryBudgetModel: collections.CategoryBudgetModel }));
   // deleteReceiptsStep's only external-I/O dependency -- the GridFS blob
   // delete itself is receiptStorageAdapter.js's own suite's job to cover,
   // not this reconciliation test's; here it only needs to be called

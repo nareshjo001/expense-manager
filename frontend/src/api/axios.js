@@ -34,7 +34,14 @@ api.interceptors.response.use(
       return api(originalRequest);
     }
     if (error.response) {
-      handleApiError(error.response);
+      // BUD-001-T05 -- a request may opt out of the generic 409 toast when its
+      // caller renders its own, more specific conflict message inline (e.g.
+      // "this would exceed your monthly budget"), so the user doesn't get both.
+      // 401/429 handling is unaffected.
+      handleApiError(
+        error.response,
+        originalRequest?.suppressConflictToast ? { onConflict: () => {} } : undefined
+      );
     }
 
     return Promise.reject(error);
