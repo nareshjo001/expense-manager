@@ -56,10 +56,10 @@ describe("migration 20260903-ensure-core-indexes", () => {
     const incomesIdx = await ctx.db.collection("incomes").indexes();
     expect(incomesIdx.map((i) => i.name)).toContain("userId_1_incomeDate_1");
 
-    const budgetIdx = await ctx.db.collection("budget").indexes();
+    const budgetIdx = await ctx.db.collection("budgets").indexes();
     expect(budgetIdx.map((i) => i.name)).toContain("userId_1_month_1");
 
-    const recurringIdx = await ctx.db.collection("recurringExpenses").indexes();
+    const recurringIdx = await ctx.db.collection("recurringexpenses").indexes();
     expect(recurringIdx.map((i) => i.name)).toEqual(
       expect.arrayContaining(["userId_1_expenseId_1", "nextDueDate_1"])
     );

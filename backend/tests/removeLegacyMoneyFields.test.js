@@ -174,9 +174,9 @@ describe("the field set", () => {
     expect(FIELD_MAP).toEqual([
       { collection: "expenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
       { collection: "incomes", legacyField: "incomeAmount", minorField: "incomeAmountMinor" },
-      { collection: "budget", legacyField: "budget", minorField: "budgetMinor" },
-      { collection: "budget", legacyField: "spent", minorField: "spentMinor" },
-      { collection: "recurringExpenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
+      { collection: "budgets", legacyField: "budget", minorField: "budgetMinor" },
+      { collection: "budgets", legacyField: "spent", minorField: "spentMinor" },
+      { collection: "recurringexpenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
     ]);
   });
 

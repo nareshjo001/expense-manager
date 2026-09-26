@@ -76,12 +76,19 @@ const OPERATION_ID = "20260910-remove-legacy-money-fields";
 // either, because this file must remove exactly the fields those two
 // populated and verified -- if that set ever diverges, this file's copy is
 // the one a reviewer should be forced to look at.
+// Real MongoDB collection names, not the Mongoose model names: the
+// 'budget' and 'recurringExpenses' models resolve to "budgets" and
+// "recurringexpenses" (Mongoose pluralizes/lowercases; no schema sets an
+// explicit `collection`). The literal model names previously used here
+// matched a nonexistent collection and silently processed zero documents
+// -- found by running the migrations against a restored copy of production
+// (DAT-003-T07). Same correction as 20260903-backfill-money-minor-fields.js.
 const FIELD_MAP = [
   { collection: "expenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
   { collection: "incomes", legacyField: "incomeAmount", minorField: "incomeAmountMinor" },
-  { collection: "budget", legacyField: "budget", minorField: "budgetMinor" },
-  { collection: "budget", legacyField: "spent", minorField: "spentMinor" },
-  { collection: "recurringExpenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
+  { collection: "budgets", legacyField: "budget", minorField: "budgetMinor" },
+  { collection: "budgets", legacyField: "spent", minorField: "spentMinor" },
+  { collection: "recurringexpenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
 ];
 
 const BATCH_SIZE = 500;

@@ -16,12 +16,31 @@
 // where it left off, same as any other migration in this pipeline.
 const { toMinorUnits } = require("../../utils/money");
 
+// DAT-002-T06 correction (2026-09-21) -- "budget" and "recurringExpenses"
+// below were never the real MongoDB collection names. config/Schemas.js
+// registers the budget model as mongoose.model('budget', budgetSchema)
+// and models/RecurringExpense.js registers
+// mongoose.model('recurringExpenses', RecurringExpenseSchema); Mongoose
+// pluralizes/lowercases both of those to derive the actual collection
+// name whenever no explicit `collection` schema option overrides it (this
+// codebase sets none) -- confirmed directly against the real mongoose
+// package, not assumed: 'budget' -> "budgets", 'recurringExpenses' ->
+// "recurringexpenses". Every application read/write already goes through
+// the Model (BudgetModel, RecurringExpenseModel), which always resolves
+// the correct real name automatically -- only this migration's direct,
+// string-keyed db.collection(...) calls bypassed that and silently
+// targeted a nonexistent collection, matching zero real documents on
+// every run without ever raising an error. Caught while investigating
+// DAT-002-T06's orphan/duplicate integrity checks, well after this
+// migration's own DAT-001-T04 tests were written and passing -- those
+// tests use a fake db keyed by the same (until now, wrong) literal
+// strings, so they never could have caught this themselves.
 const FIELD_MAP = [
   { collection: "expenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
   { collection: "incomes", legacyField: "incomeAmount", minorField: "incomeAmountMinor" },
-  { collection: "budget", legacyField: "budget", minorField: "budgetMinor" },
-  { collection: "budget", legacyField: "spent", minorField: "spentMinor" },
-  { collection: "recurringExpenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
+  { collection: "budgets", legacyField: "budget", minorField: "budgetMinor" },
+  { collection: "budgets", legacyField: "spent", minorField: "spentMinor" },
+  { collection: "recurringexpenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
 ];
 
 const BATCH_SIZE = 500;

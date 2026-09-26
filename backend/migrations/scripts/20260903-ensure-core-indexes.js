@@ -14,6 +14,17 @@
 // confirms every index this migration asks for is actually present
 // afterward, per ADR-0006's "check the outcome, don't just trust up()"
 // requirement.
+// DAT-002-T06 correction (2026-09-21) -- "budget" and "recurringExpenses"
+// below were never the real MongoDB collection names; see
+// 20260903-backfill-money-minor-fields.js's identical correction comment
+// for the full explanation (Mongoose pluralizes/lowercases the
+// 'budget'/'recurringExpenses' model names config/Schemas.js and
+// models/RecurringExpense.js register, to "budgets"/"recurringexpenses"
+// respectively -- confirmed directly against the real mongoose package).
+// createIndex() against the wrong string silently created these two
+// indexes on an empty, never-otherwise-used collection instead of the
+// real one -- caught while investigating DAT-002-T06's orphan/duplicate
+// integrity checks.
 const INDEX_SPECS = [
   {
     collection: "expenses",
@@ -31,17 +42,17 @@ const INDEX_SPECS = [
     options: { name: "userId_1_incomeDate_1" },
   },
   {
-    collection: "budget",
+    collection: "budgets",
     key: { userId: 1, month: 1 },
     options: { unique: true, name: "userId_1_month_1" },
   },
   {
-    collection: "recurringExpenses",
+    collection: "recurringexpenses",
     key: { userId: 1, expenseId: 1 },
     options: { unique: true, name: "userId_1_expenseId_1" },
   },
   {
-    collection: "recurringExpenses",
+    collection: "recurringexpenses",
     key: { nextDueDate: 1 },
     options: { name: "nextDueDate_1" },
   },

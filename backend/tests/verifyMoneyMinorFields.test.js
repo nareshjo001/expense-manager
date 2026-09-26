@@ -119,8 +119,8 @@ describe("verifyAll / summarize", () => {
     const db = makeFakeDb({
       expenses: [{ _id: "e1", expenseAmount: 100, expenseAmountMinor: 10000 }],
       incomes: [{ _id: "i1", incomeAmount: 50, incomeAmountMinor: 5000 }],
-      budget: [{ _id: "b1", budget: 1000, budgetMinor: 100000, spent: 200, spentMinor: 20000 }],
-      recurringExpenses: [{ _id: "r1", expenseAmount: 75, expenseAmountMinor: 7500 }],
+      budgets: [{ _id: "b1", budget: 1000, budgetMinor: 100000, spent: 200, spentMinor: 20000 }],
+      recurringexpenses: [{ _id: "r1", expenseAmount: 75, expenseAmountMinor: 7500 }],
     });
 
     const results = await verifyAll(db);
@@ -136,8 +136,8 @@ describe("verifyAll / summarize", () => {
     const db = makeFakeDb({
       expenses: [{ _id: "e1", expenseAmount: 100, expenseAmountMinor: 9999 }], // wrong
       incomes: [],
-      budget: [],
-      recurringExpenses: [],
+      budgets: [],
+      recurringexpenses: [],
     });
 
     const results = await verifyAll(db);
