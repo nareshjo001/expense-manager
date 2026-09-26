@@ -37,6 +37,21 @@ jobs:
         run: npm run lint
         continue-on-error: true
       - run: CI=true npm test -- --watchAll=false
+      # FE-003-T01 -- static bundle composition analysis. Needs no build (it
+      # reads src/ directly), so it runs before `npm run build` below and
+      # doesn't depend on it -- see scripts/analyzeBundleComposition.js's own
+      # header comment for what it can and can't tell you versus a real
+      # build's gzip numbers.
+      - name: Bundle composition analyzer unit tests
+        run: npm run test:bundle-composition
+      - name: Bundle composition baseline
+        run: npm run analyze:bundle-composition
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-composition-baseline
+          path: frontend/bundle-composition-baseline.json
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
