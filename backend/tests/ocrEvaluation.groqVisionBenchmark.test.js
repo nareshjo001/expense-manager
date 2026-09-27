@@ -12,6 +12,7 @@ const http = require("http");
 const path = require("path");
 const {
   PROVIDERS,
+  PROMPT,
   mimeTypeFor,
   extractJsonFromContent,
   nodeFetch,
@@ -20,6 +21,21 @@ const {
   aggregate,
   parseArgs,
 } = require("../scripts/ocrEvaluation/groqVisionBenchmark");
+
+describe("PROMPT", () => {
+  // Regression test: a live diagnostic against qwen3-vl:4b (2026-09-27) showed
+  // the OLD wording ("Digits only, no currency symbol, no thousands
+  // separators" applied to a decimal amount) sent this model into a genuine
+  // non-terminating reasoning loop -- captured verbatim arguing with itself
+  // over whether a printed "245.00" should become "24500", for 1000+ seconds,
+  // never producing any JSON (finish_reason: "length", zero content chars).
+  // This is not a timeout problem; it's an ambiguous instruction. Guards
+  // against silently reintroducing that exact ambiguity.
+  test("gives an unambiguous instruction for a decimal amount (does not tell the model to strip the decimal point)", () => {
+    expect(PROMPT).toMatch(/NEVER 24500/);
+    expect(PROMPT).not.toMatch(/Digits only, no currency symbol, no thousands/);
+  });
+});
 
 describe("mimeTypeFor", () => {
   test("maps known extensions and falls back for unknown ones", () => {

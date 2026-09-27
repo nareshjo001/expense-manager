@@ -127,8 +127,10 @@ const PROMPT = [
   '  "merchantName": string or null -- the business name printed on the receipt.',
   '  "amount": number or null -- the final total the customer paid (prefer a line labelled',
   "    Grand Total/Total over a pre-tax Sub Total; if several totals conflict, pick the one",
-  "    that reads as the amount actually paid). Digits only, no currency symbol, no thousands",
-  "    separators. null if no total is legible or present.",
+  "    that reads as the amount actually paid). Write it as a plain decimal number exactly as",
+  "    printed -- a total printed as 245.00 is the number 245.00 (or 245), NEVER 24500. Do not",
+  "    multiply it or remove its decimal point. No currency symbol, no thousands separators.",
+  "    null if no total is legible or present.",
   '  "currency": string or null -- your best guess at the currency (e.g. "INR", "IDR"), or null.',
   '  "date": string or null -- the receipt date as ISO 8601 (YYYY-MM-DD). null if no date is',
   "    legible or present. Do not invent a date.",
@@ -421,6 +423,7 @@ async function main() {
 
 module.exports = {
   PROVIDERS,
+  PROMPT,
   mimeTypeFor,
   buildDataUri,
   extractJsonFromContent,
