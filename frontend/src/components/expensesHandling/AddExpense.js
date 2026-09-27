@@ -34,7 +34,7 @@ const BillUpload = lazy(loadBillUpload);
 // loaded the same way as BillUpload above: only when the user opts into
 // it from a button click (see the isQuickAdd branch below), with the
 // same early-hover/focus/touch prefetch head start.
-const loadNaturalLanguageQuickAdd = () => import(/* webpackChunkName: "nl-quick-add" */ '../expensesHandling/NaturalLanguageQuickAdd');
+const loadNaturalLanguageQuickAdd = () => import(/* webpackChunkName: "sia" */ '../expensesHandling/NaturalLanguageQuickAdd');
 const NaturalLanguageQuickAdd = lazy(loadNaturalLanguageQuickAdd);
 
 // Category Normalization -- moved to module scope (react-hooks/exhaustive-
