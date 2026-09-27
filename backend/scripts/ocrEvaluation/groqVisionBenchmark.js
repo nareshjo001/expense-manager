@@ -75,6 +75,7 @@ const PROVIDERS = {
     needsKey: true,
     apiKeyEnvVar: "GROQ_API_KEY",
     delayMs: 2200, // free tier: 30 req/min; 21 entries well under it even serially.
+    timeoutMs: 30000,
   },
   ollama: {
     url: "http://localhost:11434/v1/chat/completions",
@@ -82,6 +83,12 @@ const PROVIDERS = {
     needsKey: false,
     apiKeyEnvVar: null,
     delayMs: 0,
+    // CPU-only inference for a 4B vision model, plus a cold model-load on the
+    // very first request, routinely takes well over 30s per receipt -- that
+    // was the actual cause of every request timing out on first real run
+    // (2026-09-27, confirmed: server was up, model was pulled, requests were
+    // reaching Ollama, they just hadn't finished within the old default).
+    timeoutMs: 180000,
   },
 };
 
@@ -240,7 +247,7 @@ const aggregate = (results) => {
 };
 
 const parseArgs = (argv) => {
-  const args = { limit: null, delayMs: null, model: null, provider: "groq", baseUrl: null };
+  const args = { limit: null, delayMs: null, model: null, provider: "groq", baseUrl: null, timeoutMs: null };
   for (const raw of argv) {
     const [key, value] = raw.replace(/^--/, "").split("=");
     if (key === "limit") args.limit = Number(value);
@@ -248,6 +255,7 @@ const parseArgs = (argv) => {
     else if (key === "model") args.model = value;
     else if (key === "provider") args.provider = value;
     else if (key === "base-url") args.baseUrl = value;
+    else if (key === "timeout-ms") args.timeoutMs = Number(value);
   }
   const providerConfig = PROVIDERS[args.provider];
   if (!providerConfig) {
@@ -259,6 +267,7 @@ const parseArgs = (argv) => {
     model: args.model || providerConfig.defaultModel,
     url: args.baseUrl || providerConfig.url,
     delayMs: args.delayMs !== null ? args.delayMs : providerConfig.delayMs,
+    timeoutMs: args.timeoutMs !== null ? args.timeoutMs : providerConfig.timeoutMs,
     needsKey: providerConfig.needsKey,
     apiKeyEnvVar: providerConfig.apiKeyEnvVar,
   };
@@ -319,7 +328,7 @@ async function main() {
     const imagePath = path.join(CORPUS_DIR, entry.image);
     // Deliberately serial (not Promise.all): stays under a hosted free-tier's RPM limit
     // (a no-op consideration for the local ollama provider, whose delayMs defaults to 0).
-    const res = await callVisionApi({ url: args.url, apiKey, imagePath, model: args.model, fetchImpl: fetch, timeoutMs: DEFAULT_TIMEOUT_MS });
+    const res = await callVisionApi({ url: args.url, apiKey, imagePath, model: args.model, fetchImpl: fetch, timeoutMs: args.timeoutMs });
     if (!res.ok) {
       console.log(`[FAIL-CALL] ${entry.id}: ${res.error}`);
       results.push({ id: entry.id, source: entry.source, callFailed: true, error: res.error });
