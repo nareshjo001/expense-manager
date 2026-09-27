@@ -526,4 +526,142 @@ describe("backend/sia/llmService -- OpenAI provider adapter", () => {
       expect(postMock).toHaveBeenCalledTimes(1);
     });
   });
+
+  // SIA-001-T03 -- token usage extraction from OpenAI's Responses API shape.
+  describe("usage extraction (SIA-001-T03)", () => {
+    const RESPONSE_WITH_USAGE = {
+      data: {
+        status: "completed",
+        output: [
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "Answer." }] },
+        ],
+        usage: { input_tokens: 120, output_tokens: 45, total_tokens: 165 },
+      },
+    };
+
+    it("extracts input/output/total tokens from the OpenAI usage block", async () => {
+      const postMock = jest.fn().mockResolvedValue(RESPONSE_WITH_USAGE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      const result = await askLlm(VALID_REQUEST);
+
+      expect(result.usage).toEqual({ promptTokens: 120, completionTokens: 45, totalTokens: 165 });
+    });
+
+    it("defaults to null usage fields when the response has no usage block", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_CHUNK_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      const result = await askLlm(VALID_REQUEST);
+
+      expect(result.usage).toEqual({ promptTokens: null, completionTokens: null, totalTokens: null });
+    });
+
+    it("does not throw when usage fields are malformed", async () => {
+      const postMock = jest.fn().mockResolvedValue({
+        data: {
+          status: "completed",
+          output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "Answer." }] }],
+          usage: { input_tokens: "many", output_tokens: -5, total_tokens: null },
+        },
+      });
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      const result = await askLlm(VALID_REQUEST);
+
+      expect(result.usage).toEqual({ promptTokens: null, completionTokens: null, totalTokens: null });
+    });
+  });
+
+  // SIA-001-T03 -- askLlm's provider-neutral usage/cost recording wiring.
+  // Exercised once here (OpenAI) rather than duplicated in all three
+  // provider files, since this logic lives in askLlm(), not in any adapter.
+  describe("usage/cost recording (SIA-001-T03)", () => {
+    function loadWithMockedMetrics({ configOverrides = {}, axiosPostMock }) {
+      jest.resetModules();
+      jest.doMock("../sia/config", () => ({
+        enabled: false,
+        provider: "openai",
+        timeoutMs: 8000,
+        model: "gpt-4.1-mini",
+        maxOutputTokens: 512,
+        maxContextChars: 60000,
+        inputPricePerMillionUsd: null,
+        outputPricePerMillionUsd: null,
+        ...configOverrides,
+      }));
+      jest.doMock("axios", () => ({ post: axiosPostMock }));
+      const recordOperation = jest.fn();
+      const recordSiaUsage = jest.fn();
+      jest.doMock("../utils/metrics", () => ({ recordOperation, recordSiaUsage }));
+      const llmService = require("../sia/llmService");
+      return { ...llmService, recordSiaUsage };
+    }
+
+    const RESPONSE_WITH_USAGE = {
+      data: {
+        status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "Answer." }] }],
+        usage: { input_tokens: 1000, output_tokens: 500, total_tokens: 1500 },
+      },
+    };
+
+    it("records provider and token counts on a successful call", async () => {
+      const postMock = jest.fn().mockResolvedValue(RESPONSE_WITH_USAGE);
+      const { askLlm, recordSiaUsage } = loadWithMockedMetrics({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      expect(recordSiaUsage).toHaveBeenCalledTimes(1);
+      expect(recordSiaUsage).toHaveBeenCalledWith({
+        provider: "openai",
+        promptTokens: 1000,
+        completionTokens: 500,
+        estimatedCostUsd: null,
+      });
+    });
+
+    it("computes an estimated cost once both input and output prices are configured", async () => {
+      const postMock = jest.fn().mockResolvedValue(RESPONSE_WITH_USAGE);
+      const { askLlm, recordSiaUsage } = loadWithMockedMetrics({
+        axiosPostMock: postMock,
+        configOverrides: { inputPricePerMillionUsd: 1, outputPricePerMillionUsd: 2 },
+      });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      // 1000 tokens * $1/1M + 500 tokens * $2/1M = 0.001 + 0.001 = 0.002
+      expect(recordSiaUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ estimatedCostUsd: 0.002 })
+      );
+    });
+
+    it("leaves the cost estimate null when only one price is configured", async () => {
+      const postMock = jest.fn().mockResolvedValue(RESPONSE_WITH_USAGE);
+      const { askLlm, recordSiaUsage } = loadWithMockedMetrics({
+        axiosPostMock: postMock,
+        configOverrides: { inputPricePerMillionUsd: 1 },
+      });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await askLlm(VALID_REQUEST);
+
+      expect(recordSiaUsage).toHaveBeenCalledWith(expect.objectContaining({ estimatedCostUsd: null }));
+    });
+
+    it("does not record usage when the provider call fails", async () => {
+      const postMock = jest.fn().mockRejectedValue(new Error("network down"));
+      const { askLlm, recordSiaUsage } = loadWithMockedMetrics({ axiosPostMock: postMock });
+      process.env.OPENAI_API_KEY = "sk-test-key";
+
+      await expect(askLlm(VALID_REQUEST)).rejects.toThrow();
+
+      expect(recordSiaUsage).not.toHaveBeenCalled();
+    });
+  });
 });

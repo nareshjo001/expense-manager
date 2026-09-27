@@ -145,3 +145,77 @@ describe("operation metrics (OCR, SIA provider, ML)", () => {
     expect(snap.jobs.recurringJob.runs).toBe(1);
   });
 });
+
+// SIA-001-T03 -- token usage and (operator-priced) cost per LLM provider.
+describe("SIA usage/cost metrics", () => {
+  test("aggregates calls and token counts per provider", () => {
+    const { metrics, logged } = loadMetrics();
+
+    metrics.recordSiaUsage({ provider: "groq", promptTokens: 100, completionTokens: 20, estimatedCostUsd: null });
+    metrics.recordSiaUsage({ provider: "groq", promptTokens: 50, completionTokens: 10, estimatedCostUsd: null });
+    metrics.recordSiaUsage({ provider: "openai", promptTokens: 200, completionTokens: 40, estimatedCostUsd: 0.01 });
+    metrics.snapshotAndReset();
+
+    const usage = snapshotOf(logged).siaUsage;
+    expect(usage.groq).toEqual({ calls: 2, promptTokens: 150, completionTokens: 30, estimatedCostUsd: null });
+    expect(usage.openai).toEqual({ calls: 1, promptTokens: 200, completionTokens: 40, estimatedCostUsd: 0.01 });
+  });
+
+  test("estimatedCostUsd stays null for a provider when no call this window had pricing configured", () => {
+    // A summed $0 across unpriced calls would read as a verified zero
+    // rather than "cost unknown" -- see recordSiaUsage in utils/metrics.js.
+    const { metrics, logged } = loadMetrics();
+
+    metrics.recordSiaUsage({ provider: "groq", promptTokens: 10, completionTokens: 5, estimatedCostUsd: null });
+    metrics.snapshotAndReset();
+
+    expect(snapshotOf(logged).siaUsage.groq.estimatedCostUsd).toBeNull();
+  });
+
+  test("sums cost across calls and rounds away floating-point drift to 6 decimals", () => {
+    // 0.1 + 0.2 is 0.30000000000000004 in IEEE-754 -- the rounding in
+    // recordSiaUsage's snapshot exists precisely to clean that up.
+    const { metrics, logged } = loadMetrics();
+
+    metrics.recordSiaUsage({ provider: "openai", promptTokens: 1, completionTokens: 1, estimatedCostUsd: 0.1 });
+    metrics.recordSiaUsage({ provider: "openai", promptTokens: 1, completionTokens: 1, estimatedCostUsd: 0.2 });
+    metrics.snapshotAndReset();
+
+    expect(snapshotOf(logged).siaUsage.openai.estimatedCostUsd).toBe(0.3);
+  });
+
+  test("a provider with no recorded usage this window is absent from the snapshot", () => {
+    const { metrics, logged } = loadMetrics();
+
+    metrics.snapshotAndReset();
+
+    expect(snapshotOf(logged).siaUsage).toEqual({});
+  });
+
+  test("the window resets usage after a snapshot", () => {
+    const { metrics, logged } = loadMetrics();
+
+    metrics.recordSiaUsage({ provider: "groq", promptTokens: 10, completionTokens: 5, estimatedCostUsd: null });
+    metrics.snapshotAndReset();
+    metrics.snapshotAndReset();
+
+    const snapshots = logged.filter((e) => e.event === "metrics_snapshot");
+    expect(snapshots[0].siaUsage.groq.calls).toBe(1);
+    expect(snapshots[1].siaUsage).toEqual({});
+  });
+
+  test("recording never throws, whatever it is handed", () => {
+    const { metrics } = loadMetrics();
+    expect(() => metrics.recordSiaUsage(undefined)).not.toThrow();
+    expect(() => metrics.recordSiaUsage({ provider: null, promptTokens: "nope", completionTokens: {}, estimatedCostUsd: "free" })).not.toThrow();
+  });
+
+  test("falls back to an \"unknown\" provider bucket when provider is missing/blank", () => {
+    const { metrics, logged } = loadMetrics();
+
+    metrics.recordSiaUsage({ promptTokens: 5, completionTokens: 1 });
+    metrics.snapshotAndReset();
+
+    expect(snapshotOf(logged).siaUsage.unknown.calls).toBe(1);
+  });
+});

@@ -13,6 +13,9 @@ const ENV_KEYS = [
   // SIA-001-T04 -- circuit breaker.
   "SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD",
   "SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS",
+  // SIA-001-T03 -- usage/cost pricing.
+  "SIA_LLM_INPUT_PRICE_PER_1M_USD",
+  "SIA_LLM_OUTPUT_PRICE_PER_1M_USD",
 ];
 
 let originalEnv;
@@ -61,6 +64,9 @@ describe("backend/sia/config", () => {
     // SIA-001-T04 -- circuit breaker, additive.
     delete process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD;
     delete process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS;
+    // SIA-001-T03 -- usage/cost pricing, additive.
+    delete process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD;
+    delete process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD;
     // Workstream 2 -- voice input variables, additive.
     delete process.env.SIA_VOICE_ENABLED;
     delete process.env.SIA_STT_PROVIDER;
@@ -82,6 +88,9 @@ describe("backend/sia/config", () => {
       // SIA-001-T04 -- circuit breaker defaults.
       circuitBreakerFailureThreshold: 5,
       circuitBreakerCooldownMs: 30000,
+      // SIA-001-T03 -- usage/cost pricing defaults (unset -> unknown cost).
+      inputPricePerMillionUsd: null,
+      outputPricePerMillionUsd: null,
       appTimeZone: "Asia/Kolkata",
       // Workstream 2 -- voice input defaults, additive.
       voiceEnabled: false,
@@ -321,6 +330,72 @@ describe("backend/sia/config", () => {
         process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS = value;
       }
       expect(loadConfig().circuitBreakerCooldownMs).toBe(30000);
+    });
+  });
+
+  describe("inputPricePerMillionUsd", () => {
+    it("defaults to null when SIA_LLM_INPUT_PRICE_PER_1M_USD is absent", () => {
+      delete process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD;
+      expect(loadConfig().inputPricePerMillionUsd).toBeNull();
+    });
+
+    it("converts a configured valid price to a number", () => {
+      process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD = "0.15";
+      const config = loadConfig();
+      expect(config.inputPricePerMillionUsd).toBe(0.15);
+      expect(typeof config.inputPricePerMillionUsd).toBe("number");
+    });
+
+    it("accepts zero as a valid (free) price", () => {
+      process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD = "0";
+      expect(loadConfig().inputPricePerMillionUsd).toBe(0);
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["blank", "   "],
+      ["non-numeric", "cheap"],
+      ["negative", "-1"],
+    ])("falls back to null when the value is %s", (_label, value) => {
+      if (value === undefined) {
+        delete process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD;
+      } else {
+        process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD = value;
+      }
+      expect(loadConfig().inputPricePerMillionUsd).toBeNull();
+    });
+  });
+
+  describe("outputPricePerMillionUsd", () => {
+    it("defaults to null when SIA_LLM_OUTPUT_PRICE_PER_1M_USD is absent", () => {
+      delete process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD;
+      expect(loadConfig().outputPricePerMillionUsd).toBeNull();
+    });
+
+    it("converts a configured valid price to a number", () => {
+      process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD = "0.6";
+      const config = loadConfig();
+      expect(config.outputPricePerMillionUsd).toBe(0.6);
+      expect(typeof config.outputPricePerMillionUsd).toBe("number");
+    });
+
+    it("accepts zero as a valid (free) price", () => {
+      process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD = "0";
+      expect(loadConfig().outputPricePerMillionUsd).toBe(0);
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["blank", "   "],
+      ["non-numeric", "cheap"],
+      ["negative", "-1"],
+    ])("falls back to null when the value is %s", (_label, value) => {
+      if (value === undefined) {
+        delete process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD;
+      } else {
+        process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD = value;
+      }
+      expect(loadConfig().outputPricePerMillionUsd).toBeNull();
     });
   });
 
