@@ -30,6 +30,13 @@ import { merchantRuleSaveSuccessToast, merchantRuleSaveErrorToast } from '../ale
 const loadBillUpload = () => import(/* webpackChunkName: "bill-upload" */ '../billScanner/BillUpload');
 const BillUpload = lazy(loadBillUpload);
 
+// AI-002 -- natural-language expense entry (NaturalLanguageQuickAdd) is
+// loaded the same way as BillUpload above: only when the user opts into
+// it from a button click (see the isQuickAdd branch below), with the
+// same early-hover/focus/touch prefetch head start.
+const loadNaturalLanguageQuickAdd = () => import(/* webpackChunkName: "sia" */ '../expensesHandling/NaturalLanguageQuickAdd');
+const NaturalLanguageQuickAdd = lazy(loadNaturalLanguageQuickAdd);
+
 // Category Normalization -- moved to module scope (react-hooks/exhaustive-
 const sanitizeText = (text = '') => {
     return text
@@ -58,6 +65,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     const [isSpinnerLoading, setIsSpinnerLoading] = useState(false);
     const [isBillUpload, setIsBillUpload] = useState(false);
     const [billData, setBillData] = useState(null);
+    const [isQuickAdd, setIsQuickAdd] = useState(false);
 
     const [mlLoading, setMlLoading] = useState(false);
     const [mlConfidence, setMlConfidence] = useState(null);
@@ -387,6 +395,14 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
         );
     }
 
+    if(isQuickAdd) {
+        return (
+            <Suspense fallback={<div className="bill-upload-loading" role="status" aria-live="polite">Loading…</div>}>
+                <NaturalLanguageQuickAdd setIsQuickAdd={setIsQuickAdd} setBillData={setBillData} />
+            </Suspense>
+        );
+    }
+
     return (
     <>
     {isSpinnerLoading && <Spinner />}
@@ -411,6 +427,20 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         onTouchStart={loadBillUpload}
                     >
                         Upload
+                    </button>
+                </div>
+
+                <div className="field bill-upload-option">
+                    <label>Or describe it in one sentence</label>
+                    <button
+                        className='open-bill-upload-btn'
+                        type="button"
+                        onClick={() => setIsQuickAdd(true)}
+                        onMouseEnter={loadNaturalLanguageQuickAdd}
+                        onFocus={loadNaturalLanguageQuickAdd}
+                        onTouchStart={loadNaturalLanguageQuickAdd}
+                    >
+                        Quick add
                     </button>
                 </div>
                 

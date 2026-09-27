@@ -13,7 +13,8 @@ const {
   voiceReadinessGate,
 } = require("../Controllers/SiaControllers/transcribe");
 const verifyToken = require("../Middlewares/Auth");
-const { siaLimiter, siaVoiceLimiter, aiSummaryLimiter } = require("../utils/rateLimiter");
+const { siaLimiter, siaVoiceLimiter, aiSummaryLimiter, expenseParseLimiter } = require("../utils/rateLimiter");
+const { parseExpense } = require("../Controllers/SiaControllers/parseExpense");
 const {
   getAiSummaryPreference,
   updateAiSummaryPreference,
@@ -28,6 +29,14 @@ const {
 // M3-1: verifyToken first (so req.userId is always set before the limiter
 // keys on it), then the dedicated SIA limiter, then the controller.
 router.post("/ask", verifyToken, siaLimiter, ask);
+
+// AI-002 -- natural-language expense entry. Parses free text into a
+// structured SUGGESTION only (never writes an expense itself -- the
+// frontend pre-fills the existing Add Expense form for the user to
+// review and submit through the existing, unmodified create path). Own
+// dedicated limiter (expenseParseLimiter), same reasoning as
+// aiSummaryLimiter: this is a paid LLM call, not a cheap read/write.
+router.post("/parse-expense", verifyToken, expenseParseLimiter, parseExpense);
 
 // Batch 3E: runtime availability check. Uses the SAME authentication
 router.get("/status", verifyToken, status);

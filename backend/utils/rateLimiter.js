@@ -132,6 +132,26 @@ const aiSummaryLimiter = rateLimit({
     legacyHeaders: false
 });
 
+// AI-002 -- a DEDICATED, SEPARATE limiter for POST /sia/parse-expense,
+// mirroring aiSummaryLimiter's shape: this is the one other request that
+// can trigger a paid LLM call outside of /sia/ask itself.
+const expenseParseLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+
+    keyGenerator: (req) => {
+        return req.userId || ipKeyGenerator(req.ip);
+    },
+
+    message: {
+        success: false,
+        message: "Too many requests. Please try again later."
+    },
+
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
 module.exports = {
     apiLimiter,
     authLimiter,
@@ -142,5 +162,6 @@ module.exports = {
     receiptLimiter,
     siaLimiter,
     siaVoiceLimiter,
-    aiSummaryLimiter
+    aiSummaryLimiter,
+    expenseParseLimiter
 };

@@ -9,3 +9,9 @@ export const askSia = async ({ question, sessionId, clientMessageId } = {}) => {
   const { data } = await api.post("/sia/ask", payload);
   return data;
 };
+
+// Parses a free-text expense sentence into a prefillable expense payload (natural-language quick add, AI-002).
+export const parseExpenseText = async (text) => {
+  const { data } = await api.post("/sia/parse-expense", { text });
+  return data;
+};
