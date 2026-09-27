@@ -88,7 +88,19 @@ const PROVIDERS = {
     // was the actual cause of every request timing out on first real run
     // (2026-09-27, confirmed: server was up, model was pulled, requests were
     // reaching Ollama, they just hadn't finished within the old default).
-    timeoutMs: 180000,
+    // 180s still wasn't enough: qwen3-vl:4b is a "thinking" model (visible
+    // chain-of-thought before its final answer, confirmed via `ollama run`
+    // directly -- that one-off request succeeded and got the right answer,
+    // just slowly), and this endpoint is non-streaming (stream defaults to
+    // false), so the whole thinking transcript has to finish generating
+    // before any HTTP response comes back at all. reasoning_effort: "none"
+    // below turns thinking off for the OpenAI-compatible endpoint (the
+    // native think:true/false flag doesn't apply here -- reasoning_effort
+    // is Ollama's own documented replacement for it on this endpoint), which
+    // should make each request fast again; 600s stays as a generous backstop
+    // in case a future model swap brings thinking back.
+    timeoutMs: 600000,
+    extraBody: { reasoning_effort: "none" },
   },
 };
 
@@ -145,7 +157,7 @@ const sleep = (ms) =>
   });
 
 // fetchImpl is injectable so tests never make a real network call.
-async function callVisionApi({ url, apiKey, imagePath, model, fetchImpl, timeoutMs }) {
+async function callVisionApi({ url, apiKey, imagePath, model, fetchImpl, timeoutMs, extraBody }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
@@ -169,6 +181,7 @@ async function callVisionApi({ url, apiKey, imagePath, model, fetchImpl, timeout
             ],
           },
         ],
+        ...extraBody,
       }),
     });
     const bodyText = await res.text();
@@ -270,6 +283,7 @@ const parseArgs = (argv) => {
     timeoutMs: args.timeoutMs !== null ? args.timeoutMs : providerConfig.timeoutMs,
     needsKey: providerConfig.needsKey,
     apiKeyEnvVar: providerConfig.apiKeyEnvVar,
+    extraBody: providerConfig.extraBody,
   };
 };
 
@@ -328,7 +342,7 @@ async function main() {
     const imagePath = path.join(CORPUS_DIR, entry.image);
     // Deliberately serial (not Promise.all): stays under a hosted free-tier's RPM limit
     // (a no-op consideration for the local ollama provider, whose delayMs defaults to 0).
-    const res = await callVisionApi({ url: args.url, apiKey, imagePath, model: args.model, fetchImpl: fetch, timeoutMs: args.timeoutMs });
+    const res = await callVisionApi({ url: args.url, apiKey, imagePath, model: args.model, fetchImpl: fetch, timeoutMs: args.timeoutMs, extraBody: args.extraBody });
     if (!res.ok) {
       console.log(`[FAIL-CALL] ${entry.id}: ${res.error}`);
       results.push({ id: entry.id, source: entry.source, callFailed: true, error: res.error });

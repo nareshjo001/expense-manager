@@ -61,6 +61,11 @@ describe("PROVIDERS", () => {
     expect(PROVIDERS.ollama.timeoutMs).toBeGreaterThanOrEqual(120000);
   });
 
+  test("ollama disables thinking via reasoning_effort: none (qwen3-vl is a thinking model)", () => {
+    expect(PROVIDERS.ollama.extraBody).toEqual({ reasoning_effort: "none" });
+    expect(PROVIDERS.groq.extraBody).toBeUndefined();
+  });
+
   test("groq is kept for history but still declares a key requirement", () => {
     expect(PROVIDERS.groq.needsKey).toBe(true);
     expect(PROVIDERS.groq.apiKeyEnvVar).toBe("GROQ_API_KEY");
@@ -133,6 +138,24 @@ describe("callVisionApi", () => {
     const body = JSON.parse(opts.body);
     expect(body.model).toBe("qwen3-vl:4b");
     expect(body.messages[0].content[1].image_url.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("merges extraBody into the request (e.g. reasoning_effort for ollama)", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: "{}" } }] }),
+    });
+    await callVisionApi({
+      url: PROVIDERS.ollama.url,
+      apiKey: "unused",
+      imagePath,
+      model: "qwen3-vl:4b",
+      fetchImpl,
+      extraBody: PROVIDERS.ollama.extraBody,
+    });
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.reasoning_effort).toBe("none");
   });
 
   test("works with no API key (local provider) by sending a placeholder bearer token", async () => {
