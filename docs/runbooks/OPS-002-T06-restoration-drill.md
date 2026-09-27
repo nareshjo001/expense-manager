@@ -174,3 +174,47 @@ actually running steps 1-6 above against real infrastructure would be
 exactly the false confidence OPS-002 exists to prevent -- a backup
 system that has never been drilled is unverified by definition, no
 matter how carefully T03/T05/T07's code was written and unit-tested.
+
+## Result (recorded 2026-09-26, closing T06)
+
+Run by Naresh, driven by `workflow/tmp/ops002-restore-drill.ps1` (not
+committed -- local operator tooling), against a staging copy of
+production (`expense_manager_staging`), restoring into a new isolated
+database (`expense_manager_restore_drill`) on the same Atlas cluster --
+never production, per this drill's own prerequisites above.
+
+- **Date/time:** 2026-09-26 22:29:29 +05:30. **Backup used:**
+  `2026-09-26T14-27-54-052Z` (a real encrypted `mongodump` of production
+  `auth-db`, all 7 authoritative collections).
+- **Step 2 (recent backup):** `checkRecentBackup` → `true`. PASS.
+- **Step 3a (safety gate, negative tests):** restore REFUSED when
+  `RESTORE_TARGET_MONGO_CONN` equalled `MONGO_CONN`
+  (`restore_refused_target_equals_production`) and when it was left
+  unset. PASS -- the first real-world confirmation `assertSafeRestoreTarget`
+  actually blocks a real misconfiguration, not just a mocked one.
+- **Step 3b/4 (isolated restore + count verification):** all 7
+  collections decrypted and restored; counts matched the manifest
+  186/186 with zero mismatches (`users` 2, `expenses` 116, `incomes` 6,
+  `budgets` 8, `mlfeedbacks` 53, `recurringexpenses` 1,
+  `merchantcategoryrules` 0). PASS.
+- **Step 5 (application-level reconciliation):** a real backend instance
+  was booted against the restored database and
+  `backend/scripts/smokeTest.js` (TST-001-T07) passed against it. PASS.
+- **Elapsed time:** T=0 → data restored in 00:05 (mm:ss); T=0 →
+  application-level-reconciled in 00:08 (mm:ss), against ADR-0005's
+  provisional 4-hour RTO target.
+- **Caveat:** the drilled dataset is small (186 documents). This
+  validates the restore-and-reconcile *procedure* end to end on real
+  production data, not RTO at scale -- re-time this drill once
+  production data has grown by an order of magnitude, per ADR-0005's own
+  Consequences section.
+- **Verdict:** every step behaved exactly as this runbook documents,
+  including both negative-test refusals. **This closes OPS-002-T06.**
+  Combined with T01-T05 and T07 (all previously Done), **OPS-002 as a
+  whole is genuinely Done** -- backups, isolated restore, recurring
+  verification+alerts, and now a real, timed, application-reconciled
+  restoration drill all executed for real against production data. The
+  one honestly-scoped-out gap remains what `destination.js` and
+  `docs/runbooks/OPS-002-backup-restore-operations.md` already document:
+  backups live on local disk only, not a remote destination -- an owner
+  vendor decision outside this feature's 7 tasks, not a T06 concern.
