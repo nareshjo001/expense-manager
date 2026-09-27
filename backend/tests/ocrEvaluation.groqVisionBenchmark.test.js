@@ -56,6 +56,11 @@ describe("PROVIDERS", () => {
     expect(PROVIDERS.ollama.defaultModel).toBe("qwen3-vl:4b");
   });
 
+  test("ollama gets a much longer timeout than groq, for CPU inference + cold model-load", () => {
+    expect(PROVIDERS.ollama.timeoutMs).toBeGreaterThan(PROVIDERS.groq.timeoutMs);
+    expect(PROVIDERS.ollama.timeoutMs).toBeGreaterThanOrEqual(120000);
+  });
+
   test("groq is kept for history but still declares a key requirement", () => {
     expect(PROVIDERS.groq.needsKey).toBe(true);
     expect(PROVIDERS.groq.apiKeyEnvVar).toBe("GROQ_API_KEY");
@@ -69,16 +74,23 @@ describe("parseArgs", () => {
     expect(args.model).toBe(PROVIDERS.groq.defaultModel);
     expect(args.url).toBe(PROVIDERS.groq.url);
     expect(args.delayMs).toBe(PROVIDERS.groq.delayMs);
+    expect(args.timeoutMs).toBe(PROVIDERS.groq.timeoutMs);
     expect(args.needsKey).toBe(true);
   });
 
-  test("--provider=ollama switches url/model/delay/needsKey together", () => {
+  test("--provider=ollama switches url/model/delay/timeout/needsKey together", () => {
     const args = parseArgs(["--provider=ollama"]);
     expect(args.provider).toBe("ollama");
     expect(args.model).toBe("qwen3-vl:4b");
     expect(args.url).toBe("http://localhost:11434/v1/chat/completions");
     expect(args.delayMs).toBe(0);
+    expect(args.timeoutMs).toBe(PROVIDERS.ollama.timeoutMs);
     expect(args.needsKey).toBe(false);
+  });
+
+  test("--timeout-ms overrides the provider's default", () => {
+    const args = parseArgs(["--provider=ollama", "--timeout-ms=60000"]);
+    expect(args.timeoutMs).toBe(60000);
   });
 
   test("--model and --base-url override the provider's defaults", () => {
