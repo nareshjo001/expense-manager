@@ -105,3 +105,50 @@ covered more than it did:
 - **No production backup verification.** `backup-verify.yml` proves the
   backup/restore *pipeline* works, against its own throwaway Mongo. It has no
   access to a real production backup, and says so.
+
+## Production run record (TST-001-T07, closing)
+
+Run 2026-09-27 by Naresh, from a local terminal (this device-bridge session's
+own network egress is blocked from reaching `onrender.com` by org policy, so
+the run itself had to happen outside this session):
+
+```
+node backend/scripts/smokeTest.js --expect-role=web https://expense-manager-backend-nnxe.onrender.com
+```
+
+13 of 14 checks passed, including every required check except one:
+liveness, readiness, dependency report, Redis, ML reachability, `/ping`
+shape, auth enforcement, all three correlation-ID checks, security headers,
+HSTS, and CORS all passed cleanly against the real deployed backend.
+
+**One required check genuinely failed: `process.role`.**
+
+```
+[FAIL] Process role is what this service is meant to be
+       expected role "web", got "all"
+```
+
+This is real, not a script bug: `render.yaml` defines two separate services
+(`balenisa-backend` with `PROCESS_ROLE=web`, `balenisa-worker` with
+`PROCESS_ROLE=worker`), but the live `balenisa-backend` instance is currently
+running with role `all` -- meaning it is serving HTTP *and* running every
+scheduled job (retryPush, feedbackCollector, recurringJob) itself, right now,
+in production. Filed as BUG-005 (Bug Tracker) rather than silently reworded
+away: this is exactly the failure mode OPS-004-T05 exists to catch, and this
+run is the first time it was actually caught for real. Left unresolved, a
+second instance of `balenisa-backend` (autoscaling, a redeploy that doesn't
+carry the env var) would start double-firing every scheduled job.
+
+**This closes TST-001-T07 and TST-001 as a whole.** The task was to prove
+the smoke-test tool against a real deployment, not to certify the deployment
+itself is perfect -- and it did exactly that: it ran for real, all
+infrastructure-level checks passed, and it caught a genuine, previously
+undetected production misconfiguration outside its own scope. A tool that
+can't fail isn't proven; this one just did, on a real defect.
+
+Also corrects the prior (unsubstantiated) 2026-09-26 note in the tracker,
+which claimed this same run with `--expect-role=all` and called role "all"
+correct for a "single-process deploy" -- `render.yaml`'s own two-service
+split contradicts that, and no artifact of that claimed run exists anywhere
+in this repo's history. Treat that earlier note as unverified/incorrect;
+this record replaces it.
