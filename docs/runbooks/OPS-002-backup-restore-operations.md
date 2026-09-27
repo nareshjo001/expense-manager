@@ -103,21 +103,78 @@ real production database.** They prove the scripts function correctly
 end-to-end; they do not by themselves constitute a production backup
 schedule. See the next section.
 
+- **`.github/workflows/backup-production.yml`** (daily, `workflow_dispatch`
+  also available): **this one IS the real thing.** Runs `mongoBackup.js`
+  against the actual production database (`MONGO_CONN` sourced from the
+  `PROD_MONGO_CONN` repo secret, not the ephemeral service containers the
+  two workflows above use) and uploads the resulting encrypted archive +
+  manifest as a GitHub Actions workflow artifact. See the next section
+  for exactly what to configure, and its caveats.
+
+## Production backup pipeline (BUG-006)
+
+`backup-production.yml` closes the gap the two sections above describe:
+production now has a real, scheduled, encrypted backup. Two things to
+set up once, and one caveat to know about.
+
+**Required repo secrets** (Settings -> Secrets and variables -> Actions):
+
+| Secret | Value |
+|---|---|
+| `PROD_MONGO_CONN` | The real production Atlas connection string. **Use a dedicated, read-only database user for this**, not the app's own read-write credential -- mongodump never needs write access, and a backup credential is exactly the kind of thing you don't want able to modify data if it ever leaked. |
+| `BACKUP_ENCRYPTION_KEY` | A real, random passphrase, at least 32 characters (e.g. `openssl rand -base64 48`). Store a copy of this somewhere independent of GitHub too (a password manager, etc.) -- if this repo and your only copy of the key are both lost, every encrypted backup becomes permanently unreadable. |
+
+**Atlas network access:** GitHub-hosted runners don't have stable,
+allowlist-able IPs (they come from a large, changing Azure range), so
+IP-based restriction isn't practical here. The realistic options are (a)
+allow `0.0.0.0/0` in Atlas's Network Access list and rely on the
+dedicated read-only credential above for security, or (b) run this
+workflow on a self-hosted runner with a static IP if you want real IP
+restriction. Option (a) is the pragmatic default for a free setup.
+
+**The GitHub-artifacts caveat -- read this before ever running T07
+(`removeLegacyMoneyFields.js`):** `backend/scripts/backup/
+checkRecentBackup.js` (the function `legacyMoneyRemovalGate.js` calls)
+only ever reads **local disk**, via `resolveDestination(env)
+.listManifests()`. A GitHub Actions artifact lives on GitHub's servers,
+not on any filesystem that gate can see on its own -- so a green
+`backup-production.yml` run does NOT, by itself, make the automated
+`recentBackup` check pass. Before invoking the T07 removal script (or
+any other tool that calls `isRecentBackupAvailable()`), you must:
+
+1. Open the most recent successful `backup-production.yml` run and
+   download its `prod-mongo-backup-<run id>` artifact.
+2. Unzip it into a local folder (it contains the encrypted archive +
+   its manifest, exactly what `mongoBackup.js` would have written to
+   `BACKUP_DESTINATION_DIR` directly).
+3. Point the gate/removal script at that folder: `BACKUP_DESTINATION_DIR=<that folder>` in its environment.
+
+This is a real, if annoying, manual step -- automating it (e.g. a small
+script that lists artifacts via GitHub's REST API and downloads the
+newest one, so this becomes one command instead of three manual clicks)
+is a natural follow-up, not yet built.
+
+**Storage retention:** artifacts are kept 90 days (GitHub's own maximum)
+and pruned automatically after that -- no local `retention.js`-style
+pruning applies here, since each run's own runner disk is discarded
+regardless. A private repo's total Actions artifact storage counts
+against your GitHub plan's overall storage quota; if that ever becomes a
+constraint, lower `retention-days` in the workflow rather than the
+schedule's frequency.
+
 ## What is NOT done here (owner action required)
 
-- **No real production backup schedule exists yet.** `backup.yml` runs
-  against its own job-local ephemeral Mongo, not a real production
-  `MONGO_CONN`. Actually protecting production data requires a scheduled
-  job (a cron on a real server, a scheduled cloud function/task, etc.)
-  that has real network access to the production database and a real,
-  securely-stored `BACKUP_ENCRYPTION_KEY` -- that is an owner
-  infrastructure decision, not made by this task.
-- **No remote backup destination is wired up.** `BACKUP_DESTINATION_DIR`
-  defaults to local disk. `backend/scripts/backup/destination.js` has a
-  documented, unimplemented seam for a real remote destination (S3, GCS,
-  Azure Blob, etc.) -- picking a vendor and provisioning credentials for
-  it is an owner decision this task deliberately does not make (no
-  account/credentials exist for this task to configure against; see that
+- **No remote, S3-style backup destination is wired up.**
+  `BACKUP_DESTINATION_DIR` (used by all three scripts when run directly,
+  e.g. manually or in the CI smoke tests) still defaults to local disk.
+  `backend/scripts/backup/destination.js` has a documented, unimplemented
+  seam for a real remote destination (S3, GCS, Azure Blob, Cloudflare R2,
+  etc.) -- GitHub Actions artifacts (above) cover the "durable, scheduled"
+  need for now without picking a vendor, but a real remote destination
+  would remove the manual download step above and any artifact-retention
+  ceiling. Picking a vendor and provisioning credentials for it is an
+  owner decision this task deliberately does not make (no account/
+  credentials exist for this task to configure against; see that
   file's header comment for exactly what to implement to add one).
   **Local-disk-only backups do not survive the loss of the machine they
   run on** -- treat this as incomplete disaster-recovery coverage until a
