@@ -29,6 +29,7 @@ jest.mock("../alertsEffects/toastMessages", () => ({
   expenseAddErrorToast: jest.fn(),
 }));
 jest.mock("../billScanner/BillUpload", () => () => null);
+jest.mock("./NaturalLanguageQuickAdd", () => () => null);
 jest.mock("../../api/expenseApi", () => ({
   getExpenseEditData: jest.fn(),
 }));
@@ -340,5 +341,37 @@ describe("AddExpense -- Category Normalization: edit-load display and unknown-ca
 
     expect(mockAddMutate).toHaveBeenCalledTimes(1);
     expect(mockAddMutate.mock.calls[0][0].expenseCategory).toBe("Pet Supplies");
+  });
+});
+
+describe("AddExpense -- natural-language Quick Add (AI-002) entry point", () => {
+  beforeEach(() => {
+    useAddExpenseMutation.mockReturnValue({ mutate: jest.fn() });
+    useUpdateExpenseMutation.mockReturnValue({ mutate: jest.fn() });
+  });
+
+  it("renders a Quick add button alongside the Upload button", () => {
+    renderAddExpense();
+
+    expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quick add" })).toBeInTheDocument();
+  });
+
+  it("clicking Quick add shows the NaturalLanguageQuickAdd component and hides the form", () => {
+    renderAddExpense();
+
+    fireEvent.click(screen.getByRole("button", { name: "Quick add" }));
+
+    expect(screen.queryByRole("button", { name: "Quick add" })).not.toBeInTheDocument();
+    expect(document.querySelector("form.add-expense")).not.toBeInTheDocument();
+  });
+
+  it("Quick add and Upload never render at the same time", () => {
+    renderAddExpense();
+
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+    expect(screen.queryByRole("button", { name: "Quick add" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
   });
 });

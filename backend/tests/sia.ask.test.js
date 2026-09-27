@@ -44,6 +44,11 @@ function loadApp({ snapshotResult, directResult } = {}) {
       siaLimiter: pass,
       siaVoiceLimiter: pass,
       aiSummaryLimiter: pass,
+      // AI-002 -- sia.routes.js now also destructures expenseParseLimiter
+      // for POST /sia/parse-expense; every limiter key that file imports
+      // from this module must stay listed here, per this factory's own
+      // comment above.
+      expenseParseLimiter: pass,
     };
   });
   jest.doMock("../sia/financialSnapshotService", () => ({ buildFinancialSnapshot }));
