@@ -1,13 +1,15 @@
 "use strict";
 
 // OCR-006-T04 -- unit tests for groqVisionBenchmark.js. Every network call
-// is mocked (fetchImpl is injected); this suite never talks to Groq, same
-// convention as ocrEvaluation.runEvaluation.test.js mocking tesseract.js.
+// is mocked (fetchImpl is injected); this suite never talks to a real
+// hosted API or a real local Ollama server, same convention as
+// ocrEvaluation.runEvaluation.test.js mocking tesseract.js.
 const path = require("path");
 const {
+  PROVIDERS,
   mimeTypeFor,
   extractJsonFromContent,
-  callGroqVision,
+  callVisionApi,
   scoreVisionEntry,
   aggregate,
   parseArgs,
@@ -47,7 +49,56 @@ describe("extractJsonFromContent", () => {
   });
 });
 
-describe("callGroqVision", () => {
+describe("PROVIDERS", () => {
+  test("ollama needs no API key and points at the local OpenAI-compatible endpoint", () => {
+    expect(PROVIDERS.ollama.needsKey).toBe(false);
+    expect(PROVIDERS.ollama.url).toBe("http://localhost:11434/v1/chat/completions");
+    expect(PROVIDERS.ollama.defaultModel).toBe("qwen3-vl:4b");
+  });
+
+  test("groq is kept for history but still declares a key requirement", () => {
+    expect(PROVIDERS.groq.needsKey).toBe(true);
+    expect(PROVIDERS.groq.apiKeyEnvVar).toBe("GROQ_API_KEY");
+  });
+});
+
+describe("parseArgs", () => {
+  test("defaults to groq with no flags (backward compatible)", () => {
+    const args = parseArgs([]);
+    expect(args.provider).toBe("groq");
+    expect(args.model).toBe(PROVIDERS.groq.defaultModel);
+    expect(args.url).toBe(PROVIDERS.groq.url);
+    expect(args.delayMs).toBe(PROVIDERS.groq.delayMs);
+    expect(args.needsKey).toBe(true);
+  });
+
+  test("--provider=ollama switches url/model/delay/needsKey together", () => {
+    const args = parseArgs(["--provider=ollama"]);
+    expect(args.provider).toBe("ollama");
+    expect(args.model).toBe("qwen3-vl:4b");
+    expect(args.url).toBe("http://localhost:11434/v1/chat/completions");
+    expect(args.delayMs).toBe(0);
+    expect(args.needsKey).toBe(false);
+  });
+
+  test("--model and --base-url override the provider's defaults", () => {
+    const args = parseArgs(["--provider=ollama", "--model=glm-ocr", "--base-url=http://localhost:9999/v1/chat/completions"]);
+    expect(args.model).toBe("glm-ocr");
+    expect(args.url).toBe("http://localhost:9999/v1/chat/completions");
+  });
+
+  test("--limit and --delay-ms parse as numbers", () => {
+    const args = parseArgs(["--limit=3", "--delay-ms=500"]);
+    expect(args.limit).toBe(3);
+    expect(args.delayMs).toBe(500);
+  });
+
+  test("throws on an unknown provider instead of silently misconfiguring", () => {
+    expect(() => parseArgs(["--provider=openai"])).toThrow(/Unknown --provider/);
+  });
+});
+
+describe("callVisionApi", () => {
   const imagePath = path.join(__dirname, "..", "scripts", "ocrEvaluation", "corpus", "images", "clean-simple.png");
 
   test("returns parsed structured output on a 200 response", async () => {
@@ -60,22 +111,32 @@ describe("callGroqVision", () => {
         }),
     });
 
-    const result = await callGroqVision({ apiKey: "test-key", imagePath, fetchImpl });
+    const result = await callVisionApi({ url: PROVIDERS.ollama.url, apiKey: "unused", imagePath, model: "qwen3-vl:4b", fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.parsed.amount).toBe(245);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, opts] = fetchImpl.mock.calls[0];
-    expect(url).toContain("api.groq.com");
-    expect(opts.headers.Authorization).toBe("Bearer test-key");
+    expect(url).toBe(PROVIDERS.ollama.url);
     const body = JSON.parse(opts.body);
-    expect(body.model).toBe("meta-llama/llama-4-scout-17b-16e-instruct");
+    expect(body.model).toBe("qwen3-vl:4b");
     expect(body.messages[0].content[1].image_url.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("works with no API key (local provider) by sending a placeholder bearer token", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: "{}" } }] }),
+    });
+    await callVisionApi({ url: PROVIDERS.ollama.url, apiKey: undefined, imagePath, model: "qwen3-vl:4b", fetchImpl });
+    const [, opts] = fetchImpl.mock.calls[0];
+    expect(opts.headers.Authorization).toBe("Bearer unused");
   });
 
   test("reports a non-2xx response as a failure without throwing", async () => {
     const fetchImpl = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => "rate limited" });
-    const result = await callGroqVision({ apiKey: "test-key", imagePath, fetchImpl });
+    const result = await callVisionApi({ url: PROVIDERS.groq.url, apiKey: "test-key", imagePath, model: "some-model", fetchImpl });
     expect(result.ok).toBe(false);
     expect(result.status).toBe(429);
   });
@@ -86,7 +147,7 @@ describe("callGroqVision", () => {
       status: 200,
       text: async () => JSON.stringify({ choices: [{ message: { content: "sorry, I can't help with that" } }] }),
     });
-    const result = await callGroqVision({ apiKey: "test-key", imagePath, fetchImpl });
+    const result = await callVisionApi({ url: PROVIDERS.groq.url, apiKey: "test-key", imagePath, model: "some-model", fetchImpl });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/parseable JSON/);
   });
@@ -102,7 +163,7 @@ describe("callGroqVision", () => {
           });
         })
     );
-    const result = await callGroqVision({ apiKey: "test-key", imagePath, fetchImpl, timeoutMs: 5 });
+    const result = await callVisionApi({ url: PROVIDERS.groq.url, apiKey: "test-key", imagePath, model: "some-model", fetchImpl, timeoutMs: 5 });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/timed out/);
   });
@@ -164,19 +225,5 @@ describe("aggregate", () => {
     expect(agg.passRate).toBe(50);
     expect(agg.failingIds).toEqual(["b"]);
     expect(agg.callFailedIds).toEqual(["c"]);
-  });
-});
-
-describe("parseArgs", () => {
-  test("parses --limit, --delay-ms and --model, defaulting the rest", () => {
-    const args = parseArgs(["--limit=3", "--delay-ms=500", "--model=some/other-model"]);
-    expect(args).toEqual({ limit: 3, delayMs: 500, model: "some/other-model" });
-  });
-
-  test("defaults to the free-tier-safe delay and default model with no flags", () => {
-    const args = parseArgs([]);
-    expect(args.limit).toBeNull();
-    expect(args.delayMs).toBe(2200);
-    expect(args.model).toBe("meta-llama/llama-4-scout-17b-16e-instruct");
   });
 });
