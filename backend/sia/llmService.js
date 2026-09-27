@@ -3,7 +3,7 @@
 
 const axios = require("axios");
 // OBS-001-T05 -- provider metrics; see askLlm() for the safety reasoning.
-const { recordOperation } = require("../utils/metrics");
+const { recordOperation, recordSiaUsage } = require("../utils/metrics");
 const config = require("./config");
 // SIA-001-T04 -- provider circuit breaker.
 const providerCircuitBreaker = require("./providerCircuitBreaker");
@@ -96,12 +96,33 @@ function parseStructuredOutput(answer, provider) {
   }
 }
 
-function buildLlmResult({ answer, structuredOutput, provider, latencyMs }) {
+// SIA-001-T03 -- normalizes a provider's raw usage block into a fixed,
+// provider-neutral shape. OpenAI's Responses API names these
+// input_tokens/output_tokens; Gemini's and Groq's OpenAI-compatible Chat
+// Completions endpoints both name them prompt_tokens/completion_tokens --
+// each adapter passes its own field names in below rather than this
+// guessing across providers. Missing/malformed usage is null fields,
+// never a throw: a token count is an observation of what happened, not a
+// correctness dependency of the answer itself.
+function normalizeUsage(usage, { promptField, completionField, totalField }) {
+  if (!usage || typeof usage !== "object") {
+    return { promptTokens: null, completionTokens: null, totalTokens: null };
+  }
+  const toCount = (value) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null);
+  return {
+    promptTokens: toCount(usage[promptField]),
+    completionTokens: toCount(usage[completionField]),
+    totalTokens: toCount(usage[totalField]),
+  };
+}
+
+function buildLlmResult({ answer, structuredOutput, provider, latencyMs, usage }) {
   return {
     answer,
     ...(structuredOutput ? { structuredOutput: parseStructuredOutput(answer, provider) } : {}),
     model: config.model,
     latencyMs,
+    usage: usage || { promptTokens: null, completionTokens: null, totalTokens: null },
   };
 }
 
@@ -319,6 +340,11 @@ async function askOpenAi({ systemPrompt, context, question, history, structuredO
     structuredOutput: normalizedStructuredOutput,
     provider: "openai",
     latencyMs,
+    usage: normalizeUsage(responseData.usage, {
+      promptField: "input_tokens",
+      completionField: "output_tokens",
+      totalField: "total_tokens",
+    }),
   });
 }
 
@@ -410,6 +436,11 @@ async function askGemini({ systemPrompt, context, question, history, structuredO
     structuredOutput: normalizedStructuredOutput,
     provider: "gemini",
     latencyMs,
+    usage: normalizeUsage(responseData.usage, {
+      promptField: "prompt_tokens",
+      completionField: "completion_tokens",
+      totalField: "total_tokens",
+    }),
   });
 }
 
@@ -499,6 +530,11 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
     structuredOutput: normalizedStructuredOutput,
     provider: "groq",
     latencyMs,
+    usage: normalizeUsage(responseData.usage, {
+      promptField: "prompt_tokens",
+      completionField: "completion_tokens",
+      totalField: "total_tokens",
+    }),
   });
 }
 
@@ -529,6 +565,23 @@ function computeOutboundContentLength({ systemPrompt, context, question, history
   );
 
   return systemPromptLength + contextLength + questionLength + historyLength;
+}
+
+// SIA-001-T03 -- null unless BOTH per-million rates are configured AND
+// both token counts are known; a partial input never produces a partial
+// (silently wrong) estimate -- see config.js's normalizePricePerMillionUsd
+// for why pricing itself is operator-configured rather than hardcoded.
+function estimateCostUsd({ promptTokens, completionTokens } = {}) {
+  const { inputPricePerMillionUsd, outputPricePerMillionUsd } = config;
+  if (
+    typeof inputPricePerMillionUsd !== "number" ||
+    typeof outputPricePerMillionUsd !== "number" ||
+    typeof promptTokens !== "number" ||
+    typeof completionTokens !== "number"
+  ) {
+    return null;
+  }
+  return (promptTokens * inputPricePerMillionUsd + completionTokens * outputPricePerMillionUsd) / 1_000_000;
 }
 
 // Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
@@ -613,6 +666,15 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
     const answer = await adapter({ systemPrompt, context, question, history, structuredOutput });
     recordProvider("success");
     providerCircuitBreaker.recordOutcome(normalizedProvider, { success: true });
+    // SIA-001-T03 -- usage/cost. Only recorded on success: a failed call
+    // has no meaningful usage, and a rejected request is not billed the
+    // way a completed one is.
+    recordSiaUsage({
+      provider: normalizedProvider,
+      promptTokens: answer.usage.promptTokens,
+      completionTokens: answer.usage.completionTokens,
+      estimatedCostUsd: estimateCostUsd(answer.usage),
+    });
     return answer;
   } catch (err) {
     // Rethrown untouched -- this only classifies the attempt so a provider

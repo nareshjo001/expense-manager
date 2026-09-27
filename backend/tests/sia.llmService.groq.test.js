@@ -334,7 +334,7 @@ describe("backend/sia/llmService -- Groq provider adapter", () => {
 
       expect(result.answer).toBe("Your spending rose 12% this month.");
       expect(result.answer).not.toContain("SENSITIVE_INTERNAL_REASONING_TRACE");
-      expect(Object.keys(result)).toEqual(["answer", "model", "latencyMs"]);
+      expect(Object.keys(result)).toEqual(["answer", "model", "latencyMs", "usage"]);
     });
 
     it("never returns a `reasoning_content` field either", async () => {
@@ -631,6 +631,44 @@ describe("backend/sia/llmService -- Groq provider adapter", () => {
 
       expect(jest.isMockFunction(postMock)).toBe(true);
       expect(postMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // SIA-001-T03 -- token usage extraction from the OpenAI-compatible
+  // chat/completions usage block (prompt_tokens/completion_tokens/total_tokens).
+  describe("usage extraction (SIA-001-T03)", () => {
+    it("extracts prompt/completion/total tokens from the usage block", async () => {
+      const postMock = jest.fn().mockResolvedValue(
+        chatCompletionResponse("Answer.", { usage: { prompt_tokens: 120, completion_tokens: 45, total_tokens: 165 } })
+      );
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.GROQ_API_KEY = "gsk-test-key";
+
+      const result = await askLlm(VALID_REQUEST);
+
+      expect(result.usage).toEqual({ promptTokens: 120, completionTokens: 45, totalTokens: 165 });
+    });
+
+    it("defaults to null usage fields when the response has no usage block", async () => {
+      const postMock = jest.fn().mockResolvedValue(SINGLE_MESSAGE_RESPONSE);
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.GROQ_API_KEY = "gsk-test-key";
+
+      const result = await askLlm(VALID_REQUEST);
+
+      expect(result.usage).toEqual({ promptTokens: null, completionTokens: null, totalTokens: null });
+    });
+
+    it("does not throw when usage fields are malformed", async () => {
+      const postMock = jest.fn().mockResolvedValue(
+        chatCompletionResponse("Answer.", { usage: { prompt_tokens: "many", completion_tokens: -5, total_tokens: null } })
+      );
+      const { askLlm } = loadLlmServiceWithMockedAxios({ axiosPostMock: postMock });
+      process.env.GROQ_API_KEY = "gsk-test-key";
+
+      const result = await askLlm(VALID_REQUEST);
+
+      expect(result.usage).toEqual({ promptTokens: null, completionTokens: null, totalTokens: null });
     });
   });
 });

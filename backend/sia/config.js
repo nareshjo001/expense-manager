@@ -120,6 +120,26 @@ function normalizeCircuitBreakerCooldownMs(rawValue) {
   return parsed;
 }
 
+// SIA-001-T03 -- usage/cost tracking. Per-model pricing is deliberately
+// NOT hardcoded here: config.model is fully operator-configured (any
+// provider, any model string via SIA_LLM_PROVIDER/SIA_LLM_MODEL), so a
+// baked-in price table would silently misprice the moment someone
+// changes it, and provider pricing itself drifts over time regardless.
+// Instead the operator sets their own current per-million-token rate for
+// whichever model they've configured. Unset (the default) means cost is
+// honestly reported as unknown, never guessed at $0 -- the same
+// "missing, never fabricated" discipline DAT-001's *Minor fields use.
+function normalizePricePerMillionUsd(rawValue) {
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return null;
+  }
+  const parsed = Number(rawValue.trim());
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
 // The application's canonical IANA time zone for calendar/period
 const DEFAULT_APP_TIME_ZONE = "Asia/Kolkata";
 
@@ -207,6 +227,9 @@ const config = {
   // SIA-001-T04 -- provider circuit breaker, additive fields.
   circuitBreakerFailureThreshold: normalizeCircuitBreakerFailureThreshold(process.env.SIA_LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD),
   circuitBreakerCooldownMs: normalizeCircuitBreakerCooldownMs(process.env.SIA_LLM_CIRCUIT_BREAKER_COOLDOWN_MS),
+  // SIA-001-T03 -- usage/cost tracking, additive fields.
+  inputPricePerMillionUsd: normalizePricePerMillionUsd(process.env.SIA_LLM_INPUT_PRICE_PER_1M_USD),
+  outputPricePerMillionUsd: normalizePricePerMillionUsd(process.env.SIA_LLM_OUTPUT_PRICE_PER_1M_USD),
   appTimeZone: normalizeAppTimeZone(process.env.APP_TIME_ZONE),
   // Voice input (Workstream 2) -- additive fields only, read the same
   voiceEnabled: normalizeEnabled(process.env.SIA_VOICE_ENABLED),

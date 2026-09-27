@@ -32,6 +32,9 @@ function createInitialState() {
     jobs: new Map(),
     // "scope:operation" -> { count, failures, totalMs }
     operations: new Map(),
+    // SIA-001-T03 -- provider -> { calls, promptTokens, completionTokens,
+    // estimatedCostUsd, costKnown }.
+    usage: new Map(),
   };
 }
 
@@ -107,6 +110,44 @@ function recordOperation({ scope, operation, outcome, durationMs } = {}) {
   }
 }
 
+// SIA-001-T03 -- records one successful LLM call's token usage and, only
+// when the operator has configured a per-million-token price (sia/config.js
+// inputPricePerMillionUsd/outputPricePerMillionUsd), its estimated cost.
+// Only the provider name, token counts and a derived dollar figure are ever
+// recorded -- never a question, context, answer or provider payload, same
+// discipline as recordOperation above. Never throws.
+function recordSiaUsage({ provider, promptTokens, completionTokens, estimatedCostUsd } = {}) {
+  try {
+    const safeProvider = typeof provider === "string" && provider.trim() ? provider.trim() : "unknown";
+    const entry = state.usage.get(safeProvider) || {
+      calls: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      estimatedCostUsd: 0,
+      // Tracks whether ANY call this window had a known cost -- an
+      // aggregate of $0 across calls with no pricing configured would
+      // read as a real, verified zero rather than "unknown".
+      costKnown: false,
+    };
+
+    entry.calls += 1;
+    if (typeof promptTokens === "number" && Number.isFinite(promptTokens) && promptTokens >= 0) {
+      entry.promptTokens += promptTokens;
+    }
+    if (typeof completionTokens === "number" && Number.isFinite(completionTokens) && completionTokens >= 0) {
+      entry.completionTokens += completionTokens;
+    }
+    if (typeof estimatedCostUsd === "number" && Number.isFinite(estimatedCostUsd) && estimatedCostUsd >= 0) {
+      entry.estimatedCostUsd += estimatedCostUsd;
+      entry.costKnown = true;
+    }
+
+    state.usage.set(safeProvider, entry);
+  } catch {
+    // Deliberately swallowed -- see recordOperation above.
+  }
+}
+
 // Emits one aggregate "metrics_snapshot" event and resets the window --
 // avoids high-cardinality per-request logging while still surfacing
 // latency/error-rate trends, per the OBS-001 observability requirements.
@@ -136,6 +177,18 @@ function snapshotAndReset() {
     };
   }
 
+  // SIA-001-T03 -- usage/cost, one summary object per provider.
+  const siaUsage = {};
+  for (const [provider, e] of state.usage.entries()) {
+    siaUsage[provider] = {
+      calls: e.calls,
+      promptTokens: e.promptTokens,
+      completionTokens: e.completionTokens,
+      // null (not 0) when no call this window had pricing configured.
+      estimatedCostUsd: e.costKnown ? Math.round(e.estimatedCostUsd * 1e6) / 1e6 : null,
+    };
+  }
+
   logEvent({
     level: "info",
     scope: "metrics",
@@ -146,6 +199,7 @@ function snapshotAndReset() {
     distinctRoutes: routeCounts.size,
     jobs,
     operations,
+    siaUsage,
   });
 
   // OBS-001-T06 -- fire-and-forget: detectAlerts + the log half of
@@ -195,6 +249,7 @@ module.exports = {
   requestMetricsMiddleware,
   recordJob,
   recordOperation,
+  recordSiaUsage,
   startMetricsReporting,
   stopMetricsReporting,
   snapshotAndReset,
