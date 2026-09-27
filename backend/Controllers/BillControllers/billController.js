@@ -1,11 +1,8 @@
-const { preprocessImage } = require("../../Services/BillServices/imageProcessor");
-const { extractTextFromImage } = require("../../Services/BillServices/ocrService");
-const { parseReceipt } = require("../../Services/BillServices/receiptParser");
 const {
   ReceiptUploadError,
   emitReceiptAuditEvent,
-  validateReceiptFile,
 } = require("../../Services/BillServices/receiptSecurity.service");
+const { ingestReceipt } = require("../../Services/ReceiptServices/receiptIngestService");
 
 const uploadBill = async (req, res) => {
   try {
@@ -17,10 +14,40 @@ const uploadBill = async (req, res) => {
       });
     }
 
-    await validateReceiptFile(req.file);
-    const processedImage = await preprocessImage(req.file.buffer);
-    const extractedText = await extractTextFromImage(processedImage);
-    const parsedReceipt = parseReceipt(extractedText);
+    // OCR-004: ingestReceipt() now runs the full validate -> preprocess ->
+    // OCR -> parse pipeline (unchanged from before this feature -- see
+    // Services/ReceiptServices/receiptIngestService.js) AND the two new
+    // persistence steps this feature adds (GridFS write + Receipt
+    // document). Only the persistence half is allowed to degrade the
+    // response rather than fail it outright -- see the catch below.
+    let parsedReceipt;
+    let receiptId = null;
+
+    try {
+      const ingestResult = await ingestReceipt({ userId: req.userId, file: req.file });
+      parsedReceipt = ingestResult.parsedReceipt;
+      receiptId = ingestResult.receiptId;
+    } catch (err) {
+      // Product decision (OCR-004): a failure in the NEW inbox-persistence
+      // step (the GridFS write or the Receipt document write) must not
+      // turn an otherwise-successful OCR scan into a failed upload -- the
+      // user still gets their parsed fields back and can go add their
+      // expense; they just won't have this receipt saved to their inbox
+      // this time. receiptIngestService.js marks exactly this case with
+      // `.receiptPersistenceFailure` and attaches the already-computed
+      // parsedReceipt to the error so it can still be returned here.
+      // Anything else -- a validation failure (ReceiptUploadError) or an
+      // OCR failure/timeout -- is NOT marked this way and falls through
+      // to the outer catch below, failing the request exactly as it
+      // always has.
+      if (!err || !err.receiptPersistenceFailure) {
+        throw err;
+      }
+
+      parsedReceipt = err.parsedReceipt;
+      emitReceiptAuditEvent({ req, outcome: "persistence_failed", code: "RECEIPT_PERSIST_FAILED" });
+    }
+
     emitReceiptAuditEvent({ req, outcome: "success", code: "RECEIPT_PROCESSED" });
 
     // OCR-003: parsedReceipt.needsReview (no amount found, or low overall
@@ -35,6 +62,10 @@ const uploadBill = async (req, res) => {
         ? "Receipt processed, but some fields may need a quick check before you save."
         : "Receipt processed successfully.",
       parsedReceipt,
+      // OCR-004: null when persistence failed (see above) -- the client
+      // can still show the parsed fields, it just has nothing to link an
+      // inbox entry to for this upload.
+      receiptId,
     });
   } catch (error) {
     if (error instanceof ReceiptUploadError) {
