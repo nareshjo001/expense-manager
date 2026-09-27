@@ -54,6 +54,8 @@
 
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
+const https = require("https");
 
 const { amountMatches, dateMatches, merchantMatches } = require("./scoring");
 
@@ -156,6 +158,53 @@ const sleep = (ms) =>
     setTimeout(resolve, ms);
   });
 
+// Node's global fetch() is built on undici, and undici's default Agent
+// applies its OWN headersTimeout/bodyTimeout (300000ms) to every request --
+// independent of any AbortSignal a caller passes in. That is the actual
+// cause of the "fetch failed" failures seen on the first full 21-entry
+// ollama run (2026-09-27): several receipts took longer than 5 minutes of
+// CPU-only inference to produce a response, well within this script's own
+// 600000ms timeoutMs budget, but undici's internal 300s timer killed the
+// connection first and surfaced only a bare "fetch failed" with no useful
+// detail (a well-documented Node/undici default, not a bug in Ollama or in
+// this script). Overriding that requires either a custom undici Agent/
+// dispatcher (undici is not an installed dependency here, and is not a
+// requireable Node built-in on the Node version this was verified against --
+// `require("undici")` and `require("node:undici")` both fail) or bypassing
+// fetch entirely. This does the latter: a minimal http(s)-based stand-in
+// with the same (ok, status, text()) shape callVisionApi already expects,
+// with NO built-in timeout of its own -- the only thing that can end a slow
+// request is the AbortController/timeoutMs this script already manages.
+const nodeFetch = (url, { method, headers, body, signal } = {}) =>
+  new Promise((resolve, reject) => {
+    const { hostname, port, pathname, search, protocol } = new URL(url);
+    const transport = protocol === "https:" ? https : http;
+    const req = transport.request({ hostname, port, path: `${pathname}${search}`, method, headers }, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          text: async () => Buffer.concat(chunks).toString("utf8"),
+        });
+      });
+      res.on("error", reject);
+    });
+    req.on("error", reject);
+    if (signal) {
+      const onAbort = () => {
+        req.destroy();
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        reject(err);
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+    req.end(body);
+  });
+
 // fetchImpl is injectable so tests never make a real network call.
 async function callVisionApi({ url, apiKey, imagePath, model, fetchImpl, timeoutMs, extraBody }) {
   const controller = new AbortController();
@@ -204,7 +253,9 @@ async function callVisionApi({ url, apiKey, imagePath, model, fetchImpl, timeout
     if (err?.name === "AbortError") {
       return { ok: false, status: null, error: `timed out after ${timeoutMs ?? DEFAULT_TIMEOUT_MS}ms` };
     }
-    return { ok: false, status: null, error: err?.message || String(err) };
+    const message = err?.message || String(err);
+    const cause = err?.cause?.message;
+    return { ok: false, status: null, error: cause ? `${message}: ${cause}` : message };
   } finally {
     clearTimeout(timer);
   }
@@ -342,7 +393,7 @@ async function main() {
     const imagePath = path.join(CORPUS_DIR, entry.image);
     // Deliberately serial (not Promise.all): stays under a hosted free-tier's RPM limit
     // (a no-op consideration for the local ollama provider, whose delayMs defaults to 0).
-    const res = await callVisionApi({ url: args.url, apiKey, imagePath, model: args.model, fetchImpl: fetch, timeoutMs: args.timeoutMs, extraBody: args.extraBody });
+    const res = await callVisionApi({ url: args.url, apiKey, imagePath, model: args.model, fetchImpl: nodeFetch, timeoutMs: args.timeoutMs, extraBody: args.extraBody });
     if (!res.ok) {
       console.log(`[FAIL-CALL] ${entry.id}: ${res.error}`);
       results.push({ id: entry.id, source: entry.source, callFailed: true, error: res.error });
@@ -373,6 +424,7 @@ module.exports = {
   mimeTypeFor,
   buildDataUri,
   extractJsonFromContent,
+  nodeFetch,
   callVisionApi,
   scoreVisionEntry,
   aggregate,
