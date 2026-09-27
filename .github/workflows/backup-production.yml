@@ -1,0 +1,106 @@
+name: BUG-006 Production Backup
+
+on:
+  schedule:
+    # Daily, per ADR-0005's provisional <=24h RPO target. Offset from
+    # backup.yml's own CI-smoke-test schedule (03:00 UTC) so the two
+    # never land on the same minute -- they run in unrelated
+    # environments (one throwaway, one real), so this is just
+    # housekeeping, not a correctness requirement.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Run encrypted backup against production (BUG-006)
+    runs-on: ubuntu-latest
+    # HONESTY NOTE, mirroring backup.yml's own: unlike that workflow,
+    # THIS job does reach a real production database -- MONGO_CONN
+    # below is a repo secret pointing at the real Atlas cluster
+    # (see docs/runbooks/OPS-002-backup-restore-operations.md's
+    # "Production backup pipeline (BUG-006)" section for exactly which
+    # secrets to configure and how). This is the actual scheduled
+    # backup BUG-006 was about; backup.yml/backup-verify.yml remain
+    # smoke tests of the tooling and are unchanged by this file.
+    #
+    # DESTINATION: this runner's filesystem is thrown away the moment
+    # this job ends, so BACKUP_DESTINATION_DIR below is only ever a
+    # same-job scratch path -- the "Upload encrypted backup" step at
+    # the bottom, not local disk, is this pipeline's real durable
+    # destination. See the runbook section above for what that means
+    # for the automated recentBackup gate check (backend/scripts/
+    # backup/checkRecentBackup.js), which reads local disk and cannot
+    # see a GitHub Actions artifact on its own.
+    env:
+      MONGO_CONN: ${{ secrets.PROD_MONGO_CONN }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      BACKUP_DESTINATION_DIR: ${{ github.workspace }}/backend/.prod-backup-output
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail fast if the required secrets are not configured
+        run: |
+          missing=0
+          if [ -z "$MONGO_CONN" ]; then
+            echo "::error::PROD_MONGO_CONN repo secret is not set -- see docs/runbooks/OPS-002-backup-restore-operations.md"
+            missing=1
+          fi
+          if [ -z "$BACKUP_ENCRYPTION_KEY" ]; then
+            echo "::error::BACKUP_ENCRYPTION_KEY repo secret is not set -- see docs/runbooks/OPS-002-backup-restore-operations.md"
+            missing=1
+          fi
+          if [ "$missing" = "1" ]; then exit 1; fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      # Same jammy-codename workaround as backup.yml/backup-verify.yml --
+      # see those files' own comments for why ubuntu-latest (noble)
+      # can't be used directly against MongoDB's apt repo yet.
+      - name: Install MongoDB Database Tools (mongodump/mongorestore)
+        run: |
+          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+          echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+          mongodump --version
+
+      - name: Run mongoBackup.js against production
+        run: node scripts/backup/mongoBackup.js
+
+      - name: Verify a manifest and encrypted archive were actually written
+        run: |
+          node -e "
+            const { listManifestsSync } = require('./scripts/backup/manifest');
+            const manifests = listManifestsSync(process.env.BACKUP_DESTINATION_DIR);
+            if (manifests.length < 1) { throw new Error('expected at least 1 manifest, found ' + manifests.length); }
+            const m = manifests[0];
+            console.log('backupId=' + m.backupId + ' createdAt=' + m.createdAt + ' collections=' + m.collections.length);
+            console.log('production backup OK');
+          "
+
+      # This upload IS the backup destination (see the job-level comment
+      # above) -- GitHub prunes it automatically after retention-days,
+      # so no separate prune step is needed the way local-fs retention.js
+      # pruning would be. retention-days: 90 is GitHub's own maximum;
+      # a private repo's total Actions artifact storage is capped by
+      # your GitHub plan's storage quota, so if that quota ever becomes
+      # a problem, lower this number rather than raising the schedule's
+      # frequency.
+      - name: Upload encrypted backup as a workflow artifact (this pipeline's backup destination)
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-mongo-backup-${{ github.run_id }}
+          path: backend/.prod-backup-output
+          retention-days: 90
+          if-no-files-found: error
