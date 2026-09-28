@@ -1,25 +1,26 @@
 /* ========== Light Theme ========== */
 .light-theme {
-  --bg-color: #faedf2;
-  --header-gradient-start: #f9a8d4;
-  --header-gradient-end: #f472b6;
-  --text-color: #9d174d;
-  --nav-link-hover: #f9a8d4;
-  --menu-color: #9d174d;
+  --bg-color: #F6F3F4;
+  --header-gradient-start: #D81B60;
+  --header-gradient-end: #C2185B;
+  --text-color: #21141B;
+  --nav-link-hover: #F8DCE8;
+  --menu-color: #D81B60;
+  --input-color: #FFFFFF;
   /* UI-REDESIGN desktop-header-sidebar -- desktop shell surface tokens.
      Scoped to this file only; App.css's global theme variables are
      untouched. */
-  --sidebar-bg: #faedf2;
-  --sidebar-border: rgba(157, 23, 77, 0.12);
-  --sidebar-group-label: rgba(157, 23, 77, 0.55);
-  --sidebar-link-color: #4b1530;
-  --sidebar-link-hover-bg: rgba(249, 168, 212, 0.25);
-  --sidebar-link-active-bg: rgba(244, 114, 182, 0.16);
-  --sidebar-link-active-color: #9d174d;
-  --topbar-bg: #faedf2;
-  --topbar-border: rgba(157, 23, 77, 0.12);
-  --topbar-icon-color: #9d174d;
-  --topbar-icon-hover-bg: rgba(249, 168, 212, 0.25);
+  --sidebar-bg: #FFF9FB;
+  --sidebar-border: #E9DDE3;
+  --sidebar-group-label: #938993;
+  --sidebar-link-color: #21141B;
+  --sidebar-link-hover-bg: #FDF7FA;
+  --sidebar-link-active-bg: #FBE6EF;
+  --sidebar-link-active-color: #C2185B;
+  --topbar-bg: #FFFDFE;
+  --topbar-border: #E9DDE3;
+  --topbar-icon-color: #D81B60;
+  --topbar-icon-hover-bg: #F8DCE8;
 }
 
 /* ========== Dark Theme ========== */
@@ -280,6 +281,10 @@
   background: var(--sidebar-link-active-bg);
   color: var(--sidebar-link-active-color);
   font-weight: 600;
+}
+
+.light-theme .sidebar-link-active {
+  box-shadow: inset 3px 0 #E91E63;
 }
 
 .sidebar-link-icon {

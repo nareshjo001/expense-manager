@@ -26,6 +26,16 @@
   outline: none;
 }
 
+.light-theme .set-budget input {
+  border-color: #E9DDE3;
+  background: #FFFFFF;
+}
+
+.light-theme .setbudget-button,
+.light-theme .set-budget .confirm:not(:disabled) {
+  color: #FFFFFF;
+}
+
 .set-budget input:focus{
   box-shadow: var(--box-shadow);
 }

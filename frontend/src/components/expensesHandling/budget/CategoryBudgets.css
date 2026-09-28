@@ -1,28 +1,28 @@
 /* BUD-001-T05 / Redesign -- Category Budgets presentation matching target Image 3 */
 .category-budgets {
-  --cb-safe: #16a34a;
-  --cb-warning: #d97706;
-  --cb-critical: #ea580c;
-  --cb-overspent: #dc2626;
+  --cb-safe: #159447;
+  --cb-warning: #D99100;
+  --cb-critical: #D99100;
+  --cb-overspent: #D9363E;
 
   /* Theme tokens - Light mode defaults */
   --cb-bg: radial-gradient(circle at 10% 15%, #fdf0f5 0%, #faeaf1 45%, #fef5f9 100%);
-  --cb-parent-bg: rgba(255, 255, 255, 0.52);
-  --cb-parent-border: rgba(244, 166, 199, 0.45);
-  --cb-card-bg: rgba(255, 255, 255, 0.78);
-  --cb-card-border: rgba(244, 166, 199, 0.45);
-  --cb-card-border-outer: rgba(255, 255, 255, 0.95);
-  --cb-card-shadow: 0 10px 30px rgba(200, 70, 120, 0.06), 0 2px 8px rgba(200, 70, 120, 0.04);
-  --cb-text-title: #4a0429;
-  --cb-text-subtitle: #8f3d64;
-  --cb-stat-label: #6b7280;
-  --cb-accent-pink: #c2185b;
+  --cb-parent-bg: #FDF7FA;
+  --cb-parent-border: #E9DDE3;
+  --cb-card-bg: #FFFFFF;
+  --cb-card-border: #E9DDE3;
+  --cb-card-border-outer: #E9DDE3;
+  --cb-card-shadow: 0 8px 24px rgba(63, 32, 48, 0.07);
+  --cb-text-title: #21141B;
+  --cb-text-subtitle: #6F6470;
+  --cb-stat-label: #6F6470;
+  --cb-accent-pink: #D81B60;
   --cb-accent-purple: #7c3aed;
   --cb-accent-coral: #ea580c;
-  --cb-input-border: #f4a6c7;
+  --cb-input-border: #E9DDE3;
   --cb-input-bg: #ffffff;
-  --cb-item-bg: rgba(255, 255, 255, 0.85);
-  --cb-item-border: rgba(244, 166, 199, 0.3);
+  --cb-item-bg: #FFFFFF;
+  --cb-item-border: #E9DDE3;
   --cb-wave-pink: rgba(255, 185, 215, 0.45);
   --cb-wave-purple: rgba(221, 205, 255, 0.45);
   --cb-wave-coral: rgba(255, 218, 190, 0.5);
@@ -40,7 +40,7 @@
   background: var(--cb-parent-bg);
   border: 1px solid var(--cb-parent-border);
   border-radius: 28px;
-  box-shadow: 0 12px 36px rgba(200, 70, 120, 0.05);
+  box-shadow: 0 8px 24px rgba(63, 32, 48, 0.07);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -56,10 +56,10 @@
 .budgets-top-bar-card {
   margin-bottom: 24px;
   padding: 12px 20px;
-  background: var(--cb-parent-bg, rgba(255, 255, 255, 0.52));
-  border: 1px solid var(--cb-parent-border, rgba(244, 166, 199, 0.45));
+  background: var(--cb-card-bg, #FFFFFF);
+  border: 1px solid var(--cb-parent-border, #E9DDE3);
   border-radius: 20px;
-  box-shadow: 0 4px 18px rgba(200, 70, 120, 0.03);
+  box-shadow: 0 8px 24px rgba(63, 32, 48, 0.07);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-sizing: border-box;
@@ -1002,6 +1002,10 @@
    5. Dark Theme Styles
    ========================================================================== */
 .dark-theme .category-budgets {
+  --cb-safe: #16a34a;
+  --cb-warning: #d97706;
+  --cb-critical: #ea580c;
+  --cb-overspent: #dc2626;
   --cb-bg: radial-gradient(circle at 10% 15%, #24111f 0%, #1a0a16 50%, #200e1c 100%);
   --cb-parent-bg: rgba(26, 15, 23, 0.65);
   --cb-parent-border: rgba(120, 42, 85, 0.5);
@@ -1023,6 +1027,12 @@
   --cb-glow-end: #241420;
   --cb-clip-bg-start: #33172c;
   --cb-clip-bg-end: #241420;
+}
+
+.dark-theme .budgets-top-bar-card {
+  background: #241420;
+  border-color: #6b264d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .dark-theme .category-budgets-month-control {
