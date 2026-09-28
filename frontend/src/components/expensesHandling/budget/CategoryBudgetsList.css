@@ -1,25 +1,27 @@
 /* Populated category-budget list only (accordion rows); imported after the
    existing section styles and scoped to .category-budgets-panel--list so the
-   empty state, unbudgeted panel and form are untouched. */
+   empty state, unbudgeted panel and form are untouched.
+
+   Scale reference: the unbudgeted card in CategoryBudgets.css. The header
+   mirrors .category-budgets-panel-header / -icon-wrap / -title / -subtitle,
+   and the collapsed rows mirror .category-budgets-unbudgeted-item (38px
+   icon, 15px/600 name, 9px 16px padding, 14px radius, item border and
+   surface). The panel frame is the shared .category-budgets-panel, so both
+   cards have the same padding, radius, border and shadow. */
 .category-budgets-panel--list {
-  --cbl-panel-bg: #fffdfe;
-  --cbl-panel-border: #f3d9e5;
-  --cbl-panel-shadow: 0 10px 30px rgba(146, 43, 91, 0.07);
-  --cbl-divider: #f4dbe6;
-  --cbl-row-bg: #fffafc;
-  --cbl-row-bg-open: #fdf3f7;
-  --cbl-row-border: #f1dbe5;
-  --cbl-row-shadow: 0 2px 8px rgba(146, 43, 91, 0.04);
+  --cbl-heading: #72143d; /* .light-theme .category-budgets-panel-title */
+  --cbl-name: var(--cb-text-title); /* .category-budgets-unbudgeted-name */
+  --cbl-muted: var(--cb-text-subtitle); /* .category-budgets-panel-subtitle */
+  --cbl-row-bg: var(--cb-item-bg);
+  --cbl-row-border: var(--cb-item-border);
+  --cbl-row-bg-open: #fdf5f8;
   --cbl-detail-bg: #ffffff;
-  --cbl-chevron-border: #ecd9e2;
   --cbl-chevron-color: #6e5e69;
+  --cbl-chevron-hover-border: #e3b9cc;
   --cbl-track: #fbe7ef;
-  --cbl-figure-divider: #eed8e2;
-  --cbl-title: #24151e;
-  --cbl-muted: #6e5e69;
   --cbl-focus: #c2185b;
 
-  /* Status fills: distinct hues, text colours chosen for >= 4.5:1. */
+  /* Status fills: distinct hues, pill text colours chosen for >= 4.5:1. */
   --cbl-safe-fill: #1f9d55;
   --cbl-safe-pill-bg: #dcf5e4;
   --cbl-safe-pill-text: #146c38;
@@ -34,32 +36,15 @@
   --cbl-overspent-pill-text: #ffffff;
   --cbl-danger: #d42a36;
   --cbl-danger-border: #f1a9b0;
-
-  min-height: 0;
-  padding: 26px 26px 24px;
-  border-radius: 24px;
-  border: 1px solid var(--cbl-panel-border);
-  outline: none;
-  background: var(--cbl-panel-bg);
-  box-shadow: var(--cbl-panel-shadow);
 }
 
 .dark-theme .category-budgets-panel--list {
-  --cbl-panel-bg: rgba(36, 20, 32, 0.92);
-  --cbl-panel-border: rgba(160, 60, 115, 0.35);
-  --cbl-panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --cbl-divider: rgba(160, 60, 115, 0.3);
-  --cbl-row-bg: rgba(48, 24, 41, 0.9);
+  --cbl-heading: var(--cb-text-title);
   --cbl-row-bg-open: rgba(58, 27, 49, 0.95);
-  --cbl-row-border: rgba(160, 60, 115, 0.35);
-  --cbl-row-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   --cbl-detail-bg: rgba(30, 16, 27, 0.9);
-  --cbl-chevron-border: rgba(212, 163, 190, 0.35);
   --cbl-chevron-color: #e8cadb;
+  --cbl-chevron-hover-border: rgba(244, 166, 199, 0.55);
   --cbl-track: rgba(244, 166, 199, 0.16);
-  --cbl-figure-divider: rgba(212, 163, 190, 0.25);
-  --cbl-title: #fdf2f8;
-  --cbl-muted: #d4a3be;
   --cbl-focus: #f9a8d4;
   --cbl-safe-pill-bg: rgba(34, 197, 94, 0.18);
   --cbl-safe-pill-text: #86efac;
@@ -71,67 +56,74 @@
   display: none;
 }
 
-/* Panel header */
+/* Panel header -- same scale as the unbudgeted card's header, plus the thin
+   divider the list design calls for. */
 .category-budgets-list-header {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 2px 18px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--cbl-divider);
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--cbl-row-border);
 }
 
 .category-budgets-list-icon {
-  width: 56px;
-  height: 56px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 18px;
   background: #fde4ef;
   color: #c2185b;
+  box-shadow: 0 4px 12px rgba(194, 24, 91, 0.08);
 }
 
 .dark-theme .category-budgets-list-icon {
-  background: rgba(244, 114, 182, 0.18);
-  color: #f9a8d4;
+  background: rgba(194, 24, 91, 0.25);
+  color: #f472b6;
 }
 
 .category-budgets-list-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
 }
 
 .category-budgets-list-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 1.2;
-  color: var(--cbl-title);
+  line-height: 1.25;
+  color: var(--cbl-heading);
 }
 
 .category-budgets-list-subtitle {
-  margin: 4px 0 0;
-  font-size: 14px;
+  margin: 0;
+  font-size: 13px;
   color: var(--cbl-muted);
 }
 
 /* List */
 .category-budgets-panel--list .category-budgets-list {
-  gap: 12px;
+  gap: 10px;
   max-height: 640px;
-  padding: 2px 6px 2px 2px;
+  padding: 0 6px 0 0;
 }
 
-/* Row card */
+/* Row card -- surface and radius of .category-budgets-unbudgeted-item. Each
+   row is a size container so the summary adapts to the row's real width
+   (two-column desktop, narrow desktop, phone), not to the viewport. */
 .category-budgets-panel--list .category-budget-row {
+  container-type: inline-size;
   padding: 0;
-  border-radius: 18px;
+  border-radius: 14px;
   border: 1px solid var(--cbl-row-border);
-  border-left: 1px solid var(--cbl-row-border);
   background: var(--cbl-row-bg);
-  box-shadow: var(--cbl-row-shadow);
+  box-shadow: 0 2px 6px rgba(194, 24, 91, 0.02);
   overflow: hidden;
 }
 
@@ -139,22 +131,25 @@
   background: var(--cbl-row-bg-open);
 }
 
-/* Summary: the whole header is the expand control */
+/* Summary: the whole header is the expand control. Grid tracks keep the
+   icon, pill and chevron at their natural size and give every remaining
+   pixel to the text column. */
 .category-budget-summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "icon text status chevron";
   align-items: center;
-  gap: 16px;
+  column-gap: 12px;
   width: 100%;
-  min-height: 84px;
-  padding: 14px 18px 14px 16px;
+  padding: 9px 16px;
   box-sizing: border-box;
   border: 0;
+  border-radius: 13px;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  border-radius: 18px;
 }
 
 .category-budget-summary:focus-visible {
@@ -162,48 +157,54 @@
   outline-offset: -3px;
 }
 
-.category-budgets-panel--list .category-budget-icon {
-  width: 52px;
-  height: 52px;
-  font-size: 21px;
+.category-budget-summary > .category-budget-icon {
+  grid-area: icon;
 }
 
 .category-budget-summary-text {
+  grid-area: text;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
+/* Same type as .category-budgets-unbudgeted-name. Names wrap only at word
+   boundaries (break-word is a last resort for a single token wider than the
+   column, e.g. a 50-character name with no spaces). */
 .category-budgets-panel--list .category-budget-name {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--cbl-title);
-  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cbl-name);
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .category-budget-summary-amounts {
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--cbl-muted);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
+/* Amounts never split; the line wraps at the spaces around "spent of". */
 .category-budget-summary-spent,
 .category-budget-summary-budget {
-  color: var(--cbl-title);
+  color: var(--cbl-name);
   font-weight: 500;
+  white-space: nowrap;
 }
 
-/* Status pill */
-.category-budgets-panel--list .category-budget-status {
-  margin-left: 0;
-  flex-shrink: 0;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
+/* Status pill -- compact. */
+.category-budgets-panel--list .category-budget-summary > .category-budget-status {
+  grid-area: status;
+  justify-self: end;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
 }
 
@@ -224,20 +225,21 @@
   color: var(--cbl-overspent-pill-text);
 }
 
-/* Rounded-square chevron */
+/* Rounded-square chevron -- compact. */
 .category-budget-chevron {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  border: 1px solid var(--cbl-chevron-border);
+  grid-area: chevron;
+  width: 30px;
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--cbl-row-border);
   background: var(--cbl-detail-bg);
   color: var(--cbl-chevron-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  font-size: 11px;
+  transition: border-color 0.15s ease;
 }
 
 .category-budget-row--expanded .category-budget-chevron {
@@ -249,14 +251,62 @@
 }
 
 .category-budget-summary:hover .category-budget-chevron {
-  border-color: #e3b9cc;
+  border-color: var(--cbl-chevron-hover-border);
 }
 
-/* Expanded detail */
+/* Narrow rows (narrow desktop columns, tablets, phones): the pill moves
+   under the amounts so the name keeps a usable width; icon and chevron stay
+   centred against both lines. */
+@container (max-width: 360px) {
+  .category-budget-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon text chevron"
+      "icon status chevron";
+    row-gap: 5px;
+  }
+
+  .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+    justify-self: start;
+  }
+}
+
+@container (max-width: 280px) {
+  .category-budget-summary {
+    column-gap: 10px;
+    padding: 9px 12px;
+  }
+
+  .category-budget-chevron {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@container (max-width: 240px) {
+  .category-budget-summary {
+    column-gap: 8px;
+    padding: 9px 10px;
+  }
+
+  .category-budget-summary > .category-budget-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .category-budget-chevron {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/* Expanded detail -- existing progress, figures, risk message and actions,
+   at the same compact scale as the summary. */
 .category-budget-detail {
-  margin: 0 8px 8px;
-  padding: 18px 22px 20px;
-  border-radius: 14px;
+  margin: 0 7px 7px;
+  padding: 14px 16px 16px;
+  border-radius: 10px;
   background: var(--cbl-detail-bg);
 }
 
@@ -265,8 +315,8 @@
 }
 
 .category-budgets-panel--list .category-budget-progress {
-  height: 14px;
-  margin: 0 0 18px;
+  height: 10px;
+  margin: 0 0 14px;
   background: var(--cbl-track);
 }
 
@@ -275,39 +325,43 @@
 .category-budgets-panel--list .category-budget-progress-fill--critical { background: var(--cbl-critical-fill); }
 .category-budgets-panel--list .category-budget-progress-fill--overspent { background: var(--cbl-overspent-fill); }
 
+/* Three equal columns with dividers. A figure never shrinks below its
+   widest amount (min-content), so when large amounts cannot share one line
+   the last figure wraps to a new line instead of an amount being split.
+   Every figure carries the same left padding and divider; the list is
+   pulled left by that amount and clipped, which hides the divider (and
+   cancels the padding) of whichever figure starts a line. */
 .category-budgets-panel--list .category-budget-figures {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 10px;
+  margin: 0 0 0 -13px;
+  clip-path: inset(0 0 0 13px);
+  font-size: inherit;
 }
 
 .category-budgets-panel--list .category-budget-figures div {
+  flex: 1 1 0;
+  min-width: min-content;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 2px 16px;
-  border-left: 1px solid var(--cbl-figure-divider);
-}
-
-.category-budgets-panel--list .category-budget-figures div:first-child {
-  padding-left: 2px;
-  border-left: 0;
+  gap: 3px;
+  padding: 0 12px;
+  border-left: 1px solid var(--cbl-row-border);
 }
 
 .category-budgets-panel--list .category-budget-figures dt {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--cbl-muted);
 }
 
 .category-budgets-panel--list .category-budget-figures dd {
   margin: 0;
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.25;
-  color: var(--cbl-title);
-  overflow-wrap: anywhere;
+  line-height: 1.3;
+  color: var(--cbl-name);
+  overflow-wrap: normal;
 }
 
 .category-budgets-panel--list .category-budget-figures dd.category-budget-over {
@@ -315,8 +369,9 @@
 }
 
 .category-budgets-panel--list .category-budget-at-risk {
-  margin: 14px 2px 0;
+  margin: 12px 0 0;
   font-size: 13px;
+  font-weight: 500;
   color: var(--cbl-critical-pill-bg);
 }
 
@@ -326,20 +381,20 @@
 
 .category-budgets-panel--list .category-budget-actions,
 .category-budgets-panel--list .category-budget-confirm {
-  margin-top: 16px;
-  gap: 12px;
+  margin-top: 14px;
+  gap: 10px;
 }
 
 .category-budgets-panel--list .category-budget-actions .category-budget-button,
 .category-budgets-panel--list .category-budget-confirm .category-budget-button {
-  min-width: 104px;
-  min-height: 44px;
-  padding: 10px 22px;
+  min-width: 88px;
+  min-height: 38px;
+  padding: 8px 18px;
   border-radius: 10px;
-  border: 1px solid var(--cbl-chevron-border);
+  border: 1px solid var(--cbl-row-border);
   background: var(--cbl-detail-bg);
-  color: var(--cbl-title);
-  font-size: 15px;
+  color: var(--cbl-name);
+  font-size: 14px;
   font-weight: 600;
   text-align: center;
   box-sizing: border-box;
@@ -347,7 +402,7 @@
 
 .category-budgets-panel--list .category-budget-actions .category-budget-button--danger,
 .category-budgets-panel--list .category-budget-confirm .category-budget-button--danger {
-  min-width: 150px;
+  min-width: 112px;
   border-color: var(--cbl-danger-border);
   color: var(--cbl-danger);
 }
@@ -364,160 +419,104 @@
 
 .category-budgets-panel--list .category-budget-confirm > span {
   flex-basis: 100%;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--cbl-title);
+  color: var(--cbl-name);
 }
 
-/* Mobile: same structure, tighter spacing; figures stay three-up when they
-   fit and stack to labelled rows on very narrow screens. */
-@media (max-width: 600px) {
-  .category-budgets-panel--list {
-    padding: 20px 14px 16px;
-    border-radius: 20px;
-    border: 1px solid var(--cbl-panel-border);
-    background: var(--cbl-panel-bg);
-  }
-
-  .category-budgets-list-header {
-    gap: 12px;
-    padding-bottom: 14px;
-    margin-bottom: 14px;
-  }
-
-  .category-budgets-list-icon {
-    width: 44px;
-    height: 44px;
-    font-size: 18px;
-  }
-
-  .category-budgets-list-title {
-    font-size: 18px;
-  }
-
-  .category-budgets-list-subtitle {
-    font-size: 13px;
-  }
-
-  .category-budgets-panel--list .category-budgets-list {
-    gap: 10px;
-    max-height: 560px;
-    padding: 0 6px 0 0;
-  }
-
-  .category-budgets-panel--list .category-budget-row {
-    padding: 0;
-    border-radius: 14px;
-  }
-
-  .category-budget-summary {
-    gap: 10px;
-    min-height: 68px;
-    padding: 12px 10px 12px 12px;
-    border-radius: 14px;
-  }
-
-  .category-budgets-panel--list .category-budget-icon {
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
-  }
-
-  .category-budget-summary-text {
-    flex: 1 1 0;
-  }
-
-  .category-budgets-panel--list .category-budget-name {
-    font-size: 15px;
-  }
-
-  .category-budget-summary-amounts {
-    font-size: 12.5px;
-  }
-
-  .category-budgets-panel--list .category-budget-status {
-    padding: 4px 10px;
-    font-size: 12px;
-  }
-
-  .category-budget-chevron {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    font-size: 12px;
-  }
-
-  .category-budget-detail {
-    margin: 0 6px 6px;
-    padding: 14px 12px 14px;
-    border-radius: 12px;
-  }
-
-  .category-budgets-panel--list .category-budget-progress {
-    height: 10px;
-    margin-bottom: 14px;
+/* Narrow rows: figures become labelled rows so large amounts never have to
+   squeeze into a third of the width; buttons share the row. */
+@container (max-width: 340px) {
+  .category-budgets-panel--list .category-budget-figures {
+    flex-direction: column;
+    row-gap: 6px;
+    margin-left: 0;
+    clip-path: none;
   }
 
   .category-budgets-panel--list .category-budget-figures div {
-    padding: 0 8px;
-    gap: 4px;
-  }
-
-  .category-budgets-panel--list .category-budget-figures dt {
-    font-size: 12px;
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 0;
+    border-left: 0;
   }
 
   .category-budgets-panel--list .category-budget-figures dd {
-    font-size: 14px;
+    text-align: right;
   }
 
   .category-budgets-panel--list .category-budget-actions .category-budget-button,
   .category-budgets-panel--list .category-budget-confirm .category-budget-button {
     flex: 1 1 0;
     min-width: 0;
-    min-height: 42px;
-    padding: 8px 12px;
-    font-size: 14px;
   }
 }
 
-/* Narrow phones: the status pill moves under the amounts so the name and
-   figures keep usable width; icon and chevron stay vertically centred. */
-@media (max-width: 480px) {
-  .category-budget-summary {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      "icon text chevron"
-      "icon pill chevron";
-    column-gap: 12px;
-    row-gap: 6px;
+/* Mobile: same header scale as the unbudgeted card's mobile header. Row
+   sizing is handled by the container queries above. */
+@media (max-width: 600px) {
+  .category-budgets-panel--list {
+    --cbl-heading: #4a0429;
+    --cbl-muted: #8f3d64;
+    padding: 20px 18px 16px;
+  }
+
+  .dark-theme .category-budgets-panel--list {
+    --cbl-heading: #fdf2f8;
+    --cbl-muted: #d4a3be;
+  }
+
+  .category-budgets-list-header {
     align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
   }
 
-  .category-budget-summary > .category-budget-icon { grid-area: icon; }
-  .category-budget-summary-text { grid-area: text; }
-  .category-budget-summary > .category-budget-chevron { grid-area: chevron; }
+  .category-budgets-list-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+    background: #fde8f1;
+    color: #db2777;
+  }
 
-  .category-budgets-panel--list .category-budget-summary > .category-budget-status {
-    grid-area: pill;
-    justify-self: start;
+  .category-budgets-list-header-text {
+    gap: 2px;
+  }
+
+  .category-budgets-list-title {
+    font-size: 16px;
+  }
+
+  .category-budgets-list-subtitle {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+
+  .category-budgets-panel--list .category-budgets-list {
+    max-height: 560px;
   }
 }
 
-@media (max-width: 380px) {
-  .category-budgets-panel--list .category-budget-figures {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
+/* Browsers without size containers fall back to the narrow row layout on
+   phones. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 600px) {
+    .category-budget-summary {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "icon text chevron"
+        "icon status chevron";
+      row-gap: 5px;
+    }
 
-  .category-budgets-panel--list .category-budget-figures div,
-  .category-budgets-panel--list .category-budget-figures div:first-child {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 0 2px;
-    border-left: 0;
+    .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+      justify-self: start;
+    }
   }
 }
 
