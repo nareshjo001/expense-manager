@@ -4,7 +4,7 @@ import { formatMoney } from "../../utils/money";
 import { motion } from 'framer-motion';
 import '../common/QueryState.css';
 
-import { ExpenseItem, SetBudget, formatDateRange } from '../imports/expensesImport';
+import { ExpenseItem, formatDateRange } from '../imports/expensesImport';
 
 import { useExpensesQuery } from '../../hooks/queries/useExpensesQuery';
 import { useInfiniteExpensesQuery } from '../../hooks/queries/useInfiniteExpensesQuery';
@@ -17,9 +17,6 @@ import InlineExpenseInsight from '../insights/InlineExpenseInsight'
 // so existing tests that jest.mock that barrel module are unaffected;
 // this is a plain, dependency-free presentational component.
 import ExpenseFilterBar from './ExpenseFilterBar';
-// BUD-001-T05 -- imported directly (not via ../imports/expensesImport) for
-// the same reason as ExpenseFilterBar above: existing tests mock that barrel.
-import CategoryBudgets from './budget/CategoryBudgets';
 // EXP-002-T06 -- ExpensesPage is mounted at "/" inside LandingPage.js's
 // <Routes> (itself inside App.js's <BrowserRouter>), so a router context
 // is always present in production. Tests mock 'react-router-dom' wholesale
@@ -328,9 +325,6 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
 
   return (
     <div className="expenses-page-container">
-      <SetBudget />
-      <CategoryBudgets />
-
       <div className="header">
         {Object.keys(groupedExpenses).length !== 0 && <p className="big-screen" style={{ fontWeight: 450, fontSize: '20px' }}>Your Expenses</p>}
         <div className="select-group">

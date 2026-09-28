@@ -1,11 +1,25 @@
 /* ========== Light Theme ========== */
 .light-theme {
-  --bg-color: #FFE4E1;
+  --bg-color: #faedf2;
   --header-gradient-start: #f9a8d4;
   --header-gradient-end: #f472b6;
   --text-color: #9d174d;
   --nav-link-hover: #f9a8d4;
   --menu-color: #9d174d;
+  /* UI-REDESIGN desktop-header-sidebar -- desktop shell surface tokens.
+     Scoped to this file only; App.css's global theme variables are
+     untouched. */
+  --sidebar-bg: #faedf2;
+  --sidebar-border: rgba(157, 23, 77, 0.12);
+  --sidebar-group-label: rgba(157, 23, 77, 0.55);
+  --sidebar-link-color: #4b1530;
+  --sidebar-link-hover-bg: rgba(249, 168, 212, 0.25);
+  --sidebar-link-active-bg: rgba(244, 114, 182, 0.16);
+  --sidebar-link-active-color: #9d174d;
+  --topbar-bg: #faedf2;
+  --topbar-border: rgba(157, 23, 77, 0.12);
+  --topbar-icon-color: #9d174d;
+  --topbar-icon-hover-bg: rgba(249, 168, 212, 0.25);
 }
 
 /* ========== Dark Theme ========== */
@@ -16,6 +30,18 @@
   --text-color: #F9FAFB;
   --nav-link-hover: #3B82F6;
   --menu-color: #1D4ED8;
+  /* UI-REDESIGN desktop-header-sidebar -- desktop shell surface tokens. */
+  --sidebar-bg: #111827;
+  --sidebar-border: rgba(249, 250, 251, 0.1);
+  --sidebar-group-label: rgba(249, 250, 251, 0.5);
+  --sidebar-link-color: #E5E7EB;
+  --sidebar-link-hover-bg: rgba(59, 130, 246, 0.16);
+  --sidebar-link-active-bg: rgba(59, 130, 246, 0.24);
+  --sidebar-link-active-color: #93C5FD;
+  --topbar-bg: #111827;
+  --topbar-border: rgba(249, 250, 251, 0.1);
+  --topbar-icon-color: #E5E7EB;
+  --topbar-icon-hover-bg: rgba(59, 130, 246, 0.16);
 }
 
 /* ========== App Container ========== */
@@ -31,8 +57,393 @@
   to { opacity: 1; }
 }
 
-/* ========== Header Flex ========== */
+/* ==========================================================================
+   UI-REDESIGN desktop-header-sidebar -- desktop shell (sidebar + top header)
+   Section boundary: this block and the sidebar- and topbar- prefixed rules
+   (app-sidebar, app-topbar, and their descendants) below are the entire
+   redesigned section. Everything else in this file (dropdown, mobile-*,
+   toggle-button, logout-button, modal, total-section, etc.) is unchanged
+   and, in several cases, deliberately reused by the markup here (see the
+   code comments in LandingPage.js).
+   Hidden below 601px so mobile keeps its separate header/bottom-nav/
+   settings-drawer untouched (see the 600px media query at the bottom).
+   ========================================================================== */
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+}
+
+/* UI-REDESIGN desktop-header-sidebar -- sidebar anchoring fix.
+   position: sticky silently failed here: App.css sets overflow-x: hidden
+   on <html>/<body> app-wide (to stop horizontal scroll caused by other
+   pages), and that turns the root element into its own scroll container,
+   which breaks sticky's viewport anchoring even though .app-shell and
+   .app-container themselves set no overflow at all. Verified by
+   reproducing the exact ancestor chain (including that global rule) and
+   scrolling programmatically: the sidebar tracked the page 1:1 instead of
+   staying pinned. Changing the global overflow-x rule is out of scope
+   (it's used across the whole app, not just this page), so the sidebar
+   is pinned with position: fixed instead, which anchors to the viewport
+   regardless of ancestor overflow. .app-content-column is offset with
+   margin-left to match the sidebar's current width (expanded/collapsed/
+   tablet) so content never sits underneath it; see the matching
+   .app-content-column rules below and in the two media queries. */
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  padding: 20px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.2s ease;
+  z-index: 500;
+}
+
+/* Sidebar Custom Scrollbar */
+.light-theme .app-sidebar,
+.light-theme .sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(225, 29, 116, 0.38) transparent;
+}
+
+.light-theme .app-sidebar::-webkit-scrollbar,
+.light-theme .sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.light-theme .app-sidebar::-webkit-scrollbar-track,
+.light-theme .sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.light-theme .app-sidebar::-webkit-scrollbar-thumb,
+.light-theme .sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(225, 29, 116, 0.38);
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.light-theme .app-sidebar::-webkit-scrollbar-thumb:hover,
+.light-theme .sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(225, 29, 116, 0.65);
+}
+
+.light-theme .app-sidebar::-webkit-scrollbar-button,
+.light-theme .sidebar-nav::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.app-shell.sidebar-collapsed .app-sidebar {
+  width: 76px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sidebar-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--header-gradient-start), var(--header-gradient-end));
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar-brand-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--sidebar-link-active-color);
+  line-height: 1.2;
+}
+
+.sidebar-brand-tagline {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--sidebar-group-label);
+}
+
+.sidebar-collapse-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sidebar-link-color);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--sidebar-link-hover-bg);
+}
+
+.app-shell.sidebar-collapsed .sidebar-brand-text {
+  display: none;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sidebar-group-label);
+  padding: 0 12px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.app-shell.sidebar-collapsed .sidebar-group-label {
+  display: none;
+}
+
+.sidebar-link,
+.sidebar-link-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--sidebar-link-color);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-link:hover,
+.sidebar-link-trigger:hover {
+  background: var(--sidebar-link-hover-bg);
+}
+
+.sidebar-link-active {
+  background: var(--sidebar-link-active-bg);
+  color: var(--sidebar-link-active-color);
+  font-weight: 600;
+}
+
+.sidebar-link-icon {
+  flex-shrink: 0;
+  font-size: 1.05rem;
+}
+
+.sidebar-link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-shell.sidebar-collapsed .sidebar-link,
+.app-shell.sidebar-collapsed .sidebar-link-trigger {
+  justify-content: center;
+  padding: 10px 8px;
+}
+
+.app-shell.sidebar-collapsed .sidebar-link-label {
+  display: none;
+}
+
+/* The Charts item's flyout submenu reuses .dropdown/.dropdown-menu/
+   .dropdown-item (see LandingPage.js) so the hover-reveal mechanism and
+   prefetch handlers stay exactly as they were. This override is scoped to
+   .sidebar-chart-menu specifically so the mobile modal's .dropdown-menu
+   (which never has this class) is completely unaffected. */
+.sidebar-chart-menu {
+  top: 0;
+  left: 100%;
+  margin-left: 8px;
+  min-width: 170px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--sidebar-border);
+}
+
+.sidebar-chart-menu .dropdown-item {
+  color: var(--sidebar-link-color);
+}
+
+.app-shell.sidebar-collapsed .sidebar-chart-menu {
+  left: 76px;
+}
+
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--sidebar-link-active-bg);
+  color: var(--sidebar-link-active-color);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-logout:hover {
+  background: var(--header-gradient-start);
+  color: #ffffff;
+}
+
+.app-shell.sidebar-collapsed .sidebar-logout {
+  justify-content: center;
+  padding: 10px 8px;
+}
+
+.app-content-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin-left: 260px;
+  transition: margin-left 0.2s ease;
+}
+
+.app-shell.sidebar-collapsed .app-content-column {
+  margin-left: 76px;
+}
+
+.app-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 30ch) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  padding: 12px 24px;
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--topbar-border);
+}
+
+.desktop-typewriter {
+  grid-column: 2;
+  width: 100%;
+  min-width: 0;
+}
+
+.desktop-typewriter p {
+  margin: 0;
+  box-sizing: border-box;
+  width: 0;
+  overflow: hidden;
+  border-right: .15em solid var(--header-gradient-start);
+  color: var(--sidebar-link-active-color);
+  font-weight: 600;
+  letter-spacing: .15em;
+  white-space: nowrap;
+  animation:
+    typing 3.5s steps(30, end) forwards,
+    blink-caret .5s step-end 3 3s forwards;
+}
+
+.app-topbar-controls {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--topbar-border);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.topbar-theme-icon {
+  font-size: 0.95rem;
+  color: var(--sidebar-group-label);
+  transition: color 0.2s ease;
+}
+
+.topbar-theme-icon-active {
+  color: var(--topbar-icon-color);
+}
+
+.topbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--topbar-icon-color);
+  text-decoration: none;
+  font-size: 1rem;
+  transition: background-color 0.2s ease;
+}
+
+.topbar-icon-btn:hover {
+  background: var(--topbar-icon-hover-bg);
+}
+
+/* ========== Mobile header ========== */
 .app-header {
+  display: none;
   background: linear-gradient(270deg, var(--header-gradient-start), var(--header-gradient-end), var(--header-gradient-start));
   background-size: 600% 600%;
   animation: glitter 10s ease infinite; /* Subtle gradient shimmer */
@@ -47,50 +458,6 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
-}
-
-/* Nav Links + Toggle Button Row */
-.app-nav-toggle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: 10px 0;
-  padding: 0 15px;
-  font-size: 1rem;
-}
-
-.app-navigation {
-  display: flex;
-  /* Wrap rather than overflow the header: with the Recurring, Notifications,
-     Export, Receipts and Import links the row no longer fits on narrower
-     desktop/tablet widths. */
-  flex-wrap: wrap;
-  gap: 15px;
-  row-gap: 8px;
-  align-items: center;
-}
-
-.nav-link {
-  color: white;
-  text-decoration: none;
-  font-weight: 450;
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.nav-link:hover {
-  scale: 1.05;
-  border-bottom: 2px solid var(--nav-link-hover);
-  padding-bottom: 3px;
-  font-weight: 600;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  margin-right: 24px;
-  gap: 6px;
 }
 
 /* ========== Dropdown Styles ========== */
@@ -144,16 +511,15 @@
   display: block;
 }
 
-/* ========== Typewriter Animation ========== */
-.typewriter p,
-  .desktop-typewriter p {
+/* ========== Mobile Typewriter Animation ========== */
+.typewriter p {
   color: white;
   overflow: hidden;
-  border-right: .15em solid var(--header-gradient-start); 
+  border-right: .15em solid var(--header-gradient-start);
   white-space: nowrap;
   margin: 0 auto;
   letter-spacing: .15em;
-  animation: 
+  animation:
     typing 3.5s steps(30, end) forwards,
     blink-caret .5s step-end 3 3s forwards; /* Typing + blinking cursor */
 }
@@ -166,7 +532,7 @@
 @keyframes blink-caret {
   from, to { border-color: transparent }
   50% { border-color: var(--header-gradient-end) }
-  100% { border: none; } 
+  100% { border: none; }
 }
 
 /* ========== Main ========== */
@@ -224,10 +590,11 @@
 .select-group {
   display: flex;
   gap: 10px;
-  margin-left: auto; 
+  margin-left: auto;
 }
 
-/* ========== Button Styles ========== */
+/* ========== Button Styles (shared with the mobile settings drawer --
+   see renderMobileSettings() in LandingPage.js -- so left untouched) ========== */
 .header-buttons {
   display: flex;
   gap: 10px;
@@ -282,7 +649,7 @@ select > option {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 999; 
+  z-index: 999;
 }
 
 .modal {
@@ -310,12 +677,12 @@ select > option {
 }
 
 .modal-buttons button:last-child {
-  background: #dc2626; 
+  background: #dc2626;
   color: white;
 }
 
 .modal-buttons button:first-child {
-  background: #e2e8f0; 
+  background: #e2e8f0;
   color: #696969;
 }
 
@@ -465,12 +832,30 @@ select > option {
 }
 
 @media screen and (max-width: 900px) {
-  .app-nav-toggle {
-    gap: 10px;
+  /* UI-REDESIGN desktop-header-sidebar -- tablet-width narrowing so the
+     sidebar never overlaps or clips .app-main between 601-900px.
+     .app-content-column's margin-left is kept in sync with the fixed
+     sidebar's width at this breakpoint (see the position: fixed note
+     above .app-sidebar). */
+  .app-sidebar {
+    width: 210px;
+    padding: 16px 10px;
   }
 
-  .nav-item {
-    margin-right: 0;
+  .app-content-column {
+    margin-left: 210px;
+  }
+
+  .app-shell.sidebar-collapsed .app-sidebar {
+    width: 64px;
+  }
+
+  .app-shell.sidebar-collapsed .app-content-column {
+    margin-left: 64px;
+  }
+
+  .app-topbar {
+    padding: 10px 16px;
   }
 
   .toggle-button,
@@ -486,8 +871,26 @@ select > option {
     display: none;
   }
 
-  .desktop-header {
+  /* UI-REDESIGN desktop-header-sidebar -- the sidebar + top header replace
+     the old .desktop-header row and are hidden the same way it was. */
+  .app-sidebar,
+  .app-topbar {
     display: none;
+  }
+
+  .app-header {
+    display: block;
+  }
+
+  .app-shell {
+    display: block;
+  }
+
+  /* The sidebar is hidden above, so undo the desktop/tablet margin-left
+     offset on .app-content-column -- otherwise mobile content would be
+     pushed to the right by the (now invisible) sidebar's width. */
+  .app-content-column {
+    margin-left: 0;
   }
 
   .mobile-header {
@@ -527,11 +930,11 @@ select > option {
     padding: 12px;
     font-size: 1rem;
     display: flex;
-    justify-content: space-around; 
+    justify-content: space-around;
     width: 100%;
     border-bottom: 1px solid #ddd;
-    text-decoration: none; 
-    color: var(--text-color); 
+    text-decoration: none;
+    color: var(--text-color);
   }
 
   .dropdown-menu a:last-child {

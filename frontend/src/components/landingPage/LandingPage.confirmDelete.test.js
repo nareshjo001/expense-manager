@@ -82,6 +82,7 @@ jest.mock("../charts/linechart/TrendChartPage", () => () => null);
 jest.mock("../charts/barchart/BarChartPage", () => () => null);
 jest.mock("../charts/piechart/PieChartPage", () => () => null);
 jest.mock("../monthlyInsights/Insights", () => () => null);
+jest.mock("../expensesHandling/budget/BudgetsPage", () => () => null);
 
 beforeEach(() => {
   setAccessToken("fake-test-token");
