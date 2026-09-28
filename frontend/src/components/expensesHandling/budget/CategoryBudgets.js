@@ -1,6 +1,7 @@
 import React, { useId, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import './CategoryBudgets.css';
+import './CategoryBudgetsEmpty.css';
 import '../../common/QueryState.css';
 import QueryState from '../../common/QueryState';
 // DAT-001-T06 -- all money renders through the shared formatter; the API
@@ -193,97 +194,76 @@ const FormRightWave = () => (
 const EmptyCategoryBudgetsArt = () => (
   <div className="category-budgets-empty-art-container" aria-hidden="true">
     <svg
-      width="240"
-      height="190"
-      viewBox="0 0 240 190"
+      viewBox="0 0 460 270"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className="category-budgets-empty-svg"
     >
-      <ellipse cx="120" cy="115" rx="95" ry="60" fill="url(#cb-empty-glow)" />
-      <ellipse cx="105" cy="125" rx="75" ry="45" fill="url(#cb-empty-glow2)" />
       <defs>
-        <radialGradient id="cb-empty-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="var(--cb-glow-start, #fce7f3)" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="var(--cb-glow-end, #fdf2f8)" stopOpacity="0" />
+        <radialGradient id="cb-empty-scene-halo">
+          <stop className="cb-empty-halo-start" offset="0%" />
+          <stop className="cb-empty-halo-end" offset="100%" />
         </radialGradient>
-        <radialGradient id="cb-empty-glow2" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#fbcfe8" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#fdf2f8" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="cb-clipboard-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--cb-clip-bg-start, #ffffff)" />
-          <stop offset="100%" stopColor="var(--cb-clip-bg-end, #fff0f6)" />
+        <linearGradient id="cb-empty-board-fill" x1="155" y1="65" x2="305" y2="240" gradientUnits="userSpaceOnUse">
+          <stop className="cb-empty-board-start" />
+          <stop className="cb-empty-board-end" offset="100%" />
         </linearGradient>
-        <linearGradient id="cb-clip-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f43f8e" />
-          <stop offset="100%" stopColor="#db2777" />
+        <linearGradient id="cb-empty-outline-fill" x1="150" y1="70" x2="310" y2="240" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#f9abd0" />
+          <stop offset="100%" stopColor="#dc3f8d" />
         </linearGradient>
-        <linearGradient id="cb-plus-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#e11d74" />
-          <stop offset="100%" stopColor="#b51259" />
+        <linearGradient id="cb-empty-clip-fill" x1="225" y1="48" x2="225" y2="81" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ff91c2" />
+          <stop offset="55%" stopColor="#f14b9a" />
+          <stop offset="100%" stopColor="#c91968" />
+        </linearGradient>
+        <linearGradient id="cb-empty-line-fill" x1="190" y1="0" x2="285" y2="0" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffa8d0" />
+          <stop offset="100%" stopColor="#f274b1" />
+        </linearGradient>
+        <linearGradient id="cb-empty-plus-fill" x1="277" y1="192" x2="344" y2="259" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ff81bc" />
+          <stop offset="52%" stopColor="#e92b82" />
+          <stop offset="100%" stopColor="#ac0753" />
         </linearGradient>
       </defs>
-
-      {/* Dashed curve accent on upper left */}
-      <path
-        d="M 38 75 C 42 45, 75 28, 106 30"
-        stroke="#f9a8d4"
-        strokeWidth="2.5"
-        strokeDasharray="4 5"
-        strokeLinecap="round"
-      />
-
-      {/* Sparkles */}
-      <path
-        d="M 186 38 Q 186 46 194 46 Q 186 46 186 54 Q 186 46 178 46 Q 186 46 186 38 Z"
-        fill="#f472b6"
-      />
-      <circle cx="198" cy="68" r="2.5" fill="#fbcfe8" />
-      <path
-        d="M 44 120 Q 44 125 49 125 Q 44 125 44 130 Q 44 125 39 125 Q 44 125 44 120 Z"
-        fill="#f472b6"
-      />
-
-      {/* Floating faint bubble on lower right */}
-      <circle cx="210" cy="148" r="12" fill="#fbcfe8" fillOpacity="0.45" />
-
-      {/* Clipboard base */}
-      <rect
-        x="84"
-        y="40"
-        width="82"
-        height="102"
-        rx="14"
-        fill="url(#cb-clipboard-grad)"
-        stroke="#f472b6"
-        strokeWidth="3.5"
-      />
-
-      {/* Clip on top */}
-      <rect x="108" y="30" width="34" height="18" rx="6" fill="url(#cb-clip-grad)" />
-      <circle cx="125" cy="36" r="3" fill="#ffffff" />
-
-      {/* Checklist items */}
-      <circle cx="101" cy="64" r="3.5" fill="#f472b6" />
-      <rect x="110" y="61" width="38" height="6" rx="3" fill="#f9a8d4" />
-
-      <circle cx="101" cy="82" r="3.5" fill="#f472b6" />
-      <rect x="110" y="79" width="32" height="6" rx="3" fill="#f9a8d4" />
-
-      <circle cx="101" cy="100" r="3.5" fill="#f472b6" />
-      <rect x="110" y="97" width="28" height="6" rx="3" fill="#f9a8d4" />
-
-      {/* Plus badge on bottom-right of clipboard */}
-      <circle cx="156" cy="132" r="18" fill="url(#cb-plus-grad)" />
-      <path
-        d="M 156 124 V 140 M 148 132 H 164"
-        stroke="#ffffff"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      <ellipse cx="230" cy="243" rx="178" ry="28" fill="url(#cb-empty-scene-halo)" />
+      <circle className="cb-empty-cloud-back" cx="205" cy="145" r="105" />
+      <circle className="cb-empty-cloud-back" cx="282" cy="149" r="94" />
+      <circle className="cb-empty-cloud-front" cx="104" cy="225" r="48" />
+      <circle className="cb-empty-cloud-front" cx="156" cy="226" r="54" />
+      <circle className="cb-empty-cloud-front" cx="325" cy="221" r="58" />
+      <circle className="cb-empty-cloud-front" cx="376" cy="228" r="45" />
+      <path className="cb-empty-cloud-front" d="M72 235 Q139 177 203 225 Q270 181 337 231 L393 255 H61 Z" />
+      <path className="cb-empty-art-sparkle" d="M106 150 Q106 162 119 163 Q106 164 106 177 Q104 164 92 163 Q104 162 106 150 Z" />
+      <path className="cb-empty-art-sparkle" d="M359 65 Q359 78 372 79 Q359 80 359 93 Q357 80 345 79 Q357 78 359 65 Z" />
+      <path className="cb-empty-art-sparkle cb-empty-art-sparkle--pale" d="M389 181 Q389 187 395 188 Q389 189 389 195 Q388 189 382 188 Q388 187 389 181 Z" />
+      <rect x="151" y="66" width="160" height="177" rx="18" fill="url(#cb-empty-board-fill)" stroke="url(#cb-empty-outline-fill)" strokeWidth="7" />
+      <rect x="193" y="53" width="76" height="28" rx="10" fill="url(#cb-empty-clip-fill)" />
+      <circle cx="231" cy="54" r="13" fill="url(#cb-empty-clip-fill)" />
+      <circle cx="231" cy="51" r="4" fill="#fff6fa" />
+      <circle className="cb-empty-bullet" cx="189" cy="111" r="7" />
+      <rect x="205" y="106" width="77" height="10" rx="5" fill="url(#cb-empty-line-fill)" />
+      <circle className="cb-empty-bullet" cx="189" cy="145" r="7" />
+      <rect x="205" y="140" width="77" height="10" rx="5" fill="url(#cb-empty-line-fill)" />
+      <circle className="cb-empty-bullet" cx="189" cy="179" r="7" />
+      <rect x="205" y="174" width="51" height="10" rx="5" fill="url(#cb-empty-line-fill)" />
+      <circle cx="311" cy="212" r="35" fill="url(#cb-empty-plus-fill)" />
+      <ellipse cx="299" cy="192" rx="14" ry="7" fill="#ffffff" fillOpacity="0.22" transform="rotate(-30 299 192)" />
+      <path d="M311 196 V228 M295 212 H327" stroke="#ffffff" strokeWidth="5" strokeLinecap="round" />
     </svg>
   </div>
+);
+
+const EmptyPanelDecor = () => (
+  <svg className="category-budgets-empty-decor" viewBox="0 0 900 500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <path d="M-12 232 C26 89 98 104 158 76 C199 57 201 37 231 12" />
+    <path d="M694 513 C734 448 792 467 842 421 C869 397 878 374 914 341" />
+    <circle cx="54" cy="225" r="15" />
+    <circle cx="846" cy="462" r="14" />
+    <path className="category-budgets-empty-decor-star" d="M576 102 Q576 113 588 114 Q576 115 576 127 Q575 115 563 114 Q575 113 576 102 Z" />
+    <path className="category-budgets-empty-decor-star" d="M330 209 Q330 216 338 217 Q330 218 330 225 Q329 218 322 217 Q329 216 330 209 Z" />
+  </svg>
 );
 
 const CategoryBudgetRow = ({
@@ -808,21 +788,24 @@ const CategoryBudgets = () => {
 
             <div className="category-budgets-panels">
               {/* Left Panel: Category Budgets or Illustrated Empty State */}
-              <div className="category-budgets-panel category-budgets-panel--left">
+              <div className={`category-budgets-panel category-budgets-panel--left${categories.length === 0 ? ' category-budgets-panel--empty' : ''}`}>
                 <CardCornerWave />
                 {categories.length === 0 ? (
-                  <div className="category-budgets-empty">
-                    <EmptyCategoryBudgetsArt />
-                    <h3 className="category-budgets-empty-title">
-                      No category budgets for {monthLabel(summary.month ?? month)} yet.
-                    </h3>
-                    {writable && (
-                      <p className="category-budgets-empty-subtitle">
-                        Give a category like Food or Travel its own limit to track it separately from
-                        your overall budget.
-                      </p>
-                    )}
-                  </div>
+                  <>
+                    <EmptyPanelDecor />
+                    <div className="category-budgets-empty">
+                      <EmptyCategoryBudgetsArt />
+                      <h3 className="category-budgets-empty-title">
+                        No category budgets for {monthLabel(summary.month ?? month)} yet.
+                      </h3>
+                      {writable && (
+                        <p className="category-budgets-empty-subtitle">
+                          Give a category like Food or Travel its own limit to track it separately from
+                          your overall budget.
+                        </p>
+                      )}
+                    </div>
+                  </>
                 ) : (
                   <ul className="category-budgets-list" aria-label="Category budgets">
                     {categories.map((row) => (
