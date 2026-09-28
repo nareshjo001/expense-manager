@@ -70,6 +70,10 @@
   font-size: 1.1rem;
 }
 
+.light-theme .expenses-page-container .expense-title {
+  color: #9E2458;
+}
+
 /* RIGHT SIDE (AMOUNT + ACTIONS) */
 .expense-actions {
   position: relative;
@@ -84,6 +88,10 @@
   font-size: 1.2rem;
   color: var(--expense-amount);
   transition: transform 0.5s ease;
+}
+
+.light-theme .expenses-page-container .expense-amount {
+  color: #72143D;
 }
 
 /* Move amount left on hover (desktop only) */
