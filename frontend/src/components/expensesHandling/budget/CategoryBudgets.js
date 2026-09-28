@@ -72,10 +72,16 @@ const useVisibleRowCap = (listRef, deps, openRowClass) => {
     const list = listRef.current;
     if (!list) return undefined;
 
+    // Writes the cap only when it changes, so a re-fit that measures the
+    // same height leaves the layout alone.
+    const setMaxHeight = (value) => {
+      if (list.style.maxHeight !== value) list.style.maxHeight = value;
+    };
+
     const fit = () => {
       const rows = Array.from(list.children);
       if (rows.length <= MAX_VISIBLE_ROWS) {
-        list.style.maxHeight = 'none';
+        setMaxHeight('none');
         return null;
       }
       const openIndex = openRowClass
@@ -89,7 +95,7 @@ const useVisibleRowCap = (listRef, deps, openRowClass) => {
         + (parseFloat(style.paddingTop) || 0)
         + (parseFloat(style.paddingBottom) || 0);
       // Without layout (e.g. jsdom) keep the stylesheet's fallback cap.
-      list.style.maxHeight = height > 0 ? `${Math.ceil(height)}px` : '';
+      setMaxHeight(height > 0 ? `${Math.ceil(height)}px` : '');
       return openIndex >= 0 ? rows[openIndex] : null;
     };
 
@@ -103,11 +109,24 @@ const useVisibleRowCap = (listRef, deps, openRowClass) => {
     }
 
     if (typeof ResizeObserver === 'undefined') return undefined;
+    // Re-fit on the next animation frame, not inside the observer callback:
+    // changing the cap there can add or remove the page scrollbar, which
+    // resizes every observed row again within the same frame, and the
+    // browser then reports "ResizeObserver loop completed with undelivered
+    // notifications". Any number of row resizes share one pending frame.
+    let frame = 0;
     const observer = new ResizeObserver(() => {
-      fit();
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        fit();
+      });
     });
     Array.from(list.children).forEach((row) => observer.observe(row));
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 };
 

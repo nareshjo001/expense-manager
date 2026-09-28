@@ -669,13 +669,15 @@ describe("CategoryBudgets -- populated list accordion", () => {
 describe("CategoryBudgets -- at most four rows visible", () => {
   // jsdom has no layout: give every list row a height (budget rows 60px,
   // 300px when open; unbudgeted rows 58px) stacked with 10px gaps.
+  let openRowHeight;
   const rowHeight = (el) => {
-    if (el.classList.contains("category-budget-row--expanded")) return 300;
+    if (el.classList.contains("category-budget-row--expanded")) return openRowHeight;
     if (el.classList.contains("category-budgets-unbudgeted-item")) return 58;
     return 60;
   };
   let rectSpy;
   beforeEach(() => {
+    openRowHeight = 300;
     rectSpy = jest.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
       let top = 0;
       let height = 0;
@@ -736,5 +738,67 @@ describe("CategoryBudgets -- at most four rows visible", () => {
     renderComponent();
     await screen.findByText("Health");
     expect(screen.getByRole("list", { name: /unbudgeted spending by category/i }).style.maxHeight).toBe("262px");
+  });
+
+  describe("when a row resizes", () => {
+    let observers;
+    let rafSpy;
+    let cafSpy;
+    beforeEach(() => {
+      // jsdom has no ResizeObserver: record the ones the lists create.
+      observers = [];
+      window.ResizeObserver = class {
+        constructor(callback) {
+          this.callback = callback;
+          this.disconnect = jest.fn();
+          observers.push(this);
+        }
+
+        observe() {}
+      };
+      // Queue animation frames so the test decides when the next one runs.
+      let lastFrame = 0;
+      rafSpy = jest.spyOn(window, "requestAnimationFrame").mockImplementation(() => {
+        lastFrame += 1;
+        return lastFrame;
+      });
+      cafSpy = jest.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      delete window.ResizeObserver;
+      rafSpy.mockRestore();
+      cafSpy.mockRestore();
+    });
+
+    it("re-measures on the next animation frame, not inside the ResizeObserver callback", async () => {
+      getCategoryBudgets.mockResolvedValue(envelope(makeSummary({ categories: budgetRows(6) })));
+      const { unmount } = renderComponent();
+      await screen.findByText("Category 1");
+      const list = screen.getByRole("list", { name: "Category budgets" });
+      expect(list.style.maxHeight).toBe("510px");
+      const live = observers.filter((observer) => observer.disconnect.mock.calls.length === 0);
+      expect(live).toHaveLength(1);
+      const [observer] = live;
+      rafSpy.mockClear();
+
+      // The open row grows, e.g. its text wraps once the page scrollbar shows.
+      openRowHeight = 340;
+      observer.callback([]);
+      observer.callback([]);
+      // Resizing the list inside the callback could resize the rows again in
+      // the same frame (the browser's "ResizeObserver loop" error), so the
+      // cap is left alone until one shared animation frame runs.
+      expect(list.style.maxHeight).toBe("510px");
+      expect(rafSpy).toHaveBeenCalledTimes(1);
+      rafSpy.mock.calls[0][0]();
+      expect(list.style.maxHeight).toBe("550px");
+
+      // A frame still pending when the list goes away is cancelled.
+      observer.callback([]);
+      const pendingFrame = rafSpy.mock.results[1].value;
+      unmount();
+      expect(observer.disconnect).toHaveBeenCalled();
+      expect(cafSpy).toHaveBeenCalledWith(pendingFrame);
+    });
   });
 });
