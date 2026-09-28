@@ -56,6 +56,14 @@
   display: none;
 }
 
+/* With budgets listed, the cards drop the static 400px minimum: side by side
+   they share one height, set by whichever card's rows are taller. The empty
+   state keeps the shared panel height. The row caps (at most four rows
+   visible, the rest scroll) are measured in CategoryBudgets.js. */
+.category-budgets-panels--list > .category-budgets-panel {
+  min-height: 0;
+}
+
 /* Panel header -- same scale as the unbudgeted card's header, plus the thin
    divider the list design calls for. */
 .category-budgets-list-header {
@@ -107,7 +115,8 @@
   color: var(--cbl-muted);
 }
 
-/* List */
+/* List. max-height is only a fallback: CategoryBudgets.js sizes the list to
+   exactly four rows (or removes the cap when there are four or fewer). */
 .category-budgets-panel--list .category-budgets-list {
   gap: 10px;
   max-height: 640px;
@@ -302,10 +311,10 @@
 }
 
 /* Expanded detail -- existing progress, figures, risk message and actions,
-   at the same compact scale as the summary. */
+   kept compact: small labels, 14px values, slim bar, small buttons. */
 .category-budget-detail {
-  margin: 0 7px 7px;
-  padding: 14px 16px 16px;
+  margin: 0 6px 6px;
+  padding: 12px 14px;
   border-radius: 10px;
   background: var(--cbl-detail-bg);
 }
@@ -315,8 +324,8 @@
 }
 
 .category-budgets-panel--list .category-budget-progress {
-  height: 10px;
-  margin: 0 0 14px;
+  height: 8px;
+  margin: 0 0 10px;
   background: var(--cbl-track);
 }
 
@@ -325,41 +334,44 @@
 .category-budgets-panel--list .category-budget-progress-fill--critical { background: var(--cbl-critical-fill); }
 .category-budgets-panel--list .category-budget-progress-fill--overspent { background: var(--cbl-overspent-fill); }
 
-/* Three equal columns with dividers. A figure never shrinks below its
-   widest amount (min-content), so when large amounts cannot share one line
-   the last figure wraps to a new line instead of an amount being split.
-   Every figure carries the same left padding and divider; the list is
-   pulled left by that amount and clipped, which hides the divider (and
-   cancels the padding) of whichever figure starts a line. */
+/* Figures with dividers. Each figure is sized to its content (so "Spent"
+   keeps its amount and percentage on one line) and shares the spare width.
+   A figure never shrinks below its widest amount (min-content): when large
+   amounts cannot share one line, the last figure wraps to a new line
+   instead of an amount being split. Every figure carries the same left
+   padding and divider; the list is pulled left by that amount and clipped,
+   which hides the divider (and cancels the padding) of whichever figure
+   starts a line. */
 .category-budgets-panel--list .category-budget-figures {
   display: flex;
   flex-wrap: wrap;
-  row-gap: 10px;
-  margin: 0 0 0 -13px;
-  clip-path: inset(0 0 0 13px);
+  row-gap: 8px;
+  margin: 0 0 0 -11px;
+  clip-path: inset(0 0 0 11px);
   font-size: inherit;
 }
 
 .category-budgets-panel--list .category-budget-figures div {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: min-content;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 0 12px;
+  gap: 1px;
+  padding: 0 10px;
   border-left: 1px solid var(--cbl-row-border);
 }
 
 .category-budgets-panel--list .category-budget-figures dt {
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--cbl-muted);
 }
 
 .category-budgets-panel--list .category-budget-figures dd {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--cbl-name);
   overflow-wrap: normal;
 }
@@ -369,8 +381,9 @@
 }
 
 .category-budgets-panel--list .category-budget-at-risk {
-  margin: 12px 0 0;
-  font-size: 13px;
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
   font-weight: 500;
   color: var(--cbl-critical-pill-bg);
 }
@@ -381,28 +394,28 @@
 
 .category-budgets-panel--list .category-budget-actions,
 .category-budgets-panel--list .category-budget-confirm {
-  margin-top: 14px;
-  gap: 10px;
+  margin-top: 12px;
+  gap: 8px;
 }
 
 .category-budgets-panel--list .category-budget-actions .category-budget-button,
 .category-budgets-panel--list .category-budget-confirm .category-budget-button {
-  min-width: 88px;
-  min-height: 38px;
-  padding: 8px 18px;
-  border-radius: 10px;
+  min-width: 64px;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: 8px;
   border: 1px solid var(--cbl-row-border);
   background: var(--cbl-detail-bg);
   color: var(--cbl-name);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.4;
   text-align: center;
   box-sizing: border-box;
 }
 
 .category-budgets-panel--list .category-budget-actions .category-budget-button--danger,
 .category-budgets-panel--list .category-budget-confirm .category-budget-button--danger {
-  min-width: 112px;
   border-color: var(--cbl-danger-border);
   color: var(--cbl-danger);
 }
@@ -419,7 +432,7 @@
 
 .category-budgets-panel--list .category-budget-confirm > span {
   flex-basis: 100%;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--cbl-name);
 }
@@ -429,7 +442,7 @@
 @container (max-width: 340px) {
   .category-budgets-panel--list .category-budget-figures {
     flex-direction: column;
-    row-gap: 6px;
+    row-gap: 4px;
     margin-left: 0;
     clip-path: none;
   }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import './CategoryBudgets.css';
@@ -56,6 +56,59 @@ const STATUS_LABEL = {
   Warning: 'Warning',
   Critical: 'Critical',
   Overspent: 'Overspent',
+};
+
+// Both panels list at most this many rows; further rows scroll inside the
+// list, and a list with fewer rows is only as tall as its rows.
+const MAX_VISIBLE_ROWS = 4;
+
+// Caps a list at MAX_VISIBLE_ROWS rows. Rows can differ in height (an open
+// budget row carries its details, long names wrap), so the window is
+// measured rather than a fixed pixel height: it is exactly four rows tall --
+// the first four, or the four ending at the open row (openRowClass) when
+// that row sits further down. Re-measures whenever a row changes size.
+const useVisibleRowCap = (listRef, deps, openRowClass) => {
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return undefined;
+
+    const fit = () => {
+      const rows = Array.from(list.children);
+      if (rows.length <= MAX_VISIBLE_ROWS) {
+        list.style.maxHeight = 'none';
+        return null;
+      }
+      const openIndex = openRowClass
+        ? rows.findIndex((row) => row.classList.contains(openRowClass))
+        : -1;
+      const start = openIndex >= MAX_VISIBLE_ROWS ? openIndex - MAX_VISIBLE_ROWS + 1 : 0;
+      const top = rows[start].getBoundingClientRect().top;
+      const bottom = rows[start + MAX_VISIBLE_ROWS - 1].getBoundingClientRect().bottom;
+      const style = window.getComputedStyle(list);
+      const height = bottom - top
+        + (parseFloat(style.paddingTop) || 0)
+        + (parseFloat(style.paddingBottom) || 0);
+      // Without layout (e.g. jsdom) keep the stylesheet's fallback cap.
+      list.style.maxHeight = height > 0 ? `${Math.ceil(height)}px` : '';
+      return openIndex >= 0 ? rows[openIndex] : null;
+    };
+
+    // Keep a newly opened (or newly saved) row fully visible in the list.
+    const openRow = fit();
+    if (openRow) {
+      const listBox = list.getBoundingClientRect();
+      const rowBox = openRow.getBoundingClientRect();
+      if (rowBox.bottom > listBox.bottom) list.scrollTop += rowBox.bottom - listBox.bottom;
+      else if (rowBox.top < listBox.top) list.scrollTop -= listBox.top - rowBox.top;
+    }
+
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      fit();
+    });
+    Array.from(list.children).forEach((row) => observer.observe(row));
+    return () => observer.disconnect();
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 };
 
 // errorCode -> inline message. Codes from the T01 contract.
@@ -473,6 +526,11 @@ const CategoryBudgets = () => {
   const toggleRow = (id) => {
     setExpandedId(openRowId === id ? null : id);
   };
+
+  const budgetListRef = useRef(null);
+  const unbudgetedListRef = useRef(null);
+  useVisibleRowCap(budgetListRef, [categories, openRowId], 'category-budget-row--expanded');
+  useVisibleRowCap(unbudgetedListRef, [unbudgeted]);
 
   // No canonical category list exists client-side (CAT-001 categories are
   // free text), so suggest the categories this month already has data for.
@@ -983,7 +1041,7 @@ const CategoryBudgets = () => {
               </p>
             )}
 
-            <div className="category-budgets-panels">
+            <div className={`category-budgets-panels${categories.length > 0 ? ' category-budgets-panels--list' : ''}`}>
               {/* Left Panel: Category Budgets or Illustrated Empty State */}
               <div className={`category-budgets-panel category-budgets-panel--left${categories.length === 0 ? ' category-budgets-panel--empty' : ' category-budgets-panel--list'}`}>
                 <CardCornerWave />
@@ -1018,7 +1076,7 @@ const CategoryBudgets = () => {
                         </p>
                       </div>
                     </div>
-                  <ul className="category-budgets-list" aria-label="Category budgets">
+                  <ul ref={budgetListRef} className="category-budgets-list" aria-label="Category budgets">
                     {categories.map((row) => (
                       <CategoryBudgetRow
                         key={row.id}
@@ -1063,7 +1121,11 @@ const CategoryBudgets = () => {
                 </div>
 
                 {unbudgeted.length > 0 ? (
-                  <ul className="category-budgets-unbudgeted-list" aria-label="Unbudgeted spending by category">
+                  <ul
+                    ref={unbudgetedListRef}
+                    className="category-budgets-unbudgeted-list"
+                    aria-label="Unbudgeted spending by category"
+                  >
                     {unbudgeted.map((c) => {
                       const [Icon, tone] = categoryVisual(c.category);
                       return (

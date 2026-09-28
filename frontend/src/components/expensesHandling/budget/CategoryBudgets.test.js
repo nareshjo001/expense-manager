@@ -569,10 +569,12 @@ describe("CategoryBudgets -- populated list accordion", () => {
     expect(second).toHaveAttribute("aria-expanded", "false");
     expect(third).toHaveAttribute("aria-expanded", "false");
 
-    const panel = document.getElementById(first.getAttribute("aria-controls"));
-    expect(panel).not.toBeNull();
-    expect(panel).not.toHaveAttribute("hidden");
-    expect(document.getElementById(second.getAttribute("aria-controls"))).toHaveAttribute("hidden");
+    // aria-controls must name the detail region, so look it up by that id.
+    const controlled = (button) =>
+      document.getElementById(button.getAttribute("aria-controls")); // eslint-disable-line testing-library/no-node-access
+    expect(controlled(first)).not.toBeNull();
+    expect(controlled(first)).not.toHaveAttribute("hidden");
+    expect(controlled(second)).toHaveAttribute("hidden");
     expect(screen.getByRole("heading", { name: "Category Budgets", level: 3 })).toBeInTheDocument();
     expect(screen.getByText(/tap a category to view details and actions/i)).toBeInTheDocument();
   });
@@ -661,5 +663,78 @@ describe("CategoryBudgets -- populated list accordion", () => {
     expect(rent).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: /^gym/i })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText(/^tap a category to view details\.$/i)).toBeInTheDocument();
+  });
+});
+
+describe("CategoryBudgets -- at most four rows visible", () => {
+  // jsdom has no layout: give every list row a height (budget rows 60px,
+  // 300px when open; unbudgeted rows 58px) stacked with 10px gaps.
+  const rowHeight = (el) => {
+    if (el.classList.contains("category-budget-row--expanded")) return 300;
+    if (el.classList.contains("category-budgets-unbudgeted-item")) return 58;
+    return 60;
+  };
+  let rectSpy;
+  beforeEach(() => {
+    rectSpy = jest.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+      let top = 0;
+      let height = 0;
+      // Fake layout needs the row's position among its siblings.
+      /* eslint-disable testing-library/no-node-access */
+      const list = this.parentElement;
+      if (this.tagName === "LI" && list?.tagName === "UL") {
+        for (const sibling of list.children) {
+          if (sibling === this) break;
+          top += rowHeight(sibling) + 10;
+        }
+        height = rowHeight(this);
+      }
+      /* eslint-enable testing-library/no-node-access */
+      return { top, bottom: top + height, left: 0, right: 300, width: 300, height, x: 0, y: top, toJSON() {} };
+    });
+  });
+  afterEach(() => rectSpy.mockRestore());
+
+  const budgetRows = (count) =>
+    Array.from({ length: count }, (_, i) => makeRow({ id: `cb-${i}`, category: `Category ${i + 1}` }));
+
+  it("does not cap a list of four or fewer rows", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary({ categories: budgetRows(4) })));
+    renderComponent();
+    await screen.findByText("Category 1");
+    expect(screen.getByRole("list", { name: "Category budgets" }).style.maxHeight).toBe("none");
+  });
+
+  it("sizes a longer list to exactly four rows, including the open one", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary({ categories: budgetRows(6) })));
+    renderComponent();
+    await screen.findByText("Category 1");
+    const list = screen.getByRole("list", { name: "Category budgets" });
+
+    // First row open by default: 300 + 60 + 60 + 60 + three 10px gaps.
+    expect(list.style.maxHeight).toBe("510px");
+
+    fireEvent.click(screen.getByRole("button", { name: /^category 1/i }));
+    expect(list.style.maxHeight).toBe("270px");
+
+    // Opening the sixth row sizes the window to rows three to six.
+    fireEvent.click(screen.getByRole("button", { name: /^category 6/i }));
+    expect(list.style.maxHeight).toBe("510px");
+  });
+
+  it("caps the unbudgeted list at four rows as well", async () => {
+    getCategoryBudgets.mockResolvedValue(
+      envelope(
+        makeSummary({
+          unbudgetedCategories: ["Bills", "Food", "Travel", "Shopping", "Health"].map((category, i) => ({
+            category,
+            spentMinor: 1000 * (i + 1),
+          })),
+        })
+      )
+    );
+    renderComponent();
+    await screen.findByText("Health");
+    expect(screen.getByRole("list", { name: /unbudgeted spending by category/i }).style.maxHeight).toBe("262px");
   });
 });
