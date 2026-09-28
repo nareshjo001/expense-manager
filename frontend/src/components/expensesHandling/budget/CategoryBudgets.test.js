@@ -360,6 +360,31 @@ describe("CategoryBudgets -- writes", () => {
 });
 
 describe("CategoryBudgets -- category suggestions", () => {
+  it("anchors the portaled menu above the input at desktop and mobile sizes", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary()));
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    const originalHeight = window.innerHeight;
+    let inputRect = { top: 700, bottom: 748, left: 120, width: 300 };
+    input.getBoundingClientRect = jest.fn(() => inputRect);
+
+    try {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+      fireEvent.focus(input);
+      const menu = screen.getByRole("listbox", { name: "Category suggestions" });
+      expect(menu.parentElement).toBe(document.body);
+      expect(menu).toHaveStyle({ bottom: "206px", left: "120px", width: "300px", maxHeight: "240px" });
+      expect(menu.style.top).toBe("");
+
+      inputRect = { top: 500, bottom: 548, left: 18, width: 340 };
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 640 });
+      fireEvent.resize(window);
+      expect(menu).toHaveStyle({ bottom: "146px", left: "18px", width: "340px", maxHeight: "240px" });
+    } finally {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+    }
+  });
+
   it("uses distinct selected-month categories, filters them, and allows a new name", async () => {
     getCategoryBudgets.mockResolvedValue(envelope(makeSummary({
       unbudgetedCategories: [

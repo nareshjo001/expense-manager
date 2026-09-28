@@ -435,10 +435,10 @@ const CategoryBudgets = () => {
     const rect = categoryInputRef.current?.getBoundingClientRect();
     if (!rect) return;
     setSuggestionMenuPosition({
-      top: rect.bottom + 6,
+      bottom: window.innerHeight - rect.top + 6,
       left: rect.left,
       width: rect.width,
-      maxHeight: Math.max(72, Math.min(240, window.innerHeight - rect.bottom - 14)),
+      maxHeight: Math.min(240, Math.max(0, rect.top - 14)),
     });
   }, []);
 
