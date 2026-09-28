@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import './CategoryBudgets.css';
 import './CategoryBudgetsEmpty.css';
+import './CategoryBudgetsList.css';
 import '../../common/QueryState.css';
 import QueryState from '../../common/QueryState';
 // DAT-001-T06 -- all money renders through the shared formatter; the API
@@ -25,6 +26,7 @@ import {
   FaPlus,
   FaCalendarAlt,
   FaChevronDown,
+  FaChevronRight,
 } from 'react-icons/fa';
 
 // BUD-001-T05 -- per-category monthly budgets on top of (never replacing)
@@ -43,6 +45,17 @@ const STATUS_CLASS = {
   Warning: 'warning',
   Critical: 'critical',
   Overspent: 'overspent',
+};
+
+// Display text for the backend status in the populated list. Only the
+// wording of Safe changes ("On track", as in the reference design); the
+// backend value is still what drives styling and the progress bar's
+// accessible value text.
+const STATUS_LABEL = {
+  Safe: 'On track',
+  Warning: 'Warning',
+  Critical: 'Critical',
+  Overspent: 'Overspent',
 };
 
 // errorCode -> inline message. Codes from the T01 contract.
@@ -267,9 +280,17 @@ const EmptyPanelDecor = () => (
   </svg>
 );
 
+// Populated-list row: a collapsible summary (icon, name, "spent of budget",
+// status, chevron) over a detail area holding the existing progress bar,
+// figures, at-risk projection and Edit/Delete/confirm controls. Every value
+// is the backend row formatted through formatMinor -- nothing is computed
+// here beyond clamping the bar width.
 const CategoryBudgetRow = ({
   row,
   writable,
+  isExpanded,
+  detailId,
+  onToggle,
   isConfirmingDelete,
   isDeleting,
   onEdit,
@@ -279,106 +300,127 @@ const CategoryBudgetRow = ({
 }) => {
   const [CategoryIcon, categoryTone] = categoryVisual(row.category);
   const statusClass = STATUS_CLASS[row.status] ?? 'safe';
+  const statusLabel = STATUS_LABEL[row.status] ?? row.status;
   const barValue = Math.max(0, Math.min(Number(row.utilization) || 0, 100));
   const isOver = row.remainingMinor < 0;
 
   return (
-    <li className={`category-budget-row category-budget-row--${statusClass}`}>
-      <div className="category-budget-row-header">
+    <li
+      className={`category-budget-row category-budget-row--${statusClass}${isExpanded ? ' category-budget-row--expanded' : ''}`}
+    >
+      <button
+        type="button"
+        className="category-budget-summary"
+        aria-expanded={isExpanded}
+        aria-controls={detailId}
+        onClick={() => onToggle(row.id)}
+      >
         <span className={`category-budget-icon category-budget-icon--${categoryTone}`}>
           <CategoryIcon aria-hidden="true" />
         </span>
-        <span className="category-budget-name">{row.category}</span>
-        <span className={`category-budget-status category-budget-status--${statusClass}`}>
-          {row.status}
+        <span className="category-budget-summary-text">
+          <span className="category-budget-name">{row.category}</span>
+          <span className="category-budget-summary-amounts">
+            <span className="category-budget-summary-spent">{formatMinor(row.spentMinor)}</span>
+            {' spent of '}
+            <span className="category-budget-summary-budget">{formatMinor(row.amountMinor)}</span>
+          </span>
         </span>
-      </div>
+        <span className={`category-budget-status category-budget-status--${statusClass}`}>
+          {statusLabel}
+        </span>
+        <span className="category-budget-chevron" aria-hidden="true">
+          {isExpanded ? <FaChevronDown /> : <FaChevronRight />}
+        </span>
+      </button>
 
-      <div
-        className="category-budget-progress"
-        role="progressbar"
-        aria-label={`${row.category} budget used`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={barValue}
-        aria-valuetext={`${formatPercent(row.utilization)} used, ${row.status}`}
-      >
+      <div id={detailId} className="category-budget-detail" hidden={!isExpanded}>
         <div
-          className={`category-budget-progress-fill category-budget-progress-fill--${statusClass}`}
-          style={{ width: `${barValue}%` }}
-        />
+          className="category-budget-progress"
+          role="progressbar"
+          aria-label={`${row.category} budget used`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={barValue}
+          aria-valuetext={`${formatPercent(row.utilization)} used, ${row.status}`}
+        >
+          <div
+            className={`category-budget-progress-fill category-budget-progress-fill--${statusClass}`}
+            style={{ width: `${barValue}%` }}
+          />
+        </div>
+
+        <dl className="category-budget-figures">
+          <div>
+            <dt>Budget</dt>
+            <dd>{formatMinor(row.amountMinor)}</dd>
+          </div>
+          <div>
+            <dt>Spent</dt>
+            <dd>
+              {formatMinor(row.spentMinor)} ({formatPercent(row.utilization)})
+            </dd>
+          </div>
+          <div>
+            <dt>{isOver ? 'Over by' : 'Remaining'}</dt>
+            <dd className={isOver ? 'category-budget-over' : undefined}>
+              {formatMinor(Math.abs(row.remainingMinor))}
+            </dd>
+          </div>
+        </dl>
+
+        {row.atRisk && (
+          <p className="category-budget-at-risk">
+            On pace to exceed this budget
+            {typeof row.projectedSpentMinor === 'number' &&
+              ` (projected ${formatMinor(row.projectedSpentMinor)} by month end)`}
+            .
+          </p>
+        )}
+
+        {writable && !isConfirmingDelete && (
+          <div className="category-budget-actions">
+            <button
+              type="button"
+              className="category-budget-button"
+              onClick={() => onEdit(row)}
+              aria-label={`Edit ${row.category} budget`}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              className="category-budget-button category-budget-button--danger"
+              onClick={() => onRequestDelete(row.id)}
+              aria-label={`Delete ${row.category} budget`}
+            >
+              Delete
+            </button>
+          </div>
+        )}
+
+        {writable && isConfirmingDelete && (
+          <div className="category-budget-confirm" role="group" aria-label={`Confirm deleting ${row.category} budget`}>
+            <span>Delete the {row.category} budget?</span>
+            <button
+              type="button"
+              className="category-budget-button category-budget-button--danger"
+              onClick={() => onConfirmDelete(row)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Confirm delete'}
+            </button>
+            <button
+              type="button"
+              className="category-budget-button"
+              onClick={onCancelDelete}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
-
-      <dl className="category-budget-figures">
-        <div>
-          <dt>Budget</dt>
-          <dd>{formatMinor(row.amountMinor)}</dd>
-        </div>
-        <div>
-          <dt>Spent</dt>
-          <dd>
-            {formatMinor(row.spentMinor)} ({formatPercent(row.utilization)})
-          </dd>
-        </div>
-        <div>
-          <dt>{isOver ? 'Over by' : 'Remaining'}</dt>
-          <dd className={isOver ? 'category-budget-over' : undefined}>
-            {formatMinor(Math.abs(row.remainingMinor))}
-          </dd>
-        </div>
-      </dl>
-
-      {row.atRisk && (
-        <p className="category-budget-at-risk">
-          On pace to exceed this budget
-          {typeof row.projectedSpentMinor === 'number' &&
-            ` (projected ${formatMinor(row.projectedSpentMinor)} by month end)`}
-          .
-        </p>
-      )}
-
-      {writable && !isConfirmingDelete && (
-        <div className="category-budget-actions">
-          <button
-            type="button"
-            className="category-budget-button"
-            onClick={() => onEdit(row)}
-            aria-label={`Edit ${row.category} budget`}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            className="category-budget-button category-budget-button--danger"
-            onClick={() => onRequestDelete(row.id)}
-            aria-label={`Delete ${row.category} budget`}
-          >
-            Delete
-          </button>
-        </div>
-      )}
-
-      {writable && isConfirmingDelete && (
-        <div className="category-budget-confirm" role="group" aria-label={`Confirm deleting ${row.category} budget`}>
-          <span>Delete the {row.category} budget?</span>
-          <button
-            type="button"
-            className="category-budget-button category-budget-button--danger"
-            onClick={() => onConfirmDelete(row)}
-            disabled={isDeleting}
-          >
-            {isDeleting ? 'Deleting...' : 'Confirm delete'}
-          </button>
-          <button
-            type="button"
-            className="category-budget-button"
-            onClick={onCancelDelete}
-            disabled={isDeleting}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
     </li>
   );
 };
@@ -403,6 +445,10 @@ const CategoryBudgets = () => {
   const [suggestionMenuPosition, setSuggestionMenuPosition] = useState(null);
   const categoryInputRef = useRef(null);
   const suggestionMenuRef = useRef(null);
+  const amountInputRef = useRef(null);
+  // Accordion: undefined = "default" (first row open), null = the user
+  // collapsed everything, otherwise the id of the open row.
+  const [expandedId, setExpandedId] = useState(undefined);
 
   const query = useCategoryBudgetsQuery(month);
   const saveMutation = useSaveCategoryBudgetMutation();
@@ -414,6 +460,19 @@ const CategoryBudgets = () => {
   const unbudgeted = summary?.unbudgetedCategories ?? [];
   const totals = summary?.totals;
   const writable = summary?.writable === true;
+
+  // Resolved during render so the first real row is open on load without a
+  // collapsed first frame. If the open row disappears (deleted, or a month
+  // switch), fall back to the first row again.
+  const openRowId = (() => {
+    if (expandedId === null) return null;
+    if (expandedId !== undefined && categories.some((c) => c.id === expandedId)) return expandedId;
+    return categories[0]?.id ?? null;
+  })();
+
+  const toggleRow = (id) => {
+    setExpandedId(openRowId === id ? null : id);
+  };
 
   // No canonical category list exists client-side (CAT-001 categories are
   // free text), so suggest the categories this month already has data for.
@@ -514,6 +573,7 @@ const CategoryBudgets = () => {
     if (!MONTH_PATTERN.test(next)) return;
     setMonth(next);
     resetForm();
+    setExpandedId(undefined);
     setConfirmingDeleteId(null);
     setListError(null);
     setNotice('');
@@ -541,6 +601,14 @@ const CategoryBudgets = () => {
     setForm({ category: row.category, amount: minorToInputValue(row.amountMinor) });
     setFormError(null);
     setNotice('');
+    // The form sits below the panels; bring it into view so the edit is
+    // obvious. Category is read-only while editing, so focus the amount.
+    requestAnimationFrame(() => {
+      const input = amountInputRef.current;
+      if (!input) return;
+      input.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      input.focus({ preventScroll: true });
+    });
   };
 
   const handleSubmit = (e) => {
@@ -560,6 +628,7 @@ const CategoryBudgets = () => {
             return;
           }
           const saved = data.data?.budget?.category ?? category;
+          if (data.data?.budget?.id) setExpandedId(data.data.budget.id);
           setNotice(`Saved the ${saved} budget.`);
           resetForm();
         },
@@ -774,6 +843,7 @@ const CategoryBudgets = () => {
               <span className="category-budgets-currency-symbol" aria-hidden="true">₹</span>
               <input
                 id={amountInputId}
+                ref={amountInputRef}
                 type="number"
                 inputMode="decimal"
                 min="0.01"
@@ -915,7 +985,7 @@ const CategoryBudgets = () => {
 
             <div className="category-budgets-panels">
               {/* Left Panel: Category Budgets or Illustrated Empty State */}
-              <div className={`category-budgets-panel category-budgets-panel--left${categories.length === 0 ? ' category-budgets-panel--empty' : ''}`}>
+              <div className={`category-budgets-panel category-budgets-panel--left${categories.length === 0 ? ' category-budgets-panel--empty' : ' category-budgets-panel--list'}`}>
                 <CardCornerWave />
                 {categories.length === 0 ? (
                   <>
@@ -934,12 +1004,29 @@ const CategoryBudgets = () => {
                     </div>
                   </>
                 ) : (
+                  <>
+                    <div className="category-budgets-list-header">
+                      <div className="category-budgets-list-icon" aria-hidden="true">
+                        <FaChartBar />
+                      </div>
+                      <div className="category-budgets-list-header-text">
+                        <h3 className="category-budgets-list-title">Category Budgets</h3>
+                        <p className="category-budgets-list-subtitle">
+                          {writable
+                            ? 'Tap a category to view details and actions.'
+                            : 'Tap a category to view details.'}
+                        </p>
+                      </div>
+                    </div>
                   <ul className="category-budgets-list" aria-label="Category budgets">
                     {categories.map((row) => (
                       <CategoryBudgetRow
                         key={row.id}
                         row={row}
                         writable={writable}
+                        isExpanded={openRowId === row.id}
+                        detailId={`${idPrefix}-budget-${row.id}`}
+                        onToggle={toggleRow}
                         isConfirmingDelete={confirmingDeleteId === row.id}
                         isDeleting={deleteMutation.isPending}
                         onEdit={handleEdit}
@@ -949,6 +1036,7 @@ const CategoryBudgets = () => {
                       />
                     ))}
                   </ul>
+                  </>
                 )}
               </div>
 

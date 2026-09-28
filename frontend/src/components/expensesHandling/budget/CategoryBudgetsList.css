@@ -1,0 +1,528 @@
+/* Populated category-budget list only (accordion rows); imported after the
+   existing section styles and scoped to .category-budgets-panel--list so the
+   empty state, unbudgeted panel and form are untouched. */
+.category-budgets-panel--list {
+  --cbl-panel-bg: #fffdfe;
+  --cbl-panel-border: #f3d9e5;
+  --cbl-panel-shadow: 0 10px 30px rgba(146, 43, 91, 0.07);
+  --cbl-divider: #f4dbe6;
+  --cbl-row-bg: #fffafc;
+  --cbl-row-bg-open: #fdf3f7;
+  --cbl-row-border: #f1dbe5;
+  --cbl-row-shadow: 0 2px 8px rgba(146, 43, 91, 0.04);
+  --cbl-detail-bg: #ffffff;
+  --cbl-chevron-border: #ecd9e2;
+  --cbl-chevron-color: #6e5e69;
+  --cbl-track: #fbe7ef;
+  --cbl-figure-divider: #eed8e2;
+  --cbl-title: #24151e;
+  --cbl-muted: #6e5e69;
+  --cbl-focus: #c2185b;
+
+  /* Status fills: distinct hues, text colours chosen for >= 4.5:1. */
+  --cbl-safe-fill: #1f9d55;
+  --cbl-safe-pill-bg: #dcf5e4;
+  --cbl-safe-pill-text: #146c38;
+  --cbl-warning-fill: #df980b;
+  --cbl-warning-pill-bg: #e39c0c;
+  --cbl-warning-pill-text: #3a2400;
+  --cbl-critical-fill: #ea580c;
+  --cbl-critical-pill-bg: #c2410c;
+  --cbl-critical-pill-text: #ffffff;
+  --cbl-overspent-fill: #dc2626;
+  --cbl-overspent-pill-bg: #c81e1e;
+  --cbl-overspent-pill-text: #ffffff;
+  --cbl-danger: #d42a36;
+  --cbl-danger-border: #f1a9b0;
+
+  min-height: 0;
+  padding: 26px 26px 24px;
+  border-radius: 24px;
+  border: 1px solid var(--cbl-panel-border);
+  outline: none;
+  background: var(--cbl-panel-bg);
+  box-shadow: var(--cbl-panel-shadow);
+}
+
+.dark-theme .category-budgets-panel--list {
+  --cbl-panel-bg: rgba(36, 20, 32, 0.92);
+  --cbl-panel-border: rgba(160, 60, 115, 0.35);
+  --cbl-panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --cbl-divider: rgba(160, 60, 115, 0.3);
+  --cbl-row-bg: rgba(48, 24, 41, 0.9);
+  --cbl-row-bg-open: rgba(58, 27, 49, 0.95);
+  --cbl-row-border: rgba(160, 60, 115, 0.35);
+  --cbl-row-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --cbl-detail-bg: rgba(30, 16, 27, 0.9);
+  --cbl-chevron-border: rgba(212, 163, 190, 0.35);
+  --cbl-chevron-color: #e8cadb;
+  --cbl-track: rgba(244, 166, 199, 0.16);
+  --cbl-figure-divider: rgba(212, 163, 190, 0.25);
+  --cbl-title: #fdf2f8;
+  --cbl-muted: #d4a3be;
+  --cbl-focus: #f9a8d4;
+  --cbl-safe-pill-bg: rgba(34, 197, 94, 0.18);
+  --cbl-safe-pill-text: #86efac;
+  --cbl-danger: #fca5a5;
+  --cbl-danger-border: rgba(252, 165, 165, 0.5);
+}
+
+.category-budgets-panel--list > .category-budgets-card-wave {
+  display: none;
+}
+
+/* Panel header */
+.category-budgets-list-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 2px 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--cbl-divider);
+}
+
+.category-budgets-list-icon {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: #fde4ef;
+  color: #c2185b;
+}
+
+.dark-theme .category-budgets-list-icon {
+  background: rgba(244, 114, 182, 0.18);
+  color: #f9a8d4;
+}
+
+.category-budgets-list-header-text {
+  min-width: 0;
+}
+
+.category-budgets-list-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--cbl-title);
+}
+
+.category-budgets-list-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--cbl-muted);
+}
+
+/* List */
+.category-budgets-panel--list .category-budgets-list {
+  gap: 12px;
+  max-height: 640px;
+  padding: 2px 6px 2px 2px;
+}
+
+/* Row card */
+.category-budgets-panel--list .category-budget-row {
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid var(--cbl-row-border);
+  border-left: 1px solid var(--cbl-row-border);
+  background: var(--cbl-row-bg);
+  box-shadow: var(--cbl-row-shadow);
+  overflow: hidden;
+}
+
+.category-budgets-panel--list .category-budget-row--expanded {
+  background: var(--cbl-row-bg-open);
+}
+
+/* Summary: the whole header is the expand control */
+.category-budget-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 84px;
+  padding: 14px 18px 14px 16px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 18px;
+}
+
+.category-budget-summary:focus-visible {
+  outline: 3px solid var(--cbl-focus);
+  outline-offset: -3px;
+}
+
+.category-budgets-panel--list .category-budget-icon {
+  width: 52px;
+  height: 52px;
+  font-size: 21px;
+}
+
+.category-budget-summary-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.category-budgets-panel--list .category-budget-name {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cbl-title);
+  overflow-wrap: anywhere;
+}
+
+.category-budget-summary-amounts {
+  font-size: 14px;
+  color: var(--cbl-muted);
+  overflow-wrap: anywhere;
+}
+
+.category-budget-summary-spent,
+.category-budget-summary-budget {
+  color: var(--cbl-title);
+  font-weight: 500;
+}
+
+/* Status pill */
+.category-budgets-panel--list .category-budget-status {
+  margin-left: 0;
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.category-budgets-panel--list .category-budget-status--safe {
+  background: var(--cbl-safe-pill-bg);
+  color: var(--cbl-safe-pill-text);
+}
+.category-budgets-panel--list .category-budget-status--warning {
+  background: var(--cbl-warning-pill-bg);
+  color: var(--cbl-warning-pill-text);
+}
+.category-budgets-panel--list .category-budget-status--critical {
+  background: var(--cbl-critical-pill-bg);
+  color: var(--cbl-critical-pill-text);
+}
+.category-budgets-panel--list .category-budget-status--overspent {
+  background: var(--cbl-overspent-pill-bg);
+  color: var(--cbl-overspent-pill-text);
+}
+
+/* Rounded-square chevron */
+.category-budget-chevron {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--cbl-chevron-border);
+  background: var(--cbl-detail-bg);
+  color: var(--cbl-chevron-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.category-budget-row--expanded .category-budget-chevron {
+  color: #d12e4f;
+}
+
+.dark-theme .category-budget-row--expanded .category-budget-chevron {
+  color: #f9a8d4;
+}
+
+.category-budget-summary:hover .category-budget-chevron {
+  border-color: #e3b9cc;
+}
+
+/* Expanded detail */
+.category-budget-detail {
+  margin: 0 8px 8px;
+  padding: 18px 22px 20px;
+  border-radius: 14px;
+  background: var(--cbl-detail-bg);
+}
+
+.category-budget-detail[hidden] {
+  display: none;
+}
+
+.category-budgets-panel--list .category-budget-progress {
+  height: 14px;
+  margin: 0 0 18px;
+  background: var(--cbl-track);
+}
+
+.category-budgets-panel--list .category-budget-progress-fill--safe { background: var(--cbl-safe-fill); }
+.category-budgets-panel--list .category-budget-progress-fill--warning { background: var(--cbl-warning-fill); }
+.category-budgets-panel--list .category-budget-progress-fill--critical { background: var(--cbl-critical-fill); }
+.category-budgets-panel--list .category-budget-progress-fill--overspent { background: var(--cbl-overspent-fill); }
+
+.category-budgets-panel--list .category-budget-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+.category-budgets-panel--list .category-budget-figures div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 16px;
+  border-left: 1px solid var(--cbl-figure-divider);
+}
+
+.category-budgets-panel--list .category-budget-figures div:first-child {
+  padding-left: 2px;
+  border-left: 0;
+}
+
+.category-budgets-panel--list .category-budget-figures dt {
+  font-size: 14px;
+  color: var(--cbl-muted);
+}
+
+.category-budgets-panel--list .category-budget-figures dd {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cbl-title);
+  overflow-wrap: anywhere;
+}
+
+.category-budgets-panel--list .category-budget-figures dd.category-budget-over {
+  color: var(--cbl-overspent-fill);
+}
+
+.category-budgets-panel--list .category-budget-at-risk {
+  margin: 14px 2px 0;
+  font-size: 13px;
+  color: var(--cbl-critical-pill-bg);
+}
+
+.dark-theme .category-budgets-panel--list .category-budget-at-risk {
+  color: #fdba74;
+}
+
+.category-budgets-panel--list .category-budget-actions,
+.category-budgets-panel--list .category-budget-confirm {
+  margin-top: 16px;
+  gap: 12px;
+}
+
+.category-budgets-panel--list .category-budget-actions .category-budget-button,
+.category-budgets-panel--list .category-budget-confirm .category-budget-button {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 1px solid var(--cbl-chevron-border);
+  background: var(--cbl-detail-bg);
+  color: var(--cbl-title);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.category-budgets-panel--list .category-budget-actions .category-budget-button--danger,
+.category-budgets-panel--list .category-budget-confirm .category-budget-button--danger {
+  min-width: 150px;
+  border-color: var(--cbl-danger-border);
+  color: var(--cbl-danger);
+}
+
+.category-budgets-panel--list .category-budget-button:focus-visible {
+  outline: 3px solid var(--cbl-focus);
+  outline-offset: 2px;
+}
+
+.category-budgets-panel--list .category-budget-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.category-budgets-panel--list .category-budget-confirm > span {
+  flex-basis: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cbl-title);
+}
+
+/* Mobile: same structure, tighter spacing; figures stay three-up when they
+   fit and stack to labelled rows on very narrow screens. */
+@media (max-width: 600px) {
+  .category-budgets-panel--list {
+    padding: 20px 14px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--cbl-panel-border);
+    background: var(--cbl-panel-bg);
+  }
+
+  .category-budgets-list-header {
+    gap: 12px;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+  }
+
+  .category-budgets-list-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  .category-budgets-list-title {
+    font-size: 18px;
+  }
+
+  .category-budgets-list-subtitle {
+    font-size: 13px;
+  }
+
+  .category-budgets-panel--list .category-budgets-list {
+    gap: 10px;
+    max-height: 560px;
+    padding: 0 6px 0 0;
+  }
+
+  .category-budgets-panel--list .category-budget-row {
+    padding: 0;
+    border-radius: 14px;
+  }
+
+  .category-budget-summary {
+    gap: 10px;
+    min-height: 68px;
+    padding: 12px 10px 12px 12px;
+    border-radius: 14px;
+  }
+
+  .category-budgets-panel--list .category-budget-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .category-budget-summary-text {
+    flex: 1 1 0;
+  }
+
+  .category-budgets-panel--list .category-budget-name {
+    font-size: 15px;
+  }
+
+  .category-budget-summary-amounts {
+    font-size: 12.5px;
+  }
+
+  .category-budgets-panel--list .category-budget-status {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  .category-budget-chevron {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .category-budget-detail {
+    margin: 0 6px 6px;
+    padding: 14px 12px 14px;
+    border-radius: 12px;
+  }
+
+  .category-budgets-panel--list .category-budget-progress {
+    height: 10px;
+    margin-bottom: 14px;
+  }
+
+  .category-budgets-panel--list .category-budget-figures div {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .category-budgets-panel--list .category-budget-figures dt {
+    font-size: 12px;
+  }
+
+  .category-budgets-panel--list .category-budget-figures dd {
+    font-size: 14px;
+  }
+
+  .category-budgets-panel--list .category-budget-actions .category-budget-button,
+  .category-budgets-panel--list .category-budget-confirm .category-budget-button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 42px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}
+
+/* Narrow phones: the status pill moves under the amounts so the name and
+   figures keep usable width; icon and chevron stay vertically centred. */
+@media (max-width: 480px) {
+  .category-budget-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon text chevron"
+      "icon pill chevron";
+    column-gap: 12px;
+    row-gap: 6px;
+    align-items: center;
+  }
+
+  .category-budget-summary > .category-budget-icon { grid-area: icon; }
+  .category-budget-summary-text { grid-area: text; }
+  .category-budget-summary > .category-budget-chevron { grid-area: chevron; }
+
+  .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+    grid-area: pill;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 380px) {
+  .category-budgets-panel--list .category-budget-figures {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .category-budgets-panel--list .category-budget-figures div,
+  .category-budgets-panel--list .category-budget-figures div:first-child {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 2px;
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-budget-chevron {
+    transition: none;
+  }
+}

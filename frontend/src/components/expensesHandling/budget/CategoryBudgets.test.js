@@ -11,6 +11,7 @@ import {
   within,
 } from "@testing-library/react";
 import { format } from "date-fns";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CategoryBudgets from "./CategoryBudgets";
 import {
@@ -154,15 +155,20 @@ describe("CategoryBudgets -- rows and totals", () => {
     expect(travelBar).toHaveAttribute("aria-valuemax", "100");
     expect(travelBar).toHaveAttribute("aria-valuetext", expect.stringMatching(/125% used, Overspent/));
 
+    // Rows are an accordion: only the first starts open.
+    expect(screen.queryByRole("progressbar", { name: /food budget used/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^food/i }));
     const foodBar = screen.getByRole("progressbar", { name: /food budget used/i });
     expect(foodBar).toHaveAttribute("aria-valuenow", "40");
+    expect(foodBar).toHaveAttribute("aria-valuetext", expect.stringMatching(/40% used, Safe/));
 
     const rows = within(screen.getByRole("list", { name: "Category budgets" })).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getByText("Overspent")).toBeInTheDocument();
     expect(within(rows[0]).getByText("Over by")).toBeInTheDocument();
     expect(within(rows[0]).getByText("₹250.00")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("Safe")).toBeInTheDocument();
+    // Safe is shown as "On track"; the backend value stays in the bar's value text.
+    expect(within(rows[1]).getByText("On track")).toBeInTheDocument();
     expect(within(rows[1]).getByText("Remaining")).toBeInTheDocument();
     expect(within(rows[1]).getByText("₹3,000.00")).toBeInTheDocument();
 
@@ -539,5 +545,121 @@ describe("CategoryBudgets -- month selection", () => {
     expect(await screen.findByText("Rent")).toBeInTheDocument();
     expect(getCategoryBudgets).toHaveBeenLastCalledWith("2025-03", expect.anything());
     expect(screen.getByText(/march 2025 is read-only/i)).toBeInTheDocument();
+  });
+});
+
+describe("CategoryBudgets -- populated list accordion", () => {
+  const threeRows = () =>
+    makeSummary({
+      categories: [
+        makeRow({ id: "cb-ess", category: "Essentials", status: "Warning", utilization: 82 }),
+        makeRow({ id: "cb-food", category: "Food", status: "Critical", utilization: 95 }),
+        makeRow({ id: "cb-bus", category: "Transport", status: "Safe", utilization: 24 }),
+      ],
+    });
+
+  it("opens the first real row by default and wires aria-expanded/aria-controls", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(threeRows()));
+    renderComponent();
+
+    const first = await screen.findByRole("button", { name: /^essentials/i });
+    const second = screen.getByRole("button", { name: /^food/i });
+    const third = screen.getByRole("button", { name: /^transport/i });
+    expect(first).toHaveAttribute("aria-expanded", "true");
+    expect(second).toHaveAttribute("aria-expanded", "false");
+    expect(third).toHaveAttribute("aria-expanded", "false");
+
+    const panel = document.getElementById(first.getAttribute("aria-controls"));
+    expect(panel).not.toBeNull();
+    expect(panel).not.toHaveAttribute("hidden");
+    expect(document.getElementById(second.getAttribute("aria-controls"))).toHaveAttribute("hidden");
+    expect(screen.getByRole("heading", { name: "Category Budgets", level: 3 })).toBeInTheDocument();
+    expect(screen.getByText(/tap a category to view details and actions/i)).toBeInTheDocument();
+  });
+
+  it("expands one row at a time and collapses on a second activation", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(threeRows()));
+    renderComponent();
+
+    const first = await screen.findByRole("button", { name: /^essentials/i });
+    const second = screen.getByRole("button", { name: /^food/i });
+
+    fireEvent.click(second);
+    expect(second).toHaveAttribute("aria-expanded", "true");
+    expect(first).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /edit food budget/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit essentials budget/i })).not.toBeInTheDocument();
+
+    fireEvent.click(second);
+    expect(second).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("toggles with Enter and Space from the keyboard", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(threeRows()));
+    renderComponent();
+
+    const third = await screen.findByRole("button", { name: /^transport/i });
+    third.focus();
+    userEvent.keyboard("{Enter}");
+    expect(third).toHaveAttribute("aria-expanded", "true");
+    userEvent.keyboard(" ");
+    expect(third).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("shows distinct status labels and keeps Safe as the underlying value", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(threeRows()));
+    renderComponent();
+
+    await screen.findByText("Essentials");
+    expect(screen.getByText("Warning")).toHaveClass("category-budget-status--warning");
+    expect(screen.getByText("Critical")).toHaveClass("category-budget-status--critical");
+    expect(screen.getByText("On track")).toHaveClass("category-budget-status--safe");
+    expect(screen.queryByText("Safe")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the first row after the open row is deleted", async () => {
+    const afterDelete = makeSummary({
+      categories: [
+        makeRow({ id: "cb-ess", category: "Essentials", status: "Warning" }),
+        makeRow({ id: "cb-bus", category: "Transport" }),
+      ],
+    });
+    getCategoryBudgets
+      .mockResolvedValueOnce(envelope(threeRows()))
+      .mockResolvedValue(envelope(afterDelete));
+    deleteCategoryBudget.mockResolvedValue({
+      success: true,
+      contractVersion: 1,
+      data: { deletedId: "cb-food", summary: afterDelete },
+    });
+    renderComponent();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^food/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete food budget/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+
+    await waitFor(() => expect(screen.queryByText("Food")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /^essentials/i })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("resets to the first row when the month changes", async () => {
+    getCategoryBudgets.mockImplementation((month) =>
+      Promise.resolve(envelope(month === "2025-03"
+        ? makeSummary({ month, writable: false, categories: [
+            makeRow({ id: "cb-rent", category: "Rent" }),
+            makeRow({ id: "cb-gym", category: "Gym" }),
+          ] })
+        : threeRows()))
+    );
+    renderComponent();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^transport/i }));
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2025-03" } });
+
+    const rent = await screen.findByRole("button", { name: /^rent/i });
+    expect(rent).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /^gym/i })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText(/^tap a category to view details\.$/i)).toBeInTheDocument();
   });
 });
