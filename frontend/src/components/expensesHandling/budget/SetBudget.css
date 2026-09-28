@@ -27,8 +27,8 @@
 }
 
 .light-theme .set-budget input {
-  border-color: #E9DDE3;
-  background: #FFFFFF;
+  border-color: var(--surface-border);
+  background: var(--surface-card);
 }
 
 .light-theme .setbudget-button,

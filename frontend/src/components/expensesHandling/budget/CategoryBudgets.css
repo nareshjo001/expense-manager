@@ -7,22 +7,22 @@
 
   /* Theme tokens - Light mode defaults */
   --cb-bg: radial-gradient(circle at 10% 15%, #fdf0f5 0%, #faeaf1 45%, #fef5f9 100%);
-  --cb-parent-bg: #FDF7FA;
-  --cb-parent-border: #E9DDE3;
-  --cb-card-bg: #FFFFFF;
-  --cb-card-border: #E9DDE3;
-  --cb-card-border-outer: #E9DDE3;
-  --cb-card-shadow: 0 8px 24px rgba(63, 32, 48, 0.07);
+  --cb-parent-bg: #FFF4F8;
+  --cb-parent-border: var(--surface-border);
+  --cb-card-bg: var(--surface-card);
+  --cb-card-border: var(--surface-border);
+  --cb-card-border-outer: var(--surface-border);
+  --cb-card-shadow: var(--surface-shadow);
   --cb-text-title: #21141B;
   --cb-text-subtitle: #6F6470;
   --cb-stat-label: #6F6470;
   --cb-accent-pink: #D81B60;
   --cb-accent-purple: #7c3aed;
   --cb-accent-coral: #ea580c;
-  --cb-input-border: #E9DDE3;
-  --cb-input-bg: #ffffff;
-  --cb-item-bg: #FFFFFF;
-  --cb-item-border: #E9DDE3;
+  --cb-input-border: var(--surface-border);
+  --cb-input-bg: var(--surface-card);
+  --cb-item-bg: var(--surface-card);
+  --cb-item-border: var(--surface-border);
   --cb-wave-pink: rgba(255, 185, 215, 0.45);
   --cb-wave-purple: rgba(221, 205, 255, 0.45);
   --cb-wave-coral: rgba(255, 218, 190, 0.5);
@@ -40,7 +40,7 @@
   background: var(--cb-parent-bg);
   border: 1px solid var(--cb-parent-border);
   border-radius: 28px;
-  box-shadow: 0 8px 24px rgba(63, 32, 48, 0.07);
+  box-shadow: var(--cb-card-shadow);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -56,10 +56,10 @@
 .budgets-top-bar-card {
   margin-bottom: 24px;
   padding: 12px 20px;
-  background: var(--cb-card-bg, #FFFFFF);
-  border: 1px solid var(--cb-parent-border, #E9DDE3);
+  background: var(--surface-card, #FFFEFF);
+  border: 1px solid var(--surface-border, #EADCE3);
   border-radius: 20px;
-  box-shadow: 0 8px 24px rgba(63, 32, 48, 0.07);
+  box-shadow: var(--surface-shadow, 0 8px 24px rgba(63, 32, 48, 0.09));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-sizing: border-box;
