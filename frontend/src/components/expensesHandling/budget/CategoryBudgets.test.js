@@ -359,6 +359,125 @@ describe("CategoryBudgets -- writes", () => {
   });
 });
 
+describe("CategoryBudgets -- category suggestions", () => {
+  it("uses distinct selected-month categories, filters them, and allows a new name", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary({
+      unbudgetedCategories: [
+        { category: "Travel", spentMinor: 1000 },
+        { category: "food", spentMinor: 500 },
+        { category: "Uncategorized", spentMinor: 200 },
+      ],
+    })));
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    fireEvent.focus(input);
+
+    const menu = screen.getByRole("listbox", { name: "Category suggestions" });
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(input).toHaveAttribute("aria-controls", menu.id);
+    expect(within(menu).getAllByRole("option")).toHaveLength(2);
+    expect(within(menu).queryByRole("option", { name: /uncategorized/i })).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "tra" } });
+    expect(within(menu).getAllByRole("option")).toHaveLength(1);
+    expect(within(menu).getByRole("option", { name: "Travel" })).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "New custom category" } });
+    expect(within(menu).queryByRole("option")).not.toBeInTheDocument();
+    expect(within(menu).getByText(/you can use your typed category/i)).toBeInTheDocument();
+    expect(input).toHaveValue("New custom category");
+  });
+
+  it("supports arrow keys, Enter, Escape, Tab, and outside clicks", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary({
+      unbudgetedCategories: [{ category: "Travel", spentMinor: 1000 }],
+    })));
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(input).toHaveAttribute("aria-activedescendant", expect.stringContaining("option-0"));
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: "Travel" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(screen.getByRole("option", { name: "Food" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(input).toHaveValue("Food");
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(saveCategoryBudget).not.toHaveBeenCalled();
+
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "Tab" });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.focus(input);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("selects by click without submitting and keeps edit mode read-only", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary({
+      unbudgetedCategories: [{ category: "Travel", spentMinor: 1000 }],
+    })));
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole("option", { name: "Travel" }));
+    expect(input).toHaveValue("Travel");
+    expect(saveCategoryBudget).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit food budget/i }));
+    expect(input).toHaveValue("Food");
+    expect(input).toHaveAttribute("readonly");
+    fireEvent.focus(input);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("submits a typed category with no matching suggestion", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary()));
+    saveCategoryBudget.mockResolvedValue({
+      success: true,
+      data: { budget: { category: "New custom category" }, summary: makeSummary() },
+    });
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    fireEvent.change(input, { target: { value: "New custom category" } });
+    fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "25" } });
+    expect(screen.getByText(/you can use your typed category/i)).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.submit(screen.getByRole("form", { name: /add category budget/i }));
+    await waitFor(() => expect(saveCategoryBudget).toHaveBeenCalledWith({
+      month: CURRENT_MONTH,
+      category: "New custom category",
+      amount: "25",
+    }));
+  });
+
+  it("updates suggestions when the selected month changes", async () => {
+    getCategoryBudgets.mockImplementation((selectedMonth) => Promise.resolve(envelope(
+      makeSummary({
+        month: selectedMonth,
+        categories: [makeRow({ category: selectedMonth === CURRENT_MONTH ? "Food" : "Travel" })],
+      })
+    )));
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    fireEvent.focus(input);
+    expect(screen.getByRole("option", { name: "Food" })).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "Foo" } });
+
+    const nextMonth = format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1), "yyyy-MM");
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: nextMonth } });
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Category" })).toHaveValue(""));
+    fireEvent.focus(screen.getByRole("combobox", { name: "Category" }));
+    expect(await screen.findByRole("option", { name: "Travel" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Food" })).not.toBeInTheDocument();
+  });
+});
+
 describe("CategoryBudgets -- month selection", () => {
   it("refetches with the newly selected month", async () => {
     getCategoryBudgets.mockImplementation((month) =>

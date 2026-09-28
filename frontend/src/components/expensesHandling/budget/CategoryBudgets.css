@@ -936,6 +936,68 @@
   pointer-events: none;
 }
 
+.category-budgets-suggestion-menu {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border: 1px solid #e9dce3;
+  border-radius: 14px;
+  background: #fffbfd;
+  box-shadow: 0 12px 28px rgba(63, 32, 48, 0.14);
+  color: #2d2028;
+}
+
+.category-budgets-suggestion-option,
+.category-budgets-suggestion-empty {
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.category-budgets-suggestion-option {
+  cursor: pointer;
+}
+
+.category-budgets-suggestion-option:hover,
+.category-budgets-suggestion-option[aria-selected="true"] {
+  background: #fbe6ef;
+}
+
+.category-budgets-suggestion-option[aria-selected="true"] {
+  outline: 2px solid #d81b60;
+  outline-offset: -2px;
+}
+
+.category-budgets-suggestion-empty {
+  color: #6e5e69;
+}
+
+.dark-theme .category-budgets-suggestion-menu {
+  border-color: #6b264d;
+  background: #2b1425;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  color: #fdf2f8;
+}
+
+.dark-theme .category-budgets-suggestion-option:hover,
+.dark-theme .category-budgets-suggestion-option[aria-selected="true"] {
+  background: #4a203b;
+}
+
+.dark-theme .category-budgets-suggestion-option[aria-selected="true"] {
+  outline-color: #f472b6;
+}
+
+.dark-theme .category-budgets-suggestion-empty {
+  color: #d4a3be;
+}
+
 .category-budgets-currency-symbol {
   position: absolute;
   left: 16px;

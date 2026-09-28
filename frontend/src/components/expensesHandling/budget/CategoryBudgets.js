@@ -1,4 +1,5 @@
-import React, { useId, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useId, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import './CategoryBudgets.css';
 import './CategoryBudgetsEmpty.css';
@@ -397,6 +398,11 @@ const CategoryBudgets = () => {
   const [formError, setFormError] = useState(null);
   const [listError, setListError] = useState(null);
   const [notice, setNotice] = useState('');
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [suggestionMenuPosition, setSuggestionMenuPosition] = useState(null);
+  const categoryInputRef = useRef(null);
+  const suggestionMenuRef = useRef(null);
 
   const query = useCategoryBudgetsQuery(month);
   const saveMutation = useSaveCategoryBudgetMutation();
@@ -411,16 +417,95 @@ const CategoryBudgets = () => {
 
   // No canonical category list exists client-side (CAT-001 categories are
   // free text), so suggest the categories this month already has data for.
-  const suggestions = [
-    ...new Set([...unbudgeted, ...categories].map((c) => c.category)),
-  ]
-    .filter((name) => name && name !== RESERVED_CATEGORY)
+  const seenSuggestions = new Set();
+  const suggestions = [...unbudgeted, ...categories]
+    .map((c) => c.category)
+    .filter((name) => {
+      const key = name?.trim().toLocaleLowerCase();
+      if (!key || key === RESERVED_CATEGORY.toLocaleLowerCase() || seenSuggestions.has(key)) return false;
+      seenSuggestions.add(key);
+      return true;
+    })
     .sort((a, b) => a.localeCompare(b));
+  const filteredSuggestions = suggestions.filter((name) =>
+    name.toLocaleLowerCase().includes(form.category.trim().toLocaleLowerCase())
+  );
+
+  const positionSuggestionMenu = useCallback(() => {
+    const rect = categoryInputRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setSuggestionMenuPosition({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      maxHeight: Math.max(72, Math.min(240, window.innerHeight - rect.bottom - 14)),
+    });
+  }, []);
+
+  const closeSuggestions = useCallback(() => {
+    setSuggestionsOpen(false);
+    setActiveSuggestionIndex(-1);
+  }, []);
+
+  const openSuggestions = () => {
+    if (editingId) return;
+    positionSuggestionMenu();
+    setSuggestionsOpen(true);
+  };
+
+  const selectSuggestion = (name) => {
+    setForm((current) => ({ ...current, category: name }));
+    categoryInputRef.current?.focus();
+    closeSuggestions();
+  };
+
+  useEffect(() => {
+    if (!suggestionsOpen) return undefined;
+    const handleOutsidePointer = (event) => {
+      if (!categoryInputRef.current?.contains(event.target) &&
+          !suggestionMenuRef.current?.contains(event.target)) {
+        closeSuggestions();
+      }
+    };
+    document.addEventListener('pointerdown', handleOutsidePointer);
+    window.addEventListener('resize', positionSuggestionMenu);
+    window.addEventListener('scroll', positionSuggestionMenu, true);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointer);
+      window.removeEventListener('resize', positionSuggestionMenu);
+      window.removeEventListener('scroll', positionSuggestionMenu, true);
+    };
+  }, [suggestionsOpen, closeSuggestions, positionSuggestionMenu]);
+
+  useEffect(() => {
+    if (!suggestionsOpen || activeSuggestionIndex < 0) return;
+    const activeOption = suggestionMenuRef.current?.querySelector('[aria-selected="true"]');
+    activeOption?.scrollIntoView?.({ block: 'nearest' });
+  }, [suggestionsOpen, activeSuggestionIndex]);
+
+  const handleCategoryKeyDown = (event) => {
+    if (editingId) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!suggestionsOpen) openSuggestions();
+      if (filteredSuggestions.length > 0) {
+        setActiveSuggestionIndex((current) => event.key === 'ArrowDown'
+          ? (current + 1) % filteredSuggestions.length
+          : (current < 0 ? filteredSuggestions.length - 1 : (current - 1 + filteredSuggestions.length) % filteredSuggestions.length));
+      }
+    } else if (event.key === 'Enter' && suggestionsOpen && activeSuggestionIndex >= 0) {
+      event.preventDefault();
+      selectSuggestion(filteredSuggestions[activeSuggestionIndex]);
+    } else if (event.key === 'Escape' || event.key === 'Tab') {
+      closeSuggestions();
+    }
+  };
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setFormError(null);
+    closeSuggestions();
   };
 
   const handleMonthChange = (e) => {
@@ -451,6 +536,7 @@ const CategoryBudgets = () => {
   };
 
   const handleEdit = (row) => {
+    closeSuggestions();
     setEditingId(row.id);
     setForm({ category: row.category, amount: minorToInputValue(row.amountMinor) });
     setFormError(null);
@@ -508,6 +594,37 @@ const CategoryBudgets = () => {
   };
 
   const isFormIncomplete = !form.category.trim() || !form.amount.trim();
+
+  const suggestionMenu = suggestionsOpen && !editingId && suggestionMenuPosition && createPortal(
+    <ul
+      id={suggestionsId}
+      ref={suggestionMenuRef}
+      className="category-budgets-suggestion-menu"
+      role="listbox"
+      aria-label="Category suggestions"
+      style={suggestionMenuPosition}
+    >
+      {filteredSuggestions.length > 0 ? filteredSuggestions.map((name, index) => (
+        <li
+          id={`${suggestionsId}-option-${index}`}
+          key={name}
+          className="category-budgets-suggestion-option"
+          role="option"
+          aria-selected={index === activeSuggestionIndex}
+          onMouseEnter={() => setActiveSuggestionIndex(index)}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => selectSuggestion(name)}
+        >
+          {name}
+        </li>
+      )) : (
+        <li className="category-budgets-suggestion-empty" role="presentation">
+          No matching suggestions — you can use your typed category.
+        </li>
+      )}
+    </ul>,
+    document.body
+  );
 
   const renderTotals = () => (
     <div className="category-budgets-summary-section">
@@ -622,24 +739,33 @@ const CategoryBudgets = () => {
             <div className="category-budgets-input-wrapper">
               <input
                 id={categoryInputId}
+                ref={categoryInputRef}
                 type="text"
-                list={suggestionsId}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                aria-expanded={suggestionsOpen && !editingId}
+                aria-controls={suggestionsOpen && !editingId ? suggestionsId : undefined}
+                aria-activedescendant={suggestionsOpen && activeSuggestionIndex >= 0 && filteredSuggestions[activeSuggestionIndex]
+                  ? `${suggestionsId}-option-${activeSuggestionIndex}`
+                  : undefined}
                 value={form.category}
                 placeholder="Select a category"
                 maxLength={50}
                 readOnly={Boolean(editingId)}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, category: e.target.value }));
+                  setActiveSuggestionIndex(-1);
+                  openSuggestions();
+                }}
+                onFocus={openSuggestions}
+                onKeyDown={handleCategoryKeyDown}
                 aria-invalid={formError?.field === 'category' ? true : undefined}
                 aria-describedby={formError ? formErrorId : undefined}
                 required
               />
               <FaChevronDown className="category-budgets-field-chevron" aria-hidden="true" />
             </div>
-            <datalist id={suggestionsId}>
-              {suggestions.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
           </div>
 
           <div className="category-budgets-field category-budgets-field--amount">
@@ -698,6 +824,7 @@ const CategoryBudgets = () => {
           </p>
         )}
       </form>
+      {suggestionMenu}
     </div>
   );
 
