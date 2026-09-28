@@ -187,6 +187,10 @@
   font-size: 0.91rem;
 }
 
+.light-theme .expense-description {
+  color: var(--text-secondary);
+}
+
 /* MOBILE MENU (⋮) */
 .mobile-menu-btn {
   display: none;

@@ -3,7 +3,8 @@
   --bg-color: #F7F1F4;
   --header-gradient-start: #D81B60;
   --header-gradient-end: #C2185B;
-  --text-color: #21141B;
+  --text-color: #2D2028;
+  --text-secondary: #6E5E69;
   --nav-link-hover: #F8DCE8;
   --menu-color: #D81B60;
   --input-color: #FFFEFF;
@@ -15,8 +16,8 @@
      untouched. */
   --sidebar-bg: #FFF8FA;
   --sidebar-border: var(--surface-border);
-  --sidebar-group-label: #938993;
-  --sidebar-link-color: #21141B;
+  --sidebar-group-label: #6E5E69;
+  --sidebar-link-color: #2D2028;
   --sidebar-link-hover-bg: #FDF7FA;
   --sidebar-link-active-bg: #FBE6EF;
   --sidebar-link-active-color: #C2185B;
@@ -585,8 +586,15 @@
 /* Gradient background per theme */
 .light-theme .total-section {
   background: linear-gradient(135deg, var(--header-gradient-start), var(--header-gradient-end));
-  color: var(--text-color);
+  color: #ffffff;
   box-shadow: 0 4px 10px rgba(249, 168, 212, 0.3);
+}
+
+.light-theme .expenses-page-container .header p,
+.light-theme .expense-category h3,
+.light-theme .budgets-top-bar-card .set-budget h1,
+.light-theme .budgets-top-bar-card .budget-label {
+  color: #72143D;
 }
 
 .dark-theme .total-section {

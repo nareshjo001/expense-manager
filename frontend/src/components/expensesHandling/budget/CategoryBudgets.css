@@ -13,9 +13,9 @@
   --cb-card-border: var(--surface-border);
   --cb-card-border-outer: var(--surface-border);
   --cb-card-shadow: var(--surface-shadow);
-  --cb-text-title: #21141B;
-  --cb-text-subtitle: #6F6470;
-  --cb-stat-label: #6F6470;
+  --cb-text-title: #2D2028;
+  --cb-text-subtitle: #6E5E69;
+  --cb-stat-label: #6E5E69;
   --cb-accent-pink: #D81B60;
   --cb-accent-purple: #7c3aed;
   --cb-accent-coral: #ea580c;
@@ -124,6 +124,14 @@
   color: var(--cb-text-title);
   letter-spacing: -0.015em;
   line-height: 1.2;
+}
+
+.light-theme .category-budgets-header h2,
+.light-theme .category-budgets-panel-title,
+.light-theme .category-budgets-form-title,
+.light-theme .category-budgets-stat-value,
+.light-theme .category-budgets-unbudgeted-amount {
+  color: #72143D;
 }
 
 .category-budgets-rollover-subtitle {
