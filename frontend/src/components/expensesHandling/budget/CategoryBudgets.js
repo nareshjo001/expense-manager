@@ -438,7 +438,7 @@ const CategoryBudgets = () => {
       bottom: window.innerHeight - rect.top + 6,
       left: rect.left,
       width: rect.width,
-      maxHeight: Math.min(240, Math.max(0, rect.top - 14)),
+      maxHeight: Math.min(174, Math.max(0, rect.top - 14)),
     });
   }, []);
 

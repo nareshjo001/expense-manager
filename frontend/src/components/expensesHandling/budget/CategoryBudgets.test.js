@@ -373,16 +373,33 @@ describe("CategoryBudgets -- category suggestions", () => {
       fireEvent.focus(input);
       const menu = screen.getByRole("listbox", { name: "Category suggestions" });
       expect(menu.parentElement).toBe(document.body);
-      expect(menu).toHaveStyle({ bottom: "206px", left: "120px", width: "300px", maxHeight: "240px" });
+      expect(menu).toHaveStyle({ bottom: "206px", left: "120px", width: "300px", maxHeight: "174px" });
       expect(menu.style.top).toBe("");
 
       inputRect = { top: 500, bottom: 548, left: 18, width: 340 };
       Object.defineProperty(window, "innerHeight", { configurable: true, value: 640 });
       fireEvent.resize(window);
-      expect(menu).toHaveStyle({ bottom: "146px", left: "18px", width: "340px", maxHeight: "240px" });
+      expect(menu).toHaveStyle({ bottom: "146px", left: "18px", width: "340px", maxHeight: "174px" });
     } finally {
       Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
     }
+  });
+
+  it("keeps suggestions beyond the first four available for scrolling and keyboard selection", async () => {
+    getCategoryBudgets.mockResolvedValue(envelope(makeSummary({
+      unbudgetedCategories: ["Bills", "Entertainment", "Essentials", "Travel", "Shopping"]
+        .map((category) => ({ category, spentMinor: 1000 })),
+    })));
+    renderComponent();
+    const input = await screen.findByRole("combobox", { name: "Category" });
+    fireEvent.focus(input);
+    const menu = screen.getByRole("listbox", { name: "Category suggestions" });
+    expect(within(menu).getAllByRole("option")).toHaveLength(6);
+
+    for (let index = 0; index < 5; index += 1) {
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+    }
+    expect(within(menu).getAllByRole("option")[4]).toHaveAttribute("aria-selected", "true");
   });
 
   it("uses distinct selected-month categories, filters them, and allows a new name", async () => {

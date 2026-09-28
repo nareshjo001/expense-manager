@@ -950,6 +950,22 @@
   background: #fffbfd;
   box-shadow: 0 12px 28px rgba(63, 32, 48, 0.14);
   color: #2d2028;
+  scrollbar-width: thin;
+  scrollbar-color: #d978a5 #fff1f6;
+}
+
+.category-budgets-suggestion-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.category-budgets-suggestion-menu::-webkit-scrollbar-track {
+  background: #fff1f6;
+  border-radius: 8px;
+}
+
+.category-budgets-suggestion-menu::-webkit-scrollbar-thumb {
+  background: #d978a5;
+  border-radius: 8px;
 }
 
 .category-budgets-suggestion-option,
@@ -961,6 +977,12 @@
 }
 
 .category-budgets-suggestion-option {
+  box-sizing: border-box;
+  height: 40px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -983,6 +1005,15 @@
   background: #2b1425;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
   color: #fdf2f8;
+  scrollbar-color: #a75483 #3a1b32;
+}
+
+.dark-theme .category-budgets-suggestion-menu::-webkit-scrollbar-track {
+  background: #3a1b32;
+}
+
+.dark-theme .category-budgets-suggestion-menu::-webkit-scrollbar-thumb {
+  background: #a75483;
 }
 
 .dark-theme .category-budgets-suggestion-option:hover,
