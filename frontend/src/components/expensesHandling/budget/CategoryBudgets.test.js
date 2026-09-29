@@ -3,6 +3,8 @@
 // cache keys, the upsert/delete flows and the summary write-back are all
 // exercised end to end on the client.
 import React from "react";
+import fs from "fs";
+import path from "path";
 import {
   render,
   screen,
@@ -738,6 +740,15 @@ describe("CategoryBudgets -- at most four rows visible", () => {
     renderComponent();
     await screen.findByText("Health");
     expect(screen.getByRole("list", { name: /unbudgeted spending by category/i }).style.maxHeight).toBe("262px");
+  });
+
+  it("keeps budget rows at their content height so a capped list scrolls", () => {
+    // jsdom has no layout, so check the rule itself: with auto rows, a capped
+    // list in the stretched card shrinks its overflow:hidden rows to their
+    // borders, and the four-row cap then measures those squashed rows.
+    const css = fs.readFileSync(path.join(__dirname, "CategoryBudgetsList.css"), "utf8");
+    const listRule = css.match(/\.category-budgets-panel--list \.category-budgets-list \{([^}]*)\}/);
+    expect(listRule?.[1]).toMatch(/grid-auto-rows:\s*max-content;/);
   });
 
   describe("when a row resizes", () => {

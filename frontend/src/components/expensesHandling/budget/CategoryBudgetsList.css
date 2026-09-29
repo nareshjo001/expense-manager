@@ -116,8 +116,13 @@
 }
 
 /* List. max-height is only a fallback: CategoryBudgets.js sizes the list to
-   exactly four rows (or removes the cap when there are four or fewer). */
+   exactly four rows (or removes the cap when there are four or fewer).
+   Rows always keep their content height and the rest of the list scrolls:
+   with auto rows, a capped list inside the stretched card shrinks its
+   overflow:hidden rows to fit instead (down to their borders), and the
+   four-row measurement then shrinks the cap along with them. */
 .category-budgets-panel--list .category-budgets-list {
+  grid-auto-rows: max-content;
   gap: 10px;
   max-height: 640px;
   padding: 0 6px 0 0;
