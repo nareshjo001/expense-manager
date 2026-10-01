@@ -327,7 +327,7 @@ describe("CategoryBudgets -- writes", () => {
     expect(deleteCategoryBudget).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /delete food budget/i }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
     await waitFor(() => expect(deleteCategoryBudget).toHaveBeenCalledWith("cb-food"));
     expect(await screen.findByText("No category budgets set.")).toBeInTheDocument();
@@ -650,7 +650,7 @@ describe("CategoryBudgets -- populated list accordion", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /^food/i }));
     fireEvent.click(screen.getByRole("button", { name: /delete food budget/i }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
     await waitFor(() => expect(screen.queryByText("Food")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: /^essentials/i })).toHaveAttribute("aria-expanded", "false");

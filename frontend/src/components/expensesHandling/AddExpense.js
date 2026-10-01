@@ -505,8 +505,11 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 </div>
 
                 <div className="field category-input-wrapper">
-                    <label htmlFor="category" className="category-label">
-                        <span>Category<span className="add-expense-required" aria-hidden="true">*</span></span>
+                    <div className="category-label-row">
+                        <label htmlFor="category" className="category-label">
+                            Category
+                        </label>
+                        <span className="add-expense-required" aria-hidden="true">*</span>
 
                         {
                             // ML-003-T04 -- the confidence badge only appears for
@@ -523,7 +526,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                                 </span>
                             )
                         }
-                    </label>
+                    </div>
                     <input
                         type="text"
                         value={expenseCategory}

@@ -176,7 +176,9 @@ describe("AiMonthlySummary -- generate flow for an opted-in user", () => {
 
     render(<AiMonthlySummary />);
 
-    expect(screen.getByText("You spent ₹5000 across 10 transactions this month.")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.tagName.toLowerCase() === "p" && element.textContent.replace(/\s+/g, " ").trim() === "You spent ₹5000 across 10 transactions this month.")
+    ).toBeInTheDocument();
     expect(screen.getAllByText("₹5000")[0]).toBeInTheDocument();
     expect(screen.getByText("spent")).toBeInTheDocument();
     expect(screen.getByText("transactions")).toBeInTheDocument();
@@ -205,7 +207,9 @@ describe("AiMonthlySummary -- generate flow for an opted-in user", () => {
 
     render(<AiMonthlySummary />);
 
-    expect(screen.getByText("This month you spent a total of ₹5000.")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.tagName.toLowerCase() === "p" && element.textContent.replace(/\s+/g, " ").trim() === "This month you spent a total of ₹5000.")
+    ).toBeInTheDocument();
     expect(screen.getAllByText("₹5000")[0]).toBeInTheDocument();
     expect(screen.getByText("spent")).toBeInTheDocument();
     expect(screen.getByText(/ai-generated/i)).toBeInTheDocument();

@@ -179,10 +179,11 @@
 }
 
 .category-label,
+.category-label-row,
 .field-label-flex {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     min-width: 0;
 }
 
