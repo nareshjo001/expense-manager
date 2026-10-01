@@ -505,7 +505,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                 </div>
 
                 <div className="field category-input-wrapper">
-                    <label htmlFor="category" className="category-label" aria-label="Category">
+                    <label htmlFor="category" className="category-label">
                         <span>Category<span className="add-expense-required" aria-hidden="true">*</span></span>
 
                         {
@@ -528,7 +528,6 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         type="text"
                         value={expenseCategory}
                         id="category"
-                        aria-label="Category"
                         onChange={(e) => {setCategory(e.target.value)}}
                         placeholder="e.g. Food, Travel, Shopping"
                         maxLength={20}
