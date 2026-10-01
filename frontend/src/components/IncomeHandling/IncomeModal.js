@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 // DAT-001-T06 -- money renders through the shared formatter.
 import { formatMoney } from "../../utils/money";
 import "./IncomeModel.css";
@@ -117,10 +118,11 @@ export default function IncomeModal({ isOpen, onClose, period }) {
     });
   };
 
-  // Falls back to "0" for null/undefined/non-numeric incomeAmount values instead of crashing.
-  const formatIncomeAmount = (amount) => {
+  // Parses amount into a finite number in rupees for formatMoney (supports number or numeric string).
+  const parseIncomeRupees = (amount) => {
+    if (amount === null || amount === undefined || amount === "") return null;
     const num = Number(amount);
-    return Number.isFinite(num) ? num.toLocaleString() : "0";
+    return Number.isFinite(num) ? num : null;
   };
 
   const formatDate = (date) =>
@@ -136,8 +138,7 @@ export default function IncomeModal({ isOpen, onClose, period }) {
 
   if (!isOpen) return null;
 
-  return (
-
+  const modalContent = (
     <div
         className="income-modal-backdrop"
         onClick={() => {
@@ -236,7 +237,7 @@ export default function IncomeModal({ isOpen, onClose, period }) {
                     </span>
 
                     <span className="income-amount">
-                      {formatMoney(formatIncomeAmount(income.incomeAmount))}
+                      {formatMoney(parseIncomeRupees(income.incomeAmount), income.incomeAmountMinor)}
                     </span>
                   </div>
 
@@ -283,4 +284,8 @@ export default function IncomeModal({ isOpen, onClose, period }) {
       }
     </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 }
