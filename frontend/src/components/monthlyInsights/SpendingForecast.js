@@ -67,7 +67,7 @@ function BudgetRiskBlock({ budgetRisk }) {
 
 function ForecastShell({ children, targetMonth }) {
   return (
-    <section className="forecast-container" role="region" aria-label="Month-end Forecast">
+    <section className="forecast-container" aria-label="Month-end Forecast">
       <div className="forecast-section-header">
         <div className="forecast-title-wrapper">
           <span className="forecast-accent-bar" aria-hidden="true" />

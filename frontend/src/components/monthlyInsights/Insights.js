@@ -30,7 +30,6 @@ const Insights = () => {
             type="button"
             role="tab"
             aria-selected={type === "budget"}
-            aria-pressed={type === "budget"}
             className={`analysis-toggle-btn ${type === "budget" ? "active" : ""}`}
             onClick={() => setType("budget")}
           >
@@ -44,7 +43,6 @@ const Insights = () => {
             type="button"
             role="tab"
             aria-selected={type === "income"}
-            aria-pressed={type === "income"}
             className={`analysis-toggle-btn ${type === "income" ? "active" : ""}`}
             onClick={() => setType("income")}
           >
