@@ -8,7 +8,7 @@ import '../../common/QueryState.css';
 import QueryState from '../../common/QueryState';
 // DAT-001-T06 -- all money renders through the shared formatter; the API
 // sends integer paise, so formatMinor is used directly.
-import { formatMinor } from '../../../utils/money';
+import { formatMinor, formatMoneyApprox } from '../../../utils/money';
 import { useCategoryBudgetsQuery } from '../../../hooks/queries/useCategoryBudgetsQuery';
 import { useSaveCategoryBudgetMutation } from '../../../hooks/mutations/useSaveCategoryBudgetMutation';
 import { useDeleteCategoryBudgetMutation } from '../../../hooks/mutations/useDeleteCategoryBudgetMutation';
@@ -202,6 +202,7 @@ const describeError = (error) => {
 };
 
 const EMPTY_FORM = { category: '', amount: '' };
+const NOTICE_DURATION_MS = 4000;
 
 const categoryVisual = (category) => {
   const value = (category || '').toLowerCase();
@@ -237,21 +238,31 @@ const SparkleStar = ({ className = '' }) => (
 
 const PanelTopWave = () => (
   <div className="category-budgets-panel-wave-tr" aria-hidden="true">
-    <svg viewBox="0 0 220 130" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 300 150" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M0 0 C70 0, 95 45, 145 52 C185 58, 205 90, 220 130 L220 0 Z"
+        d="M0 0 C78 2, 105 53, 164 60 C222 67, 260 93, 300 150 L300 0 Z"
         fill="url(#cb-panel-tr-grad)"
       />
+      <path
+        d="M86 0 C154 8, 169 46, 222 39 C255 35, 274 14, 300 0 Z"
+        fill="url(#cb-panel-tr-top-grad)"
+      />
       <defs>
-        <linearGradient id="cb-panel-tr-grad" x1="220" y1="0" x2="30" y2="110" gradientUnits="userSpaceOnUse">
+        <linearGradient id="cb-panel-tr-grad" x1="300" y1="0" x2="35" y2="130" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#f472b6" stopOpacity="0.4" />
           <stop offset="60%" stopColor="#fbcfe8" stopOpacity="0.22" />
           <stop offset="100%" stopColor="#fdf2f8" stopOpacity="0.02" />
+        </linearGradient>
+        <linearGradient id="cb-panel-tr-top-grad" x1="300" y1="0" x2="85" y2="65" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#f9a8d4" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="#fce7f3" stopOpacity="0.04" />
         </linearGradient>
       </defs>
     </svg>
     <div className="category-budgets-panel-sparkle">
       <SparkleStar />
+      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--upper" />
+      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--lower" />
     </div>
   </div>
 );
@@ -273,6 +284,8 @@ const FormRightWave = () => (
     </svg>
     <div className="category-budgets-form-sparkle">
       <SparkleStar />
+      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--upper" />
+      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--lower" />
     </div>
   </div>
 );
@@ -393,9 +406,19 @@ const CategoryBudgetRow = ({
         <span className="category-budget-summary-text">
           <span className="category-budget-name">{row.category}</span>
           <span className="category-budget-summary-amounts">
-            <span className="category-budget-summary-spent">{formatMinor(row.spentMinor)}</span>
+            <span className="category-budget-summary-spent">
+              <span className="category-budget-summary-amount-full">{formatMinor(row.spentMinor)}</span>
+              <span className="category-budget-summary-amount-whole" aria-hidden="true">
+                {formatMoneyApprox(undefined, row.spentMinor)}
+              </span>
+            </span>
             {' spent of '}
-            <span className="category-budget-summary-budget">{formatMinor(row.amountMinor)}</span>
+            <span className="category-budget-summary-budget">
+              <span className="category-budget-summary-amount-full">{formatMinor(row.amountMinor)}</span>
+              <span className="category-budget-summary-amount-whole" aria-hidden="true">
+                {formatMoneyApprox(undefined, row.amountMinor)}
+              </span>
+            </span>
           </span>
         </span>
         <span className={`category-budget-status category-budget-status--${statusClass}`}>
@@ -406,8 +429,14 @@ const CategoryBudgetRow = ({
         </span>
       </button>
 
-      <div id={detailId} className="category-budget-detail" hidden={!isExpanded}>
-        <div
+      <div
+        id={detailId}
+        className="category-budget-detail"
+        aria-hidden={!isExpanded}
+        inert={!isExpanded}
+      >
+        <div className="category-budget-detail-content">
+          <div
           className="category-budget-progress"
           role="progressbar"
           aria-label={`${row.category} budget used`}
@@ -415,83 +444,84 @@ const CategoryBudgetRow = ({
           aria-valuemax={100}
           aria-valuenow={barValue}
           aria-valuetext={`${formatPercent(row.utilization)} used, ${row.status}`}
-        >
-          <div
-            className={`category-budget-progress-fill category-budget-progress-fill--${statusClass}`}
-            style={{ width: `${barValue}%` }}
-          />
+          >
+            <div
+              className={`category-budget-progress-fill category-budget-progress-fill--${statusClass}`}
+              style={{ width: `${barValue}%` }}
+            />
+          </div>
+
+          <dl className="category-budget-figures">
+            <div>
+              <dt>Budget</dt>
+              <dd>{formatMinor(row.amountMinor)}</dd>
+            </div>
+            <div>
+              <dt>Spent</dt>
+              <dd>
+                {formatMinor(row.spentMinor)} ({formatPercent(row.utilization)})
+              </dd>
+            </div>
+            <div>
+              <dt>{isOver ? 'Over by' : 'Remaining'}</dt>
+              <dd className={isOver ? 'category-budget-over' : undefined}>
+                {formatMinor(Math.abs(row.remainingMinor))}
+              </dd>
+            </div>
+          </dl>
+
+          {row.atRisk && (
+            <p className="category-budget-at-risk">
+              On pace to exceed this budget
+              {typeof row.projectedSpentMinor === 'number' &&
+                ` (projected ${formatMinor(row.projectedSpentMinor)} by month end)`}
+              .
+            </p>
+          )}
+
+          {writable && !isConfirmingDelete && (
+            <div className="category-budget-actions">
+              <button
+                type="button"
+                className="category-budget-button"
+                onClick={() => onEdit(row)}
+                aria-label={`Edit ${row.category} budget`}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="category-budget-button category-budget-button--danger"
+                onClick={() => onRequestDelete(row.id)}
+                aria-label={`Delete ${row.category} budget`}
+              >
+                Delete
+              </button>
+            </div>
+          )}
+
+          {writable && isConfirmingDelete && (
+            <div className="category-budget-confirm" role="group" aria-label={`Confirm deleting ${row.category} budget`}>
+              <span>Delete the {row.category} budget?</span>
+              <button
+                type="button"
+                className="category-budget-button category-budget-button--danger"
+                onClick={() => onConfirmDelete(row)}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Confirm'}
+              </button>
+              <button
+                type="button"
+                className="category-budget-button"
+                onClick={onCancelDelete}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
-
-        <dl className="category-budget-figures">
-          <div>
-            <dt>Budget</dt>
-            <dd>{formatMinor(row.amountMinor)}</dd>
-          </div>
-          <div>
-            <dt>Spent</dt>
-            <dd>
-              {formatMinor(row.spentMinor)} ({formatPercent(row.utilization)})
-            </dd>
-          </div>
-          <div>
-            <dt>{isOver ? 'Over by' : 'Remaining'}</dt>
-            <dd className={isOver ? 'category-budget-over' : undefined}>
-              {formatMinor(Math.abs(row.remainingMinor))}
-            </dd>
-          </div>
-        </dl>
-
-        {row.atRisk && (
-          <p className="category-budget-at-risk">
-            On pace to exceed this budget
-            {typeof row.projectedSpentMinor === 'number' &&
-              ` (projected ${formatMinor(row.projectedSpentMinor)} by month end)`}
-            .
-          </p>
-        )}
-
-        {writable && !isConfirmingDelete && (
-          <div className="category-budget-actions">
-            <button
-              type="button"
-              className="category-budget-button"
-              onClick={() => onEdit(row)}
-              aria-label={`Edit ${row.category} budget`}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              className="category-budget-button category-budget-button--danger"
-              onClick={() => onRequestDelete(row.id)}
-              aria-label={`Delete ${row.category} budget`}
-            >
-              Delete
-            </button>
-          </div>
-        )}
-
-        {writable && isConfirmingDelete && (
-          <div className="category-budget-confirm" role="group" aria-label={`Confirm deleting ${row.category} budget`}>
-            <span>Delete the {row.category} budget?</span>
-            <button
-              type="button"
-              className="category-budget-button category-budget-button--danger"
-              onClick={() => onConfirmDelete(row)}
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Deleting...' : 'Confirm delete'}
-            </button>
-            <button
-              type="button"
-              className="category-budget-button"
-              onClick={onCancelDelete}
-              disabled={isDeleting}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
       </div>
     </li>
   );
@@ -518,9 +548,9 @@ const CategoryBudgets = () => {
   const categoryInputRef = useRef(null);
   const suggestionMenuRef = useRef(null);
   const amountInputRef = useRef(null);
-  // Accordion: undefined = "default" (first row open), null = the user
-  // collapsed everything, otherwise the id of the open row.
-  const [expandedId, setExpandedId] = useState(undefined);
+  // Accordion: the id of the open row, or null when every row is collapsed
+  // (the default).
+  const [expandedId, setExpandedId] = useState(null);
 
   const query = useCategoryBudgetsQuery(month);
   const saveMutation = useSaveCategoryBudgetMutation();
@@ -533,14 +563,10 @@ const CategoryBudgets = () => {
   const totals = summary?.totals;
   const writable = summary?.writable === true;
 
-  // Resolved during render so the first real row is open on load without a
-  // collapsed first frame. If the open row disappears (deleted, or a month
-  // switch), fall back to the first row again.
-  const openRowId = (() => {
-    if (expandedId === null) return null;
-    if (expandedId !== undefined && categories.some((c) => c.id === expandedId)) return expandedId;
-    return categories[0]?.id ?? null;
-  })();
+  // Resolved during render: if the open row disappears (deleted, or a month
+  // switch), every row is collapsed again.
+  const openRowId =
+    expandedId !== null && categories.some((c) => c.id === expandedId) ? expandedId : null;
 
   const toggleRow = (id) => {
     setExpandedId(openRowId === id ? null : id);
@@ -566,6 +592,14 @@ const CategoryBudgets = () => {
   const filteredSuggestions = suggestions.filter((name) =>
     name.toLocaleLowerCase().includes(form.category.trim().toLocaleLowerCase())
   );
+
+  // Save/delete confirmations are transient feedback, not persistent page
+  // content. Clear the current message and its timer on replacement/unmount.
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeout = window.setTimeout(() => setNotice(''), NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   const positionSuggestionMenu = useCallback(() => {
     const rect = categoryInputRef.current?.getBoundingClientRect();
@@ -650,7 +684,7 @@ const CategoryBudgets = () => {
     if (!MONTH_PATTERN.test(next)) return;
     setMonth(next);
     resetForm();
-    setExpandedId(undefined);
+    setExpandedId(null);
     setConfirmingDeleteId(null);
     setListError(null);
     setNotice('');
@@ -679,12 +713,15 @@ const CategoryBudgets = () => {
     setFormError(null);
     setNotice('');
     // The form sits below the panels; bring it into view so the edit is
-    // obvious. Category is read-only while editing, so focus the amount.
+    // obvious. On narrow screens, do not focus the amount automatically:
+    // that summons the virtual keyboard and obscures the field the user
+    // needs to edit. Desktop retains its established focus behavior.
     requestAnimationFrame(() => {
       const input = amountInputRef.current;
       if (!input) return;
       input.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-      input.focus({ preventScroll: true });
+      const isMobileViewport = window.matchMedia?.('(max-width: 600px)').matches === true;
+      if (!isMobileViewport) input.focus({ preventScroll: true });
     });
   };
 
@@ -935,22 +972,24 @@ const CategoryBudgets = () => {
             </div>
           </div>
 
-          <div className="category-budgets-form-actions">
+          <div className={`category-budgets-form-actions${editingId ? ' category-budgets-form-actions--editing' : ''}`}>
             <button
               type="submit"
               className="category-budget-button category-budget-button--submit"
+              aria-label={editingId ? 'Update budget' : 'Add Budget'}
               disabled={saveMutation.isPending || isFormIncomplete}
             >
               <span className="category-budget-button-plus" aria-hidden="true">
                 <FaPlus />
               </span>
-              <span>
+              <span className="category-budget-button-label--desktop" aria-hidden="true">
                 {saveMutation.isPending
                   ? 'Saving...'
                   : editingId
                     ? 'Update budget'
                     : 'Add Budget'}
               </span>
+              {editingId && <span className="category-budget-button-label--mobile" aria-hidden="true">Update</span>}
             </button>
             {editingId && (
               <button
@@ -958,8 +997,10 @@ const CategoryBudgets = () => {
                 className="category-budget-button category-budget-button--cancel"
                 onClick={resetForm}
                 disabled={saveMutation.isPending}
+                aria-label="Cancel edit"
               >
-                Cancel edit
+                <span className="category-budget-button-label--desktop" aria-hidden="true">Cancel edit</span>
+                <span className="category-budget-button-label--mobile" aria-hidden="true">Cancel</span>
               </button>
             )}
           </div>
@@ -1070,7 +1111,7 @@ const CategoryBudgets = () => {
                     <div className="category-budgets-empty">
                       <EmptyCategoryBudgetsArt />
                       <h3 className="category-budgets-empty-title">
-                        No category budgets for {monthLabel(summary.month ?? month)} yet.
+                        No category budgets set.
                       </h3>
                       {writable && (
                         <p className="category-budgets-empty-subtitle">
@@ -1120,7 +1161,6 @@ const CategoryBudgets = () => {
               {/* Right Panel: Unbudgeted Categories */}
               <div className="category-budgets-panel category-budgets-panel--right">
                 <PanelTopWave />
-                <CardCornerWave tone="pink" />
 
                 <div className="category-budgets-panel-header">
                   <div className="category-budgets-panel-icon-wrap" aria-hidden="true">
@@ -1134,7 +1174,7 @@ const CategoryBudgets = () => {
                       Unbudgeted categories
                     </h3>
                     <p className="category-budgets-panel-subtitle">
-                      These amounts are part of your unbudgeted spending ({formatMinor(totals.unbudgetedSpentMinor)}).
+                      These are part of your unbudgeted spending ({formatMinor(totals.unbudgetedSpentMinor)}).
                     </p>
                   </div>
                 </div>

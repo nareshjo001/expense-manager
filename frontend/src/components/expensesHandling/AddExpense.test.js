@@ -354,15 +354,15 @@ describe("AddExpense -- natural-language Quick Add (AI-002) entry point", () => 
     renderAddExpense();
 
     expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Quick add" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quick Add" })).toBeInTheDocument();
   });
 
   it("clicking Quick add shows the NaturalLanguageQuickAdd component and hides the form", () => {
     renderAddExpense();
 
-    fireEvent.click(screen.getByRole("button", { name: "Quick add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Quick Add" }));
 
-    expect(screen.queryByRole("button", { name: "Quick add" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quick Add" })).not.toBeInTheDocument();
     expect(document.querySelector("form.add-expense")).not.toBeInTheDocument();
   });
 
@@ -371,7 +371,7 @@ describe("AddExpense -- natural-language Quick Add (AI-002) entry point", () => 
 
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
 
-    expect(screen.queryByRole("button", { name: "Quick add" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quick Add" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
   });
 });

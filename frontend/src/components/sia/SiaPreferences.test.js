@@ -187,3 +187,20 @@ describe("SiaPreferences -- delete history", () => {
     expect(siaHistoryDeleteErrorToast).toHaveBeenCalledWith({ message: "nope" });
   });
 });
+
+describe("SiaPreferences -- UI structure and mobile elements", () => {
+  it("renders the accent bar, heading, callout banner, and assistant toggle switch", () => {
+    setupQuery({ enabled: true });
+    setupSaveMutation();
+    setupDeleteMutation();
+
+    const { container } = render(<SiaPreferences />);
+
+    expect(container.querySelector(".sia-prefs-accent-bar")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /sia settings/i })).toBeInTheDocument();
+    expect(screen.getByText(/turning sia back on doesn't lose anything/i)).toBeInTheDocument();
+    expect(container.querySelector(".sia-prefs-toggle-switch")).toBeInTheDocument();
+    expect(container.querySelector(".sia-prefs-toggle-knob")).toBeInTheDocument();
+    expect(container.querySelector(".sia-prefs-delete-history")).toBeInTheDocument();
+  });
+});

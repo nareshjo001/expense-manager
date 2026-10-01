@@ -1,15 +1,25 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { format, parseISO } from "date-fns";
 // DAT-001-T06 -- all money renders through the shared formatter.
 import { formatMoney } from "../../utils/money";
 import { FormStatus } from "../a11y/FormStatus";
-import { getUpcomingRecurring } from "../../api/recurringApi";
-import { usePauseRecurringMutation } from "../../hooks/mutations/usePauseRecurringMutation";
-import { useEndRecurringMutation } from "../../hooks/mutations/useEndRecurringMutation";
+import { useUpcomingRecurringQuery } from "../../hooks/queries/useUpcomingRecurringQuery";
+import { useSkipRecurringMutation } from "../../hooks/mutations/useSkipRecurringMutation";
 import {
   recurringActionSuccessToast,
   recurringActionErrorToast,
 } from "../alertsEffects/toastMessages";
+import {
+  FaBolt,
+  FaUtensils,
+  FaShoppingCart,
+  FaPlane,
+  FaGamepad,
+  FaMedkit,
+  FaHome,
+  FaCoins,
+  FaGraduationCap,
+} from "react-icons/fa";
 import "./UpcomingRecurring.css";
 
 // REC-003-T04 -- the upcoming recurring expenses view.
@@ -35,33 +45,10 @@ import "./UpcomingRecurring.css";
 //           overdueCount for exactly this, and the panel surfaces it rather
 //           than quietly listing past dates as though they were upcoming.
 //
-// REC-003-T05 update -- pause/edit actions, now that REC-002 exists:
-//
-//   EDIT    the "Edit" button below still calls onEditExpense(expenseId),
-//           i.e. it opens the ORIGINAL, already-logged expense this
-//           definition was created from -- NOT the recurring definition
-//           itself. That is a real, useful action (fixing a typo on that one
-//           historical row) but it does NOT change future occurrences:
-//           cron/recurringJob.js reads the definition's own copied
-//           expenseName/expenseCategory/expenseAmount fields when it logs
-//           each occurrence, never the original expense (see
-//           recurringLifecycleService.js's header for the full trace). A
-//           previous version of this comment claimed the opposite; it was
-//           wrong. To change what future occurrences look like, use "Pause"
-//           or the recurring-management screen's "Edit", which edits the
-//           definition itself via REC-002's editDefinition API.
-//
-//   PAUSE   every row here is, by construction, an occurrence of an ACTIVE
-//           definition -- Controllers/RecurringExpenses/upcoming.js only
-//           ever projects active ones, since a paused or ended definition
-//           produces no occurrences to project. So "Pause" is the only
-//           lifecycle action that belongs on a row here; "Resume" has
-//           nothing to attach to (a paused definition has no row), and
-//           lives on the recurring-management screen instead.
-//
-//   END     terminal, and offered here too since it is just as reachable
-//           from a due occurrence as pausing is -- with a confirmation,
-//           since it cannot be undone.
+// Pure Forecast Projection View:
+//   This section renders a clean 3-month forecast of upcoming recurring
+//   expenses. Master lifecycle controls (Edit, Pause, Resume, End) belong
+//   exclusively to the Master Section (RecurringManagement.js).
 
 const STATUS = {
   LOADING: "loading",
@@ -97,110 +84,198 @@ function monthLabel(monthKey) {
   return format(parseISO(`${monthKey}-01`), "MMMM yyyy");
 }
 
-const UpcomingRecurring = ({ onEditExpense }) => {
-  const [status, setStatus] = useState(STATUS.LOADING);
-  const [payload, setPayload] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [confirmEndRecurringId, setConfirmEndRecurringId] = useState(null);
+// Maps expense name and category to matching visual icon
+const getRecurringIcon = (name = "", category = "") => {
+  const combined = `${name} ${category}`.trim().toLowerCase();
+  if (
+    combined.includes("recharge") ||
+    combined.includes("electric") ||
+    combined.includes("power") ||
+    combined.includes("broadband") ||
+    combined.includes("wifi") ||
+    combined.includes("phone") ||
+    combined.includes("mobile") ||
+    combined.includes("bill") ||
+    combined.includes("utilit")
+  ) {
+    return FaBolt;
+  }
+  if (
+    combined.includes("food") ||
+    combined.includes("swiggy") ||
+    combined.includes("zomato") ||
+    combined.includes("dine") ||
+    combined.includes("dining") ||
+    combined.includes("restaurant") ||
+    combined.includes("grocer") ||
+    combined.includes("snack") ||
+    combined.includes("eat") ||
+    combined.includes("cafe")
+  ) {
+    return FaUtensils;
+  }
+  if (
+    combined.includes("shop") ||
+    combined.includes("mart") ||
+    combined.includes("store") ||
+    combined.includes("cloth") ||
+    combined.includes("essential") ||
+    combined.includes("supermarket") ||
+    combined.includes("retail")
+  ) {
+    return FaShoppingCart;
+  }
+  if (
+    combined.includes("travel") ||
+    combined.includes("transport") ||
+    combined.includes("flight") ||
+    combined.includes("air") ||
+    combined.includes("fuel") ||
+    combined.includes("gas") ||
+    combined.includes("petrol") ||
+    combined.includes("diesel") ||
+    combined.includes("cab") ||
+    combined.includes("uber") ||
+    combined.includes("ola") ||
+    combined.includes("train") ||
+    combined.includes("bus") ||
+    combined.includes("metro")
+  ) {
+    return FaPlane;
+  }
+  if (
+    combined.includes("entertain") ||
+    combined.includes("movie") ||
+    combined.includes("cinema") ||
+    combined.includes("game") ||
+    combined.includes("gaming") ||
+    combined.includes("play") ||
+    combined.includes("netflix") ||
+    combined.includes("prime") ||
+    combined.includes("stream") ||
+    combined.includes("music") ||
+    combined.includes("spotify")
+  ) {
+    return FaGamepad;
+  }
+  if (
+    combined.includes("health") ||
+    combined.includes("medic") ||
+    combined.includes("doctor") ||
+    combined.includes("hospital") ||
+    combined.includes("pharm") ||
+    combined.includes("fitness") ||
+    combined.includes("gym")
+  ) {
+    return FaMedkit;
+  }
+  if (
+    combined.includes("rent") ||
+    combined.includes("hous") ||
+    combined.includes("home") ||
+    combined.includes("flat") ||
+    combined.includes("apartment")
+  ) {
+    return FaHome;
+  }
+  if (
+    combined.includes("invest") ||
+    combined.includes("save") ||
+    combined.includes("finance") ||
+    combined.includes("bank") ||
+    combined.includes("stock") ||
+    combined.includes("mutual") ||
+    combined.includes("crypto")
+  ) {
+    return FaCoins;
+  }
+  if (
+    combined.includes("educat") ||
+    combined.includes("exam") ||
+    combined.includes("fee") ||
+    combined.includes("study") ||
+    combined.includes("book") ||
+    combined.includes("course") ||
+    combined.includes("tuition") ||
+    combined.includes("school") ||
+    combined.includes("college") ||
+    combined.includes("learning")
+  ) {
+    return FaGraduationCap;
+  }
+  return FaBolt;
+};
 
-  const pauseMutation = usePauseRecurringMutation();
-  const endMutation = useEndRecurringMutation();
+const UpcomingRecurring = () => {
+  const {
+    data: payload,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useUpcomingRecurringQuery();
 
-  // `isLive` guards every state write against landing after unmount.
-  //
-  // Not test hygiene: aborting the request does not cancel the promise
-  // callbacks that are already queued, so a user who opens this panel and
-  // navigates away before it resolves gets a setState on an unmounted
-  // component. React logs that, and in a component that refetches it is also
-  // how a stale response overwrites a newer one.
-  const load = useCallback((signal, isLive = () => true) => {
-    setStatus(STATUS.LOADING);
-    setErrorMessage("");
+  const [confirmSkipOccurrence, setConfirmSkipOccurrence] = useState(null);
+  const skipMutation = useSkipRecurringMutation();
 
-    return getUpcomingRecurring(signal)
-      .then((data) => {
-        if (!isLive()) return;
-        setPayload(data);
-        setStatus(STATUS.READY);
-      })
-      .catch((err) => {
-        if (!isLive()) return;
-        // An aborted request is a component unmounting or a refetch
-        // superseding this one -- not an error to show the user.
-        if (err?.name === "CanceledError" || err?.name === "AbortError") return;
-        setStatus(STATUS.ERROR);
-        setErrorMessage(
-          err?.response?.data?.message ||
-            "Couldn't load your upcoming recurring expenses."
-        );
-      });
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let live = true;
-    load(controller.signal, () => live);
-    return () => {
-      live = false;
-      controller.abort();
-    };
-  }, [load]);
-
-  // A paused/ended definition drops out of this projection entirely (see
-  // the header comment on PAUSE above), so the only way this view can stay
-  // correct after either action is to refetch it -- invalidating a
-  // TanStack Query cache does nothing here since this component does not
-  // use useQuery for its own data.
-  const handlePause = (recurringId) => {
-    pauseMutation.mutate(
-      { id: recurringId },
+  const handleSkipConfirm = () => {
+    if (!confirmSkipOccurrence) return;
+    const target = confirmSkipOccurrence;
+    skipMutation.mutate(
+      {
+        id: target.recurringId,
+        date: target.dueCalendarDate,
+        scheduleVersion: target.scheduleVersion,
+      },
       {
         onSuccess: () => {
-          recurringActionSuccessToast("Recurring expense paused. It won't appear here until resumed.");
-          load();
+          const monthName = format(parseISO(target.dueCalendarDate), "MMMM yyyy");
+          recurringActionSuccessToast(`Skipped ${target.expenseName} for ${monthName}.`);
+          setConfirmSkipOccurrence(null);
         },
-        onError: (error) => recurringActionErrorToast(error.response?.data),
+        onError: (err) => {
+          recurringActionErrorToast(err?.response?.data);
+          setConfirmSkipOccurrence(null);
+        },
       }
     );
   };
 
-  const handleEndConfirmed = () => {
-    const recurringId = confirmEndRecurringId;
-    endMutation.mutate(
-      { id: recurringId },
-      {
-        onSuccess: () => {
-          recurringActionSuccessToast("Recurring expense ended.");
-          setConfirmEndRecurringId(null);
-          load();
-        },
-        onError: (error) => {
-          recurringActionErrorToast(error.response?.data);
-          setConfirmEndRecurringId(null);
-        },
-      }
-    );
-  };
+  const isCanceled = error?.name === "CanceledError" || error?.name === "AbortError";
+  const isActualError = isError && !isCanceled;
 
-  if (status === STATUS.LOADING) {
+  if (isLoading || (isError && isCanceled)) {
     return (
-      <section className="upcoming-recurring" aria-busy="true">
-        <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+      <section className="upcoming-recurring upcoming-recurring--loading" aria-busy="true">
+        <div className="upcoming-recurring__header">
+          <div className="upcoming-recurring__title-wrapper">
+            <span className="upcoming-recurring__accent-bar" aria-hidden="true" />
+            <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+          </div>
+        </div>
         <p className="upcoming-recurring__muted">Loading…</p>
       </section>
     );
   }
 
   // ERROR -- deliberately not rendered as an empty list. See the header.
-  if (status === STATUS.ERROR) {
+  if (isActualError) {
+    const errorMessage =
+      error?.response?.data?.message ||
+      "Couldn't load your upcoming recurring expenses.";
     return (
-      <section className="upcoming-recurring">
-        <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+      <section className="upcoming-recurring upcoming-recurring--error">
+        <div className="upcoming-recurring__header">
+          <div className="upcoming-recurring__title-wrapper">
+            <span className="upcoming-recurring__accent-bar" aria-hidden="true" />
+            <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+          </div>
+        </div>
         <FormStatus message={errorMessage} tone="error" />
         <button
           type="button"
           className="upcoming-recurring__retry"
-          onClick={() => load()}
+          onClick={() => refetch()}
         >
           Try again
         </button>
@@ -216,8 +291,13 @@ const UpcomingRecurring = ({ onEditExpense }) => {
   if (occurrences.length === 0) {
     const hasNoDefinitions = (summary.definitionCount ?? 0) === 0;
     return (
-      <section className="upcoming-recurring">
-        <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+      <section className="upcoming-recurring upcoming-recurring--empty">
+        <div className="upcoming-recurring__header">
+          <div className="upcoming-recurring__title-wrapper">
+            <span className="upcoming-recurring__accent-bar" aria-hidden="true" />
+            <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+          </div>
+        </div>
         <p className="upcoming-recurring__muted">
           {hasNoDefinitions
             ? "You haven't marked any expenses as recurring yet. Mark one from your expenses list and it will show up here."
@@ -227,16 +307,22 @@ const UpcomingRecurring = ({ onEditExpense }) => {
     );
   }
 
-  const confirmEndOccurrence = occurrences.find((o) => o.recurringId === confirmEndRecurringId);
-
   return (
     <section className="upcoming-recurring">
-      <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+      <div className="upcoming-recurring__header">
+        <div className="upcoming-recurring__title-wrapper">
+          <span className="upcoming-recurring__accent-bar" aria-hidden="true" />
+          <h2 className="upcoming-recurring__title">Upcoming recurring</h2>
+        </div>
 
-      <p className="upcoming-recurring__summary">
-        {summary.count} upcoming ·{" "}
-        <strong>{formatMoney(undefined, summary.totalMinor)}</strong> total
-      </p>
+        <p className="upcoming-recurring__summary">
+          {summary.count} upcoming •{" "}
+          <strong className="upcoming-recurring__summary-total">
+            {formatMoney(undefined, summary.totalMinor)}
+          </strong>{" "}
+          total
+        </p>
+      </div>
 
       {/* STALE -- the schedule is behind, so these dates are already wrong. */}
       {summary.overdueCount > 0 && (
@@ -250,85 +336,110 @@ const UpcomingRecurring = ({ onEditExpense }) => {
         </div>
       )}
 
-      {groups.map((group) => (
-        <div key={group.monthKey} className="upcoming-recurring__group">
-          <h3 className="upcoming-recurring__month">{monthLabel(group.monthKey)}</h3>
-          <ul className="upcoming-recurring__list">
-            {group.occurrences.map((occurrence) => (
-              <li
-                key={`${occurrence.recurringId}-${occurrence.dueDate}`}
-                className={
-                  occurrence.overdue
-                    ? "upcoming-recurring__item upcoming-recurring__item--overdue"
-                    : "upcoming-recurring__item"
-                }
-              >
-                <div className="upcoming-recurring__item-main">
-                  <span className="upcoming-recurring__name">{occurrence.expenseName}</span>
-                  <span className="upcoming-recurring__category">
-                    {occurrence.expenseCategory}
-                  </span>
-                </div>
-
-                <div className="upcoming-recurring__item-meta">
-                  <span className="upcoming-recurring__date">
-                    {format(parseISO(occurrence.dueCalendarDate), "d MMM")}
-                    {occurrence.overdue && (
-                      <span className="upcoming-recurring__badge"> overdue</span>
-                    )}
-                  </span>
-                  <span className="upcoming-recurring__amount">
-                    {formatMoney(occurrence.expenseAmount, occurrence.expenseAmountMinor)}
-                  </span>
-                </div>
-
-                <div className="upcoming-recurring__actions">
-                  {occurrence.expenseId && onEditExpense && (
-                    <button
-                      type="button"
-                      className="upcoming-recurring__action"
-                      onClick={() => onEditExpense(occurrence.expenseId)}
-                    >
-                      Edit
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="upcoming-recurring__action"
-                    disabled={pauseMutation.isPending}
-                    onClick={() => handlePause(occurrence.recurringId)}
+      <div className="upcoming-recurring__groups">
+        {groups.map((group) => (
+          <div key={group.monthKey} className="upcoming-recurring__group">
+            <h3 className="upcoming-recurring__month">{monthLabel(group.monthKey)}</h3>
+            <ul className="upcoming-recurring__list">
+              {group.occurrences.map((occurrence) => {
+                const CategoryIcon = getRecurringIcon(occurrence.expenseName, occurrence.expenseCategory);
+                return (
+                  <li
+                    key={`${occurrence.recurringId}-${occurrence.dueDate}`}
+                    className={
+                      occurrence.overdue
+                        ? "upcoming-recurring__item upcoming-recurring__item--overdue"
+                        : "upcoming-recurring__item"
+                    }
                   >
-                    Pause
-                  </button>
-                  <button
-                    type="button"
-                    className="upcoming-recurring__action"
-                    onClick={() => setConfirmEndRecurringId(occurrence.recurringId)}
-                  >
-                    End
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+                    <div className="upcoming-recurring__item-main">
+                      <div className="upcoming-recurring__icon-wrapper" aria-hidden="true">
+                        <CategoryIcon className="upcoming-recurring__category-icon" />
+                      </div>
+                      <div className="upcoming-recurring__text-details">
+                        <span className="upcoming-recurring__name">{occurrence.expenseName}</span>
+                        <span className="upcoming-recurring__category">
+                          {occurrence.expenseCategory}
+                        </span>
+                      </div>
+                    </div>
 
-      {confirmEndOccurrence && (
-        <div className="modal-overlay">
-          <div
-            className="modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="upcoming-end-recurring-message"
-          >
-            <p id="upcoming-end-recurring-message">
-              End "{confirmEndOccurrence.expenseName}"? This stops it permanently — it cannot be
-              resumed, unlike pausing.
+                    <div className="upcoming-recurring__item-right">
+                      <div className="upcoming-recurring__item-meta">
+                        <span className="upcoming-recurring__date">
+                          {format(parseISO(occurrence.dueCalendarDate), "d MMM")}
+                          {occurrence.overdue && (
+                            <span className="upcoming-recurring__badge"> overdue</span>
+                          )}
+                        </span>
+                        <span className="upcoming-recurring__amount">
+                          {formatMoney(occurrence.expenseAmount, occurrence.expenseAmountMinor)}
+                        </span>
+                      </div>
+
+                      <div className="upcoming-recurring__item-actions">
+                        <button
+                          type="button"
+                          className="upcoming-recurring__skip-btn"
+                          onClick={() => setConfirmSkipOccurrence(occurrence)}
+                          disabled={skipMutation.isPending}
+                          title={`Skip ${occurrence.expenseName} for ${format(parseISO(occurrence.dueCalendarDate), "MMMM yyyy")}`}
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {confirmSkipOccurrence && (
+        <div
+          className="upcoming-recurring__modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-skip-title"
+        >
+          <div className="upcoming-recurring__modal">
+            <h3 id="confirm-skip-title" className="upcoming-recurring__modal-title">
+              Skip This Month?
+            </h3>
+            <p className="upcoming-recurring__modal-text">
+              Skip <strong>{confirmSkipOccurrence.expenseName}</strong> (
+              {formatMoney(
+                confirmSkipOccurrence.expenseAmount,
+                confirmSkipOccurrence.expenseAmountMinor
+              )}
+              ) for{" "}
+              <strong>
+                {format(parseISO(confirmSkipOccurrence.dueCalendarDate), "MMMM yyyy")}
+              </strong>
+              ?
             </p>
-            <div className="modal-buttons">
-              <button onClick={() => setConfirmEndRecurringId(null)}>Cancel</button>
-              <button onClick={handleEndConfirmed}>Yes, End</button>
+            <p className="upcoming-recurring__modal-subtext">
+              This will skip this month's expense only. Your recurring schedule will remain active and continue for future months.
+            </p>
+            <div className="upcoming-recurring__modal-actions">
+              <button
+                type="button"
+                className="upcoming-recurring__modal-cancel"
+                onClick={() => setConfirmSkipOccurrence(null)}
+                disabled={skipMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="upcoming-recurring__modal-confirm"
+                onClick={handleSkipConfirm}
+                disabled={skipMutation.isPending}
+              >
+                {skipMutation.isPending ? "Skipping…" : "Skip this month"}
+              </button>
             </div>
           </div>
         </div>

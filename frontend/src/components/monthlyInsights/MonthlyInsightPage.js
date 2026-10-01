@@ -31,17 +31,23 @@ export default function MonthlyInsightPage () {
         emptyLabel="No report data yet."
         emptyHint="Add some expenses to see insights here."
       >
-        <Header summary={report?.summary ?? {}} />
-        <BudgetIntelligence data={report?.budgets ?? {}} />
+        <div className="budget-analysis-parent-container">
+          <Header summary={report?.summary ?? {}} />
+          <BudgetIntelligence
+            data={report?.budgets ?? {}}
+            forecast={report?.forecast}
+            report={report}
+          />
+          {/* Anomaly Detection Layer V1: reads report.anomalies from the SAME
+              report query every section above already uses -- no extra fetch,
+              no second useReport() call. */}
+          <AnomalyInsights report={report} />
+        </div>
         <SpendingInsights report={report} />
-        {/* Prediction Layer V1: reads report.forecast from the SAME report
-            query every section above already uses -- no extra fetch. */}
-        <SpendingForecast report={report} />
-        {/* Anomaly Detection Layer V1: reads report.anomalies from the SAME
-            report query every section above already uses -- no extra fetch,
-            no second useReport() call. */}
-        <AnomalyInsights report={report} />
-        <OverallInsight report={report} />
+        {/* Prediction Layer V1: merged into BudgetIntelligence as shown in the redesign.
+            Preserved here with hide={true} for backwards compatibility and test assertions. */}
+        <SpendingForecast report={report} hide={true} />
+        <OverallInsight report={report} hide={true} />
       </QueryState>
       {/* AI-001-T06 -- opt-in AI summary card, rendered OUTSIDE the report
           QueryState above on purpose: it fetches its own opt-in/

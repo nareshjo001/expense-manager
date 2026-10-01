@@ -2,6 +2,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateRecurringStatus } from "../../api/expenseApi";
 import { queryKeys } from "../../query/queryKeys";
 
+// Removes a definition corresponding to the un-marked expense from the cached recurring definitions list.
+const removeRecurringFromCache = (data, expenseId) => {
+  if (!data?.success || !Array.isArray(data.data)) return data;
+  return {
+    ...data,
+    data: data.data.filter((def) => def && def.expenseId !== expenseId && def.id !== expenseId),
+  };
+};
+
 // Flips isRecurring on a single matching expense inside a cached list, category map, or detail entry.
 const patchRecurringInCache = (data, expenseId, isRecurring) => {
   if (!data?.success) return data;
@@ -61,13 +70,21 @@ export const useUpdateRecurringMutation = () => {
         queryClient.setQueriesData({ queryKey: queryKeys.expenses.all }, (old) =>
           patchRecurringInCache(old, expenseId, data.isRecurring)
         );
+
+        // When unmarking an expense as recurring, immediately remove it from the cached recurring definitions list
+        if (!data.isRecurring) {
+          queryClient.setQueriesData({ queryKey: queryKeys.recurring.lists() }, (old) =>
+            removeRecurringFromCache(old, expenseId)
+          );
+        }
       }
     },
 
-    // Refetches so every expense-derived view converges on the same
+    // Refetches so every expense-derived and recurring view converges on the same
     // authoritative state regardless of which cached shape it holds.
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurring.all });
     },
   });
 };

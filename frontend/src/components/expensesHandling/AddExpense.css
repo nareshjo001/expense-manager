@@ -401,3 +401,912 @@
     max-width: 85%;
   }
 }
+
+/* ------------------------------------------------------------------------
+   Add Expense page redesign (spec/ui-redesign/add-expense-page.md).
+   Everything below is scoped to .add-expense-page, the Add Expense view
+   only. The Add Income view (.add-income-page, its own block at the end of
+   this file) shares just the palette tokens and page padding below.
+   ------------------------------------------------------------------------ */
+.add-expense-page,
+.add-income-page {
+  --ae-title: #1f1320;
+  --ae-label: #2a1a24;
+  --ae-muted: #6e5e69;
+  --ae-accent: #d81b60;
+  --ae-accent-soft: #fdf0f5;
+  --ae-soft-bg: #fdf3f7;
+  --ae-soft-border: #f7e1ea;
+  --ae-icon-bg: #fbe1ec;
+  --ae-card-bg: #ffffff;
+  --ae-card-border: #f1e4ea;
+  --ae-card-shadow: 0 8px 24px rgba(194, 24, 91, 0.05);
+  --ae-input-bg: #ffffff;
+  --ae-input-border: #e7d9df;
+  --ae-addon-bg: #fcf6f9;
+  --ae-placeholder: #8c7e87;
+  --ae-divider: #eadde3;
+  --ae-focus-ring: rgba(216, 27, 96, 0.16);
+  --ae-primary: #d81b60;
+  --ae-primary-hover: #c2185b;
+
+  display: block;
+  padding: 20px 24px 36px;
+}
+
+.dark-theme .add-expense-page,
+.dark-theme .add-income-page {
+  --ae-title: #fdf2f8;
+  --ae-label: #f5e6ee;
+  --ae-muted: #d4a3be;
+  --ae-accent: #f472b6;
+  --ae-accent-soft: rgba(244, 114, 182, 0.12);
+  --ae-soft-bg: rgba(58, 27, 49, 0.6);
+  --ae-soft-border: rgba(120, 42, 85, 0.5);
+  --ae-icon-bg: rgba(194, 24, 91, 0.25);
+  --ae-card-bg: rgba(36, 20, 32, 0.95);
+  --ae-card-border: rgba(120, 42, 85, 0.5);
+  --ae-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --ae-input-bg: rgba(255, 255, 255, 0.04);
+  --ae-input-border: rgba(244, 166, 199, 0.22);
+  --ae-addon-bg: rgba(255, 255, 255, 0.03);
+  --ae-placeholder: #a78b9b;
+  --ae-divider: rgba(244, 166, 199, 0.18);
+  --ae-focus-ring: rgba(244, 114, 182, 0.25);
+  --ae-primary: #db2777;
+  --ae-primary-hover: #be185d;
+}
+
+.add-expense-page-inner {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+/* Header: title with the pink accent bar used by the other redesigned pages. */
+.add-expense-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.add-expense-page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ae-title);
+}
+
+.add-expense-page-title::before {
+  content: "";
+  width: 4px;
+  height: 26px;
+  border-radius: 4px;
+  background: var(--ae-accent);
+  flex-shrink: 0;
+}
+
+.add-expense-page-subtitle {
+  margin: 0 0 0 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ae-muted);
+}
+
+/* Quick actions: Upload Bill and Quick Add. */
+.add-expense-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.add-expense-action-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--ae-soft-bg);
+  border: 1px solid var(--ae-soft-border);
+  box-shadow: 0 3px 10px rgba(194, 24, 91, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+.add-expense-action-card:hover {
+  box-shadow: 0 8px 18px rgba(194, 24, 91, 0.08);
+}
+
+.add-expense-action-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: var(--ae-accent);
+  background: var(--ae-icon-bg);
+}
+
+.add-expense-action-text {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.add-expense-action-title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ae-title);
+}
+
+.add-expense-action-description {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ae-muted);
+}
+
+.add-expense-page .add-expense-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  margin-left: auto;
+  padding: 7px 14px;
+  border: 1.5px solid var(--ae-accent);
+  border-radius: 10px;
+  background: var(--ae-card-bg);
+  color: var(--ae-accent);
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.add-expense-page .add-expense-action-btn svg {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.add-expense-page .add-expense-action-btn:hover {
+  background: var(--ae-accent-soft);
+  filter: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(216, 27, 96, 0.14);
+}
+
+.add-expense-page .add-expense-action-btn:focus-visible,
+.add-expense-page .submit-btn:focus-visible {
+  outline: 3px solid var(--ae-focus-ring);
+  outline-offset: 2px;
+}
+
+/* "Or enter manually" divider. */
+.add-expense-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 18px 0 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ae-muted);
+}
+
+.add-expense-divider::before,
+.add-expense-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--ae-divider);
+}
+
+/* Manual form card. */
+.add-expense-page .add-expense {
+  max-width: none;
+  box-sizing: border-box;
+  padding: 20px 22px;
+  gap: 14px;
+  border-radius: 16px;
+  background: var(--ae-card-bg);
+  backdrop-filter: none;
+  border: 1px solid var(--ae-card-border);
+  box-shadow: var(--ae-card-shadow);
+}
+
+.add-expense-page .field {
+  gap: 6px;
+}
+
+.add-expense-page .field label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ae-label);
+}
+
+.add-expense-required {
+  margin-left: 3px;
+  color: var(--ae-accent);
+}
+
+.add-expense-page .add-expense input[type="text"],
+.add-expense-page .add-expense input[type="number"],
+.add-expense-page .add-expense input[type="date"] {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ae-input-border);
+  background: var(--ae-input-bg);
+  color: var(--ae-label);
+}
+
+.add-expense-page .add-expense input::placeholder {
+  color: var(--ae-placeholder);
+  opacity: 1;
+}
+
+.add-expense-page .field input:focus {
+  border-color: var(--ae-accent);
+  box-shadow: 0 0 0 3px var(--ae-focus-ring);
+}
+
+.dark-theme .add-expense-page input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Amount and Date side by side, each with a leading addon. */
+.add-expense-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.add-expense-input-group {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ae-input-border);
+  border-radius: 10px;
+  background: var(--ae-input-bg);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.add-expense-input-group:focus-within {
+  border-color: var(--ae-accent);
+  box-shadow: 0 0 0 3px var(--ae-focus-ring);
+}
+
+.add-expense-input-addon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--ae-input-border);
+  background: var(--ae-addon-bg);
+  color: var(--ae-label);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.add-expense-page .add-expense .add-expense-input-group input[type="number"],
+.add-expense-page .add-expense .add-expense-input-group input[type="date"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.add-expense-page .field .add-expense-input-group input:focus {
+  box-shadow: none;
+}
+
+/* Primary action. */
+.add-expense-page .submit-btn {
+  margin-top: 2px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-size: 15px;
+  background: var(--ae-primary);
+  box-shadow: 0 6px 16px rgba(216, 27, 96, 0.2);
+}
+
+.add-expense-page .submit-btn:hover {
+  background: var(--ae-primary-hover);
+  box-shadow: 0 8px 20px rgba(216, 27, 96, 0.26);
+}
+
+@media (max-width: 900px) {
+  .add-expense-quick-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .add-expense-page {
+    padding: 14px 14px 28px;
+  }
+
+  .add-expense-page-title {
+    font-size: 21px;
+  }
+
+  .add-expense-page-title::before {
+    height: 22px;
+  }
+
+  .add-expense-page-subtitle {
+    font-size: 13px;
+  }
+
+  .add-expense-action-card {
+    padding: 12px 14px;
+  }
+
+  .add-expense-action-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .add-expense-page .add-expense-action-btn {
+    width: 100%;
+  }
+
+  .add-expense-divider {
+    margin: 16px 0 12px;
+  }
+
+  .add-expense-page .add-expense {
+    max-width: none;
+    padding: 16px 14px;
+    gap: 12px;
+    border-radius: 14px;
+  }
+
+  .add-expense-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-expense-action-card,
+  .add-expense-page .add-expense-action-btn,
+  .add-expense-input-group {
+    transition: none;
+  }
+
+  .add-expense-page .add-expense-action-btn:hover {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Add Income page redesign (spec/ui-redesign/add-income-page.md).
+   Scoped to .add-income-page, the Add Income view only. The --ae-* palette
+   tokens and page padding come from the shared rule in the Add Expense
+   block above.
+   ------------------------------------------------------------------------ */
+.add-income-page .add-expense {
+  max-width: 1040px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 22px 24px 24px;
+  gap: 16px;
+  border-radius: 16px;
+  background: var(--ae-card-bg);
+  backdrop-filter: none;
+  border: 1px solid var(--ae-card-border);
+  box-shadow: var(--ae-card-shadow);
+}
+
+/* Header: title with the pink accent bar, subtitle aligned with the fields. */
+.add-income-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.add-income-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ae-title);
+}
+
+.add-income-title::before {
+  content: "";
+  width: 4px;
+  height: 26px;
+  border-radius: 4px;
+  background: var(--ae-accent);
+  flex-shrink: 0;
+}
+
+.add-income-subtitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ae-muted);
+}
+
+.add-income-page .field {
+  gap: 6px;
+}
+
+.add-income-page .field label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ae-label);
+}
+
+.add-income-required {
+  margin-left: 3px;
+  color: var(--ae-accent);
+}
+
+.add-income-page .add-expense input[type="text"],
+.add-income-page .add-expense input[type="number"],
+.add-income-page .add-expense input[type="date"] {
+  height: 40px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ae-input-border);
+  background: var(--ae-input-bg);
+  color: var(--ae-label);
+}
+
+.add-income-page .add-expense input::placeholder {
+  color: var(--ae-placeholder);
+  opacity: 1;
+}
+
+.add-income-page .field input:focus {
+  border-color: var(--ae-accent);
+  box-shadow: 0 0 0 3px var(--ae-focus-ring);
+}
+
+.dark-theme .add-income-page input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Source of Income: the free-text input with a menu of the user's saved
+   sources (see .add-income-source-menu below); the chevron toggles it. */
+.add-income-select {
+  position: relative;
+}
+
+.add-income-page .add-expense .add-income-select input[type="text"] {
+  padding-right: 40px;
+}
+
+.add-income-select-icon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--ae-muted);
+  cursor: pointer;
+}
+
+/* Saved-source menu: the same look as the Category Budgets category
+   suggestions menu (.category-budgets-suggestion-menu), opening below the
+   field. */
+.add-income-source-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  box-sizing: border-box;
+  max-height: 174px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border: 1px solid #e9dce3;
+  border-radius: 14px;
+  background: #fffbfd;
+  box-shadow: 0 12px 28px rgba(63, 32, 48, 0.14);
+  color: #2d2028;
+  scrollbar-width: thin;
+  scrollbar-color: #d978a5 #fff1f6;
+}
+
+.add-income-source-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.add-income-source-menu::-webkit-scrollbar-track {
+  background: #fff1f6;
+  border-radius: 8px;
+}
+
+.add-income-source-menu::-webkit-scrollbar-thumb {
+  background: #d978a5;
+  border-radius: 8px;
+}
+
+.add-income-source-option,
+.add-income-source-empty {
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.add-income-source-option {
+  box-sizing: border-box;
+  height: 40px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.add-income-source-option:hover,
+.add-income-source-option[aria-selected="true"] {
+  background: #fbe6ef;
+}
+
+.add-income-source-option[aria-selected="true"] {
+  outline: 2px solid #d81b60;
+  outline-offset: -2px;
+}
+
+.add-income-source-empty {
+  color: #6e5e69;
+}
+
+.dark-theme .add-income-source-menu {
+  border-color: #6b264d;
+  background: #2b1425;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  color: #fdf2f8;
+  scrollbar-color: #a75483 #3a1b32;
+}
+
+.dark-theme .add-income-source-menu::-webkit-scrollbar-track {
+  background: #3a1b32;
+}
+
+.dark-theme .add-income-source-menu::-webkit-scrollbar-thumb {
+  background: #a75483;
+}
+
+.dark-theme .add-income-source-option:hover,
+.dark-theme .add-income-source-option[aria-selected="true"] {
+  background: #4a203b;
+}
+
+.dark-theme .add-income-source-option[aria-selected="true"] {
+  outline-color: #f472b6;
+}
+
+.dark-theme .add-income-source-empty {
+  color: #d4a3be;
+}
+
+/* Amount (leading rupee sign) and Date (trailing calendar) input groups. */
+.add-income-input-group {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ae-input-border);
+  border-radius: 10px;
+  background: var(--ae-input-bg);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.add-income-input-group:focus-within {
+  border-color: var(--ae-accent);
+  box-shadow: 0 0 0 3px var(--ae-focus-ring);
+}
+
+.add-income-input-addon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--ae-input-border);
+  background: var(--ae-addon-bg);
+  color: var(--ae-label);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.add-income-page .add-expense .add-income-input-group input[type="number"],
+.add-income-page .add-expense .add-income-input-group input[type="date"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Date: the calendar addon sits over the input's right edge (clicks pass
+   through it) and Chromium's native picker toggle is stretched, invisible,
+   underneath it, so clicking the addon opens the native picker. */
+.add-income-page .add-expense .add-income-input-group--date input[type="date"] {
+  padding-right: 54px;
+}
+
+.add-income-input-addon--end {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-right: none;
+  border-left: 1px solid var(--ae-input-border);
+  color: var(--ae-muted);
+  font-size: 17px;
+  pointer-events: none;
+}
+
+.add-income-input-group--date input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 42px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Firefox draws its own calendar button inside the date input: keep that one
+   instead of showing two calendar icons. */
+@supports (-moz-appearance: none) {
+  .add-income-input-addon--end {
+    display: none;
+  }
+
+  .add-income-page .add-expense .add-income-input-group--date input[type="date"] {
+    padding-right: 12px;
+  }
+}
+
+/* Primary action. */
+.add-income-page .submit-btn {
+  margin-top: 4px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-size: 15px;
+  background: var(--ae-primary);
+  box-shadow: 0 6px 16px rgba(216, 27, 96, 0.2);
+}
+
+.add-income-page .submit-btn:hover {
+  background: var(--ae-primary-hover);
+  box-shadow: 0 8px 20px rgba(216, 27, 96, 0.26);
+}
+
+.add-income-page .submit-btn:focus-visible {
+  outline: 3px solid var(--ae-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .add-income-page {
+    padding: 14px 14px 28px;
+  }
+
+  .add-income-page .add-expense {
+    padding: 16px 14px;
+    gap: 14px;
+    border-radius: 14px;
+  }
+
+  .add-income-title {
+    font-size: 21px;
+  }
+
+  .add-income-title::before {
+    height: 22px;
+  }
+
+  .add-income-subtitle {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-income-input-group {
+    transition: none;
+  }
+
+  .add-income-page .submit-btn:hover {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Add Expense / Add Income toggle redesign (spec/ui-redesign/add-toggle-bar.md).
+   Scoped to .add-form-toggle (Add.js only): the Analysis page's Insights
+   toggle also uses .form-toggle and keeps the look defined above.
+   ------------------------------------------------------------------------ */
+.add-form-toggle {
+  --ft-bg: #ffffff;
+  --ft-border: #f1e4ea;
+  --ft-shadow: 0 6px 18px rgba(63, 32, 48, 0.06);
+  --ft-active-bg: linear-gradient(90deg, #fcdbe7 0%, #fdeef3 100%);
+  --ft-active-shadow: 0 2px 8px rgba(216, 27, 96, 0.08);
+  --ft-active-text: #d81b60;
+  --ft-active-icon-bg: #f9cfdf;
+  --ft-text: #1f1320;
+  --ft-icon: #6f6a7d;
+  --ft-icon-bg: #f0eef3;
+  --ft-icon-hover-bg: #e7e3ec;
+  --ft-focus: rgba(216, 27, 96, 0.55);
+}
+
+.dark-theme .add-form-toggle {
+  --ft-bg: rgba(36, 20, 32, 0.95);
+  --ft-border: rgba(120, 42, 85, 0.5);
+  --ft-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  --ft-active-bg: linear-gradient(90deg, rgba(219, 39, 119, 0.34) 0%, rgba(219, 39, 119, 0.16) 100%);
+  --ft-active-shadow: none;
+  --ft-active-text: #f9a8d4;
+  --ft-active-icon-bg: rgba(244, 114, 182, 0.24);
+  --ft-text: #f5e6ee;
+  --ft-icon: #cbb8c6;
+  --ft-icon-bg: rgba(255, 255, 255, 0.08);
+  --ft-icon-hover-bg: rgba(255, 255, 255, 0.14);
+  --ft-focus: rgba(244, 114, 182, 0.7);
+}
+
+/* Same width as the page cards below (1040px max, 24px gutters). The 8px
+   bottom margin plus the views' 20px top padding leaves a 28px gap. */
+.form-toggle.add-form-toggle {
+  box-sizing: border-box;
+  width: calc(100% - 48px);
+  max-width: 1040px;
+  height: 56px;
+  margin: 16px auto 8px;
+  padding: 5px;
+  border: 1px solid var(--ft-border);
+  background: var(--ft-bg);
+  box-shadow: var(--ft-shadow);
+}
+
+.add-form-toggle .form-toggle-slider {
+  inset: 5px auto 5px 5px;
+  width: calc(50% - 5px);
+  background: var(--ft-active-bg);
+  box-shadow: var(--ft-active-shadow);
+}
+
+.add-form-toggle button {
+  gap: 12px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ft-text);
+  transition: color 0.2s ease;
+}
+
+.add-form-toggle button.active {
+  color: var(--ft-active-text);
+}
+
+.add-form-toggle button:focus-visible {
+  outline: 2px solid var(--ft-focus);
+  outline-offset: 0;
+}
+
+.add-form-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ft-icon-bg);
+  color: var(--ft-icon);
+  font-size: 18px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.add-form-toggle button:not(.active):hover .add-form-toggle-icon {
+  background: var(--ft-icon-hover-bg);
+}
+
+.add-form-toggle button.active .add-form-toggle-icon {
+  background: var(--ft-active-icon-bg);
+  color: var(--ft-active-text);
+}
+
+@media (max-width: 600px) {
+  .form-toggle.add-form-toggle {
+    width: calc(100% - 28px);
+    max-width: none;
+    height: 50px;
+    margin-top: 12px;
+    margin-bottom: 10px; /* + the views' 14px top padding = 24px gap */
+    padding: 4px;
+  }
+
+  .add-form-toggle .form-toggle-slider {
+    inset: 4px auto 4px 4px;
+    width: calc(50% - 4px);
+  }
+
+  .add-form-toggle button {
+    gap: 8px;
+    font-size: 14.5px;
+  }
+
+  .add-form-toggle-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
+  }
+}
+
+/* Small phones: tighter icon and text; below 340px the icons give way to
+   the labels. */
+@media (max-width: 400px) {
+  .add-form-toggle button {
+    gap: 6px;
+    font-size: 14px;
+  }
+
+  .add-form-toggle-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 340px) {
+  .add-form-toggle-icon {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-form-toggle .form-toggle-slider,
+  .add-form-toggle button,
+  .add-form-toggle-icon {
+    transition: none;
+  }
+}

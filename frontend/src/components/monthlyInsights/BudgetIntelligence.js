@@ -1,9 +1,17 @@
-import { FaLightbulb, FaExclamationTriangle, FaExclamationCircle, FaMagic, FaFireAlt, FaBullseye } from "react-icons/fa";
-// DAT-001-T06 -- money renders through the shared formatter.
-import { formatMoney } from "../../utils/money";
+import { useMemo } from "react";
+import {
+  FaLightbulb,
+  FaBullseye,
+  FaFireAlt,
+  FaChartLine,
+  FaExclamationTriangle,
+  FaExclamationCircle,
+} from "react-icons/fa";
+import { formatMoneyApprox as formatMoney } from "../../utils/money";
 import "./BudgetIntelligence.css";
 
-// Falls back to a generic "no insights yet" message when no budget insight data is available.
+const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+
 const DEFAULT_INSIGHT = {
   type: "OTHERS",
   title: "No Budget Insights Yet",
@@ -11,80 +19,210 @@ const DEFAULT_INSIGHT = {
   tip: "Add a monthly budget to unlock smart tips.",
 };
 
-export default function BudgetIntelligence({ data }) {
-  const icons = {
-    EXCEEDED: <FaFireAlt  color="#e11d48" size={18} />,
-    HIGH_RISK: <FaExclamationTriangle  color="#f97316" size={18} />,
-    CRITICAL: <FaExclamationCircle  color="#dc2626" size={18} />,
-    AT_RISK: <FaExclamationTriangle  color="#f97316" size={18} />,
-    WARNING: <FaExclamationCircle color="#eab308" size={18} />,
-    SAFE: <FaBullseye  color="#10b981" size={18} />,
-    OTHERS: <FaLightbulb  color="#10b981" size={18} />,
-  };
+function getInsightType(data) {
+  const typeFromInsights = data?.budgetInsights?.type?.toUpperCase();
+  if (
+    typeFromInsights &&
+    ["EXCEEDED", "CRITICAL", "HIGH_RISK", "AT_RISK", "WARNING", "SAFE", "OTHERS"].includes(
+      typeFromInsights
+    )
+  ) {
+    return typeFromInsights;
+  }
 
+  const statusFromData = data?.status?.toUpperCase();
+  if (statusFromData === "OVERSPENT") return "EXCEEDED";
+  if (statusFromData === "CRITICAL") return "CRITICAL";
+  if (statusFromData === "WARNING") return "WARNING";
+  if (statusFromData === "SAFE") return "SAFE";
+
+  const projStatus = data?.projectionStatus?.toUpperCase();
+  if (projStatus === "PROJECTEDOVERSPEND") return "HIGH_RISK";
+  if (projStatus === "ATRISK") return "AT_RISK";
+
+  const utilization = Number(data?.utilization);
+  if (Number.isFinite(utilization)) {
+    if (utilization > 100) return "EXCEEDED";
+    if (utilization >= 90) return "CRITICAL";
+    if (utilization >= 70) return "WARNING";
+    return "SAFE";
+  }
+
+  return "OTHERS";
+}
+
+function renderStatusIcon(type) {
+  switch (type) {
+    case "EXCEEDED":
+      return <FaFireAlt size={18} color="#dc2626" />;
+    case "CRITICAL":
+      return <FaExclamationCircle size={20} color="#dc2626" />;
+    case "HIGH_RISK":
+      return <FaExclamationTriangle size={18} color="#ea580c" />;
+    case "AT_RISK":
+      return <FaExclamationTriangle size={18} color="#f97316" />;
+    case "WARNING":
+      return <FaExclamationCircle size={20} color="#eab308" />;
+    case "SAFE":
+      return <FaBullseye size={18} color="#10b981" />;
+    case "OTHERS":
+    default:
+      return <FaLightbulb size={18} color="#10b981" />;
+  }
+}
+
+export default function BudgetIntelligence({ data, forecast, report }) {
   const insights = data?.budgetInsights ?? DEFAULT_INSIGHT;
-  const insightType = insights.type && icons[insights.type] ? insights.type : "OTHERS";
-  const utilization = Number.isFinite(data?.utilization) ? data.utilization : 0;
-  const spent = data?.spent ?? 0;
-  const budget = data?.budget ?? 0;
+  const insightType = getInsightType(data);
+
+  const utilization = isFiniteNumber(data?.utilization) ? data.utilization : 0;
+  const spent = isFiniteNumber(data?.spent) ? data.spent : 0;
+  const budget = isFiniteNumber(data?.budget) ? data.budget : 0;
+
+  const effectiveForecast = forecast || report?.forecast || data?.forecast;
+  const currentMonthForecast = effectiveForecast?.currentMonthForecast;
+  const hasForecastData =
+    currentMonthForecast?.hasData === true && isFiniteNumber(currentMonthForecast?.estimate);
+
+  const { displayEstimate, displayRemaining, footnoteText } = useMemo(() => {
+    if (hasForecastData) {
+      const estimate = currentMonthForecast.estimate;
+      const remainingFromRisk = currentMonthForecast.budgetRisk?.predictedRemaining;
+      const remaining = isFiniteNumber(remainingFromRisk)
+        ? remainingFromRisk
+        : (budget > 0 ? budget - estimate : null);
+
+      const historyMonths = isFiniteNumber(currentMonthForecast.historyMonthsUsed)
+        ? currentMonthForecast.historyMonthsUsed
+        : null;
+
+      const footnote = historyMonths !== null
+        ? `Based on your recent spending pattern and ${historyMonths} ${historyMonths === 1 ? "month" : "months"} of history.`
+        : "Based on your recent spending pattern and history.";
+
+      return {
+        displayEstimate: estimate,
+        displayRemaining: remaining,
+        footnoteText: footnote,
+      };
+    }
+
+    if (budget > 0) {
+      return {
+        displayEstimate: spent,
+        displayRemaining: Math.max(0, budget - spent),
+        footnoteText: "Complete 3 months of tracking to unlock month-end forecast.",
+      };
+    }
+
+    return {
+      displayEstimate: null,
+      displayRemaining: null,
+      footnoteText: "Set a monthly budget to unlock month-end forecast.",
+    };
+  }, [hasForecastData, currentMonthForecast, budget, spent]);
 
   return (
-    <div className="budget-intelligence-card">
-      <div className="budget-intelligence-heading">
-        <div className="heading-icon">
-          <FaLightbulb size={18} color="#FFFFFF" />
+    <div className="budget-intel-merged-container">
+      {/* LEFT COLUMN: Budget Progress & Smart Tip */}
+      <div className="budget-intel-left-col">
+        {/* Status Header */}
+        <div className="budget-intel-header">
+          <div className="budget-intel-icon-tile" aria-hidden="true">
+            {renderStatusIcon(insightType)}
+          </div>
+          <div className="budget-intel-title-wrap">
+            <div className="budget-intel-title-row">
+              <h2 className="budget-intel-title">
+                {insights.title ?? DEFAULT_INSIGHT.title}
+              </h2>
+              <span className={`budget-intel-priority-badge ${insightType}`}>
+                {insightType.replace("_", " ")}
+              </span>
+            </div>
+            {insights.message && insights.message !== insights.title && (
+              <p className="budget-intel-message">{insights.message}</p>
+            )}
+          </div>
         </div>
-        <h1 className="budget-intelligence-h-text">Budget Intelligence</h1>
+
+        {/* Budget Progress Bar */}
+        {budget > 0 && (
+          <div className="budget-progress-section">
+            <div className="budget-progress-row">
+              <span className="budget-progress-label">Budget Progress</span>
+              <span className={`budget-progress-percent ${insightType}`}>
+                {Math.round(utilization)}%
+              </span>
+            </div>
+
+            <div className="budget-progress-bar-track" aria-hidden="true">
+              <div
+                className={`budget-progress-bar-fill ${insightType}`}
+                style={{
+                  width: `${Math.min(Math.max(utilization, 0), 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="budget-progress-labels">
+              <span className="budget-label-spent">{formatMoney(spent)}</span>
+              <span className="budget-label-budget">{formatMoney(budget)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Smart Tip Card */}
+        <div className="budget-smart-tip-card">
+          <div className="budget-smart-tip-icon-tile" aria-hidden="true">
+            <FaLightbulb size={16} color="#db2777" />
+          </div>
+          <div className="budget-smart-tip-content">
+            <h5 className="budget-smart-tip-heading">Smart Tip</h5>
+            <p className="budget-smart-tip-text">
+              {insights.tip ?? DEFAULT_INSIGHT.tip}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className={`budget-intelligence-report-card ${insightType}`}>
-        <div className="budget-intelligence-report-heading">
-          <div className="heading-icon" style={{background: "#F3F4F6"}}>
-            {icons[insightType]}
-          </div>
-          <h1 className="budget-intelligence-h-text">{insights.title ?? DEFAULT_INSIGHT.title}</h1>
-          <p className={`budget-intelligence-report-priority ${insightType}`}>
-            {insightType.replace("_", " ")}
-          </p>
-        </div>
-
-        <div className="budget-intelligence-report-insight">
-          <p className="budget-intelligence-p-text">{insights.message ?? DEFAULT_INSIGHT.message}</p>
-
-          {budget > 0 && (
-            <div className="budget-intelligence-report-bar-container">
-              <div className="budget-progress-header">
-                <span className="budget-progress-title">Budget Progress</span>
-                <span className="budget-progress-percent">
-                  {Math.round(utilization)}%
-                </span>
-              </div>
-
-              <div className="budget-intelligence-report-bar">
-                <div className="progress-track">
-                  <div
-                    className={`progress-fill ${insightType}`}
-                    style={{
-                      width: `${Math.min(Math.max(utilization, 0), 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="budget-bar-labels">
-                <span>{formatMoney(spent)}</span>
-                <span>{formatMoney(budget)}</span>
-              </div>
+      {/* RIGHT COLUMN: Month-end Forecast */}
+      <div className="budget-intel-right-col">
+        <div className="budget-forecast-panel">
+          <div className="budget-forecast-header">
+            <div className="budget-forecast-icon-tile" aria-hidden="true">
+              <FaChartLine size={15} color="#db2777" />
             </div>
-          )}
-        </div>
-
-        <div className="budget-intelligence-smart-tip">
-          <div className="budget-intelligence-smart-tip-label">
-            <FaMagic style={{ color:"#d97706", fontSize:"16px"}}/>
-            <h5>Smart Tip</h5>
+            <h3 className="budget-forecast-heading">Month-end Forecast</h3>
           </div>
-          <p>{insights.tip ?? DEFAULT_INSIGHT.tip}</p>
+
+          <div className="budget-forecast-metric-card">
+            <div className="forecast-stat-col">
+              <span className="forecast-stat-amount spend">
+                {displayEstimate !== null ? formatMoney(displayEstimate) : "—"}
+              </span>
+              <span className="forecast-stat-label">projected total spend</span>
+            </div>
+
+            <div className="forecast-stat-divider" aria-hidden="true" />
+
+            <div className="forecast-stat-col">
+              <span
+                className={`forecast-stat-amount ${
+                  displayRemaining !== null && displayRemaining < 0 ? "over" : "safe"
+                }`}
+              >
+                {displayRemaining !== null ? formatMoney(Math.abs(displayRemaining)) : "—"}
+              </span>
+              <span className="forecast-stat-label">
+                {displayRemaining !== null && displayRemaining < 0
+                  ? "likely over budget"
+                  : "likely remaining"}
+              </span>
+            </div>
+          </div>
+
+          <p className="budget-forecast-footnote">{footnoteText}</p>
         </div>
       </div>
     </div>

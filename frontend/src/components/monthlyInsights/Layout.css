@@ -1,18 +1,91 @@
 .monthly-page-container {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 20px;
-  padding-bottom: 90px;
+  padding: 20px 24px 36px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .monthly-page-container {
-    padding: 5px;
+    padding: 14px 14px 28px;
     gap: 16px;
-    padding-bottom: 90px;
+  }
+}
+
+/* ==========================================================================
+   PARENT CONTAINERS (BUDGET & INCOME ANALYSIS)
+   Unifies child cards under a single cohesive parent container matching BALENISA standards.
+   ========================================================================== */
+
+.budget-analysis-parent-container,
+.income-analysis-parent-container,
+.income-insights-parent-container {
+  width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, rgba(255, 248, 251, 0.94) 0%, rgba(255, 238, 246, 0.82) 100%);
+  border: 1px solid rgba(244, 114, 182, 0.28);
+  border-radius: 26px;
+  padding: 24px 28px;
+  box-shadow: 0 12px 36px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.dark-theme .budget-analysis-parent-container,
+.dark-theme .income-analysis-parent-container,
+.dark-theme .income-insights-parent-container {
+  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
+  border-color: rgba(244, 114, 182, 0.22);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
+}
+
+.income-analysis-parent-container,
+.income-insights-parent-container {
+  gap: 16px;
+}
+
+/* Seamless inner integration when inside .budget-analysis-parent-container */
+.budget-analysis-parent-container .budget-insights-header,
+.budget-analysis-parent-container .anomaly-container {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Seamless inner integration when inside .income-analysis-parent-container */
+.income-analysis-parent-container .income-insights-header,
+.income-analysis-parent-container .income-insights-section,
+.income-insights-parent-container .income-insights-header,
+.income-insights-parent-container .income-insights-section {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: visible !important;
+}
+
+@media (max-width: 600px) {
+  .budget-analysis-parent-container,
+  .income-analysis-parent-container,
+  .income-insights-parent-container {
+    padding: 16px 14px;
+    border-radius: 20px;
+    gap: 16px;
   }
 }

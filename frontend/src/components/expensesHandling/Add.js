@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { HiChartBar, HiOutlineCreditCard } from 'react-icons/hi2';
 import AddExpense from './AddExpense';
 import AddIncome from './AddIncome';
 import './AddExpense.css';
@@ -9,7 +10,7 @@ const Add = ({ isEdit, setIsEdit }) => {
 
   return (
     <div className="add-page">
-      <div className="form-toggle">
+      <div className="form-toggle add-form-toggle">
         <div
           className={`form-toggle-slider ${
             type === "income" ? "right" : ""
@@ -19,14 +20,22 @@ const Add = ({ isEdit, setIsEdit }) => {
         <button
           className={type === "expense" ? "active" : ""}
           onClick={() => setType("expense")}
+          aria-pressed={type === "expense"}
         >
+          <span className="add-form-toggle-icon" aria-hidden="true">
+            <HiOutlineCreditCard />
+          </span>
           Add Expense
         </button>
 
         <button
           className={type === "income" ? "active" : ""}
           onClick={() => setType("income")}
+          aria-pressed={type === "income"}
         >
+          <span className="add-form-toggle-icon" aria-hidden="true">
+            <HiChartBar />
+          </span>
           Add Income
         </button>
       </div>

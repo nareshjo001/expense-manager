@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { format as formatDate, parseISO } from "date-fns";
+import { FiUpload } from "react-icons/fi";
+import {
+  FaDatabase,
+  FaFileAlt,
+  FaRegCalendarAlt,
+  FaChevronDown,
+  FaDownload,
+} from "react-icons/fa";
 import "../expensesHandling/AddExpense.css";
 import "./DataExport.css";
 
@@ -103,79 +111,140 @@ const DataExport = () => {
 
   return (
     <div className="add-page data-export-page">
-      <h2 className="data-export-heading">Data Export</h2>
-      <p className="data-export-subheading">
-        Export your expenses, income, or budgets as a CSV or JSON file. Small exports download right
-        away; larger ones are prepared in the background and appear below once ready.
-      </p>
-
-      <form className="data-export-form" onSubmit={handleSubmit}>
-        <div className="field">
-          <label htmlFor="data-export-domain">Data</label>
-          <select
-            id="data-export-domain"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-          >
-            {Object.entries(DOMAIN_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor="data-export-format">Format</label>
-          <select
-            id="data-export-format"
-            value={formatValue}
-            onChange={(e) => setFormatValue(e.target.value)}
-          >
-            <option value="csv" disabled={isAllDomain}>
-              CSV
-            </option>
-            <option value="json">JSON</option>
-          </select>
-          {isAllDomain && (
-            <p className="data-export-hint">Exporting all data is only available as JSON.</p>
-          )}
-        </div>
-
-        {isBudgetsDomain ? (
-          <p className="data-export-hint">
-            Date range doesn't apply to budgets -- every budget is included in this export.
+      <div className="data-export-card data-export-config-card">
+        <div className="data-export-header">
+          <div className="data-export-title-wrapper">
+            <span className="data-export-accent-bar" aria-hidden="true" />
+            <h2 className="data-export-heading">Data Export</h2>
+          </div>
+          <p className="data-export-subheading">
+            Export your expenses, income, or budgets as a CSV or JSON file. Small exports download
+            right away; larger ones are prepared in the background and appear below once ready.
           </p>
-        ) : (
-          <div className="data-export-date-range">
-            <div className="field">
-              <label htmlFor="data-export-date-from">From (optional)</label>
-              <input
-                id="data-export-date-from"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
+        </div>
+
+        <form className="data-export-form" onSubmit={handleSubmit}>
+          <div className="data-export-form-grid">
+            {/* Row 1, Col 1: Data */}
+            <div className="data-export-field field data-export-field--data">
+              <label htmlFor="data-export-domain">Data</label>
+              <div className="data-export-input-wrapper">
+                <span className="data-export-input-icon" aria-hidden="true">
+                  <FaDatabase />
+                </span>
+                <select
+                  id="data-export-domain"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                >
+                  {Object.entries(DOMAIN_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <span className="data-export-select-arrow" aria-hidden="true">
+                  <FaChevronDown />
+                </span>
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="data-export-date-to">To (optional)</label>
-              <input
-                id="data-export-date-to"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
+
+            {/* Row 1, Col 2: Format */}
+            <div className="data-export-field field data-export-field--format">
+              <label htmlFor="data-export-format">Format</label>
+              <div className="data-export-input-wrapper">
+                <span className="data-export-input-icon" aria-hidden="true">
+                  <FaFileAlt />
+                </span>
+                <select
+                  id="data-export-format"
+                  value={formatValue}
+                  onChange={(e) => setFormatValue(e.target.value)}
+                >
+                  <option value="csv" disabled={isAllDomain}>
+                    CSV
+                  </option>
+                  <option value="json">JSON</option>
+                </select>
+                <span className="data-export-select-arrow" aria-hidden="true">
+                  <FaChevronDown />
+                </span>
+              </div>
+              {isAllDomain && (
+                <p className="data-export-hint">Exporting all data is only available as JSON.</p>
+              )}
+            </div>
+
+            {/* Row 1, Col 3: Spacer on desktop */}
+            <div className="data-export-grid-spacer" aria-hidden="true" />
+
+            {/* Row 2: Date filters or budgets hint */}
+            {isBudgetsDomain ? (
+              <div className="data-export-budgets-hint-wrapper">
+                <p className="data-export-hint">
+                  Date range doesn't apply to budgets -- every budget is included in this export.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="data-export-field field data-export-field--from">
+                  <label htmlFor="data-export-date-from">From (optional)</label>
+                  <div className="data-export-input-wrapper">
+                    <span className="data-export-input-icon" aria-hidden="true">
+                      <FaRegCalendarAlt />
+                    </span>
+                    <input
+                      id="data-export-date-from"
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="data-export-field field data-export-field--to">
+                  <label htmlFor="data-export-date-to">To (optional)</label>
+                  <div className="data-export-input-wrapper">
+                    <span className="data-export-input-icon" aria-hidden="true">
+                      <FaRegCalendarAlt />
+                    </span>
+                    <input
+                      id="data-export-date-to"
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Row 2, Col 3: Export button */}
+            <div
+              className={`data-export-btn-wrapper ${
+                isBudgetsDomain ? "data-export-btn-wrapper--budgets" : ""
+              }`}
+            >
+              <button
+                type="submit"
+                className="submit-btn data-export-submit-btn"
+                disabled={createMutation.isPending}
+              >
+                <FiUpload className="data-export-btn-icon" aria-hidden="true" />
+                <span>{createMutation.isPending ? "Exporting..." : "Export"}</span>
+              </button>
             </div>
           </div>
-        )}
+        </form>
+      </div>
 
-        <button type="submit" className="submit-btn" disabled={createMutation.isPending}>
-          {createMutation.isPending ? "Exporting..." : "Export"}
-        </button>
-      </form>
-
-      <section className="data-export-history">
-        <h3>Past exports</h3>
+      <section className="data-export-card data-export-history-card data-export-history">
+        <div className="data-export-header data-export-history-header">
+          <div className="data-export-title-wrapper">
+            <span className="data-export-accent-bar" aria-hidden="true" />
+            <h3 className="data-export-history-heading">Past exports</h3>
+          </div>
+        </div>
 
         <QueryState
           isLoading={requestsQuery.isLoading}
@@ -213,7 +282,8 @@ const DataExport = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Download
+                    <FaDownload className="data-export-download-icon" aria-hidden="true" />
+                    <span>Download</span>
                   </a>
                 )}
               </li>

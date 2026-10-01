@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import "./NaturalLanguageQuickAdd.css";
 import { FaArrowLeft } from "react-icons/fa";
+import { FaWandMagicSparkles } from "react-icons/fa6";
+import { HiOutlineDocumentPlus, HiOutlineExclamationCircle, HiSparkles } from "react-icons/hi2";
 import { expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import { useParseExpenseMutation } from "../../hooks/mutations/useParseExpenseMutation";
 
@@ -53,28 +55,38 @@ const NaturalLanguageQuickAdd = ({ setIsQuickAdd, setBillData }) => {
             className="back-btn"
             onClick={() => setIsQuickAdd(false)}
           >
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "5px" }}>
-              <FaArrowLeft size={14} /> Back
-            </span>
+            <FaArrowLeft size={13} aria-hidden="true" /> Back
           </button>
 
-          <h2>Quick Add</h2>
+          <div className="nl-quick-add-heading">
+            <span className="nl-quick-add-heading-icon" aria-hidden="true">
+              <HiOutlineDocumentPlus />
+            </span>
+            <div>
+              <h2>Quick Add</h2>
+              <p className="nl-quick-add-subtitle">Add your expense in seconds</p>
+            </div>
+          </div>
         </div>
 
         <div className="nl-quick-add-input-section">
           <label htmlFor="nl-quick-add-text">Describe the expense in one sentence</label>
 
-          <input
-            id="nl-quick-add-text"
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={MAX_TEXT_LENGTH}
-            placeholder='e.g. "spent 250 on lunch yesterday at Cafe X"'
-            aria-describedby={parseMessage ? "nl-quick-add-message" : undefined}
-          />
+          <div className="nl-quick-add-input-wrap">
+            <HiSparkles className="nl-quick-add-input-icon" aria-hidden="true" />
+            <input
+              id="nl-quick-add-text"
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={MAX_TEXT_LENGTH}
+              placeholder='e.g. "spent 250 on lunch yesterday at Cafe X"'
+              aria-describedby={parseMessage ? "nl-quick-add-message" : undefined}
+            />
+          </div>
           {parseMessage && (
             <p id="nl-quick-add-message" className="nl-quick-add-message" role="status" aria-live="polite">
+              <HiOutlineExclamationCircle aria-hidden="true" />
               {parseMessage}
             </p>
           )}
@@ -86,6 +98,7 @@ const NaturalLanguageQuickAdd = ({ setIsQuickAdd, setBillData }) => {
           onClick={handleSubmit}
           disabled={parseExpenseMutation.isPending || !text.trim()}
         >
+          <FaWandMagicSparkles aria-hidden="true" />
           {parseExpenseMutation.isPending ? "Parsing..." : "Parse Expense"}
         </button>
       </div>

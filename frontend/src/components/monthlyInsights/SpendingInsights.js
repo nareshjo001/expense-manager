@@ -2,8 +2,8 @@ import './SpendingInsights.css';
 // DAT-001-T06 -- money renders through the shared formatter.
 import { formatMoney } from "../../utils/money";
 import { useMemo } from 'react';
-import { FaChartPie, FaTrophy, FaTint } from "react-icons/fa";
-import { FaArrowTrendUp } from "react-icons/fa6";
+import { FaChartPie, FaTrophy, FaTint, FaWallet, FaChartBar } from "react-icons/fa";
+import OverallInsight from "./OverallInsight";
 
 // Derives the top-category, micro-spending, and weekend-vs-weekday panels from the report data.
 function buildLeftPanel(categoriesMonthly, totalSpent) {
@@ -37,7 +37,7 @@ function buildMiddlePanel(habitsMonthly) {
 function buildRightPanel(habitsMonthly) {
   const wvw = habitsMonthly?.weekendVsWeekday;
   if (!wvw || (!wvw.weekendSpent && !wvw.weekdaySpent)) return null;
-  let title = "How You Spend";
+  let title = "Weekday Spender";
   let message = "Your spending pattern is consistent throughout the week.";
   if (wvw.preferredPeriod === "Weekday") {
     title = "Weekday Spender";
@@ -64,134 +64,131 @@ export default function SpendingInsights({ report }) {
 
   return (
     <div className="spending-insights-container">
-      <div className='spending-insights-container-heading'>
-        <div className="heading-icon">
-          <FaChartPie size={18} color="#FFFFFF" />
+      <div className="spending-insights-container-heading">
+        <div className="spending-insights-brand-tile" aria-hidden="true">
+          <FaChartPie size={20} color="#FFFFFF" />
         </div>
-        <h1 className='spending-insights-h-text' style={{fontWeight: "600"}}>Spending Insights</h1>
+        <h2 className="spending-insights-title">Spending Insights</h2>
       </div>
 
       <div className="spending-insights-grid">
-        <div className='spending-insights-left'>
-          <div className='spending-insights-card-head'>
-            <div className="heading-icon">
-              <FaTrophy size={18} color="#FFFFFF" />
+        {/* Card 1: Top Category */}
+        <div className="spending-insights-card top-category-card">
+          <div className="spending-insights-card-head">
+            <div className="spending-card-icon-badge badge-trophy" aria-hidden="true">
+              <FaTrophy size={16} />
             </div>
-            <div className='spending-insights-left-heading'>
-              <h1 className='spending-insights-h-text' style={{color: "#111827"}}>Top Category</h1>
-              <p className='spending-insights-p-text' style={{color: "var(--muted-text)"}}>Your highest spending</p>
-            </div>
-          </div>
-
-          {leftPanelData 
-            ? (
-              <>
-                <div className="spending-insights-left-body">
-                  <p className='spending-insights-p-text' style={{color: "#374151", fontWeight: "500", marginBottom: "12px"}}>
-                    {leftPanelData.topCategory} is your top category at{" "}
-                    <strong style={{ color: "var(--menu-color)" }}>
-                      {formatMoney(leftPanelData.amount)}
-                    </strong>
-                  </p>
-                  <p className='spending-insights-p-text'>
-                    {leftPanelData.showTopCategoryInsight
-                      ? "Reducing spending in this category could have the biggest impact."
-                      : `(${Math.round(leftPanelData.percentage)}% of your spending)`}
-                  </p>
-                </div>
-
-                <div className="spending-insights-left-progress">
-                  <div className='spending-insights-left-bar'>
-                      <div className="progress-track" style={{height: "13px"}}>
-                        <div
-                            className="spending-progress-fill"
-                            style={{ width: `${Math.min(100, Math.round(leftPanelData.percentage))}%` }}
-                        />
-                      </div>
-                      <p className='spending-insights-p-text' style={{color: "#000"}}>
-                        <strong>{`${Math.round(leftPanelData.percentage)}%`}</strong>
-                      </p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className='insights-empty-card'>
-                <p className='insights-empty-text'>No spending insights yet</p>
-                <p className='insights-empty-text'>Start tracking expenses to discover your top category</p>
-              </div>
-            )}
-        </div>
-
-        <div className='spending-insights-middle'>
-          <div className='spending-insights-card-head'>
-            <div className="heading-icon" style={{background: ""}}>
-              <FaTint  size={18} color="#FFFFFF" />
-            </div>
-            <div className='spending-insights-middle-heading'>
-              <h1 className='spending-insights-h-text' style={{color: "#111827"}}>Leaky Bucket</h1>
-              <p className='spending-insights-p-text'>Micro-spending Pattern</p>
+            <div className="spending-card-head-text">
+              <h3 className="spending-card-title">Top Category</h3>
+              <p className="spending-card-subtitle">Your highest spending</p>
             </div>
           </div>
 
-          {middlePanelData
-            ? (
-              <div className="spending-insights-middle-body">
-                <h1 className='spending-insights-h-text' style={{color: "var(--menu-color)", fontWeight: "700", fontSize: "28px" ,textAlign: "center", marginTop: "20px"}}>
-                  {formatMoney(middlePanelData.leakTotal)}
-                </h1>
-                <p className='spending-insights-p-text' style={{textAlign: "center"}}><strong>{middlePanelData.count}</strong> small purchases (At an avg <strong>{formatMoney(middlePanelData.averageLeak)}</strong>)</p>
-                <p className='spending-insights-p-text' style={{marginTop: "20px", fontWeight: "500"}}>{middlePanelData.subMessage}</p>
+          {leftPanelData ? (
+            <div className="spending-card-body">
+              <p className="spending-card-main-text">
+                {leftPanelData.topCategory} is your top category at{" "}
+                <strong className="top-category-amount">{formatMoney(leftPanelData.amount)}</strong>
+              </p>
+              <p className="spending-card-desc">
+                {leftPanelData.showTopCategoryInsight
+                  ? "Reducing spending in this category could have the biggest impact."
+                  : `(${Math.round(leftPanelData.percentage)}% of your spending)`}
+              </p>
+              <div className="top-category-progress-row">
+                <div className="top-category-progress-track">
+                  <div
+                    className="top-category-progress-fill"
+                    style={{ width: `${Math.min(100, Math.round(leftPanelData.percentage))}%` }}
+                  />
+                </div>
+                <span className="top-category-progress-percent">
+                  {Math.round(leftPanelData.percentage)}%
+                </span>
               </div>
-            ) : (
-              <div className='insights-empty-card'>
-                <p className='insights-empty-text'>No micro-spending detected</p>
-                <p className='insights-empty-text'>Great job keeping small expenses under control</p>
-              </div>
-            )} 
+            </div>
+          ) : (
+            <div className="insights-empty-card">
+              <p className="insights-empty-title">No spending insights yet</p>
+              <p className="insights-empty-text">Start tracking expenses to discover your top category</p>
+            </div>
+          )}
         </div>
 
-        <div className='spending-insights-right'>
-          <div className='spending-insights-card-head'>
-            <div className="heading-icon">
-              <FaArrowTrendUp size={18} color="#FFFFFF" />
+        {/* Card 2: Leaky Bucket */}
+        <div className="spending-insights-card leaky-bucket-card">
+          <div className="spending-insights-card-head">
+            <div className="spending-card-icon-badge badge-droplet" aria-hidden="true">
+              <FaTint size={16} />
             </div>
-            <div className='spending-insights-right-heading'>
-              <h1 className='spending-insights-h-text' style={{color: "#111827"}}>
-                {rightPanelData ? rightPanelData.insight.title : `How You Spend`}
-              </h1>
-              <p className='spending-insights-p-text'>Behavioral Pattern</p>
+            <div className="spending-card-head-text">
+              <h3 className="spending-card-title">Leaky Bucket</h3>
+              <p className="spending-card-subtitle">Micro-spending Pattern</p>
             </div>
           </div>
 
-          {rightPanelData 
-            ? (
-              <>
-                <p className='spending-insights-p-text' style={{color: "#374151", fontWeight: "500"}}>
-                  {rightPanelData.insight.message}
-                </p>
-                <div className='spending-insights-right-stats'>
-                  <div className='spending-insights-right-stats-weekday'>
-                    <p className='spending-insights-p-text'>Weekday Avg</p>
-                    <h1 className='spending-insights-h-text' style={{color: "var(--menu-color)"}}>
-                      {formatMoney(rightPanelData.weekdayAvg)}
-                    </h1>
-                  </div>
-                  <div className='spending-insights-right-stats-weekend'>
-                    <p className='spending-insights-p-text'>Weekend Avg</p>
-                    <h1 className='spending-insights-h-text' style={{color: "var(--menu-color)"}}>
-                      {formatMoney(rightPanelData.weekendAvg)}
-                    </h1>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className='insights-empty-card'>
-                <p className='insights-empty-text'>Not enough data to analyze patterns</p>
-                <p className='insights-empty-text'>Keep tracking to unlock insights</p>
+          {middlePanelData ? (
+            <div className="leaky-bucket-active-body">
+              <h3 className="leaky-bucket-amount">{formatMoney(middlePanelData.leakTotal)}</h3>
+              <p className="leaky-bucket-sub">
+                <strong>{middlePanelData.count}</strong> small purchases (At an avg{" "}
+                <strong>{formatMoney(middlePanelData.averageLeak)}</strong>)
+              </p>
+              <p className="leaky-bucket-msg">{middlePanelData.subMessage}</p>
+            </div>
+          ) : (
+            <div className="leaky-bucket-empty-body">
+              <div className="leaky-bucket-wallet-tile" aria-hidden="true">
+                <FaWallet size={18} color="#db2777" />
+                <svg className="wallet-sparkles" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 0L9.5 5.5L15 7L9.5 8.5L8 14L6.5 8.5L1 7L6.5 5.5L8 0Z" fill="#f43f5e" opacity="0.8" />
+                  <circle cx="13" cy="3" r="1.5" fill="#f43f5e" />
+                </svg>
               </div>
-            )
-          }
+              <p className="leaky-bucket-empty-title">No micro-spending detected</p>
+              <p className="leaky-bucket-empty-desc">Great job keeping small expenses under control.</p>
+            </div>
+          )}
         </div>
+
+        {/* Card 3: Weekday Spender */}
+        <div className="spending-insights-card weekday-spender-card">
+          <div className="spending-insights-card-head">
+            <div className="spending-card-icon-badge badge-chart" aria-hidden="true">
+              <FaChartBar size={16} />
+            </div>
+            <div className="spending-card-head-text">
+              <h3 className="spending-card-title">
+                {rightPanelData ? rightPanelData.insight.title : "Weekday Spender"}
+              </h3>
+              <p className="spending-card-subtitle">Behavioral Pattern</p>
+            </div>
+          </div>
+
+          {rightPanelData ? (
+            <div className="spending-card-body">
+              <p className="spending-card-desc">{rightPanelData.insight.message}</p>
+              <div className="weekday-stats-row">
+                <div className="weekday-stat-box weekday-box">
+                  <span className="weekday-stat-label">Weekday Avg</span>
+                  <span className="weekday-stat-value">{formatMoney(rightPanelData.weekdayAvg)}</span>
+                </div>
+                <div className="weekday-stat-box weekend-box">
+                  <span className="weekday-stat-label">Weekend Avg</span>
+                  <span className="weekday-stat-value">{formatMoney(rightPanelData.weekendAvg)}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="insights-empty-card">
+              <p className="insights-empty-title">Not enough data to analyze patterns</p>
+              <p className="insights-empty-text">Keep tracking to unlock insights</p>
+            </div>
+          )}
+        </div>
+
+        {/* Cards 4, 5, 6: Unified continuous grid items */}
+        <OverallInsight report={report} />
       </div>
     </div>
   );

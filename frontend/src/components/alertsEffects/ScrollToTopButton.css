@@ -39,8 +39,9 @@
 @media screen and (max-width: 600px) {
   /* SIA owns the complete mobile viewport while its panel is open. The
      persistent page-level control returns as soon as that panel closes. */
-  body.sia-mobile-panel-open .scroll-top-btn {
-    display: none;
+  body.sia-mobile-panel-open .scroll-top-btn,
+  body:has(.notification-prefs-page) .scroll-top-btn {
+    display: none !important;
   }
 
   .scroll-top-btn {

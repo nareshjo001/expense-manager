@@ -203,3 +203,42 @@ describe("NotificationPreferences -- editing and saving", () => {
     expect(notificationPreferencesSaveErrorToast).toHaveBeenCalledWith({ message: "nope" });
   });
 });
+
+describe("NotificationPreferences -- redesigned layout and icons", () => {
+  it("renders header badges and icon badges for all notification types including category-budget-alert", () => {
+    setupQuery(payload({
+      types: {
+        "recurring-expense": { enabled: true, preview: "device" },
+        "recurring-expense-ended": { enabled: true, preview: "device" },
+        "category-budget-alert": { enabled: true, preview: "device" },
+      },
+      typeMeta: {
+        "recurring-expense": { label: "Recurring expense logged", description: "When a recurring expense is automatically added for you." },
+        "recurring-expense-ended": { label: "Recurring expense ended", description: "When a recurring expense reaches its end date and stops." },
+        "category-budget-alert": { label: "Category budget alerts", description: "When spending in a category reaches 90% of its budget or goes over it." },
+      },
+    }));
+    setupMutation();
+
+    const { container } = render(<NotificationPreferences />);
+
+    expect(screen.getByText("Category budget alerts")).toBeInTheDocument();
+    expect(screen.getByText("When spending in a category reaches 90% of its budget or goes over it.")).toBeInTheDocument();
+
+    // Verify 2 cards are rendered (Preferences card + Quiet hours card)
+    const cards = container.querySelectorAll(".notification-prefs-card");
+    expect(cards).toHaveLength(2);
+
+    // Verify badges
+    const badges = container.querySelectorAll(".notification-prefs-badge");
+    expect(badges).toHaveLength(2); // 1 bell + 1 moon
+
+    // Verify 3 type icon badges
+    const typeIconBadges = container.querySelectorAll(".notification-prefs-type-icon-badge");
+    expect(typeIconBadges).toHaveLength(3);
+
+    // Verify quiet hours box and save wrapper structure
+    expect(container.querySelector(".notification-prefs-quiet-box")).toBeInTheDocument();
+    expect(container.querySelector(".notification-prefs-save-wrapper")).toBeInTheDocument();
+  });
+});

@@ -5,9 +5,12 @@ import { queryKeys } from "../../query/queryKeys";
 // REC-002-T05 -- backs the recurring-definition management screen (every
 // definition regardless of status, unlike the REC-003 upcoming projection
 // which only ever returns active ones).
-export const useRecurringDefinitionsQuery = () => {
+export const useRecurringDefinitionsQuery = (options = {}) => {
   return useQuery({
     queryKey: queryKeys.recurring.lists(),
     queryFn: ({ signal }) => listRecurringDefinitions(signal),
+    refetchOnMount: "always",
+    ...options,
   });
 };
+

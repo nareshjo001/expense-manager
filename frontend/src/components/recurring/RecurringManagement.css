@@ -1,127 +1,724 @@
-/* REC-002-T05 -- recurring-definition management screen. */
+/* REC-002-T05 -- recurring-definition management screen redesign */
+
+.recurring-mgmt-page {
+  --rm-title: #831843;
+  --rm-label: #1e293b;
+  --rm-muted: #64748b;
+  --rm-accent: #db2777;
+  --rm-accent-dark: #be185d;
+  --rm-accent-soft: #fdf2f8;
+  --rm-accent-border: #fce7f3;
+  --rm-card-bg: #ffffff;
+  --rm-card-border: rgba(244, 114, 182, 0.28);
+  --rm-card-shadow: 0 10px 30px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+  --rm-item-bg: #ffffff;
+  --rm-item-border: rgba(244, 114, 182, 0.22);
+  --rm-item-shadow: 0 2px 8px rgba(225, 29, 116, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --rm-item-hover-border: rgba(244, 114, 182, 0.45);
+  --rm-btn-bg: #ffffff;
+  --rm-btn-border: rgba(244, 114, 182, 0.35);
+  --rm-btn-text: #831843;
+  --rm-btn-hover-bg: #fdf2f8;
+  --rm-btn-hover-border: rgba(244, 114, 182, 0.7);
+  --rm-btn-hover-text: #be185d;
+  --rm-input-bg: #ffffff;
+  --rm-input-border: rgba(244, 114, 182, 0.35);
+  --rm-input-focus: #ec4899;
+
+  background: var(--rm-card-bg);
+  border: 1px solid var(--rm-card-border);
+  border-radius: 22px;
+  box-shadow: var(--rm-card-shadow);
+  padding: 28px 32px 32px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.dark-theme .recurring-mgmt-page {
+  --rm-title: #fdf2f8;
+  --rm-label: #f8fafc;
+  --rm-muted: #94a3b8;
+  --rm-accent: #f472b6;
+  --rm-accent-dark: #f472b6;
+  --rm-accent-soft: rgba(244, 114, 182, 0.15);
+  --rm-accent-border: rgba(244, 114, 182, 0.25);
+  --rm-card-bg: rgba(31, 41, 55, 0.85);
+  --rm-card-border: rgba(244, 114, 182, 0.22);
+  --rm-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+  --rm-item-bg: rgba(26, 34, 46, 0.95);
+  --rm-item-border: rgba(244, 114, 182, 0.2);
+  --rm-item-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --rm-item-hover-border: rgba(244, 114, 182, 0.4);
+  --rm-btn-bg: rgba(17, 24, 39, 0.6);
+  --rm-btn-border: rgba(244, 114, 182, 0.3);
+  --rm-btn-text: #f472b6;
+  --rm-btn-hover-bg: rgba(244, 114, 182, 0.18);
+  --rm-btn-hover-border: rgba(244, 114, 182, 0.6);
+  --rm-btn-hover-text: #fdf2f8;
+  --rm-input-bg: rgba(17, 24, 39, 0.6);
+  --rm-input-border: rgba(244, 114, 182, 0.3);
+  --rm-input-focus: #f472b6;
+}
+
+/* ================= Header with Vertical Accent Line ================= */
+.recurring-mgmt-header {
+  margin-bottom: 24px;
+}
+
+.recurring-mgmt-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.recurring-mgmt-accent-bar {
+  width: 4px;
+  height: 24px;
+  border-radius: 4px;
+  background: var(--rm-accent, #db2777);
+  flex-shrink: 0;
+}
 
 .recurring-mgmt-heading {
-    margin-bottom: 4px;
+  font-size: 1.32rem;
+  font-weight: 700;
+  color: var(--rm-title, #831843);
+  margin: 0;
+  line-height: 1.25;
 }
 
 .recurring-mgmt-subheading {
-    margin-top: 0;
-    margin-bottom: 20px;
-    opacity: 0.8;
-    font-size: 0.9rem;
+  color: var(--rm-muted, #64748b);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin: 6px 0 0 0;
+  max-width: 780px;
 }
 
+/* ================= List & Item Cards ================= */
 .recurring-mgmt-list {
-    list-style: none;
-    padding: 0;
-    margin: 20px 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  list-style: none;
+  padding: 4px 6px 6px 4px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Exactly 5 items visible initially (~92px per item + 14px gaps * 4 = ~516px), remaining scrollable */
+  max-height: 535px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 114, 182, 0.4) transparent;
+}
+
+.recurring-mgmt-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recurring-mgmt-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.recurring-mgmt-list::-webkit-scrollbar-thumb {
+  background: rgba(244, 114, 182, 0.35);
+  border-radius: 6px;
+}
+
+.recurring-mgmt-list::-webkit-scrollbar-thumb:hover {
+  background: var(--rm-accent, #db2777);
 }
 
 .recurring-mgmt-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: 10px;
-    background: rgba(127, 127, 127, 0.08);
-    flex-wrap: wrap;
+  background: var(--rm-item-bg, #ffffff);
+  border: 1px solid var(--rm-item-border, rgba(244, 114, 182, 0.22));
+  border-radius: 16px;
+  box-shadow: var(--rm-item-shadow);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  box-sizing: border-box;
+}
+
+.recurring-mgmt-item:hover {
+  border-color: var(--rm-item-hover-border);
+  box-shadow: 0 8px 24px rgba(225, 29, 116, 0.08);
+  transform: translateY(-1px);
 }
 
 .recurring-mgmt-item--paused {
-    opacity: 0.75;
+  opacity: 0.88;
 }
 
 .recurring-mgmt-item--ended {
-    opacity: 0.55;
+  opacity: 0.68;
+}
+
+/* Item Main & Icon Column */
+.recurring-mgmt-item-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  flex: 1;
+}
+
+.recurring-mgmt-icon-wrapper {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--rm-accent-soft, #fdf2f8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--rm-accent-dark, #be185d);
+  font-size: 1.2rem;
+  transition: transform 0.15s ease;
+}
+
+.recurring-mgmt-item:hover .recurring-mgmt-icon-wrapper {
+  transform: scale(1.05);
 }
 
 .recurring-mgmt-item-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 .recurring-mgmt-item-title-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .recurring-mgmt-item-name {
-    font-weight: 600;
-    overflow-wrap: anywhere;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--rm-label, #1e293b);
+  overflow-wrap: anywhere;
 }
 
-.recurring-mgmt-item-category,
-.recurring-mgmt-item-meta {
-    font-size: 0.85rem;
-    opacity: 0.75;
-}
-
-.recurring-mgmt-item-amount {
-    font-weight: 500;
-}
-
+/* Status Badges */
 .recurring-mgmt-badge {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 2px 8px;
-    border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.recurring-mgmt-badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .recurring-mgmt-badge--active {
-    background: rgba(16, 185, 129, 0.18);
-    color: #047857;
+  background: #ecfdf5;
+  color: #15803d;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.dark-theme .recurring-mgmt-badge--active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border-color: rgba(110, 231, 183, 0.25);
 }
 
 .recurring-mgmt-badge--paused {
-    background: rgba(245, 158, 11, 0.18);
-    color: #92400e;
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.dark-theme .recurring-mgmt-badge--paused {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+  border-color: rgba(253, 230, 138, 0.25);
 }
 
 .recurring-mgmt-badge--ended {
-    background: rgba(107, 114, 128, 0.18);
-    color: #374151;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.25);
 }
 
+.dark-theme .recurring-mgmt-badge--ended {
+  background: rgba(100, 116, 139, 0.25);
+  color: #cbd5e1;
+  border-color: rgba(203, 213, 225, 0.25);
+}
+
+.recurring-mgmt-item-category {
+  font-size: 0.82rem;
+  color: var(--rm-muted, #64748b);
+  font-weight: 500;
+}
+
+/* Line 3: Amount + Divider + Next Due */
+.recurring-mgmt-item-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.recurring-mgmt-item-amount {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--rm-accent-dark, #be185d);
+  font-variant-numeric: tabular-nums;
+}
+
+.dark-theme .recurring-mgmt-item-amount {
+  color: #f472b6;
+}
+
+.recurring-mgmt-item-divider {
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 300;
+  user-select: none;
+}
+
+.dark-theme .recurring-mgmt-item-divider {
+  color: #475569;
+}
+
+.recurring-mgmt-item-meta {
+  font-size: 0.82rem;
+  color: var(--rm-muted, #64748b);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.recurring-mgmt-calendar-icon {
+  font-size: 0.82rem;
+  color: var(--rm-muted, #64748b);
+  flex-shrink: 0;
+}
+
+/* Item Right Column & Vertical Divider */
+.recurring-mgmt-item-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.recurring-mgmt-actions-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(203, 213, 225, 0.7);
+  flex-shrink: 0;
+}
+
+.dark-theme .recurring-mgmt-actions-divider {
+  background: rgba(244, 114, 182, 0.25);
+}
+
+/* ================= Actions ================= */
 .recurring-mgmt-item-actions {
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
-.recurring-mgmt-item-actions button {
-    background: none;
-    border: 1px solid var(--text-color, #666);
-    border-radius: 8px;
-    padding: 6px 12px;
-    cursor: pointer;
+.recurring-mgmt-btn {
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 78px;
 }
 
+.recurring-mgmt-btn-icon {
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.recurring-mgmt-btn:focus-visible {
+  outline: 2px solid var(--rm-accent, #db2777);
+  outline-offset: 2px;
+}
+
+.recurring-mgmt-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Pause Button (soft pink tint) */
+.recurring-mgmt-btn--pause {
+  background: var(--rm-accent-soft, #fdf2f8);
+  border: 1px solid rgba(244, 114, 182, 0.4);
+  color: var(--rm-accent-dark, #be185d);
+}
+
+.recurring-mgmt-btn--pause:hover:not(:disabled) {
+  background: #fce7f3;
+  border-color: rgba(219, 39, 119, 0.7);
+  color: #9d174d;
+  transform: translateY(-1px);
+}
+
+.dark-theme .recurring-mgmt-btn--pause {
+  background: rgba(244, 114, 182, 0.15);
+  border-color: rgba(244, 114, 182, 0.35);
+  color: #f472b6;
+}
+
+.dark-theme .recurring-mgmt-btn--pause:hover:not(:disabled) {
+  background: rgba(244, 114, 182, 0.25);
+  border-color: rgba(244, 114, 182, 0.6);
+  color: #fdf2f8;
+}
+
+/* Resume Button (soft green tint) */
+.recurring-mgmt-btn--resume {
+  background: #f0fdf4;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: #166534;
+}
+
+.recurring-mgmt-btn--resume:hover:not(:disabled) {
+  background: #dcfce7;
+  border-color: rgba(34, 197, 94, 0.7);
+  color: #14532d;
+  transform: translateY(-1px);
+}
+
+.dark-theme .recurring-mgmt-btn--resume {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+
+.dark-theme .recurring-mgmt-btn--resume:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.6);
+  color: #dcfce7;
+}
+
+/* Edit Button (clean white / subtle border) */
+.recurring-mgmt-btn--edit {
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  color: #334155;
+}
+
+.recurring-mgmt-btn--edit:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.dark-theme .recurring-mgmt-btn--edit {
+  background: rgba(17, 24, 39, 0.7);
+  border-color: rgba(203, 213, 225, 0.25);
+  color: #cbd5e1;
+}
+
+.dark-theme .recurring-mgmt-btn--edit:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(244, 114, 182, 0.5);
+  color: #f8fafc;
+}
+
+/* End Button (clean white with red/rose accent) */
+.recurring-mgmt-btn--end {
+  background: #ffffff;
+  border: 1px solid rgba(254, 205, 211, 0.85);
+  color: #e11d48;
+}
+
+.recurring-mgmt-btn--end:hover:not(:disabled) {
+  background: #fff1f2;
+  border-color: #f43f5e;
+  color: #be123c;
+  transform: translateY(-1px);
+}
+
+.dark-theme .recurring-mgmt-btn--end {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fb7185;
+}
+
+.dark-theme .recurring-mgmt-btn--end:hover:not(:disabled) {
+  background: rgba(225, 29, 72, 0.2);
+  border-color: rgba(244, 63, 94, 0.6);
+  color: #ffe4e6;
+}
+
+/* ================= Edit Form ================= */
 .recurring-mgmt-edit-form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  padding: 8px 4px;
+}
+
+.recurring-mgmt-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.recurring-mgmt-edit-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recurring-mgmt-edit-form .field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--rm-label, #334155);
+}
+
+.recurring-mgmt-edit-form .field input {
+  background: var(--rm-input-bg, #ffffff);
+  border: 1px solid var(--rm-input-border, rgba(244, 114, 182, 0.35));
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  color: var(--rm-label, #1e293b);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.recurring-mgmt-edit-form .field input:focus {
+  border-color: var(--rm-input-focus, #ec4899);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.15);
+  outline: none;
 }
 
 .recurring-mgmt-form-actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.recurring-mgmt-form-actions .submit-btn {
+  background: linear-gradient(90deg, #ec4899 0%, #db2777 100%);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 10px 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(225, 29, 116, 0.28);
+  transition: all 0.2s ease;
+}
+
+.recurring-mgmt-form-actions .submit-btn:hover {
+  box-shadow: 0 6px 18px rgba(225, 29, 116, 0.4);
+  transform: translateY(-1px);
+}
+
+.recurring-mgmt-form-actions .submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .recurring-mgmt-cancel {
-    background: none;
-    border: 1px solid var(--text-color, #666);
-    border-radius: 8px;
-    padding: 8px 16px;
-    cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--rm-btn-border, rgba(203, 213, 225, 0.8));
+  border-radius: 10px;
+  color: var(--rm-muted, #64748b);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
+
+.recurring-mgmt-cancel:hover {
+  background: var(--rm-accent-soft, #fdf2f8);
+  border-color: var(--rm-accent, #db2777);
+  color: var(--rm-accent-dark, #be185d);
+}
+
+/* ================= End Confirmation Modal ================= */
+.recurring-mgmt-page .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.recurring-mgmt-page .modal {
+  background: var(--rm-card-bg, #ffffff);
+  border: 1px solid var(--rm-card-border, rgba(244, 114, 182, 0.28));
+  border-radius: 20px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+  max-width: 440px;
+  width: 100%;
+  padding: 28px 24px;
+  box-sizing: border-box;
+  animation: rmModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rmModalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.recurring-mgmt-page .modal p {
+  font-size: 1rem;
+  color: var(--rm-label, #334155);
+  line-height: 1.5;
+  margin: 0 0 24px 0;
+}
+
+.dark-theme .recurring-mgmt-page .modal p {
+  color: #e2e8f0;
+}
+
+.recurring-mgmt-page .modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.recurring-mgmt-page .modal-buttons button {
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 9px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recurring-mgmt-page .modal-buttons button:first-child {
+  background: transparent;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  color: #475569;
+}
+
+.recurring-mgmt-page .modal-buttons button:first-child:hover {
+  background: var(--rm-accent-soft, #fdf2f8);
+  border-color: var(--rm-accent, #db2777);
+  color: var(--rm-accent-dark, #be185d);
+}
+
+.recurring-mgmt-page .modal-buttons button:last-child {
+  background: linear-gradient(90deg, #ec4899 0%, #db2777 100%);
+  border: none;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(225, 29, 116, 0.3);
+}
+
+.recurring-mgmt-page .modal-buttons button:last-child:hover {
+  box-shadow: 0 6px 18px rgba(225, 29, 116, 0.45);
+  transform: translateY(-1px);
+}
+
+/* ================= Responsive Breakpoints ================= */
+@media (max-width: 680px) {
+  .recurring-mgmt-page {
+    padding: 20px 16px 24px;
+    border-radius: 18px;
+  }
+
+  .recurring-mgmt-item {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 18px 20px;
+    gap: 16px;
+  }
+
+  .recurring-mgmt-item-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .recurring-mgmt-actions-divider {
+    display: none;
+  }
+
+  .recurring-mgmt-item-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .recurring-mgmt-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .recurring-mgmt-item {
+    padding: 14px 16px;
+  }
+
+  .recurring-mgmt-item-main {
+    gap: 12px;
+  }
+
+  .recurring-mgmt-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    font-size: 1.05rem;
+    border-radius: 10px;
+  }
+
+  .recurring-mgmt-item-name {
+    font-size: 0.98rem;
+  }
+
+  .recurring-mgmt-item-actions {
+    justify-content: stretch;
+  }
+
+  .recurring-mgmt-btn {
+    flex: 1 1 calc(50% - 6px);
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    min-width: unset;
+  }
+}
+
+

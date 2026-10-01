@@ -1,6 +1,7 @@
 /* Populated category-budget list only (accordion rows); imported after the
    existing section styles and scoped to .category-budgets-panel--list so the
-   empty state, unbudgeted panel and form are untouched.
+   empty state, unbudgeted panel and form are untouched (apart from the
+   unbudgeted header's divider, which matches this list's header).
 
    Scale reference: the unbudgeted card in CategoryBudgets.css. The header
    mirrors .category-budgets-panel-header / -icon-wrap / -title / -subtitle,
@@ -75,6 +76,14 @@
   border-bottom: 1px solid var(--cbl-row-border);
 }
 
+/* The unbudgeted card's header gets the same divider while budgets are
+   listed (--cbl-row-border is --cb-item-border). */
+.category-budgets-panels--list .category-budgets-panel--right .category-budgets-panel-header {
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--cb-item-border);
+}
+
 .category-budgets-list-icon {
   width: 42px;
   height: 42px;
@@ -126,6 +135,7 @@
   gap: 10px;
   max-height: 640px;
   padding: 0 6px 0 0;
+  transition: max-height 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Row card -- surface and radius of .category-budgets-unbudgeted-item. Each
@@ -199,6 +209,10 @@
   line-height: 1.4;
   color: var(--cbl-muted);
   overflow-wrap: break-word;
+}
+
+.category-budget-summary-amount-whole {
+  display: none;
 }
 
 /* Amounts never split; the line wraps at the spaces around "spent of". */
@@ -315,17 +329,50 @@
   }
 }
 
-/* Expanded detail -- existing progress, figures, risk message and actions,
-   kept compact: small labels, 14px values, slim bar, small buttons. */
+/* Expanded detail -- the grid row follows the detail's intrinsic height, so
+   the card, capped list, and rows below transition as one layout change.
+   Unlike a fixed max-height, this does not cap variable risk text or actions. */
 .category-budget-detail {
-  margin: 0 6px 6px;
-  padding: 12px 14px;
+  display: grid;
+  grid-template-rows: 0fr;
+  margin: 0 6px;
+  padding: 0 14px;
   border-radius: 10px;
   background: var(--cbl-detail-bg);
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    margin 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.category-budget-detail[hidden] {
-  display: none;
+.category-budget-detail-content {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.category-budget-row--expanded .category-budget-detail {
+  grid-template-rows: 1fr;
+  margin-bottom: 6px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  pointer-events: auto;
+}
+
+.category-budget-row--expanded .category-budget-detail-content {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 60ms, 0ms;
+}
+
+.category-budget-detail[aria-hidden="true"] {
+  pointer-events: none;
 }
 
 .category-budgets-panel--list .category-budget-progress {
@@ -405,6 +452,9 @@
 
 .category-budgets-panel--list .category-budget-actions .category-budget-button,
 .category-budgets-panel--list .category-budget-confirm .category-budget-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 64px;
   min-height: 32px;
   padding: 6px 14px;
@@ -494,6 +544,11 @@
     margin-bottom: 12px;
   }
 
+  .category-budgets-panels--list .category-budgets-panel--right .category-budgets-panel-header {
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
   .category-budgets-list-icon {
     width: 38px;
     height: 38px;
@@ -518,6 +573,49 @@
   .category-budgets-panel--list .category-budgets-list {
     max-height: 560px;
   }
+
+  /* Keep the category name and status on the first line. Flatten only the
+     presentational text wrapper so the amount can use the full second line
+     between the icon and chevron instead of competing with the status pill. */
+  .category-budget-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "icon name status status"
+      "icon amounts amounts chevron";
+    row-gap: 12px;
+  }
+
+  .category-budget-summary-text {
+    display: contents;
+  }
+
+  .category-budgets-panel--list .category-budget-name {
+    grid-area: name;
+    min-width: 0;
+  }
+
+  .category-budget-summary-amounts {
+    grid-area: amounts;
+    margin-top: 0;
+  }
+
+  .category-budget-summary-amount-full {
+    display: none;
+  }
+
+  .category-budget-summary-amount-whole {
+    display: inline;
+  }
+
+  .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+    align-self: start;
+    justify-self: end;
+  }
+
+  .category-budget-chevron {
+    align-self: end;
+    justify-self: end;
+  }
 }
 
 /* Browsers without size containers fall back to the narrow row layout on
@@ -525,21 +623,52 @@
 @supports not (container-type: inline-size) {
   @media (max-width: 600px) {
     .category-budget-summary {
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
       grid-template-areas:
-        "icon text chevron"
-        "icon status chevron";
-      row-gap: 5px;
+        "icon name status status"
+        "icon amounts amounts chevron";
+      row-gap: 12px;
+    }
+
+    .category-budget-summary-text {
+      display: contents;
+    }
+
+    .category-budgets-panel--list .category-budget-name {
+      grid-area: name;
+      min-width: 0;
+    }
+
+    .category-budget-summary-amounts {
+      grid-area: amounts;
+      margin-top: 0;
+    }
+
+    .category-budget-summary-amount-full {
+      display: none;
+    }
+
+    .category-budget-summary-amount-whole {
+      display: inline;
     }
 
     .category-budgets-panel--list .category-budget-summary > .category-budget-status {
-      justify-self: start;
+      align-self: start;
+      justify-self: end;
+    }
+
+    .category-budget-chevron {
+      align-self: end;
+      justify-self: end;
     }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .category-budget-chevron {
+  .category-budget-chevron,
+  .category-budget-detail,
+  .category-budget-detail-content,
+  .category-budgets-panel--list .category-budgets-list {
     transition: none;
   }
 }

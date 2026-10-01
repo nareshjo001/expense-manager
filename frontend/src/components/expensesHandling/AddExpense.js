@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { HiOutlineArrowUpTray, HiOutlineCalendarDays, HiOutlineDocumentText, HiSparkles } from 'react-icons/hi2';
 import './AddExpense.css';
 
 import Spinner from '../alertsEffects/Spinner';
@@ -406,7 +407,69 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     return (
     <>
     {isSpinnerLoading && <Spinner />}
-        <div className="add-expense-wrapper">
+        <div className="add-expense-wrapper add-expense-page">
+            <div className="add-expense-page-inner">
+            <header className="add-expense-page-header">
+                <h2 className="add-expense-page-title">
+                    {isEdit.enableEdit ? 'Edit Expense' : 'Add Expense'}
+                </h2>
+                <p className="add-expense-page-subtitle">
+                    {isEdit.enableEdit
+                        ? 'Update the details of this expense.'
+                        : 'Record your expense manually or choose a faster way to add it.'}
+                </p>
+            </header>
+
+            <div className="add-expense-quick-actions">
+                <div className="add-expense-action-card">
+                    <span className="add-expense-action-icon" aria-hidden="true">
+                        <HiOutlineDocumentText />
+                    </span>
+                    <div className="add-expense-action-text">
+                        <h3 className="add-expense-action-title">Upload Bill</h3>
+                        <p className="add-expense-action-description">
+                            Scan a receipt and we'll fill the details automatically.
+                        </p>
+                    </div>
+                    <button
+                        className='open-bill-upload-btn add-expense-action-btn'
+                        type="button"
+                        onClick={() => setIsBillUpload(true)}
+                        onMouseEnter={loadBillUpload}
+                        onFocus={loadBillUpload}
+                        onTouchStart={loadBillUpload}
+                    >
+                        <HiOutlineArrowUpTray aria-hidden="true" />
+                        Upload
+                    </button>
+                </div>
+
+                <div className="add-expense-action-card">
+                    <span className="add-expense-action-icon" aria-hidden="true">
+                        <HiSparkles />
+                    </span>
+                    <div className="add-expense-action-text">
+                        <h3 className="add-expense-action-title">Quick Add</h3>
+                        <p className="add-expense-action-description">
+                            Describe the expense in one sentence (e.g. "Lunch at Subway ₹280 today").
+                        </p>
+                    </div>
+                    <button
+                        className='open-bill-upload-btn add-expense-action-btn'
+                        type="button"
+                        onClick={() => setIsQuickAdd(true)}
+                        onMouseEnter={loadNaturalLanguageQuickAdd}
+                        onFocus={loadNaturalLanguageQuickAdd}
+                        onTouchStart={loadNaturalLanguageQuickAdd}
+                    >
+                        <HiSparkles aria-hidden="true" />
+                        Quick Add
+                    </button>
+                </div>
+            </div>
+
+            <p className="add-expense-divider"><span>Or enter manually</span></p>
+
             <form className="add-expense" onSubmit={handleSubmit}>
                 {
                     billData?.needsReview && (
@@ -416,37 +479,9 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     )
                 }
 
-                <div className="field bill-upload-option">
-                    <label>Do you want to upload a bill?</label>
-                    <button
-                        className='open-bill-upload-btn'
-                        type="button"
-                        onClick={() => setIsBillUpload(true)}
-                        onMouseEnter={loadBillUpload}
-                        onFocus={loadBillUpload}
-                        onTouchStart={loadBillUpload}
-                    >
-                        Upload
-                    </button>
-                </div>
-
-                <div className="field bill-upload-option">
-                    <label>Or describe it in one sentence</label>
-                    <button
-                        className='open-bill-upload-btn'
-                        type="button"
-                        onClick={() => setIsQuickAdd(true)}
-                        onMouseEnter={loadNaturalLanguageQuickAdd}
-                        onFocus={loadNaturalLanguageQuickAdd}
-                        onTouchStart={loadNaturalLanguageQuickAdd}
-                    >
-                        Quick add
-                    </button>
-                </div>
-                
                 <div className="field">
                     <label htmlFor="name" className="field-label-flex">
-                        Name of the Expense
+                        <span>Name of the Expense<span className="add-expense-required" aria-hidden="true">*</span></span>
                         {
                             formatFieldConfidence(billData?.fieldConfidence?.expenseName) !== null && (
                                 <span
@@ -464,13 +499,14 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         value={expenseName}
                         id="name"
                         onChange={(e) => {setName(e.target.value)}}
+                        placeholder="e.g. Lunch, Electricity Bill, Netflix"
                         required
                     />
                 </div>
 
                 <div className="field category-input-wrapper">
                     <label htmlFor="category" className="category-label">
-                        Category
+                        <span>Category<span className="add-expense-required" aria-hidden="true">*</span></span>
 
                         {
                             // ML-003-T04 -- the confidence badge only appears for
@@ -493,6 +529,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         value={expenseCategory}
                         id="category"
                         onChange={(e) => {setCategory(e.target.value)}}
+                        placeholder="e.g. Food, Travel, Shopping"
                         maxLength={20}
                         required
                     />
@@ -545,9 +582,10 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     }
                 </div>
 
+                <div className="add-expense-row">
                 <div className="field">
                     <label htmlFor="number" className="field-label-flex">
-                        Amount Spent
+                        <span>Amount Spent<span className="add-expense-required" aria-hidden="true">*</span></span>
                         {
                             formatFieldConfidence(billData?.fieldConfidence?.expenseAmount) !== null && (
                                 <span
@@ -560,20 +598,24 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                             )
                         }
                     </label>
-                    <input
-                        type="number"
-                        value={expenseAmount}
-                        id="number"
-                        onChange={(e) => {setAmount(e.target.value)}}
-                        min={0}
-                        step="any"
-                        required
-                    />
+                    <div className="add-expense-input-group">
+                        <span className="add-expense-input-addon" aria-hidden="true">₹</span>
+                        <input
+                            type="number"
+                            value={expenseAmount}
+                            id="number"
+                            onChange={(e) => {setAmount(e.target.value)}}
+                            placeholder="Enter amount"
+                            min={0}
+                            step="any"
+                            required
+                        />
+                    </div>
                 </div>
 
                 <div className="field">
                     <label htmlFor="date" className="field-label-flex">
-                        Date Spent
+                        <span>Date Spent<span className="add-expense-required" aria-hidden="true">*</span></span>
                         {
                             formatFieldConfidence(billData?.fieldConfidence?.expenseDate) !== null && (
                                 <span
@@ -586,13 +628,19 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                             )
                         }
                     </label>
-                    <input
-                        type="date"
-                        id="date"
-                        value={expenseDate}
-                        onChange={(e) => { setDate(e.target.value) }}
-                        required
-                    />
+                    <div className="add-expense-input-group">
+                        <span className="add-expense-input-addon" aria-hidden="true">
+                            <HiOutlineCalendarDays />
+                        </span>
+                        <input
+                            type="date"
+                            id="date"
+                            value={expenseDate}
+                            onChange={(e) => { setDate(e.target.value) }}
+                            required
+                        />
+                    </div>
+                </div>
                 </div>
 
                 <div className="field">
@@ -602,6 +650,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                         value={expenseDescription}
                         id="description"
                         onChange={(e) => {setDescription(e.target.value)}}
+                        placeholder="Add a note (e.g. at cafe with friends)"
                         maxLength={25}
                     />
                 </div>
@@ -610,6 +659,7 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     {isEdit.enableEdit ? "Update Expense" : "Add Expense"}
                 </button>
             </form>
+            </div>
         </div>
 
         {ruleSavePrompt && (

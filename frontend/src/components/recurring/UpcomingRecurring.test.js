@@ -16,6 +16,7 @@ import {
   getRecurringDefinition,
   pauseRecurringDefinition,
   endRecurringDefinition,
+  skipRecurringOccurrence,
 } from "../../api/recurringApi";
 
 jest.mock("../../api/recurringApi", () => ({
@@ -23,6 +24,7 @@ jest.mock("../../api/recurringApi", () => ({
   getRecurringDefinition: jest.fn(),
   pauseRecurringDefinition: jest.fn(),
   endRecurringDefinition: jest.fn(),
+  skipRecurringOccurrence: jest.fn(),
 }));
 
 function occurrence(overrides = {}) {
@@ -233,78 +235,17 @@ describe("stale state -- the schedule is behind", () => {
   });
 });
 
-describe("actions", () => {
-  test("edit is offered and calls back with the expense id", async () => {
-    const onEditExpense = jest.fn();
+describe("forecast-only row presentation", () => {
+  test("rows do not render Edit, Pause, Resume, or End action buttons (managed in Master section)", async () => {
     getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
 
-    renderUpcoming({ onEditExpense });
-
-    await userEvent.click(await screen.findByRole("button", { name: /edit/i }));
-    expect(onEditExpense).toHaveBeenCalledWith("exp1");
-  });
-
-  // REC-002/REC-003-T05 update: pause/end now exist and are wired to this
-  // view. The old "no pause control is rendered" assertion documented a real
-  // gap at the time (no lifecycle API existed) -- it is superseded here now
-  // that one does.
-  test("pause and end controls are offered on every row", async () => {
-    getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
-
-    renderUpcoming({ onEditExpense: jest.fn() });
+    renderUpcoming();
 
     await screen.findByText("Rent");
-    expect(screen.getByRole("button", { name: /pause/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /end/i })).toBeInTheDocument();
-    // Resume never appears here -- see this component's header comment on
-    // why a paused definition has no row to attach one to.
+    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /pause/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /end/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /resume/i })).not.toBeInTheDocument();
-  });
-
-  test("pausing re-fetches the current scheduleVersion, then pauses, then reloads the list", async () => {
-    getUpcomingRecurring
-      .mockResolvedValueOnce(payload([occurrence()]))
-      .mockResolvedValueOnce(payload([], { definitionCount: 0 }));
-    getRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", scheduleVersion: 3 } });
-    pauseRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", status: "paused" } });
-
-    renderUpcoming();
-
-    await userEvent.click(await screen.findByRole("button", { name: /pause/i }));
-
-    await waitFor(() => expect(pauseRecurringDefinition).toHaveBeenCalledWith("rec1", 3));
-    // The paused definition drops out of the next fetch -- the empty state
-    // proves this component actually reloaded rather than just trusting a
-    // local optimistic patch.
-    expect(await screen.findByText(/haven't marked any expenses as recurring/i)).toBeInTheDocument();
-  });
-
-  test("ending requires confirmation before calling the API", async () => {
-    getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
-    getRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", scheduleVersion: 5 } });
-    endRecurringDefinition.mockResolvedValue({ success: true, data: { id: "rec1", status: "ended" } });
-
-    renderUpcoming();
-
-    await userEvent.click(await screen.findByRole("button", { name: /end/i }));
-    // Not called yet -- a confirmation dialog must appear first for a
-    // terminal, unrecoverable action.
-    expect(endRecurringDefinition).not.toHaveBeenCalled();
-
-    await userEvent.click(await screen.findByRole("button", { name: /yes, end/i }));
-    await waitFor(() => expect(endRecurringDefinition).toHaveBeenCalledWith("rec1", 5));
-  });
-
-  test("canceling the end confirmation does not call the API", async () => {
-    getUpcomingRecurring.mockResolvedValue(payload([occurrence()]));
-
-    renderUpcoming();
-
-    await userEvent.click(await screen.findByRole("button", { name: /end/i }));
-    await userEvent.click(await screen.findByRole("button", { name: /cancel/i }));
-
-    expect(endRecurringDefinition).not.toHaveBeenCalled();
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
 
@@ -340,3 +281,134 @@ describe("date handling", () => {
     expect(monthLabel("2026-12")).toBe("December 2026");
   });
 });
+
+describe("cache invalidation sync with master recurring management", () => {
+  test("invalidating recurring queries automatically refetches upcoming list (e.g. on pause or resume)", async () => {
+    getUpcomingRecurring
+      .mockResolvedValueOnce(payload([occurrence({ expenseName: "Netflix" })]))
+      .mockResolvedValueOnce(payload([]));
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <UpcomingRecurring />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText("Netflix")).toBeInTheDocument();
+
+    // Simulating mutation in Section 2 (which invalidates queryKeys.recurring.all)
+    await act(async () => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+    });
+
+    // Upcoming list updates immediately to reflect the change
+    await waitFor(() => {
+      expect(screen.queryByText("Netflix")).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe("skip action", () => {
+  test("renders Skip button on each occurrence row", async () => {
+    getUpcomingRecurring.mockResolvedValue(
+      payload([
+        occurrence({ expenseName: "Recharge", dueCalendarDate: "2026-10-01" }),
+        occurrence({ expenseName: "Train Ticket", dueCalendarDate: "2026-11-01" }),
+      ])
+    );
+
+    renderUpcoming();
+
+    const skipButtons = await screen.findAllByRole("button", { name: /^Skip/i });
+    expect(skipButtons).toHaveLength(2);
+  });
+
+  test("clicking Skip opens the confirmation modal with occurrence details", async () => {
+    getUpcomingRecurring.mockResolvedValue(
+      payload([
+        occurrence({
+          expenseName: "Recharge",
+          expenseAmount: 300,
+          expenseAmountMinor: 30000,
+          dueCalendarDate: "2026-12-01",
+        }),
+      ])
+    );
+
+    renderUpcoming();
+
+    const skipButton = await screen.findByRole("button", { name: /^Skip/i });
+    await userEvent.click(skipButton);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Skip This Month?")).toBeInTheDocument();
+    expect(screen.getByText(/Skip this month's expense only/i)).toBeInTheDocument();
+  });
+
+  test("clicking Cancel closes the modal without calling the API", async () => {
+    getUpcomingRecurring.mockResolvedValue(
+      payload([occurrence({ expenseName: "Recharge", dueCalendarDate: "2026-12-01" })])
+    );
+
+    renderUpcoming();
+
+    const skipButton = await screen.findByRole("button", { name: /^Skip/i });
+    await userEvent.click(skipButton);
+
+    const cancelButton = screen.getByRole("button", { name: /Cancel/i });
+    await userEvent.click(cancelButton);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(skipRecurringOccurrence).not.toHaveBeenCalled();
+  });
+
+  test("confirming skip calls skipRecurringOccurrence and invalidates query", async () => {
+    getUpcomingRecurring
+      .mockResolvedValueOnce(
+        payload([
+          occurrence({
+            recurringId: "rec-recharge",
+            expenseName: "Recharge",
+            dueCalendarDate: "2026-12-01",
+            scheduleVersion: 1,
+          }),
+        ])
+      )
+      .mockResolvedValueOnce(payload([]));
+
+    skipRecurringOccurrence.mockResolvedValue({
+      success: true,
+      data: { id: "rec-recharge", skippedDates: ["2026-12-01"] },
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <UpcomingRecurring />
+      </QueryClientProvider>
+    );
+
+    const skipButton = await screen.findByRole("button", { name: /^Skip/i });
+    await userEvent.click(skipButton);
+
+    const confirmButton = screen.getByRole("button", { name: /Skip this month/i });
+    await userEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(skipRecurringOccurrence).toHaveBeenCalledWith("rec-recharge", "2026-12-01", 1);
+    });
+
+    // The occurrence is refetched and removed
+    await waitFor(() => {
+      expect(screen.queryByText("Recharge")).not.toBeInTheDocument();
+    });
+  });
+});
+

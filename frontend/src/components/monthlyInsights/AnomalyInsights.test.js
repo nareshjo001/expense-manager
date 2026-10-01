@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import AnomalyInsights from "./AnomalyInsights";
 
 // Material, history-based spending-review section.
@@ -225,9 +225,10 @@ describe("AnomalyInsights -- malformed individual records", () => {
     const { container } = renderWith(anomalies);
 
     expect(container.textContent).not.toMatch(/NaN|undefined/);
-    // Only the one genuinely renderable record is counted in the summary,
+    // Only the one genuinely renderable record is rendered in the list,
     // even though the backend's own flaggedCount says 2.
-    expect(screen.getByText(/^1 material spending change found/)).toBeInTheDocument();
+    const items = within(screen.getByRole("list")).getAllByRole("listitem");
+    expect(items).toHaveLength(1);
   });
 
   it("never renders the literal string 'Invalid Date' for a malformed expenseDate", () => {
@@ -314,3 +315,111 @@ describe("AnomalyInsights -- accessibility and structure", () => {
     expect(container.querySelectorAll("button, a, input, select, textarea, [tabindex]")).toHaveLength(0);
   });
 });
+
+describe("AnomalyInsights -- Projected by Category equation cards", () => {
+  it("renders equation cards with Spent so far, Expected (remaining), Projected total, and share badge", () => {
+    const report = {
+      anomalies: availableAnomalies(),
+      forecast: {
+        currentMonthForecast: {
+          categories: [
+            {
+              category: "Food",
+              actualAmount: 1171,
+              expectedRemaining: 77,
+              projectedAmount: 1248,
+              sharePercentage: 31,
+            },
+          ],
+        },
+      },
+    };
+
+    render(<AnomalyInsights report={report} />);
+
+    expect(screen.getByText("Food")).toBeInTheDocument();
+    expect(screen.getByText("Spent so far")).toBeInTheDocument();
+    expect(screen.getByText("₹1,171")).toBeInTheDocument();
+    expect(screen.getByText("Expected (remaining)")).toBeInTheDocument();
+    expect(screen.getByText("₹77")).toBeInTheDocument();
+    expect(screen.getByText("Projected total")).toBeInTheDocument();
+    expect(screen.getByText("₹1,248")).toBeInTheDocument();
+    expect(screen.getByText("31%")).toBeInTheDocument();
+    expect(screen.getByText(/of monthly/)).toBeInTheDocument();
+  });
+
+  it("shows empty state when categories are missing or empty", () => {
+    const report = {
+      anomalies: availableAnomalies(),
+      forecast: {
+        currentMonthForecast: {
+          categories: [],
+        },
+      },
+    };
+
+    render(<AnomalyInsights report={report} />);
+
+    expect(screen.getByText("Category projection unavailable")).toBeInTheDocument();
+  });
+
+  it("shows initial 1 card, displays Show all button when > 1 categories, and expands/collapses on click", () => {
+    const report = {
+      anomalies: availableAnomalies(),
+      forecast: {
+        currentMonthForecast: {
+          categories: [
+            { category: "Food", actualAmount: 1000, expectedRemaining: 500, projectedAmount: 1500, sharePercentage: 50 },
+            { category: "Bills", actualAmount: 800, expectedRemaining: 200, projectedAmount: 1000, sharePercentage: 30 },
+            { category: "Travel", actualAmount: 300, expectedRemaining: 100, projectedAmount: 400, sharePercentage: 20 },
+          ],
+        },
+      },
+    };
+
+    render(<AnomalyInsights report={report} />);
+
+    expect(screen.getByText("Food")).toBeInTheDocument();
+    expect(screen.getByText("Bills")).toBeInTheDocument();
+    expect(screen.getByText("Travel")).toBeInTheDocument();
+
+    const toggleBtn = screen.getByRole("button", { name: /show all/i });
+    expect(toggleBtn).toBeInTheDocument();
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+
+    // Click Show all
+    fireEvent.click(toggleBtn);
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/show less/i)).toBeInTheDocument();
+
+    // Click Show less
+    fireEvent.click(toggleBtn);
+    expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText(/show all \(3\)/i)).toBeInTheDocument();
+  });
+
+  it("filters out categories with 0 spending, 0% share, or rounding to 0 and renders the footer note", () => {
+    const report = {
+      anomalies: availableAnomalies(),
+      forecast: {
+        currentMonthForecast: {
+          categories: [
+            { category: "Food", actualAmount: 1000, expectedRemaining: 500, projectedAmount: 1500, sharePercentage: 100 },
+            { category: "ZeroCategory", actualAmount: 0, expectedRemaining: 0, projectedAmount: 0, sharePercentage: 0 },
+            { category: "Bank", actualAmount: 0, expectedRemaining: 1, projectedAmount: 1, sharePercentage: 0 },
+            { category: "Education", actualAmount: 0, expectedRemaining: 0.04, projectedAmount: 0.04, sharePercentage: 0 },
+          ],
+        },
+      },
+    };
+
+    const { container } = render(<AnomalyInsights report={report} />);
+
+    expect(screen.getByText("Food")).toBeInTheDocument();
+    expect(screen.queryByText("ZeroCategory")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bank")).not.toBeInTheDocument();
+    expect(screen.queryByText("Education")).not.toBeInTheDocument();
+    expect(container.textContent).toContain("Projections combine month-to-date spending with historical pace");
+  });
+});
+

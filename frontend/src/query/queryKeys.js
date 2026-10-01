@@ -29,13 +29,16 @@ export const queryKeys = {
     all: ["merchantRules"],
   },
 
-  // REC-002-T05 -- recurring-definition lifecycle management (list/detail).
-  // Deliberately separate from the REC-003 upcoming projection, which is
-  // fetched by UpcomingRecurring.js outside TanStack Query entirely -- this
-  // key namespace is only for the definitions themselves.
+  // REC-002-T05 / REC-003 -- recurring-definition lifecycle management (list/detail)
+  // and upcoming recurring projection.
   recurring: {
     all: ["recurring"],
     lists: () => [...queryKeys.recurring.all, "list"],
+    upcoming: (filters) => [
+      ...queryKeys.recurring.all,
+      "upcoming",
+      ...(filters ? [filters] : []),
+    ],
     detail: (id) => [...queryKeys.recurring.all, "detail", id],
   },
 

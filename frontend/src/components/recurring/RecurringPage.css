@@ -1,7 +1,23 @@
 /* REC-002-T05/REC-003 -- layout wrapper for the recurring-expenses page. */
 
 .recurring-page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 20px 24px 36px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 24px;
+}
+
+/* Ensure SIA launcher button is removed on the Recurring page */
+body:has(.recurring-page) .sia-entry-point {
+    display: none !important;
+}
+
+@media (max-width: 600px) {
+    .recurring-page {
+        padding: 12px 14px calc(90px + env(safe-area-inset-bottom, 0px));
+        gap: 18px;
+    }
 }

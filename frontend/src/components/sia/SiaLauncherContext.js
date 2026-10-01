@@ -31,7 +31,29 @@ export const SiaLauncherProvider = ({ children }) => {
   return (
     <SiaLauncherContext.Provider value={contextValue}>
       {children}
-      <SiaEntryPoint ref={entryPointRef} hideLauncher={location.pathname === "/add"} />
+      <SiaEntryPoint
+        ref={entryPointRef}
+        hideLauncher={
+          location.pathname === "/add" ||
+          location.pathname === "/budgets" ||
+          location.pathname === "/rules" ||
+          location.pathname.startsWith("/rules/") ||
+          location.pathname === "/sia-settings" ||
+          location.pathname.startsWith("/sia-settings/") ||
+          location.pathname === "/notification-preferences" ||
+          location.pathname.startsWith("/notification-preferences/") ||
+          location.pathname === "/notifications" ||
+          location.pathname.startsWith("/notifications/") ||
+          location.pathname === "/export" ||
+          location.pathname.startsWith("/export/") ||
+          location.pathname === "/import" ||
+          location.pathname.startsWith("/import/") ||
+          location.pathname === "/recurring" ||
+          location.pathname.startsWith("/recurring/") ||
+          location.pathname === "/receipts" ||
+          location.pathname.startsWith("/receipts/")
+        }
+      />
     </SiaLauncherContext.Provider>
   );
 };

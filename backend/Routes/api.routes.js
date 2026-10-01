@@ -31,6 +31,7 @@ const {
     resumeRecurring,
     endRecurring,
     editRecurring,
+    skipRecurring,
 } = require('../Controllers/RecurringExpenses');
 // NOT-003-T02 -- per-type/quiet-hours notification preferences.
 const {
@@ -144,6 +145,7 @@ router.get('/recurring/:id', verifyToken, getRecurringDetail);
 router.patch('/recurring/:id/pause', verifyToken, pauseRecurring);
 router.patch('/recurring/:id/resume', verifyToken, resumeRecurring);
 router.patch('/recurring/:id/end', verifyToken, endRecurring);
+router.patch('/recurring/:id/skip', verifyToken, skipRecurring);
 router.patch('/recurring/:id', verifyToken, editRecurring);
 
 // ================= EXPORT ROUTES =================

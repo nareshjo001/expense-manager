@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 // DAT-001-T06 -- money renders through the shared formatter.
 import { formatMoney } from "../../utils/money";
 import './OverallInsight.css';
-import { FaFire, FaAward, FaArrowRight } from "react-icons/fa";
+import { FaArrowRight, FaCrown, FaShieldAlt } from "react-icons/fa";
 import { FaArrowTrendUp } from "react-icons/fa6";
 import { useInView } from 'react-intersection-observer';
 
@@ -44,9 +44,7 @@ const STABILITY_TIER_LABELS = {
 // (Math.max(0, Math.min(100, Math.round(100 - cov * 100))), 75/50 cutoffs),
 // so this is a genuine 1:1 swap, not an approximation. Falls back to
 // recomputing from report.spending.stability, UNCHANGED, for reports
-// generated before ANL-001-T03/T04 added backend insights (legacy cached
-// reports have insights: {} per the Report model's schema default, so
-// insightsStability?.hasData will be falsy there).
+// generated before ANL-001-T03/T04 added backend insights.
 function buildStability(spending, insightsStability) {
   if (insightsStability?.hasData) {
     const tier = STABILITY_TIER_LABELS[insightsStability.tier];
@@ -70,7 +68,7 @@ function buildStability(spending, insightsStability) {
   return { stabilityScore: score, stabilityInsight: { label, message } };
 }
 
-export default function OverallInsight({ report }) {
+export default function OverallInsight({ report, hide = false }) {
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.5 });
 
   const insight = useMemo(() => ({
@@ -79,100 +77,125 @@ export default function OverallInsight({ report }) {
     stabilityDetails: buildStability(report?.spending, report?.insights?.stability),
   }), [report]);
 
+  if (hide) return null;
+
   return (
-    <div className='overall-insights-container'>
-      <div className='overall-insights-card spending-jump'>
-        <div className='overall-insights-card-head spending-jump-head'>
-          <div className="heading-icon">
-              <FaArrowTrendUp  size={18} color="#FFFFFF" />
+    <>
+      {/* Card 4: Biggest Spending Jump */}
+      <div className="spending-insights-card overall-insights-card spending-jump">
+        <div className="spending-insights-card-head overall-insights-card-head spending-jump-head">
+          <div className="spending-card-icon-badge badge-jump" aria-hidden="true">
+            <FaArrowTrendUp size={16} />
           </div>
-          <h1 className='overall-insights-h-text'>Biggest Spending Jump</h1>
+          <div className="spending-card-head-text">
+            <h3 className="spending-card-title overall-insights-h-text">Biggest Spending Jump</h3>
+          </div>
         </div>
 
-        {insight.biggestSpendingJump?.type === "SPENDING_SPIKE"
-          ? (
-            <div className='overall-insights-card-body spending-jump-body'>
-              <p className='overall-insights-p-text jump-message'>{insight.biggestSpendingJump.message}</p>
-              <div className='spending-jump-body-time-card'>
-                <h1 className='overall-insights-h-text'>
-                  +{insight.biggestSpendingJump.data.increasePercent}%
-                </h1>
-                <p className='overall-insights-p-text p-wrapper'>
-                  {formatMoney(insight.biggestSpendingJump.data.previousAmount)}
-                  <span> <FaArrowRight /> </span>
-                  <span style={{fontWeight: "bold", fontSize: "16px"}}>{formatMoney(insight.biggestSpendingJump.data.currentAmount)}</span>
-                </p>
-              </div>
-              <p className='overall-insights-p-text' style={{ marginTop: "10px"}}>
-                {insight.biggestSpendingJump.subMessage}
+        {insight.biggestSpendingJump?.type === "SPENDING_SPIKE" ? (
+          <div className="spending-card-body overall-insights-card-body spending-jump-body">
+            <p className="spending-card-desc overall-insights-p-text jump-message">
+              {insight.biggestSpendingJump.message}
+            </p>
+            <div className="spending-jump-box spending-jump-body-time-card">
+              <h4 className="spending-jump-percent overall-insights-h-text">
+                +{insight.biggestSpendingJump.data.increasePercent}%
+              </h4>
+              <p className="spending-jump-range overall-insights-p-text p-wrapper">
+                {formatMoney(insight.biggestSpendingJump.data.previousAmount)}
+                <span> <FaArrowRight size={12} /> </span>
+                <strong style={{ fontWeight: "bold", fontSize: "15px" }}>
+                  {formatMoney(insight.biggestSpendingJump.data.currentAmount)}
+                </strong>
               </p>
             </div>
-          )
-          : (
-            <div className='overall-insights-empty-card'>
-              <p className='insights-empty-text'>No major spending spikes detected.</p>
-            </div>
-          )
-        }
+            <p className="spending-jump-subtext overall-insights-p-text">
+              {insight.biggestSpendingJump.subMessage}
+            </p>
+          </div>
+        ) : (
+          <div className="insights-empty-card overall-insights-empty-card">
+            <p className="insights-empty-text">No major spending spikes detected.</p>
+          </div>
+        )}
       </div>
 
-      <div className='overall-insights-card budget-streak'>
-        <div className='overall-insights-card-head budget-streak-head'>
-          <div className="heading-icon">
-              <FaFire size={18} color="#FFFFFF" />
+      {/* Card 5: Budget Streak */}
+      <div className="spending-insights-card overall-insights-card budget-streak">
+        <div className="spending-insights-card-head overall-insights-card-head budget-streak-head">
+          <div className="spending-card-icon-badge badge-streak" aria-hidden="true">
+            <FaCrown size={16} />
           </div>
-          <div className='budget-streak-head-texts'>
-            <h1 className='overall-insights-h-text'>Budget Streak</h1>
-            <p className='overall-insights-p-text'>Achievement tracker</p>
+          <div className="spending-card-head-text budget-streak-head-texts">
+            <h3 className="spending-card-title overall-insights-h-text">Budget Streak</h3>
+            <p className="spending-card-subtitle overall-insights-p-text">Achievement tracker</p>
           </div>
         </div>
 
-        <div className='overall-insights-card-body budget-streak-body'>
-          <p className='overall-insights-p-text'>{insight.streak.streak ? `You stayed within budget for` : `Your streak hasn't started yet`}</p>
-          <h1 
-            ref={ref}
-            className={`overall-insights-h-text streak-number ${!inView ? 'hidden' : ''} ${inView ? 'animate' : ''}`}
-          >{insight.streak.streak}</h1>
-          <p className='overall-insights-p-text'>{insight.streak.streak ? `consecutive months. Keep it up!` : 'Stay within your budget to start your streak'}</p>
-        </div>   
+        <div className="streak-card-body overall-insights-card-body budget-streak-body">
+          <p className="streak-top-text overall-insights-p-text">
+            {insight.streak.streak ? "You stayed within budget for" : "Your streak hasn't started yet"}
+          </p>
+          <div className="streak-center-wrap">
+            <svg className="streak-confetti" width="90" height="48" viewBox="0 0 90 48" fill="none" aria-hidden="true">
+              <line x1="14" y1="12" x2="22" y2="18" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="76" y1="12" x2="68" y2="18" stroke="#ec4899" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="10" y1="28" x2="19" y2="28" stroke="#ec4899" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="80" y1="28" x2="71" y2="28" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+            <h2
+              ref={ref}
+              className={`streak-number overall-insights-h-text ${!inView ? "hidden" : ""} ${inView ? "animate" : ""}`}
+            >
+              {insight.streak.streak}
+            </h2>
+          </div>
+          <p className="streak-bottom-text overall-insights-p-text">
+            {insight.streak.streak ? "consecutive months. Keep it up!" : "Stay within your budget to start your streak"}
+          </p>
+        </div>
       </div>
 
-      <div className='overall-insights-card stability-score' title="Measures how consistent your daily spending is.">
-        <div className='overall-insights-card-head stability-score-head'>
-          <div className="heading-icon">
-              <FaAward size={18} color="#FFFFFF" />
+      {/* Card 6: Stability Score */}
+      <div
+        className="spending-insights-card overall-insights-card stability-score"
+        title="Measures how consistent your daily spending is."
+      >
+        <div className="spending-insights-card-head overall-insights-card-head stability-score-head">
+          <div className="spending-card-icon-badge badge-stability" aria-hidden="true">
+            <FaShieldAlt size={16} />
           </div>
-          <h1 className='overall-insights-h-text'>Stability Score</h1>
+          <div className="spending-card-head-text">
+            <h3 className="spending-card-title overall-insights-h-text">Stability Score</h3>
+          </div>
         </div>
 
-        {insight.stabilityDetails != null
-          ? (
-            <div className='overall-insights-card-body stability-score-body'>
-              <div className='stability-score-percentage'>
-                <div
-                  className="circle"
-                  style={{
-                    background: `conic-gradient(
-                      #14b8a6 0%,
-                      #3b82f6 ${insight.stabilityDetails.stabilityScore}%,
-                      #e5e7eb ${insight.stabilityDetails.stabilityScore}% 100%
-                    )`
-                  }}
-                >
-                  <span>{insight.stabilityDetails.stabilityScore}%</span>
-                </div>
+        {insight.stabilityDetails != null ? (
+          <div className="stability-card-body overall-insights-card-body stability-score-body">
+            <div
+              className="stability-donut circle"
+              style={{
+                background: `conic-gradient(#be185d 0% ${insight.stabilityDetails.stabilityScore}%, #e2e8f0 ${insight.stabilityDetails.stabilityScore}% 100%)`
+              }}
+            >
+              <div className="stability-donut-inner">
+                <span>{insight.stabilityDetails.stabilityScore}%</span>
               </div>
-              <h3 className='overall-insights-h-text' style={{color: "#374151", fontSize: "16px", fontWeight: "500"}}>{insight.stabilityDetails.stabilityInsight.label}</h3>
-              <p className='overall-insights-p-text'>{insight.stabilityDetails.stabilityInsight.message}</p>
             </div>
-          ) : (
-            <div className='overall-insights-empty-card'>
-              <p className='insights-empty-text'>We're still learning your spending</p>
-              <p className='insights-empty-text'>Add more transactions to analyze your spending consistency</p>
-            </div>
-          )
-        }
+            <h4 className="stability-label overall-insights-h-text" style={{ fontSize: "15px", fontWeight: "700" }}>
+              {insight.stabilityDetails.stabilityInsight.label}
+            </h4>
+            <p className="stability-desc overall-insights-p-text">
+              {insight.stabilityDetails.stabilityInsight.message}
+            </p>
+          </div>
+        ) : (
+          <div className="insights-empty-card overall-insights-empty-card">
+            <p className="insights-empty-title">We're still learning your spending</p>
+            <p className="insights-empty-text">Add more transactions to analyze your spending consistency</p>
+          </div>
+        )}
       </div>
-    </div>
-  )
+    </>
+  );
 }

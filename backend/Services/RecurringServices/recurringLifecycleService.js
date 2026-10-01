@@ -29,6 +29,7 @@
 const { RecurringExpenseModel } = require("../../models/RecurringExpense");
 const { normalizeCategory } = require("../../utils/categoryNormalization");
 const { withMinorFields } = require("../../utils/moneyView");
+const { calendarDateInZone, resolveTimeZone, advanceOneMonth } = require("./upcomingProjection");
 
 const MONEY_FIELDS = ["expenseAmount"];
 
@@ -53,6 +54,7 @@ function toPublicShape(doc) {
     resumedAt: plain.resumedAt ?? null,
     endedAt: plain.endedAt ?? null,
     endDate: plain.endDate ?? null,
+    skippedDates: Array.isArray(plain.skippedDates) ? plain.skippedDates : [],
     scheduleVersion: plain.scheduleVersion,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,
@@ -219,6 +221,59 @@ async function editDefinition(userId, id, body, scheduleVersion) {
   return { ok: true, definition: toPublicShape(updated) };
 }
 
+async function skipOccurrence(userId, id, date, scheduleVersion) {
+  const existing = await RecurringExpenseModel.findOne({ _id: id, userId }).lean();
+  if (!existing) return { ok: false, reason: "not_found" };
+  if (existing.status === "ended") return { ok: false, reason: "already_ended" };
+  if (existing.status === "paused") return { ok: false, reason: "already_paused" };
+
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, reason: "invalid_date" };
+  }
+
+  const skipped = Array.isArray(existing.skippedDates) ? existing.skippedDates : [];
+  if (skipped.includes(date)) {
+    return { ok: false, reason: "already_skipped" };
+  }
+
+  const timeZone = resolveTimeZone(process.env.APP_TIME_ZONE);
+  const currentNextDueCalendar = calendarDateInZone(new Date(existing.nextDueDate), timeZone);
+
+  // If the skipped date is earlier than the current nextDueDate, it has already passed
+  if (date < currentNextDueCalendar) {
+    return { ok: false, reason: "invalid_date_in_past" };
+  }
+
+  const updateOps = {
+    $addToSet: { skippedDates: date },
+    $inc: { scheduleVersion: 1 },
+  };
+
+  // If skipping the exact occurrence that is currently nextDueDate,
+  // advance nextDueDate immediately so Manage Recurring reflects the new next due date.
+  if (date === currentNextDueCalendar) {
+    let nextDue = advanceOneMonth(new Date(existing.nextDueDate));
+    const allSkipped = new Set([...skipped, date]);
+    while (allSkipped.has(calendarDateInZone(nextDue, timeZone))) {
+      nextDue = advanceOneMonth(nextDue);
+    }
+    if (existing.endDate && nextDue > new Date(existing.endDate)) {
+      updateOps.$set = { nextDueDate: nextDue, status: "ended", endedAt: new Date() };
+    } else {
+      updateOps.$set = { nextDueDate: nextDue };
+    }
+  }
+
+  const updated = await RecurringExpenseModel.findOneAndUpdate(
+    { _id: id, userId, status: "active", scheduleVersion },
+    updateOps,
+    { new: true }
+  ).lean();
+
+  if (!updated) return resolveMutationFailure(userId, id);
+  return { ok: true, definition: toPublicShape(updated) };
+}
+
 module.exports = {
   listDefinitions,
   getDefinition,
@@ -226,6 +281,7 @@ module.exports = {
   resumeDefinition,
   endDefinition,
   editDefinition,
+  skipOccurrence,
   toPublicShape,
   buildEditUpdates,
 };

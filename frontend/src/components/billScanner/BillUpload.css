@@ -1,36 +1,95 @@
+/* ------------------------------------------------------------------------
+   Bill Upload page (spec/ui-redesign/bill-upload.md). Page-scoped --bu-*
+   tokens with a .dark-theme override; every rule below is limited to the
+   Bill Upload view.
+   ------------------------------------------------------------------------ */
 .bill-upload-wrapper {
-  display: flex;
-  justify-content: center;
-  padding: 32px 16px 48px;
+  --bu-title: #1f1320;
+  --bu-text: #2a1a24;
+  --bu-muted: #6e5e69;
+  --bu-subtle: #8c7e87;
+  --bu-accent: #d81b60;
+  --bu-card-bg: #ffffff;
+  --bu-card-border: #f1e4ea;
+  --bu-card-shadow: 0 8px 24px rgba(194, 24, 91, 0.05);
+  --bu-back-bg: #fdf0f5;
+  --bu-back-hover: #fbe1ec;
+  --bu-zone-bg: #fffafc;
+  --bu-zone-hover: #fdf1f6;
+  --bu-zone-border: #f2b3cc;
+  --bu-icon-bg: #fbe1ec;
+  --bu-focus-ring: rgba(216, 27, 96, 0.16);
+  --bu-focus-ring-strong: rgba(216, 27, 96, 0.3);
+  --bu-primary: #d81b60;
+  --bu-primary-hover: #c2185b;
+  --bu-error: #b91c1c;
+  --bu-error-bg: #fef2f2;
+  --bu-error-border: #f5c2c2;
+
+  display: block;
+  padding: 20px 24px 36px;
   animation: slideInFromRight 0.3s ease forwards;
+}
+
+.dark-theme .bill-upload-wrapper {
+  --bu-title: #fdf2f8;
+  --bu-text: #f5e6ee;
+  --bu-muted: #d4a3be;
+  --bu-subtle: #a78b9b;
+  --bu-accent: #f472b6;
+  --bu-card-bg: rgba(36, 20, 32, 0.95);
+  --bu-card-border: rgba(120, 42, 85, 0.5);
+  --bu-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --bu-back-bg: rgba(244, 114, 182, 0.12);
+  --bu-back-hover: rgba(244, 114, 182, 0.2);
+  --bu-zone-bg: rgba(58, 27, 49, 0.45);
+  --bu-zone-hover: rgba(74, 32, 59, 0.6);
+  --bu-zone-border: rgba(244, 114, 182, 0.45);
+  --bu-icon-bg: rgba(194, 24, 91, 0.25);
+  --bu-focus-ring: rgba(244, 114, 182, 0.25);
+  --bu-focus-ring-strong: rgba(244, 114, 182, 0.4);
+  --bu-primary: #db2777;
+  --bu-primary-hover: #be185d;
+  --bu-error: #fca5a5;
+  --bu-error-bg: rgba(185, 28, 28, 0.15);
+  --bu-error-border: rgba(252, 165, 165, 0.35);
 }
 
 .bill-upload-container {
   width: 100%;
-  max-width: 85%;
-  background: var(--container-color);
-  backdrop-filter: blur(8px);
-  padding: 32px;
-  border-radius: 24px;
-  box-shadow: var(--box-shadow);
-  box-sizing: border-box !important;
+  max-width: 1040px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 24px 28px 28px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  border: 1px solid var(--bu-card-border);
+  border-radius: 16px;
+  background: var(--bu-card-bg);
+  box-shadow: var(--bu-card-shadow);
 }
 
+/* Header: Back on the left, the page title on the right. */
 .bill-upload-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .bill-upload-header h2 {
-  color: var(--text-color);
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--bu-title);
 }
 
+/* Shared back-button look used by other screens once this chunk has loaded;
+   kept as it was. The Bill Upload version is styled just below. */
 .back-btn {
   border: none;
   padding: 10px 16px;
@@ -47,73 +106,224 @@
   box-shadow: 0 6px 14px rgba(0,0,0,0.15);
 }
 
+.bill-upload-wrapper .back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--bu-back-bg);
+  color: var(--bu-title);
+  font-size: 14px;
+  line-height: 1.3;
+  transition: background-color 0.2s ease;
+}
+
+.bill-upload-wrapper .back-btn:hover {
+  background: var(--bu-back-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.bill-upload-wrapper .back-btn:focus-visible,
+.bill-upload-btn:focus-visible {
+  outline: 3px solid var(--bu-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Receipt image: intro, dropzone and validation error. */
 .bill-upload-input-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.bill-upload-input-section label {
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-.bill-upload-input-section input[type="file"] {
-  width: 100%;
-  padding: 14px;
-  border-radius: 16px;
-  background: var(--input-color);
-  color: var(--text-color);
-  border: 1px solid rgba(0,0,0,0.15);
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-.preview-container {
-  width: 100%;
+.bill-upload-intro {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.preview-image {
-  width: 100%;
-  max-height: 350px;
-  object-fit: contain;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.15);
-}
-
-.bill-upload-btn {
-  text-align: center;
-  width: 100%;
-  padding: 16px;
-  border-radius: 20px;
-  border: none;
-  cursor: pointer;
-  box-sizing: border-box;
+.bill-upload-intro label {
+  margin: 0;
+  font-size: 16px;
   font-weight: 700;
-  font-size: 1rem;
-  color: #fff;
-  background: linear-gradient(
-    135deg,
-    var(--header-gradient-start),
-    var(--header-gradient-end)
-  );
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
+  color: var(--bu-title);
 }
 
-.bill-upload-btn:hover {
+.bill-upload-description {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--bu-muted);
+}
+
+.bill-upload-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 210px;
+  box-sizing: border-box;
+  padding: 28px 20px;
+  border: 1.5px dashed var(--bu-zone-border);
+  border-radius: 14px;
+  background: var(--bu-zone-bg);
+  text-align: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bill-upload-dropzone:hover,
+.bill-upload-dropzone.is-dragging {
+  border-color: var(--bu-accent);
+  background: var(--bu-zone-hover);
+}
+
+.bill-upload-dropzone:focus-within {
+  border-color: var(--bu-accent);
+}
+
+/* Keyboard focus on the (invisible) file input shows on the whole zone. */
+.bill-upload-dropzone:has(.bill-upload-file-input:focus-visible) {
+  border-style: solid;
+  box-shadow: 0 0 0 3px var(--bu-focus-ring-strong);
+}
+
+.bill-upload-dropzone.has-error {
+  border-color: var(--bu-error);
+}
+
+/* The real file input covers the zone, invisible, so clicks and drops reach it. */
+.bill-upload-file-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.bill-upload-dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.bill-upload-dropzone-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: var(--bu-icon-bg);
+  color: var(--bu-accent);
+  font-size: 28px;
+}
+
+.bill-upload-choose {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bu-accent);
+}
+
+.bill-upload-drag {
+  font-size: 14px;
+  color: var(--bu-muted);
+}
+
+.bill-upload-rules {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--bu-subtle);
+}
+
+/* Selected image: the existing preview, inside the zone. */
+.bill-upload-wrapper .preview-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.bill-upload-wrapper .preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  margin-bottom: 8px;
+  object-fit: contain;
+  border: 1px solid var(--bu-card-border);
+  border-radius: 12px;
+  background: var(--bu-card-bg);
+}
+
+.bill-upload-file-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bu-text);
+}
+
+.bill-upload-dropzone.has-preview .bill-upload-choose {
+  font-size: 14px;
+}
+
+.bill-upload-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--bu-error-border);
+  border-radius: 10px;
+  background: var(--bu-error-bg);
+  color: var(--bu-error);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.bill-upload-error svg {
+  flex-shrink: 0;
+  font-size: 17px;
+}
+
+/* Primary action. */
+.bill-upload-btn {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bu-primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(216, 27, 96, 0.2);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.bill-upload-btn:hover:not(:disabled) {
+  background: var(--bu-primary-hover);
   transform: translateY(-1px);
-  filter: brightness(1.05);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+  box-shadow: 0 8px 20px rgba(216, 27, 96, 0.26);
 }
 
 .bill-upload-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* Animation */
@@ -129,31 +339,14 @@
   }
 }
 
+@media (max-width: 900px) {
+  .bill-upload-container {
+    padding: 22px;
+  }
+}
+
 /* Mobile */
 @media (max-width: 600px) {
-
-  .bill-upload-wrapper {
-    padding: 16px 12px 32px;
-  }
-
-  .bill-upload-container {
-    max-width: 100%;
-    padding: 20px;
-    border-radius: 20px;
-    gap: 20px;
-  }
-
-  .bill-upload-header {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .bill-upload-header h2 {
-    font-size: 1.5rem;
-    margin: 0;
-  }
 
   .back-btn {
     width: fit-content;
@@ -161,26 +354,50 @@
     border-radius: 14px;
   }
 
-  .bill-upload-input-section input[type="file"] {
-    padding: 12px;
-    font-size: 0.95rem;
+  .bill-upload-wrapper {
+    padding: 14px 14px 28px;
   }
 
-  .preview-image {
-    max-height: 240px;
-    border-radius: 16px;
+  .bill-upload-container {
+    padding: 18px 16px 20px;
+    gap: 16px;
+    border-radius: 14px;
   }
 
-  .bill-upload-btn {
-    width: 100%;
-    padding: 14px;
-    border-radius: 18px;
-    font-size: 1rem;
+  .bill-upload-header h2 {
+    font-size: 21px;
+  }
+
+  .bill-upload-wrapper .back-btn {
+    padding: 8px 14px;
+    border-radius: 10px;
+  }
+
+  .bill-upload-dropzone {
+    min-height: 170px;
+    padding: 22px 14px;
+  }
+
+  .bill-upload-dropzone-icon {
+    width: 54px;
+    height: 54px;
+    margin-bottom: 10px;
+    font-size: 24px;
+  }
+
+  .bill-upload-wrapper .preview-image {
+    max-height: 220px;
   }
 }
 
-.bill-upload-error {
-  margin: 0;
-  color: #b91c1c;
-  font-size: 0.9rem;
+@media (prefers-reduced-motion: reduce) {
+  .bill-upload-dropzone,
+  .bill-upload-btn,
+  .bill-upload-wrapper .back-btn {
+    transition: none;
+  }
+
+  .bill-upload-btn:hover:not(:disabled) {
+    transform: none;
+  }
 }

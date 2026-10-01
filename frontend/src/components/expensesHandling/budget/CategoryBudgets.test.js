@@ -114,7 +114,7 @@ describe("CategoryBudgets -- query states", () => {
     );
     renderComponent();
 
-    expect(await screen.findByText(/no category budgets for .* yet/i)).toBeInTheDocument();
+    expect(await screen.findByText("No category budgets set.")).toBeInTheDocument();
     expect(screen.getByRole("form", { name: /add category budget/i })).toBeInTheDocument();
     expect(screen.getByText(/unspent amounts don't carry over to next month/i)).toBeInTheDocument();
   });
@@ -151,13 +151,14 @@ describe("CategoryBudgets -- rows and totals", () => {
     );
     renderComponent();
 
-    const travelBar = await screen.findByRole("progressbar", { name: /travel budget used/i });
+    // Rows are an accordion and all start collapsed.
+    fireEvent.click(await screen.findByRole("button", { name: /^travel/i }));
+    const travelBar = screen.getByRole("progressbar", { name: /travel budget used/i });
     expect(travelBar).toHaveAttribute("aria-valuenow", "100");
     expect(travelBar).toHaveAttribute("aria-valuemin", "0");
     expect(travelBar).toHaveAttribute("aria-valuemax", "100");
     expect(travelBar).toHaveAttribute("aria-valuetext", expect.stringMatching(/125% used, Overspent/));
 
-    // Rows are an accordion: only the first starts open.
     expect(screen.queryByRole("progressbar", { name: /food budget used/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^food/i }));
     const foodBar = screen.getByRole("progressbar", { name: /food budget used/i });
@@ -237,6 +238,7 @@ describe("CategoryBudgets -- rows and totals", () => {
 
     expect(await screen.findByText(/january 2025 is read-only/i)).toBeInTheDocument();
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^food/i }));
     expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: /food budget used/i })).toBeInTheDocument();
@@ -289,7 +291,8 @@ describe("CategoryBudgets -- writes", () => {
     });
     renderComponent();
 
-    fireEvent.click(await screen.findByRole("button", { name: /edit food budget/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^food/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit food budget/i }));
     expect(screen.getByRole("form", { name: /edit category budget/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toHaveValue("Food");
     expect(screen.getByLabelText(/amount/i)).toHaveValue(5000);
@@ -315,7 +318,8 @@ describe("CategoryBudgets -- writes", () => {
     });
     renderComponent();
 
-    fireEvent.click(await screen.findByRole("button", { name: /delete food budget/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^food/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete food budget/i }));
     expect(deleteCategoryBudget).not.toHaveBeenCalled();
 
     // Cancel backs out without deleting.
@@ -326,7 +330,7 @@ describe("CategoryBudgets -- writes", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
 
     await waitFor(() => expect(deleteCategoryBudget).toHaveBeenCalledWith("cb-food"));
-    expect(await screen.findByText(/no category budgets for .* yet/i)).toBeInTheDocument();
+    expect(await screen.findByText("No category budgets set.")).toBeInTheDocument();
   });
 
   it("shows an inline message for a 409 CATEGORY_BUDGET_EXCEEDS_TOTAL", async () => {
@@ -479,6 +483,7 @@ describe("CategoryBudgets -- category suggestions", () => {
     expect(saveCategoryBudget).not.toHaveBeenCalled();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /^food/i }));
     fireEvent.click(screen.getByRole("button", { name: /edit food budget/i }));
     expect(input).toHaveValue("Food");
     expect(input).toHaveAttribute("readonly");
@@ -560,23 +565,27 @@ describe("CategoryBudgets -- populated list accordion", () => {
       ],
     });
 
-  it("opens the first real row by default and wires aria-expanded/aria-controls", async () => {
+  it("keeps every row collapsed by default and wires aria-expanded/aria-controls", async () => {
     getCategoryBudgets.mockResolvedValue(envelope(threeRows()));
     renderComponent();
 
     const first = await screen.findByRole("button", { name: /^essentials/i });
     const second = screen.getByRole("button", { name: /^food/i });
     const third = screen.getByRole("button", { name: /^transport/i });
-    expect(first).toHaveAttribute("aria-expanded", "true");
+    expect(first).toHaveAttribute("aria-expanded", "false");
     expect(second).toHaveAttribute("aria-expanded", "false");
     expect(third).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 
     // aria-controls must name the detail region, so look it up by that id.
     const controlled = (button) =>
       document.getElementById(button.getAttribute("aria-controls")); // eslint-disable-line testing-library/no-node-access
     expect(controlled(first)).not.toBeNull();
-    expect(controlled(first)).not.toHaveAttribute("hidden");
-    expect(controlled(second)).toHaveAttribute("hidden");
+    expect(controlled(first)).toHaveAttribute("aria-hidden", "true");
+    fireEvent.click(first);
+    expect(first).toHaveAttribute("aria-expanded", "true");
+    expect(controlled(first)).toHaveAttribute("aria-hidden", "false");
+    expect(controlled(second)).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByRole("heading", { name: "Category Budgets", level: 3 })).toBeInTheDocument();
     expect(screen.getByText(/tap a category to view details and actions/i)).toBeInTheDocument();
   });
@@ -622,7 +631,7 @@ describe("CategoryBudgets -- populated list accordion", () => {
     expect(screen.queryByText("Safe")).not.toBeInTheDocument();
   });
 
-  it("falls back to the first row after the open row is deleted", async () => {
+  it("collapses every row after the open row is deleted", async () => {
     const afterDelete = makeSummary({
       categories: [
         makeRow({ id: "cb-ess", category: "Essentials", status: "Warning" }),
@@ -644,10 +653,11 @@ describe("CategoryBudgets -- populated list accordion", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
 
     await waitFor(() => expect(screen.queryByText("Food")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /^essentials/i })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /^essentials/i })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /^transport/i })).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("resets to the first row when the month changes", async () => {
+  it("collapses every row when the month changes", async () => {
     getCategoryBudgets.mockImplementation((month) =>
       Promise.resolve(envelope(month === "2025-03"
         ? makeSummary({ month, writable: false, categories: [
@@ -662,7 +672,7 @@ describe("CategoryBudgets -- populated list accordion", () => {
     fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2025-03" } });
 
     const rent = await screen.findByRole("button", { name: /^rent/i });
-    expect(rent).toHaveAttribute("aria-expanded", "true");
+    expect(rent).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("button", { name: /^gym/i })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText(/^tap a category to view details\.$/i)).toBeInTheDocument();
   });
@@ -715,11 +725,12 @@ describe("CategoryBudgets -- at most four rows visible", () => {
     await screen.findByText("Category 1");
     const list = screen.getByRole("list", { name: "Category budgets" });
 
-    // First row open by default: 300 + 60 + 60 + 60 + three 10px gaps.
-    expect(list.style.maxHeight).toBe("510px");
-
-    fireEvent.click(screen.getByRole("button", { name: /^category 1/i }));
+    // Every row starts collapsed: four 60px rows and three 10px gaps.
     expect(list.style.maxHeight).toBe("270px");
+
+    // An open first row: 300 + 60 + 60 + 60 + three 10px gaps.
+    fireEvent.click(screen.getByRole("button", { name: /^category 1/i }));
+    expect(list.style.maxHeight).toBe("510px");
 
     // Opening the sixth row sizes the window to rows three to six.
     fireEvent.click(screen.getByRole("button", { name: /^category 6/i }));
@@ -749,6 +760,18 @@ describe("CategoryBudgets -- at most four rows visible", () => {
     const css = fs.readFileSync(path.join(__dirname, "CategoryBudgetsList.css"), "utf8");
     const listRule = css.match(/\.category-budgets-panel--list \.category-budgets-list \{([^}]*)\}/);
     expect(listRule?.[1]).toMatch(/grid-auto-rows:\s*max-content;/);
+    expect(listRule?.[1]).toMatch(/transition:\s*max-height/);
+  });
+
+  it("uses an intrinsic-height detail transition instead of a fixed cap", () => {
+    const css = fs.readFileSync(path.join(__dirname, "CategoryBudgetsList.css"), "utf8");
+    const detailRule = css.match(/\.category-budget-detail \{([^}]*)\}/);
+    const expandedRule = css.match(/\.category-budget-row--expanded \.category-budget-detail \{([^}]*)\}/);
+
+    expect(detailRule?.[1]).toMatch(/grid-template-rows:\s*0fr;/);
+    expect(detailRule?.[1]).toMatch(/transition:[\s\S]*grid-template-rows/);
+    expect(expandedRule?.[1]).toMatch(/grid-template-rows:\s*1fr;/);
+    expect(detailRule?.[1]).not.toMatch(/max-height:/);
   });
 
   describe("when a row resizes", () => {
@@ -786,6 +809,7 @@ describe("CategoryBudgets -- at most four rows visible", () => {
       const { unmount } = renderComponent();
       await screen.findByText("Category 1");
       const list = screen.getByRole("list", { name: "Category budgets" });
+      fireEvent.click(screen.getByRole("button", { name: /^category 1/i }));
       expect(list.style.maxHeight).toBe("510px");
       const live = observers.filter((observer) => observer.disconnect.mock.calls.length === 0);
       expect(live).toHaveLength(1);

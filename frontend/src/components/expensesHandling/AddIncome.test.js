@@ -5,11 +5,15 @@ import path from "path";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import AddIncome from "./AddIncome";
 import { useAddIncomeMutation } from "../../hooks/mutations/useAddIncomeMutation";
+import { useSavedIncomeSources } from "../../hooks/queries/useSavedIncomeSources";
 import { expenseAddSuccessToast, expenseAddErrorToast } from "../alertsEffects/toastMessages";
 
 // Explicit factories (not bare jest.mock(path) auto-mocking), mirroring
 jest.mock("../../hooks/mutations/useAddIncomeMutation", () => ({
   useAddIncomeMutation: jest.fn(),
+}));
+jest.mock("../../hooks/queries/useSavedIncomeSources", () => ({
+  useSavedIncomeSources: jest.fn(),
 }));
 jest.mock("../alertsEffects/toastMessages", () => ({
   expenseAddSuccessToast: jest.fn(),
@@ -25,12 +29,17 @@ jest.mock(
   { virtual: true }
 );
 
+// Default: a user with no saved income sources yet.
+beforeEach(() => {
+  useSavedIncomeSources.mockReturnValue({ sources: [] });
+});
+
 afterEach(() => {
   jest.clearAllMocks();
 });
 
 function fillRequiredFields({ source = "Salary", amount = "1000", date = "2026-01-15" } = {}) {
-  fireEvent.change(screen.getByLabelText(/source of the income/i), { target: { value: source } });
+  fireEvent.change(screen.getByLabelText(/source of income/i), { target: { value: source } });
   fireEvent.change(screen.getByLabelText(/amount received/i), { target: { value: amount } });
   fireEvent.change(screen.getByLabelText(/date received/i), { target: { value: date } });
 }
@@ -130,7 +139,7 @@ describe("AddIncome -- payload-scoped idempotency id ({ id, fingerprint } per at
       first.callbacks.onError({ response: { status: 500, data: { message: "Internal Server Error" } } });
     });
 
-    fireEvent.change(screen.getByLabelText(/source of the income/i), { target: { value: "Freelance" } });
+    fireEvent.change(screen.getByLabelText(/source of income/i), { target: { value: "Freelance" } });
     fireEvent.submit(document.querySelector("form.add-expense"));
     const second = mockAddMutate.mock.calls[1][0];
 
@@ -280,7 +289,7 @@ describe("AddIncome -- existing form/success/error behavior is unchanged", () =>
     expect(expenseAddSuccessToast).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Income Added Successfully" })
     );
-    expect(screen.getByLabelText(/source of the income/i).value).toBe("");
+    expect(screen.getByLabelText(/source of income/i).value).toBe("");
     expect(screen.getByLabelText(/amount received/i).value).toBe("");
     expect(screen.getByLabelText(/date received/i).value).toBe("");
   });
@@ -296,7 +305,7 @@ describe("AddIncome -- existing form/success/error behavior is unchanged", () =>
 
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(expenseAddErrorToast).toHaveBeenCalledWith({ message: "Internal Server Error" });
-    expect(screen.getByLabelText(/source of the income/i).value).toBe("Consulting");
+    expect(screen.getByLabelText(/source of income/i).value).toBe("Consulting");
   });
 
   it("9c. 401/429/409 errors are left to the shared axios interceptor -- no second toast fired", () => {
@@ -329,6 +338,120 @@ describe("AddIncome -- existing form/success/error behavior is unchanged", () =>
     // Deliberately leave required fields empty -- no fireEvent.submit call
     // simulates the browser blocking submission via native validation.
     expect(mockAddMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("AddIncome -- Source of Income suggestions are the user's saved sources only", () => {
+  let mockAddMutate;
+
+  beforeEach(() => {
+    mockAddMutate = jest.fn();
+    useAddIncomeMutation.mockReturnValue({ mutate: mockAddMutate, isPending: false });
+  });
+
+  const sourceInput = () => screen.getByLabelText(/source of income/i);
+  const optionNames = () => screen.queryAllByRole("option").map((option) => option.textContent);
+  const focusSource = () => act(() => { sourceInput().focus(); });
+
+  it("opens a menu of exactly the user's saved sources, in the order the hook returns them", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary", "Workday", "Scholarship", "Freelance"] });
+    renderAddIncome();
+    expect(screen.queryByRole("listbox")).toBeNull();
+
+    focusSource();
+
+    expect(screen.getByRole("listbox", { name: /saved income sources/i })).toBeInTheDocument();
+    expect(optionNames()).toEqual(["Salary", "Workday", "Scholarship", "Freelance"]);
+    expect(sourceInput()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("filters the saved sources as the user types", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary", "Scholarship", "Workday", "Freelance"] });
+    renderAddIncome();
+
+    fireEvent.change(sourceInput(), { target: { value: "sch" } });
+
+    expect(optionNames()).toEqual(["Scholarship"]);
+  });
+
+  it("fills the field from a clicked suggestion and closes the menu", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary", "Workday"] });
+    renderAddIncome();
+    focusSource();
+
+    fireEvent.click(screen.getByRole("option", { name: "Workday" }));
+
+    expect(sourceInput().value).toBe("Workday");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("supports the keyboard: arrows move the highlight, Enter picks it without submitting, Escape closes", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary", "Workday"] });
+    renderAddIncome();
+    focusSource();
+
+    fireEvent.keyDown(sourceInput(), { key: "ArrowDown" });
+    fireEvent.keyDown(sourceInput(), { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: "Workday" })).toHaveAttribute("aria-selected", "true");
+    expect(sourceInput()).toHaveAttribute("aria-activedescendant", "add-income-source-option-1");
+
+    fireEvent.keyDown(sourceInput(), { key: "Enter" });
+    expect(sourceInput().value).toBe("Workday");
+    expect(mockAddMutate).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(sourceInput(), { key: "ArrowDown" });
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    fireEvent.keyDown(sourceInput(), { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("reopens when the already-focused field is clicked", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary"] });
+    renderAddIncome();
+    focusSource();
+    fireEvent.keyDown(sourceInput(), { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+
+    fireEvent.click(sourceInput());
+
+    expect(optionNames()).toEqual(["Salary"]);
+  });
+
+  it("toggles from the chevron and closes on a press outside the field", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary"] });
+    renderAddIncome();
+    const chevron = document.querySelector(".add-income-select-icon");
+
+    fireEvent.mouseDown(chevron);
+    expect(optionNames()).toEqual(["Salary"]);
+    fireEvent.mouseDown(chevron);
+    expect(screen.queryByRole("listbox")).toBeNull();
+
+    fireEvent.mouseDown(chevron);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("shows 'No saved sources yet' -- and no options, no defaults -- when the user has none", () => {
+    renderAddIncome();
+    focusSource();
+
+    expect(optionNames()).toEqual([]);
+    expect(screen.getByText("No saved sources yet")).toBeInTheDocument();
+    // The field still works as a plain input for a new source.
+    fireEvent.change(sourceInput(), { target: { value: "Business" } });
+    expect(sourceInput().value).toBe("Business");
+  });
+
+  it("still submits a brand-new source that matches none of the saved ones", () => {
+    useSavedIncomeSources.mockReturnValue({ sources: ["Salary", "Scholarship"] });
+    renderAddIncome();
+    fillRequiredFields({ source: "Internship" });
+    expect(screen.getByText(/no matching sources/i)).toBeInTheDocument();
+
+    const { payload } = submitAndCaptureCallbacks(mockAddMutate, 0);
+
+    expect(payload.incomeSource).toBe("Internship");
   });
 });
 

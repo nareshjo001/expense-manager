@@ -1,78 +1,322 @@
-/* IMP-001 -- CSV import wizard. Self-contained (doesn't depend on another
-   feature's CSS being loaded alongside it, unlike ReceiptDetail.js which
-   reuses AddExpense.css) -- uses only the --text-color/--header-gradient-
-   start theme variables LandingPage.css already defines per theme, plus
-   the same neutral rgba(127,127,127, alpha) surfaces ReceiptDetail.css
-   uses so it looks right in both light and dark theme without new
-   variables. */
+/* IMP-001 -- CSV bulk import wizard redesign. */
 
-.import-wizard {
+.import-wizard-page {
+    --iw-title: #831843;
+    --iw-label: #334155;
+    --iw-muted: #64748b;
+    --iw-accent: #db2777;
+    --iw-accent-dark: #be185d;
+    --iw-accent-soft: #fdf2f8;
+    --iw-accent-border: #fce7f3;
+    --iw-card-bg: #ffffff;
+    --iw-card-border: rgba(244, 114, 182, 0.28);
+    --iw-card-shadow: 0 10px 30px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+    --iw-input-bg: #ffffff;
+    --iw-input-border: rgba(244, 114, 182, 0.35);
+    --iw-input-focus: #ec4899;
+    --iw-btn-gradient: linear-gradient(90deg, #ec4899 0%, #db2777 100%);
+    --iw-btn-shadow: 0 4px 16px rgba(225, 29, 116, 0.28);
+    --iw-item-bg: #ffffff;
+    --iw-item-border: rgba(244, 114, 182, 0.22);
+
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 20px 24px 36px;
+    box-sizing: border-box;
+    background: radial-gradient(circle at 12% 18%, rgba(253, 242, 248, 0.7) 0%, rgba(255, 241, 242, 0.3) 50%, transparent 100%);
+}
+
+/* Ensure SIA launcher button is removed on the Import Wizard page */
+body:has(.import-wizard-page) .sia-entry-point {
+    display: none !important;
+}
+
+.dark-theme .import-wizard-page {
+    --iw-title: #fdf2f8;
+    --iw-label: #cbd5e1;
+    --iw-muted: #94a3b8;
+    --iw-accent: #f472b6;
+    --iw-accent-dark: #f472b6;
+    --iw-accent-soft: rgba(244, 114, 182, 0.15);
+    --iw-accent-border: rgba(244, 114, 182, 0.25);
+    --iw-card-bg: rgba(31, 41, 55, 0.85);
+    --iw-card-border: rgba(244, 114, 182, 0.22);
+    --iw-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+    --iw-input-bg: rgba(17, 24, 39, 0.6);
+    --iw-input-border: rgba(244, 114, 182, 0.3);
+    --iw-input-focus: #f472b6;
+    --iw-btn-gradient: linear-gradient(90deg, #e11d74 0%, #db2777 100%);
+    --iw-btn-shadow: 0 4px 16px rgba(225, 29, 116, 0.4);
+    --iw-item-bg: rgba(26, 34, 46, 0.95);
+    --iw-item-border: rgba(244, 114, 182, 0.2);
+
+    background: radial-gradient(circle at 12% 18%, rgba(36, 17, 31, 0.6) 0%, rgba(26, 10, 22, 0.3) 50%, transparent 100%);
+}
+
+/* ================= Card Surface ================= */
+.import-wizard-card {
+    background: var(--iw-card-bg);
+    border-radius: 22px;
+    border: 1px solid var(--iw-card-border);
+    box-shadow: var(--iw-card-shadow);
+    padding: 28px 32px 32px;
+    box-sizing: border-box;
+    position: relative;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* ================= Header ================= */
+.import-wizard-header {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
-.import-wizard-header h2 {
-    margin: 0 0 10px;
+.import-wizard-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
+.import-wizard-accent-bar {
+    display: inline-block;
+    width: 4px;
+    height: 26px;
+    background: var(--iw-accent);
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.dark-theme .import-wizard-accent-bar {
+    background: #f472b6;
+}
+
+.import-wizard-heading {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--iw-title);
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+}
+
+/* ================= Step Indicator Pills ================= */
 .import-wizard-steps {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    align-items: center;
     list-style: none;
     margin: 0;
     padding: 0;
+    flex-wrap: wrap;
+    gap: 0;
 }
 
 .import-wizard-steps li {
-    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    margin: 0;
+}
+
+.import-step-pill {
+    font-size: 0.85rem;
     font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: rgba(127, 127, 127, 0.12);
-    opacity: 0.7;
+    padding: 6px 18px;
+    border-radius: 9999px;
+    background: rgba(253, 242, 248, 0.6);
+    color: var(--iw-accent-dark);
+    opacity: 0.75;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
-.import-wizard-steps li.active {
+.import-wizard-steps li.active .import-step-pill {
     opacity: 1;
-    background: rgba(59, 130, 246, 0.18);
-    color: #1d4ed8;
+    background: #fdf2f8;
+    color: #db2777;
+    border-color: rgba(244, 114, 182, 0.45);
+    box-shadow: 0 2px 8px rgba(225, 29, 116, 0.08);
+    font-weight: 700;
 }
 
-.import-wizard-upload,
-.import-wizard-mapping,
-.import-wizard-preview,
-.import-wizard-done {
+.dark-theme .import-step-pill {
+    background: rgba(244, 114, 182, 0.1);
+    color: #f9a8d4;
+}
+
+.dark-theme .import-wizard-steps li.active .import-step-pill {
+    background: rgba(244, 114, 182, 0.22);
+    color: #fdf2f8;
+    border-color: rgba(244, 114, 182, 0.35);
+}
+
+.import-wizard-steps li:not(:last-child)::after {
+    content: "";
+    display: inline-block;
+    width: 24px;
+    height: 1.5px;
+    background: rgba(244, 114, 182, 0.45);
+    margin: 0 6px;
+    flex-shrink: 0;
+}
+
+/* ================= Step 1: Upload Surface ================= */
+.import-wizard-upload {
     display: flex;
     flex-direction: column;
     gap: 14px;
 }
 
-.import-field {
+.import-section-label {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--iw-title);
+    margin: 8px 0 12px;
+    letter-spacing: -0.01em;
+}
+
+.import-upload-surface {
+    position: relative;
+    border: 1.5px dashed rgba(244, 114, 182, 0.5);
+    border-radius: 18px;
+    background: rgba(253, 242, 248, 0.35);
+    padding: 22px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+    box-sizing: border-box;
+}
+
+.import-upload-surface:hover,
+.import-upload-surface:focus-visible {
+    border-color: #ec4899;
+    background: rgba(253, 242, 248, 0.65);
+    box-shadow: 0 4px 20px rgba(225, 29, 116, 0.08);
+    outline: none;
+}
+
+.dark-theme .import-upload-surface {
+    border-color: rgba(244, 114, 182, 0.35);
+    background: rgba(244, 114, 182, 0.05);
+}
+
+.dark-theme .import-upload-surface:hover,
+.dark-theme .import-upload-surface:focus-visible {
+    border-color: #f472b6;
+    background: rgba(244, 114, 182, 0.12);
+}
+
+.import-upload-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
+.import-upload-icon-badge {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    border-radius: 14px;
+    background: #fdf2f8;
+    border: 1px solid #fce7f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.import-upload-surface:hover .import-upload-icon-badge {
+    transform: scale(1.05);
+}
+
+.dark-theme .import-upload-icon-badge {
+    background: rgba(244, 114, 182, 0.15);
+    border-color: rgba(244, 114, 182, 0.25);
+}
+
+.import-upload-icon {
+    font-size: 24px;
+    color: #db2777;
+}
+
+.dark-theme .import-upload-icon {
+    color: #f472b6;
+}
+
+.import-upload-text {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
+    min-width: 0;
 }
 
-.import-field label {
+.import-upload-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--iw-title);
+    letter-spacing: -0.01em;
+}
+
+.import-upload-status {
+    font-size: 0.88rem;
+    color: var(--iw-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.import-choose-file-btn {
+    height: 44px;
+    padding: 0 28px;
+    border-radius: 12px;
+    border: none;
+    background: var(--iw-btn-gradient);
+    color: #ffffff;
+    font-size: 0.95rem;
     font-weight: 600;
-    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: var(--iw-btn-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.import-field select,
-.import-field input[type="file"] {
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(127, 127, 127, 0.35);
-    background: rgba(127, 127, 127, 0.06);
-    font-size: 0.95rem;
+.import-choose-file-btn:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(225, 29, 116, 0.38);
+}
+
+.import-choose-file-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(225, 29, 116, 0.2);
+}
+
+.import-file-input-hidden {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .import-wizard-hint {
     font-size: 0.9rem;
-    opacity: 0.8;
-    margin: 0;
+    color: var(--iw-muted);
+    margin: 4px 0 0;
 }
 
 .import-wizard-error {
@@ -80,62 +324,171 @@
     color: #991b1b;
     border: 1px solid rgba(153, 27, 27, 0.3);
     border-radius: 12px;
-    padding: 10px 14px;
-    margin: 0;
+    padding: 12px 16px;
+    margin: 8px 0 0;
     font-size: 0.9rem;
+    font-weight: 500;
 }
 
+/* ================= Step 2: Mapping Step ================= */
+.import-wizard-mapping {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.import-mapping-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 20px;
+}
+
+.import-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.import-field label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--iw-label);
+    letter-spacing: -0.01em;
+}
+
+.import-required {
+    color: var(--iw-accent);
+    margin-left: 3px;
+}
+
+.import-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 48px;
+    border-radius: 14px;
+    border: 1px solid var(--iw-input-border);
+    background: var(--iw-input-bg);
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.import-select-wrapper:focus-within {
+    border-color: var(--iw-input-focus);
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);
+}
+
+.import-select-wrapper select {
+    width: 100%;
+    height: 100%;
+    padding: 0 38px 0 16px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.import-select-arrow {
+    position: absolute;
+    right: 14px;
+    font-size: 12px;
+    color: var(--iw-accent-dark);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Actions */
 .import-wizard-actions {
     display: flex;
-    gap: 12px;
+    align-items: center;
+    gap: 14px;
+    margin-top: 8px;
     flex-wrap: wrap;
 }
 
-.import-wizard-primary-btn,
-.import-wizard-secondary-btn {
-    padding: 12px 20px;
-    border-radius: 16px;
+.import-wizard-primary-btn {
+    height: 46px;
+    padding: 0 28px;
+    border-radius: 12px;
     border: none;
-    font-weight: 700;
+    background: var(--iw-btn-gradient);
+    color: #ffffff;
     font-size: 0.95rem;
+    font-weight: 600;
     cursor: pointer;
+    box-shadow: var(--iw-btn-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-decoration: none;
+}
+
+.import-wizard-primary-btn:hover:not(:disabled) {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(225, 29, 116, 0.38);
+}
+
+.import-wizard-primary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.import-wizard-secondary-btn {
+    height: 46px;
+    padding: 0 24px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(219, 39, 119, 0.35);
+    background: var(--iw-accent-soft);
+    color: var(--iw-accent-dark);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-.import-wizard-primary-btn {
+.import-wizard-secondary-btn:hover {
+    background: var(--iw-accent);
     color: #ffffff;
-    background: linear-gradient(135deg, #3B82F6, #6366f1);
+    transform: translateY(-1px);
 }
 
-.import-wizard-primary-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.import-wizard-secondary-btn {
-    background: rgba(127, 127, 127, 0.15);
-    color: var(--text-color, inherit);
-}
-
-.import-wizard-link-btn {
-    width: fit-content;
+/* ================= Step 3: Preview Step ================= */
+.import-wizard-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
 }
 
 .import-wizard-totals {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    font-size: 0.85rem;
-    font-weight: 600;
 }
 
 .import-wizard-total {
-    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 4px 12px;
     border-radius: 999px;
-    background: rgba(127, 127, 127, 0.12);
 }
 
 .import-wizard-total--accepted {
@@ -149,8 +502,8 @@
 }
 
 .import-wizard-total--pending {
-    background: rgba(59, 130, 246, 0.18);
-    color: #1d4ed8;
+    background: rgba(245, 158, 11, 0.18);
+    color: #92400e;
 }
 
 .import-wizard-total--errors {
@@ -160,123 +513,245 @@
 
 .import-row-list {
     list-style: none;
-    margin: 0;
     padding: 0;
+    margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .import-row-item {
     display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
-    border-radius: 14px;
-    background: rgba(127, 127, 127, 0.08);
-    border: 1px solid rgba(127, 127, 127, 0.18);
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: var(--iw-item-bg);
+    border: 1px solid var(--iw-item-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.025);
+    box-sizing: border-box;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .import-row-item--accept {
-    border-color: rgba(16, 185, 129, 0.4);
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.04);
 }
 
 .import-row-item--skip {
-    opacity: 0.6;
+    opacity: 0.65;
+    background: rgba(107, 114, 128, 0.05);
 }
 
 .import-row-main {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    min-width: 180px;
-    flex: 1 1 220px;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
 }
 
 .import-row-name {
+    font-size: 1rem;
     font-weight: 700;
+    color: var(--iw-title);
 }
 
 .import-row-meta {
-    font-size: 0.85rem;
-    opacity: 0.85;
+    font-size: 0.88rem;
+    color: var(--iw-muted);
 }
 
 .import-row-raw {
-    font-size: 0.72rem;
-    opacity: 0.6;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin-top: 2px;
 }
 
 .import-row-flags {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    flex: 1 1 200px;
+    max-width: 320px;
 }
 
 .import-row-badge {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 2px 8px;
-    border-radius: 999px;
-    width: fit-content;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 8px;
+    display: inline-block;
 }
 
 .import-row-badge--duplicate {
-    background: rgba(245, 158, 11, 0.18);
-    color: #92400e;
+    background: rgba(245, 158, 11, 0.15);
+    color: #b45309;
+    border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .import-row-badge--suggestion {
-    background: rgba(59, 130, 246, 0.18);
-    color: #1d4ed8;
-    text-transform: none;
-    letter-spacing: normal;
+    background: var(--iw-accent-soft);
+    color: var(--iw-accent-dark);
+    border: 1px solid var(--iw-accent-border);
 }
 
 .import-row-errors {
+    list-style: none;
+    padding: 0;
     margin: 0;
-    padding-left: 18px;
-    font-size: 0.8rem;
-    color: #991b1b;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.import-row-errors li {
+    font-size: 0.76rem;
+    color: #b91c1c;
+    font-weight: 600;
 }
 
 .import-row-actions {
     display: flex;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .import-row-accept-btn,
 .import-row-skip-btn {
-    padding: 8px 14px;
+    padding: 7px 14px;
     border-radius: 10px;
-    border: none;
-    font-weight: 700;
-    font-size: 0.82rem;
+    font-size: 0.85rem;
+    font-weight: 600;
     cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: all 0.15s ease;
 }
 
 .import-row-accept-btn {
-    background: rgba(16, 185, 129, 0.85);
+    background: rgba(16, 185, 129, 0.15);
+    color: #047857;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.import-row-accept-btn:hover:not(:disabled) {
+    background: #047857;
     color: #ffffff;
 }
 
-.import-row-skip-btn {
-    background: rgba(127, 127, 127, 0.2);
-    color: var(--text-color, inherit);
-}
-
-.import-row-accept-btn:disabled,
-.import-row-skip-btn:disabled {
-    opacity: 0.5;
+.import-row-accept-btn:disabled {
+    opacity: 0.45;
     cursor: not-allowed;
 }
 
+.import-row-skip-btn {
+    background: rgba(107, 114, 128, 0.12);
+    color: #4b5563;
+    border-color: rgba(107, 114, 128, 0.25);
+}
+
+.import-row-skip-btn:hover:not(:disabled) {
+    background: #4b5563;
+    color: #ffffff;
+}
+
+.import-row-skip-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* ================= Step 4: Done Step ================= */
+.import-wizard-done {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 16px 0;
+}
+
 .import-wizard-done-summary {
-    font-size: 1.05rem;
-    font-weight: 600;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--iw-title);
+    margin: 0;
+}
+
+/* ================= Responsive Layout (Mobile & Tablet) ================= */
+@media (max-width: 768px) {
+    .import-wizard-page {
+        padding: 16px 14px 28px;
+    }
+
+    .import-wizard-card {
+        padding: 20px 18px 22px;
+        border-radius: 18px;
+    }
+
+    .import-wizard-heading {
+        font-size: 1.25rem;
+    }
+
+    .import-wizard-accent-bar {
+        height: 22px;
+    }
+
+    .import-wizard-steps {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 6px;
+    }
+
+    .import-step-pill {
+        padding: 5px 14px;
+        font-size: 0.78rem;
+    }
+
+    .import-wizard-steps li:not(:last-child)::after {
+        width: 16px;
+        margin: 0 4px;
+    }
+
+    .import-upload-surface {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+        padding: 18px 16px;
+    }
+
+    .import-choose-file-btn {
+        width: 100%;
+        height: 48px;
+        border-radius: 9999px;
+    }
+
+    .import-mapping-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .import-row-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .import-row-actions {
+        width: 100%;
+    }
+
+    .import-row-accept-btn,
+    .import-row-skip-btn {
+        flex: 1;
+        text-align: center;
+    }
+
+    .import-wizard-actions {
+        flex-direction: column;
+    }
+
+    .import-wizard-primary-btn,
+    .import-wizard-secondary-btn {
+        width: 100%;
+        text-align: center;
+        box-sizing: border-box;
+    }
 }

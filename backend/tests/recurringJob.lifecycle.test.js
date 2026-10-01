@@ -292,4 +292,39 @@ describe("recurringJob: endDate auto-end (REC-002-T03/T06)", () => {
     expect(localNotificationCreate).not.toHaveBeenCalled();
     expect(localSendPush).not.toHaveBeenCalled();
   });
+
+  it("skips expense creation and advances schedule when occurrence date is in skippedDates", async () => {
+    const recurring = dueRecurring({
+      nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+      skippedDates: ["2026-08-01"],
+    });
+    const { runCronCallback, createdExpenses, findOneAndUpdateMock, notificationCreateMock } = loadCronJob({
+      dueExpenses: [recurring],
+    });
+
+    await runCronCallback();
+
+    // No expense should be logged
+    expect(createdExpenses).toHaveLength(0);
+    // No notification should be sent
+    expect(notificationCreateMock).not.toHaveBeenCalled();
+
+    // Schedule should be advanced and date pulled from skippedDates
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      {
+        _id: recurring._id,
+        nextDueDate: recurring.nextDueDate,
+      },
+      {
+        $set: {
+          lastLoggedDate: expect.any(Date),
+          nextDueDate: new Date(Date.UTC(2026, 8, 1, 0, 0, 0)),
+        },
+        $pull: {
+          skippedDates: "2026-08-01",
+        },
+      }
+    );
+  });
 });
+
