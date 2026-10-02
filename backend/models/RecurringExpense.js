@@ -114,6 +114,12 @@ const RecurringExpenseSchema = new Schema({
         type: Number,
         default: 0,
         required: true
+    },
+    // Array of skipped occurrence dates ('YYYY-MM-DD' calendar date in app time zone).
+    // An occurrence in this array is omitted from projection and skipped by recurring cron.
+    skippedDates: {
+        type: [String],
+        default: []
     }
 }, { timestamps: true });
 

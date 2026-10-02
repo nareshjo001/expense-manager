@@ -1,49 +1,573 @@
-/* SIA-001-T06 -- SIA settings screen (enable/disable + delete history). */
+/* SIA-001-T06 -- SIA settings screen redesign */
 
-.sia-prefs-heading {
-    margin-bottom: 4px;
+.sia-prefs-page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 20px 24px 36px;
+    box-sizing: border-box;
 }
 
-.sia-prefs-subheading {
-    margin-top: 0;
-    margin-bottom: 20px;
-    opacity: 0.8;
-    font-size: 0.9rem;
+/* Ensure SIA launcher button is removed on the SIA Settings page */
+body:has(.sia-prefs-page) .sia-entry-point {
+    display: none !important;
 }
 
-.sia-prefs-section {
+/* ================= Main Card (Desktop) ================= */
+.sia-prefs-card {
+    background: #ffffff;
+    border-radius: 22px;
+    border: 1px solid rgba(244, 114, 182, 0.28);
+    box-shadow: 0 10px 30px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+    padding: 28px 32px 32px;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.dark-theme .sia-prefs-card {
+    background: rgba(31, 41, 55, 0.85);
+    border: 1px solid rgba(244, 114, 182, 0.22);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+/* ================= Header ================= */
+.sia-prefs-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
     margin-bottom: 24px;
 }
 
-.sia-prefs-section h3 {
-    margin-bottom: 10px;
-}
-
-.sia-prefs-toggle {
+.sia-prefs-title-wrapper {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-weight: 600;
+}
+
+.sia-prefs-accent-bar {
+    display: none;
+}
+
+.sia-prefs-header-badge {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 12px;
+    background: #fdf2f8;
+    border: 1px solid #fce7f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dark-theme .sia-prefs-header-badge {
+    background: rgba(244, 114, 182, 0.15);
+    border-color: rgba(244, 114, 182, 0.25);
+}
+
+.sia-prefs-header-badge-icon {
+    font-size: 22px;
+    color: #831843;
+}
+
+.dark-theme .sia-prefs-header-badge-icon {
+    color: #f472b6;
+}
+
+.sia-prefs-header-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.sia-prefs-heading {
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #831843;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+
+.dark-theme .sia-prefs-heading {
+    color: #f9a8d4;
+}
+
+.sia-prefs-subheading {
+    margin: 6px 0 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.45;
+    opacity: 1;
+}
+
+.dark-theme .sia-prefs-subheading {
+    color: #94a3b8;
+}
+
+/* ================= Content & Sections ================= */
+.sia-prefs-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.sia-prefs-section {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px;
+    background: #ffffff;
+    border: 1px solid rgba(244, 114, 182, 0.22);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(225, 29, 116, 0.03);
+    box-sizing: border-box;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sia-prefs-section:hover {
+    box-shadow: 0 4px 14px rgba(225, 29, 116, 0.06);
+}
+
+.dark-theme .sia-prefs-section {
+    background: rgba(31, 41, 55, 0.8);
+    border-color: rgba(244, 114, 182, 0.2);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.sia-prefs-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.sia-prefs-section-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* Item Badges */
+.sia-prefs-item-badge {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 10px;
+    background: #fdf2f8;
+    border: 1px solid #fce7f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dark-theme .sia-prefs-item-badge {
+    background: rgba(244, 114, 182, 0.15);
+    border-color: rgba(244, 114, 182, 0.25);
+}
+
+.sia-prefs-item-badge-icon {
+    font-size: 19px;
+    color: #831843;
+}
+
+.dark-theme .sia-prefs-item-badge-icon {
+    color: #f472b6;
+}
+
+/* Item Title */
+.sia-prefs-item-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: -0.01em;
+}
+
+.dark-theme .sia-prefs-item-title {
+    color: #f8fafc;
+}
+
+/* ================= Switch Toggle ================= */
+.sia-prefs-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     cursor: pointer;
+    user-select: none;
+    margin: 0;
+}
+
+.sia-prefs-toggle-input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.sia-prefs-toggle-switch {
+    width: 46px;
+    height: 26px;
+    background: #cbd5e1;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    padding: 2px 3px;
+    box-sizing: border-box;
+    transition: background 0.25s ease;
+    flex-shrink: 0;
+}
+
+.dark-theme .sia-prefs-toggle-switch {
+    background: #4b5563;
+}
+
+.sia-prefs-toggle-knob {
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.25s ease;
+    transform: translateX(0);
+}
+
+.sia-prefs-toggle-input:checked + .sia-prefs-toggle-switch {
+    background: #e11d74;
+}
+
+.sia-prefs-toggle-input:checked + .sia-prefs-toggle-switch .sia-prefs-toggle-knob {
+    transform: translateX(20px);
+}
+
+.sia-prefs-toggle-input:focus-visible + .sia-prefs-toggle-switch {
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.35);
+}
+
+.sia-prefs-toggle-input:disabled + .sia-prefs-toggle-switch {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.sia-prefs-toggle-text {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #475569;
+}
+
+.dark-theme .sia-prefs-toggle-text {
+    color: #cbd5e1;
+}
+
+/* Hints */
+.sia-prefs-item-body {
+    width: 100%;
 }
 
 .sia-prefs-hint {
-    font-size: 0.8rem;
-    opacity: 0.7;
-    margin-top: 6px;
+    margin: 8px 0 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.dark-theme .sia-prefs-hint {
+    color: #94a3b8;
+}
+
+/* ================= Callout Banner ================= */
+.sia-prefs-callout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fdf2f8;
+    border: 1px solid #fce7f3;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-top: 14px;
+    box-sizing: border-box;
+}
+
+.dark-theme .sia-prefs-callout {
+    background: rgba(244, 114, 182, 0.12);
+    border-color: rgba(244, 114, 182, 0.22);
+}
+
+.sia-prefs-callout-icon {
+    font-size: 15px;
+    color: #e11d48;
+    flex-shrink: 0;
+}
+
+.dark-theme .sia-prefs-callout-icon {
+    color: #f472b6;
+}
+
+.sia-prefs-callout span {
+    font-size: 0.825rem;
+    font-weight: 500;
+    color: #be185d;
+    line-height: 1.4;
+}
+
+.dark-theme .sia-prefs-callout span {
+    color: #f9a8d4;
+}
+
+/* ================= Delete History Button ================= */
+.sia-prefs-item-actions {
+    margin-top: 14px;
+    width: 100%;
 }
 
 .sia-prefs-delete-history {
-    margin-top: 8px;
-    background: rgba(220, 38, 38, 0.1);
-    color: #991b1b;
-    border: 1px solid rgba(220, 38, 38, 0.3);
-    border-radius: 8px;
-    padding: 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 12px;
+    border: 1.5px solid #f472b6;
+    background: #ffffff;
+    color: #e11d48;
+    font-size: 0.88rem;
+    font-weight: 600;
     cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.sia-prefs-delete-history:hover:not(:disabled) {
+    background: #fff1f2;
+    border-color: #fda4af;
+    color: #be123c;
+    transform: translateY(-1px);
+}
+
+.sia-prefs-delete-history:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 .sia-prefs-delete-history:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    transform: none;
+}
+
+.dark-theme .sia-prefs-delete-history {
+    background: rgba(17, 24, 39, 0.5);
+    border-color: rgba(244, 114, 182, 0.35);
+    color: #f472b6;
+}
+
+.dark-theme .sia-prefs-delete-history:hover:not(:disabled) {
+    background: rgba(244, 114, 182, 0.16);
+    border-color: #f472b6;
+}
+
+.sia-prefs-delete-icon {
+    font-size: 14px;
+    color: #e11d48;
+}
+
+.dark-theme .sia-prefs-delete-icon {
+    color: #f472b6;
+}
+
+/* ================= Mobile View Only (<= 600px) ================= */
+@media (max-width: 600px) {
+    .sia-prefs-page {
+        padding: 12px 14px 20px;
+    }
+
+    .sia-prefs-card {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    .sia-prefs-header {
+        align-items: flex-start;
+        margin-bottom: 24px;
+        gap: 0;
+    }
+
+    .sia-prefs-header-badge {
+        display: none !important;
+    }
+
+    .sia-prefs-title-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .sia-prefs-accent-bar {
+        display: inline-block !important;
+        width: 4px;
+        height: 26px;
+        background: #e11d48;
+        border-radius: 9999px;
+        flex-shrink: 0;
+    }
+
+    .dark-theme .sia-prefs-accent-bar {
+        background: #f472b6;
+    }
+
+    .sia-prefs-heading {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.015em;
+        line-height: 1.25;
+    }
+
+    .dark-theme .sia-prefs-heading {
+        color: #f8fafc;
+    }
+
+    .sia-prefs-subheading {
+        font-size: 0.88rem;
+        color: #64748b;
+        line-height: 1.45;
+        margin: 8px 0 0 14px;
+    }
+
+    .dark-theme .sia-prefs-subheading {
+        color: #94a3b8;
+    }
+
+    .sia-prefs-content {
+        gap: 14px;
+    }
+
+    .sia-prefs-section {
+        background: #ffffff;
+        border-radius: 22px;
+        border: 1px solid rgba(244, 114, 182, 0.28);
+        padding: 20px 18px 18px;
+        box-shadow: 0 4px 20px rgba(225, 29, 116, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+        box-sizing: border-box;
+    }
+
+    .dark-theme .sia-prefs-section {
+        background: rgba(31, 41, 55, 0.85);
+        border-color: rgba(244, 114, 182, 0.22);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .sia-prefs-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 4px;
+    }
+
+    .sia-prefs-section-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .sia-prefs-item-badge {
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        border-radius: 13px;
+        margin-top: 0;
+    }
+
+    .sia-prefs-item-badge-icon {
+        font-size: 20px;
+        color: #e11d74;
+    }
+
+    .dark-theme .sia-prefs-item-badge-icon {
+        color: #f472b6;
+    }
+
+    .sia-prefs-item-title {
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+
+    .dark-theme .sia-prefs-item-title {
+        color: #f8fafc;
+    }
+
+    .sia-prefs-toggle-text {
+        display: none !important;
+    }
+
+    .sia-prefs-toggle-switch {
+        width: 50px;
+        height: 28px;
+        padding: 3px;
+    }
+
+    .sia-prefs-toggle-knob {
+        width: 22px;
+        height: 22px;
+    }
+
+    .sia-prefs-toggle-input:checked + .sia-prefs-toggle-switch .sia-prefs-toggle-knob {
+        transform: translateX(22px);
+    }
+
+    .sia-prefs-hint {
+        font-size: 0.875rem;
+        color: #64748b;
+        line-height: 1.45;
+        margin: 12px 0 0 0;
+    }
+
+    .dark-theme .sia-prefs-hint {
+        color: #94a3b8;
+    }
+
+    .sia-prefs-callout {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        gap: 10px;
+    }
+
+    .sia-prefs-callout-icon {
+        font-size: 18px;
+    }
+
+    .sia-prefs-callout span {
+        font-size: 0.85rem;
+    }
+
+    .sia-prefs-item-actions {
+        width: 100%;
+        margin-top: 14px;
+    }
+
+    .sia-prefs-delete-history {
+        width: 100%;
+        height: 48px;
+        justify-content: center;
+        border-radius: 14px;
+        font-size: 0.92rem;
+        border: 1.5px solid #f472b6;
+    }
+
+    .sia-prefs-delete-icon {
+        font-size: 17px;
+    }
 }

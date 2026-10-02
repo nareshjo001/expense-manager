@@ -65,3 +65,8 @@ export const editRecurringDefinition = async (id, updates, scheduleVersion) => {
   const { data } = await api.patch(`/api/recurring/${id}`, { ...updates, scheduleVersion });
   return data;
 };
+
+export const skipRecurringOccurrence = async (id, date, scheduleVersion) => {
+  const { data } = await api.patch(`/api/recurring/${id}/skip`, { date, scheduleVersion });
+  return data;
+};

@@ -33,6 +33,7 @@ function loadController(serviceMock) {
     resumeDefinition: jest.fn(),
     endDefinition: jest.fn(),
     editDefinition: jest.fn(),
+    skipOccurrence: jest.fn(),
     ...serviceMock,
   }));
   return require("../Controllers/RecurringExpenses/lifecycle");
@@ -249,5 +250,81 @@ describe("editRecurring", () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(JSON.stringify(responseBody(res))).not.toMatch(/db exploded/);
+  });
+});
+
+describe("skipRecurring", () => {
+  test("returns 400 for a malformed id", async () => {
+    const { skipRecurring } = loadController();
+    const res = makeRes();
+    await skipRecurring(makeReq({ scheduleVersion: 0, date: "2026-10-01" }, { id: "not-an-oid" }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test("returns 400 for invalid scheduleVersion", async () => {
+    const { skipRecurring } = loadController();
+    const res = makeRes();
+    await skipRecurring(makeReq({ scheduleVersion: -1, date: "2026-10-01" }, { id: VALID_ID }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(responseBody(res).errorCode).toBe("INVALID_SCHEDULE_VERSION");
+  });
+
+  test("returns 400 for missing or invalid date", async () => {
+    const { skipRecurring } = loadController();
+    const res = makeRes();
+    await skipRecurring(makeReq({ scheduleVersion: 0, date: "" }, { id: VALID_ID }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(responseBody(res).errorCode).toBe("INVALID_DATE");
+  });
+
+  test("calls skipOccurrence with userId, id, date, scheduleVersion and returns 200 on success", async () => {
+    const skipOccurrence = jest
+      .fn()
+      .mockResolvedValue({ ok: true, definition: { id: VALID_ID, skippedDates: ["2026-10-01"] } });
+    const { skipRecurring } = loadController({ skipOccurrence });
+
+    const req = makeReq({ scheduleVersion: 0, date: "2026-10-01" }, { id: VALID_ID });
+    const res = makeRes();
+    await skipRecurring(req, res);
+
+    expect(skipOccurrence).toHaveBeenCalledWith(req.userId, VALID_ID, "2026-10-01", 0);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(responseBody(res)).toEqual({
+      message: "Occurrence skipped successfully",
+      success: true,
+      data: { id: VALID_ID, skippedDates: ["2026-10-01"] },
+    });
+  });
+
+  test("maps already_skipped to 409 ALREADY_SKIPPED", async () => {
+    const skipOccurrence = jest.fn().mockResolvedValue({ ok: false, reason: "already_skipped" });
+    const { skipRecurring } = loadController({ skipOccurrence });
+
+    const res = makeRes();
+    await skipRecurring(makeReq({ scheduleVersion: 0, date: "2026-10-01" }, { id: VALID_ID }), res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(responseBody(res).errorCode).toBe("ALREADY_SKIPPED");
+  });
+
+  test("maps invalid_date_in_past to 400 INVALID_DATE_IN_PAST", async () => {
+    const skipOccurrence = jest.fn().mockResolvedValue({ ok: false, reason: "invalid_date_in_past" });
+    const { skipRecurring } = loadController({ skipOccurrence });
+
+    const res = makeRes();
+    await skipRecurring(makeReq({ scheduleVersion: 0, date: "2026-08-01" }, { id: VALID_ID }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(responseBody(res).errorCode).toBe("INVALID_DATE_IN_PAST");
+  });
+
+  test("returns 500 when service throws", async () => {
+    const skipOccurrence = jest.fn().mockRejectedValue(new Error("crash"));
+    const { skipRecurring } = loadController({ skipOccurrence });
+
+    const res = makeRes();
+    await skipRecurring(makeReq({ scheduleVersion: 0, date: "2026-10-01" }, { id: VALID_ID }), res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 });

@@ -10,8 +10,10 @@ export default function IncomeInsights () {
 
   return (
     <div className="monthly-page-container">
-      <Header period={period} setPeriod={setPeriod} />
-      <OverallInsight period={period} setPeriod={setPeriod} />
+      <div className="income-analysis-parent-container">
+        <Header period={period} setPeriod={setPeriod} />
+        <OverallInsight period={period} setPeriod={setPeriod} />
+      </div>
     </div>
   )
 }

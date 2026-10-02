@@ -125,7 +125,27 @@ describe("useUpdateRecurringMutation -- onSuccess reconciles with the server's a
 
     expect(setQueriesData).not.toHaveBeenCalled();
   });
+
+  it("removes the recurring definition from the cached recurring list when isRecurring is false", () => {
+    const { options, setQueriesData } = captureOptions();
+
+    options.onSuccess({ success: true, isRecurring: false }, { expenseId: "exp-1", isRecurring: false });
+
+    expect(setQueriesData).toHaveBeenCalledWith({ queryKey: queryKeys.recurring.lists() }, expect.any(Function));
+    const updater = setQueriesData.mock.calls.find(
+      (call) => JSON.stringify(call[0]) === JSON.stringify({ queryKey: queryKeys.recurring.lists() })
+    )[1];
+    const patched = updater({
+      success: true,
+      data: [
+        { id: "rec-1", expenseId: "exp-1", expenseName: "Netflix" },
+        { id: "rec-2", expenseId: "exp-2", expenseName: "Spotify" },
+      ],
+    });
+    expect(patched.data).toEqual([{ id: "rec-2", expenseId: "exp-2", expenseName: "Spotify" }]);
+  });
 });
+
 
 describe("useUpdateRecurringMutation -- onSettled always refetches for convergence", () => {
   it("invalidates every cached expense query regardless of outcome", () => {
@@ -135,4 +155,13 @@ describe("useUpdateRecurringMutation -- onSettled always refetches for convergen
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.expenses.all });
   });
+
+  it("invalidates every cached recurring query onSettled so recurring views sync", () => {
+    const { options, invalidateQueries } = captureOptions();
+
+    options.onSettled();
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.recurring.all });
+  });
 });
+

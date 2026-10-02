@@ -10,4 +10,5 @@ module.exports = {
     resumeRecurring: require('./lifecycle').resumeRecurring,
     endRecurring: require('./lifecycle').endRecurring,
     editRecurring: require('./lifecycle').editRecurring,
-}
+    skipRecurring: require('./lifecycle').skipRecurring,
+};

@@ -1,0 +1,178 @@
+/* ==========================================================================
+   ANALYSIS CHANGER (INSIGHTS TOGGLE)
+   Capsule toggle switching between Budget Insights and Income Insights.
+   Matches design in media_1790866081313.png
+   ========================================================================== */
+
+.insights-page-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.analysis-toggle-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 16px 24px 0;
+  box-sizing: border-box;
+}
+
+.analysis-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 52px;
+  padding: 4px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid rgba(244, 114, 182, 0.38);
+  box-shadow: 0 4px 20px rgba(244, 114, 182, 0.15), 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.dark-theme .analysis-toggle {
+  background: rgba(36, 20, 32, 0.95);
+  border-color: rgba(244, 114, 182, 0.28);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 16px rgba(244, 114, 182, 0.08);
+}
+
+/* Sliding active pill indicator */
+.analysis-toggle-slider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(254, 235, 243, 0.98) 0%, rgba(252, 222, 237, 0.95) 100%);
+  box-shadow: 0 2px 8px rgba(225, 29, 116, 0.08);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.analysis-toggle-slider.right {
+  transform: translateX(100%);
+}
+
+.dark-theme .analysis-toggle-slider {
+  background: linear-gradient(135deg, rgba(219, 39, 119, 0.35) 0%, rgba(190, 24, 93, 0.25) 100%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Toggle tab button */
+.analysis-toggle-btn {
+  position: relative;
+  z-index: 2;
+  flex: 1 1 50%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: none;
+  background: transparent;
+  border-radius: 9999px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: color 0.22s ease;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.analysis-toggle-btn:focus-visible {
+  outline: 2px solid #db2777;
+  outline-offset: 2px;
+}
+
+.analysis-toggle-btn.active {
+  color: #be185d;
+  font-weight: 700;
+}
+
+.dark-theme .analysis-toggle-btn {
+  color: #cbd5e1;
+}
+
+.dark-theme .analysis-toggle-btn.active {
+  color: #f472b6;
+}
+
+/* Circular Icon Badge */
+.analysis-toggle-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #334155;
+  transition: background-color 0.22s ease, color 0.22s ease, transform 0.2s ease;
+}
+
+.analysis-toggle-btn.active .analysis-toggle-icon {
+  background: rgba(244, 114, 182, 0.28);
+  color: #be185d;
+}
+
+.analysis-toggle-btn:not(.active):hover .analysis-toggle-icon {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.dark-theme .analysis-toggle-icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+
+.dark-theme .analysis-toggle-btn.active .analysis-toggle-icon {
+  background: rgba(244, 114, 182, 0.25);
+  color: #f472b6;
+}
+
+.dark-theme .analysis-toggle-btn:not(.active):hover .analysis-toggle-icon {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f1f5f9;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+  .analysis-toggle-container {
+    padding: 12px 14px 0;
+  }
+
+  .analysis-toggle {
+    height: 48px;
+    padding: 3px;
+  }
+
+  .analysis-toggle-slider {
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc(50% - 3px);
+  }
+
+  .analysis-toggle-btn {
+    font-size: 13.5px;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .analysis-toggle-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+}

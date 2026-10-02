@@ -136,6 +136,14 @@ function projectDefinition(definition, { from, to, now, timeZone, overdueRank })
 
     iterations += 1;
 
+    const currentCalendarDate = calendarDateInZone(due, timeZone);
+    // Honor skippedDates: if the occurrence's calendar date has been skipped by the user,
+    // do not project it or count it towards overdue.
+    if (Array.isArray(definition.skippedDates) && definition.skippedDates.includes(currentCalendarDate)) {
+      due = advanceOneMonth(due);
+      continue;
+    }
+
     const isOverdue = due <= now;
     if (isOverdue) {
       overdueCount += 1;
@@ -159,11 +167,13 @@ function projectDefinition(definition, { from, to, now, timeZone, overdueRank })
           typeof definition.expenseAmountMinor === "number" ? definition.expenseAmountMinor : null,
         // The schedule.
         dueDate: due.toISOString(),
-        dueCalendarDate: calendarDateInZone(due, timeZone),
+        dueCalendarDate: currentCalendarDate,
         // What the created expense will actually carry (see this file's
         // header, point 3). Equal to dueDate for anything not overdue.
         expectedExpenseDate: expectedCreationDate.toISOString(),
         overdue: isOverdue,
+        scheduleVersion:
+          typeof definition.scheduleVersion === "number" ? definition.scheduleVersion : 0,
       });
     }
 

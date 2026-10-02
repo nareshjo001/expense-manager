@@ -14,6 +14,8 @@ test.describe('Budget', () => {
   test('sets this month\'s budget and sees it reflected on the dashboard', async ({ page }) => {
     await loginAsE2EUser(page);
 
+    await page.getByRole('link', { name: 'Budgets' }).click();
+
     // frontend/src/components/expensesHandling/budget/SetBudget.js shows
     // one of two states for the current month: an initial "Set" prompt, or
     // (once a budget already exists for this month) the BudgetBar

@@ -14,6 +14,12 @@ export const ThemeProvider = ({ children }) => {
 
     useEffect(() => {
         localStorage.setItem('theme', theme);
+        if (typeof document !== 'undefined') {
+            document.documentElement.classList.remove('light-theme', 'dark-theme');
+            document.documentElement.classList.add(theme);
+            document.body.classList.remove('light-theme', 'dark-theme');
+            document.body.classList.add(theme);
+        }
     }, [theme]);
 
     return (

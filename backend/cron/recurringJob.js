@@ -14,6 +14,7 @@ const { reserve, synchronizeAfterMutation } = require('../Services/syncRecoveryS
 // a time; the expense insert's own occurrence-ID uniqueness constraint
 // remains the actual financial-correctness backstop either way.
 const { runWithLease } = require('../utils/jobLease');
+const { calendarDateInZone, resolveTimeZone } = require('../Services/RecurringServices/upcomingProjection');
 
 const JOB_NAME = "recurringJob";
 const LEASE_TTL_MS = 10 * 60 * 1000;
@@ -134,6 +135,31 @@ async function runRecurringJob() {
             1,
             0, 0, 0
          ));
+
+         // Check if this occurrence was skipped by the user for this month.
+         const timeZone = resolveTimeZone(process.env.APP_TIME_ZONE);
+         const dueCalendarDate = calendarDateInZone(new Date(originalNextDue), timeZone);
+
+         if (Array.isArray(recurring.skippedDates) && recurring.skippedDates.includes(dueCalendarDate)) {
+            // Occurrence is skipped: advance nextDueDate and clean up the date from skippedDates
+            // without creating an Expense document or sending notifications.
+            await RecurringExpenseModel.findOneAndUpdate(
+               {
+                  _id: recurring._id,
+                  nextDueDate: originalNextDue
+               },
+               {
+                  $set: {
+                     lastLoggedDate: new Date(),
+                     nextDueDate: newNextDue
+                  },
+                  $pull: {
+                     skippedDates: dueCalendarDate
+                  }
+               }
+            );
+            continue;
+         }
 
          // Remediation Workstream D -- deterministic occurrence identity,
          const occurrenceId = crypto

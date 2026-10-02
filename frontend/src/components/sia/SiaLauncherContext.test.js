@@ -130,6 +130,54 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
     expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
   });
 
+  it("hides only the base launcher on the Budgets route", () => {
+    renderProvider(<span>budgets page</span>, { route: "/budgets" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the Rules route", () => {
+    renderProvider(<span>rules page</span>, { route: "/rules" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the SIA Settings route", () => {
+    renderProvider(<span>sia settings page</span>, { route: "/sia-settings" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the Notification Preferences route", () => {
+    renderProvider(<span>notifications page</span>, { route: "/notification-preferences" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the Export route", () => {
+    renderProvider(<span>export page</span>, { route: "/export" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the Import route", () => {
+    renderProvider(<span>import page</span>, { route: "/import" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the Recurring route", () => {
+    renderProvider(<span>recurring page</span>, { route: "/recurring" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
+  it("hides only the base launcher on the Receipts route", () => {
+    renderProvider(<span>receipts page</span>, { route: "/receipts" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
   it("an unknown/malformed suggestion id fails closed: no panel, no crash, no state mutation", async () => {
     renderProvider(<RawLauncherButton suggestionId="not-a-real-suggestion" />);
     await waitFor(() => expect(getSiaStatus).toHaveBeenCalled());

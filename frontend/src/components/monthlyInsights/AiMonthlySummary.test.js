@@ -176,16 +176,18 @@ describe("AiMonthlySummary -- generate flow for an opted-in user", () => {
 
     render(<AiMonthlySummary />);
 
-    expect(screen.getByText("You spent ₹5000 across 10 transactions this month.")).toBeInTheDocument();
-    expect(screen.getByText("Total spent")).toBeInTheDocument();
-    expect(screen.getByText("₹5000")).toBeInTheDocument();
-    expect(screen.getByText("Transaction count")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.tagName.toLowerCase() === "p" && element.textContent.replace(/\s+/g, " ").trim() === "You spent ₹5000 across 10 transactions this month.")
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("₹5000")[0]).toBeInTheDocument();
+    expect(screen.getByText("spent")).toBeInTheDocument();
+    expect(screen.getByText("transactions")).toBeInTheDocument();
     expect(screen.getByText(/template-based/i)).toBeInTheDocument();
     expect(screen.getByText("September 2026")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /regenerate summary/i })).toBeInTheDocument();
   });
 
-  it("renders the LLM path's narrative with a single source-facts list beneath it", () => {
+  it("renders the LLM path's narrative with highlighted insights and metric strip", () => {
     setupQuery({ optedIn: true, regenerationsUsed: 1, regenerationsRemaining: 4 });
     setupOptInMutation();
     setupGenerateMutation({
@@ -205,9 +207,11 @@ describe("AiMonthlySummary -- generate flow for an opted-in user", () => {
 
     render(<AiMonthlySummary />);
 
-    expect(screen.getByText("This month you spent a total of ₹5000.")).toBeInTheDocument();
-    expect(screen.getByText(/source facts/i)).toBeInTheDocument();
-    expect(screen.getByText("Total spent")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.tagName.toLowerCase() === "p" && element.textContent.replace(/\s+/g, " ").trim() === "This month you spent a total of ₹5000.")
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("₹5000")[0]).toBeInTheDocument();
+    expect(screen.getByText("spent")).toBeInTheDocument();
     expect(screen.getByText(/ai-generated/i)).toBeInTheDocument();
   });
 });

@@ -1,76 +1,645 @@
-/* CAT-001-T06 -- merchant rule management screen. */
+/* CAT-001-T06 -- merchant rule management screen redesign */
+
+.merchant-rules-page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 20px 24px 36px;
+    box-sizing: border-box;
+}
+
+/* Ensure SIA launcher button is removed on the Merchant Rules page */
+body:has(.merchant-rules-page) .sia-entry-point {
+    display: none !important;
+}
+
+/* ================= Main Card ================= */
+.merchant-rules-card {
+    background: #ffffff;
+    border-radius: 22px;
+    border: 1px solid rgba(244, 114, 182, 0.28);
+    box-shadow: 0 10px 30px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+    padding: 28px 32px 32px;
+    margin-bottom: 28px;
+    position: relative;
+    box-sizing: border-box;
+    scroll-margin-top: 24px;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.merchant-rules-card--editing {
+    border-color: rgba(236, 72, 153, 0.65);
+    box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.14), 0 12px 36px rgba(225, 29, 116, 0.1);
+}
+
+.dark-theme .merchant-rules-card {
+    background: rgba(31, 41, 55, 0.85);
+    border: 1px solid rgba(244, 114, 182, 0.22);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+.dark-theme .merchant-rules-card--editing {
+    border-color: rgba(244, 114, 182, 0.55);
+    box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.2), 0 14px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ================= Header ================= */
+.merchant-rules-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.merchant-rules-badge {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 12px;
+    background: #fdf2f8;
+    border: 1px solid #fce7f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dark-theme .merchant-rules-badge {
+    background: rgba(244, 114, 182, 0.15);
+    border-color: rgba(244, 114, 182, 0.25);
+}
+
+.merchant-rules-badge-icon {
+    font-size: 20px;
+    color: #831843;
+}
+
+.dark-theme .merchant-rules-badge-icon {
+    color: #f472b6;
+}
+
+.merchant-rules-header-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 
 .merchant-rules-heading {
-    margin-bottom: 4px;
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #831843;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+
+.dark-theme .merchant-rules-heading {
+    color: #f9a8d4;
 }
 
 .merchant-rules-subheading {
-    margin-top: 0;
-    margin-bottom: 20px;
-    opacity: 0.8;
-    font-size: 0.9rem;
+    margin: 6px 0 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.45;
+    opacity: 1;
 }
 
-.merchant-rules-form-actions {
+.dark-theme .merchant-rules-subheading {
+    color: #94a3b8;
+}
+
+/* ================= Form ================= */
+.merchant-rules-form {
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+}
+
+.merchant-rules-fields-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.merchant-rules-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+}
+
+.merchant-rules-field label {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #334155;
+    margin: 0;
+}
+
+.dark-theme .merchant-rules-field label {
+    color: #cbd5e1;
+}
+
+.merchant-rules-field input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px;
+    font-size: 0.92rem;
+    border-radius: 12px;
+    border: 1px solid rgba(244, 114, 182, 0.45);
+    background: #ffffff;
+    color: #1e293b;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.merchant-rules-field input::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+}
+
+.merchant-rules-field input:focus {
+    border-color: #ec4899;
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);
+}
+
+.dark-theme .merchant-rules-field input {
+    background: rgba(17, 24, 39, 0.55);
+    border-color: rgba(244, 114, 182, 0.35);
+    color: #f8fafc;
+}
+
+.dark-theme .merchant-rules-field input::placeholder {
+    color: #64748b;
+}
+
+.dark-theme .merchant-rules-field input:focus {
+    border-color: #f472b6;
+    box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.2);
+}
+
+/* Category select wrapper with chevron */
+.merchant-rules-select-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
     align-items: center;
 }
 
-.merchant-rules-cancel-edit {
-    background: none;
-    border: 1px solid var(--text-color, #666);
-    border-radius: 8px;
-    padding: 8px 16px;
-    cursor: pointer;
+.merchant-rules-select-wrapper input {
+    padding-right: 38px;
 }
 
+.merchant-rules-select-arrow {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #ec4899;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dark-theme .merchant-rules-select-arrow {
+    color: #f472b6;
+}
+
+/* ================= Actions & Buttons ================= */
+.merchant-rules-form-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.merchant-rules-submit-btn,
+.merchant-rules-card .submit-btn {
+    flex: 1;
+    width: 100%;
+    height: 48px;
+    padding: 0 24px;
+    border-radius: 9999px;
+    border: none;
+    background: linear-gradient(90deg, #f472b6 0%, #ec4899 100%);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.96rem;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(236, 72, 153, 0.28);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.merchant-rules-submit-btn:hover:not(:disabled),
+.merchant-rules-card .submit-btn:hover:not(:disabled) {
+    background: linear-gradient(90deg, #f472b6 0%, #db2777 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(236, 72, 153, 0.38);
+}
+
+.merchant-rules-submit-btn:active:not(:disabled),
+.merchant-rules-card .submit-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(236, 72, 153, 0.22);
+}
+
+.merchant-rules-submit-btn:disabled,
+.merchant-rules-card .submit-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.merchant-rules-cancel-edit {
+    height: 48px;
+    padding: 0 24px;
+    border-radius: 9999px;
+    border: 1px solid rgba(225, 29, 116, 0.35);
+    background: transparent;
+    color: #be185d;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.merchant-rules-cancel-edit:hover {
+    background: rgba(244, 114, 182, 0.12);
+    border-color: #ec4899;
+}
+
+.dark-theme .merchant-rules-cancel-edit {
+    border-color: rgba(244, 114, 182, 0.4);
+    color: #f472b6;
+}
+
+.dark-theme .merchant-rules-cancel-edit:hover {
+    background: rgba(244, 114, 182, 0.18);
+}
+
+/* ================= Saved Rules Card ================= */
+.merchant-rules-saved-card {
+    background: #ffffff;
+    border-radius: 22px;
+    border: 1px solid rgba(244, 114, 182, 0.28);
+    box-shadow: 0 10px 30px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+    padding: 28px 32px 32px;
+    box-sizing: border-box;
+}
+
+.dark-theme .merchant-rules-saved-card {
+    background: rgba(31, 41, 55, 0.85);
+    border: 1px solid rgba(244, 114, 182, 0.22);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+.merchant-rules-saved-header {
+    margin-bottom: 24px;
+}
+
+.merchant-rules-saved-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.merchant-rules-saved-accent-bar {
+    width: 4px;
+    height: 22px;
+    background: #e11d48;
+    border-radius: 9999px;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.dark-theme .merchant-rules-saved-accent-bar {
+    background: #f472b6;
+}
+
+.merchant-rules-saved-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+}
+
+.dark-theme .merchant-rules-saved-title {
+    color: #f8fafc;
+}
+
+.merchant-rules-saved-subtitle {
+    margin: 6px 0 0 14px;
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.dark-theme .merchant-rules-saved-subtitle {
+    color: #94a3b8;
+}
+
+/* ================= Saved Rules List & Scrollable Area ================= */
 .merchant-rules-list {
     list-style: none;
     padding: 0;
-    margin: 20px 0 0;
+    margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
+    box-sizing: border-box;
+}
+
+.merchant-rules-list--scrollable {
+    max-height: 440px;
+    overflow-y: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(244, 114, 182, 0.45) transparent;
+}
+
+.merchant-rules-list--scrollable::-webkit-scrollbar {
+    width: 6px;
+}
+
+.merchant-rules-list--scrollable::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.merchant-rules-list--scrollable::-webkit-scrollbar-thumb {
+    background: rgba(244, 114, 182, 0.4);
+    border-radius: 9999px;
+}
+
+.merchant-rules-list--scrollable::-webkit-scrollbar-thumb:hover {
+    background: rgba(236, 72, 153, 0.65);
 }
 
 .merchant-rules-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: 10px;
-    background: rgba(127, 127, 127, 0.08);
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 18px;
+    background: #ffffff;
+    border: 1px solid rgba(244, 114, 182, 0.22);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.025);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    box-sizing: border-box;
+}
+
+.merchant-rules-item:hover {
+    box-shadow: 0 6px 18px rgba(225, 29, 116, 0.08);
+    border-color: rgba(244, 114, 182, 0.38);
+}
+
+.dark-theme .merchant-rules-item {
+    background: rgba(26, 34, 46, 0.95);
+    border-color: rgba(244, 114, 182, 0.2);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.merchant-rules-item-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
+.merchant-rules-category-icon-badge {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 50%;
+    background: #fdf2f8;
+    border: 1px solid #fce7f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e11d48;
+    font-size: 19px;
+    flex-shrink: 0;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.dark-theme .merchant-rules-category-icon-badge {
+    background: rgba(244, 114, 182, 0.15);
+    border-color: rgba(244, 114, 182, 0.25);
+    color: #f472b6;
 }
 
 .merchant-rules-item-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    align-items: flex-start;
+    gap: 4px;
     min-width: 0;
 }
 
 .merchant-rules-item-merchant {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0f172a;
     overflow-wrap: anywhere;
+    line-height: 1.25;
+    text-transform: capitalize;
+}
+
+.dark-theme .merchant-rules-item-merchant {
+    color: #f8fafc;
 }
 
 .merchant-rules-item-category {
-    font-size: 0.85rem;
-    opacity: 0.75;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 12px;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: #fdf2f8;
+    color: #be185d;
+    border: 1px solid #fce7f3;
+    width: fit-content;
+    line-height: 1.2;
+}
+
+.dark-theme .merchant-rules-item-category {
+    background: rgba(244, 114, 182, 0.15);
+    color: #f472b6;
+    border-color: rgba(244, 114, 182, 0.25);
 }
 
 .merchant-rules-item-actions {
     display: flex;
-    gap: 8px;
+    gap: 10px;
+    align-items: center;
     flex-shrink: 0;
 }
 
-.merchant-rules-item-actions button {
-    background: none;
-    border: 1px solid var(--text-color, #666);
-    border-radius: 8px;
-    padding: 6px 12px;
+.merchant-rules-btn-edit,
+.merchant-rules-btn-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 12px;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
     cursor: pointer;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.merchant-rules-btn-icon {
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.merchant-rules-btn-edit {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+}
+
+.merchant-rules-btn-edit:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #1e293b;
+    transform: translateY(-1px);
+}
+
+.dark-theme .merchant-rules-btn-edit {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #cbd5e1;
+}
+
+.dark-theme .merchant-rules-btn-edit:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #f8fafc;
+}
+
+.merchant-rules-btn-delete {
+    background: #ffffff;
+    border: 1px solid #fecdd3;
+    color: #e11d48;
+}
+
+.merchant-rules-btn-delete:hover {
+    background: #fff1f2;
+    border-color: #fda4af;
+    color: #be123c;
+    transform: translateY(-1px);
+}
+
+.dark-theme .merchant-rules-btn-delete {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.dark-theme .merchant-rules-btn-delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #fca5a5;
+}
+
+/* ================= Mobile Responsive ================= */
+@media (max-width: 600px) {
+    .merchant-rules-page {
+        padding: 12px 14px 24px;
+    }
+
+    .merchant-rules-card,
+    .merchant-rules-saved-card {
+        padding: 20px 18px 22px;
+        border-radius: 18px;
+    }
+
+    .merchant-rules-header {
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .merchant-rules-badge {
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        border-radius: 10px;
+    }
+
+    .merchant-rules-badge-icon {
+        font-size: 18px;
+    }
+
+    .merchant-rules-heading {
+        font-size: 1.35rem;
+    }
+
+    .merchant-rules-subheading {
+        font-size: 0.825rem;
+    }
+
+    .merchant-rules-saved-title {
+        font-size: 1.2rem;
+    }
+
+    .merchant-rules-saved-subtitle {
+        font-size: 0.8rem;
+    }
+
+    .merchant-rules-fields-row {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .merchant-rules-submit-btn,
+    .merchant-rules-card .submit-btn {
+        height: 46px;
+        font-size: 0.925rem;
+    }
+
+    .merchant-rules-cancel-edit {
+        height: 46px;
+        font-size: 0.925rem;
+        padding: 0 18px;
+    }
+
+    .merchant-rules-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 16px;
+    }
+
+    .merchant-rules-item-left {
+        width: 100%;
+    }
+
+    .merchant-rules-item-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .merchant-rules-btn-edit,
+    .merchant-rules-btn-delete {
+        flex: 1;
+        justify-content: center;
+        padding: 8px 12px;
+    }
 }

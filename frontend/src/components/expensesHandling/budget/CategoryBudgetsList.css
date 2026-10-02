@@ -1,0 +1,674 @@
+/* Populated category-budget list only (accordion rows); imported after the
+   existing section styles and scoped to .category-budgets-panel--list so the
+   empty state, unbudgeted panel and form are untouched (apart from the
+   unbudgeted header's divider, which matches this list's header).
+
+   Scale reference: the unbudgeted card in CategoryBudgets.css. The header
+   mirrors .category-budgets-panel-header / -icon-wrap / -title / -subtitle,
+   and the collapsed rows mirror .category-budgets-unbudgeted-item (38px
+   icon, 15px/600 name, 9px 16px padding, 14px radius, item border and
+   surface). The panel frame is the shared .category-budgets-panel, so both
+   cards have the same padding, radius, border and shadow. */
+.category-budgets-panel--list {
+  --cbl-heading: #72143d; /* .light-theme .category-budgets-panel-title */
+  --cbl-name: var(--cb-text-title); /* .category-budgets-unbudgeted-name */
+  --cbl-muted: var(--cb-text-subtitle); /* .category-budgets-panel-subtitle */
+  --cbl-row-bg: var(--cb-item-bg);
+  --cbl-row-border: var(--cb-item-border);
+  --cbl-row-bg-open: #fdf5f8;
+  --cbl-detail-bg: #ffffff;
+  --cbl-chevron-color: #6e5e69;
+  --cbl-chevron-hover-border: #e3b9cc;
+  --cbl-track: #fbe7ef;
+  --cbl-focus: #c2185b;
+
+  /* Status fills: distinct hues, pill text colours chosen for >= 4.5:1. */
+  --cbl-safe-fill: #1f9d55;
+  --cbl-safe-pill-bg: #dcf5e4;
+  --cbl-safe-pill-text: #146c38;
+  --cbl-warning-fill: #df980b;
+  --cbl-warning-pill-bg: #e39c0c;
+  --cbl-warning-pill-text: #3a2400;
+  --cbl-critical-fill: #ea580c;
+  --cbl-critical-pill-bg: #c2410c;
+  --cbl-critical-pill-text: #ffffff;
+  --cbl-overspent-fill: #dc2626;
+  --cbl-overspent-pill-bg: #c81e1e;
+  --cbl-overspent-pill-text: #ffffff;
+  --cbl-danger: #d42a36;
+  --cbl-danger-border: #f1a9b0;
+}
+
+.dark-theme .category-budgets-panel--list {
+  --cbl-heading: var(--cb-text-title);
+  --cbl-row-bg-open: rgba(58, 27, 49, 0.95);
+  --cbl-detail-bg: rgba(30, 16, 27, 0.9);
+  --cbl-chevron-color: #e8cadb;
+  --cbl-chevron-hover-border: rgba(244, 166, 199, 0.55);
+  --cbl-track: rgba(244, 166, 199, 0.16);
+  --cbl-focus: #f9a8d4;
+  --cbl-safe-pill-bg: rgba(34, 197, 94, 0.18);
+  --cbl-safe-pill-text: #86efac;
+  --cbl-danger: #fca5a5;
+  --cbl-danger-border: rgba(252, 165, 165, 0.5);
+}
+
+.category-budgets-panel--list > .category-budgets-card-wave {
+  display: none;
+}
+
+/* With budgets listed, the cards drop the static 400px minimum: side by side
+   they share one height, set by whichever card's rows are taller. The empty
+   state keeps the shared panel height. The row caps (at most four rows
+   visible, the rest scroll) are measured in CategoryBudgets.js. */
+.category-budgets-panels--list > .category-budgets-panel {
+  min-height: 0;
+}
+
+/* Panel header -- same scale as the unbudgeted card's header, plus the thin
+   divider the list design calls for. */
+.category-budgets-list-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--cbl-row-border);
+}
+
+/* The unbudgeted card's header gets the same divider while budgets are
+   listed (--cbl-row-border is --cb-item-border). */
+.category-budgets-panels--list .category-budgets-panel--right .category-budgets-panel-header {
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--cb-item-border);
+}
+
+.category-budgets-list-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: #fde4ef;
+  color: #c2185b;
+  box-shadow: 0 4px 12px rgba(194, 24, 91, 0.08);
+}
+
+.dark-theme .category-budgets-list-icon {
+  background: rgba(194, 24, 91, 0.25);
+  color: #f472b6;
+}
+
+.category-budgets-list-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.category-budgets-list-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cbl-heading);
+}
+
+.category-budgets-list-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cbl-muted);
+}
+
+/* List. max-height is only a fallback: CategoryBudgets.js sizes the list to
+   exactly four rows (or removes the cap when there are four or fewer).
+   Rows always keep their content height and the rest of the list scrolls:
+   with auto rows, a capped list inside the stretched card shrinks its
+   overflow:hidden rows to fit instead (down to their borders), and the
+   four-row measurement then shrinks the cap along with them. */
+.category-budgets-panel--list .category-budgets-list {
+  grid-auto-rows: max-content;
+  gap: 10px;
+  max-height: 640px;
+  padding: 0 6px 0 0;
+  transition: max-height 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Row card -- surface and radius of .category-budgets-unbudgeted-item. Each
+   row is a size container so the summary adapts to the row's real width
+   (two-column desktop, narrow desktop, phone), not to the viewport. */
+.category-budgets-panel--list .category-budget-row {
+  container-type: inline-size;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid var(--cbl-row-border);
+  background: var(--cbl-row-bg);
+  box-shadow: 0 2px 6px rgba(194, 24, 91, 0.02);
+  overflow: hidden;
+}
+
+.category-budgets-panel--list .category-budget-row--expanded {
+  background: var(--cbl-row-bg-open);
+}
+
+/* Summary: the whole header is the expand control. Grid tracks keep the
+   icon, pill and chevron at their natural size and give every remaining
+   pixel to the text column. */
+.category-budget-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "icon text status chevron";
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  padding: 9px 16px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.category-budget-summary:focus-visible {
+  outline: 3px solid var(--cbl-focus);
+  outline-offset: -3px;
+}
+
+.category-budget-summary > .category-budget-icon {
+  grid-area: icon;
+}
+
+.category-budget-summary-text {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* Same type as .category-budgets-unbudgeted-name. Names wrap only at word
+   boundaries (break-word is a last resort for a single token wider than the
+   column, e.g. a 50-character name with no spaces). */
+.category-budgets-panel--list .category-budget-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cbl-name);
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.category-budget-summary-amounts {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--cbl-muted);
+  overflow-wrap: break-word;
+}
+
+.category-budget-summary-amount-whole {
+  display: none;
+}
+
+/* Amounts never split; the line wraps at the spaces around "spent of". */
+.category-budget-summary-spent,
+.category-budget-summary-budget {
+  color: var(--cbl-name);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Status pill -- compact. */
+.category-budgets-panel--list .category-budget-summary > .category-budget-status {
+  grid-area: status;
+  justify-self: end;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.category-budgets-panel--list .category-budget-status--safe {
+  background: var(--cbl-safe-pill-bg);
+  color: var(--cbl-safe-pill-text);
+}
+.category-budgets-panel--list .category-budget-status--warning {
+  background: var(--cbl-warning-pill-bg);
+  color: var(--cbl-warning-pill-text);
+}
+.category-budgets-panel--list .category-budget-status--critical {
+  background: var(--cbl-critical-pill-bg);
+  color: var(--cbl-critical-pill-text);
+}
+.category-budgets-panel--list .category-budget-status--overspent {
+  background: var(--cbl-overspent-pill-bg);
+  color: var(--cbl-overspent-pill-text);
+}
+
+/* Rounded-square chevron -- compact. */
+.category-budget-chevron {
+  grid-area: chevron;
+  width: 30px;
+  height: 30px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--cbl-row-border);
+  background: var(--cbl-detail-bg);
+  color: var(--cbl-chevron-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: border-color 0.15s ease;
+}
+
+.category-budget-row--expanded .category-budget-chevron {
+  color: #d12e4f;
+}
+
+.dark-theme .category-budget-row--expanded .category-budget-chevron {
+  color: #f9a8d4;
+}
+
+.category-budget-summary:hover .category-budget-chevron {
+  border-color: var(--cbl-chevron-hover-border);
+}
+
+/* Narrow rows (narrow desktop columns, tablets, phones): the pill moves
+   under the amounts so the name keeps a usable width; icon and chevron stay
+   centred against both lines. */
+@container (max-width: 360px) {
+  .category-budget-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon text chevron"
+      "icon status chevron";
+    row-gap: 5px;
+  }
+
+  .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+    justify-self: start;
+  }
+}
+
+@container (max-width: 280px) {
+  .category-budget-summary {
+    column-gap: 10px;
+    padding: 9px 12px;
+  }
+
+  .category-budget-chevron {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@container (max-width: 240px) {
+  .category-budget-summary {
+    column-gap: 8px;
+    padding: 9px 10px;
+  }
+
+  .category-budget-summary > .category-budget-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .category-budget-chevron {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/* Expanded detail -- the grid row follows the detail's intrinsic height, so
+   the card, capped list, and rows below transition as one layout change.
+   Unlike a fixed max-height, this does not cap variable risk text or actions. */
+.category-budget-detail {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin: 0 6px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--cbl-detail-bg);
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    margin 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.category-budget-detail-content {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.category-budget-row--expanded .category-budget-detail {
+  grid-template-rows: 1fr;
+  margin-bottom: 6px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  pointer-events: auto;
+}
+
+.category-budget-row--expanded .category-budget-detail-content {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 60ms, 0ms;
+}
+
+.category-budget-detail[aria-hidden="true"] {
+  pointer-events: none;
+}
+
+.category-budgets-panel--list .category-budget-progress {
+  height: 8px;
+  margin: 0 0 10px;
+  background: var(--cbl-track);
+}
+
+.category-budgets-panel--list .category-budget-progress-fill--safe { background: var(--cbl-safe-fill); }
+.category-budgets-panel--list .category-budget-progress-fill--warning { background: var(--cbl-warning-fill); }
+.category-budgets-panel--list .category-budget-progress-fill--critical { background: var(--cbl-critical-fill); }
+.category-budgets-panel--list .category-budget-progress-fill--overspent { background: var(--cbl-overspent-fill); }
+
+/* Figures with dividers. Each figure is sized to its content (so "Spent"
+   keeps its amount and percentage on one line) and shares the spare width.
+   A figure never shrinks below its widest amount (min-content): when large
+   amounts cannot share one line, the last figure wraps to a new line
+   instead of an amount being split. Every figure carries the same left
+   padding and divider; the list is pulled left by that amount and clipped,
+   which hides the divider (and cancels the padding) of whichever figure
+   starts a line. */
+.category-budgets-panel--list .category-budget-figures {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  margin: 0 0 0 -11px;
+  clip-path: inset(0 0 0 11px);
+  font-size: inherit;
+}
+
+.category-budgets-panel--list .category-budget-figures div {
+  flex: 1 1 auto;
+  min-width: min-content;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 10px;
+  border-left: 1px solid var(--cbl-row-border);
+}
+
+.category-budgets-panel--list .category-budget-figures dt {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cbl-muted);
+}
+
+.category-budgets-panel--list .category-budget-figures dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--cbl-name);
+  overflow-wrap: normal;
+}
+
+.category-budgets-panel--list .category-budget-figures dd.category-budget-over {
+  color: var(--cbl-overspent-fill);
+}
+
+.category-budgets-panel--list .category-budget-at-risk {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--cbl-critical-pill-bg);
+}
+
+.dark-theme .category-budgets-panel--list .category-budget-at-risk {
+  color: #fdba74;
+}
+
+.category-budgets-panel--list .category-budget-actions,
+.category-budgets-panel--list .category-budget-confirm {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.category-budgets-panel--list .category-budget-actions .category-budget-button,
+.category-budgets-panel--list .category-budget-confirm .category-budget-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--cbl-row-border);
+  background: var(--cbl-detail-bg);
+  color: var(--cbl-name);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.category-budgets-panel--list .category-budget-actions .category-budget-button--danger,
+.category-budgets-panel--list .category-budget-confirm .category-budget-button--danger {
+  border-color: var(--cbl-danger-border);
+  color: var(--cbl-danger);
+}
+
+.category-budgets-panel--list .category-budget-button:focus-visible {
+  outline: 3px solid var(--cbl-focus);
+  outline-offset: 2px;
+}
+
+.category-budgets-panel--list .category-budget-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.category-budgets-panel--list .category-budget-confirm > span {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cbl-name);
+}
+
+/* Narrow rows: figures become labelled rows so large amounts never have to
+   squeeze into a third of the width; buttons share the row. */
+@container (max-width: 340px) {
+  .category-budgets-panel--list .category-budget-figures {
+    flex-direction: column;
+    row-gap: 4px;
+    margin-left: 0;
+    clip-path: none;
+  }
+
+  .category-budgets-panel--list .category-budget-figures div {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 0;
+    border-left: 0;
+  }
+
+  .category-budgets-panel--list .category-budget-figures dd {
+    text-align: right;
+  }
+
+  .category-budgets-panel--list .category-budget-actions .category-budget-button,
+  .category-budgets-panel--list .category-budget-confirm .category-budget-button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* Mobile: same header scale as the unbudgeted card's mobile header. Row
+   sizing is handled by the container queries above. */
+@media (max-width: 600px) {
+  .category-budgets-panel--list {
+    --cbl-heading: #4a0429;
+    --cbl-muted: #8f3d64;
+    padding: 20px 18px 16px;
+  }
+
+  .dark-theme .category-budgets-panel--list {
+    --cbl-heading: #fdf2f8;
+    --cbl-muted: #d4a3be;
+  }
+
+  .category-budgets-list-header {
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .category-budgets-panels--list .category-budgets-panel--right .category-budgets-panel-header {
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .category-budgets-list-icon {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+    background: #fde8f1;
+    color: #db2777;
+  }
+
+  .category-budgets-list-header-text {
+    gap: 2px;
+  }
+
+  .category-budgets-list-title {
+    font-size: 16px;
+  }
+
+  .category-budgets-list-subtitle {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+
+  .category-budgets-panel--list .category-budgets-list {
+    max-height: 560px;
+  }
+
+  /* Keep the category name and status on the first line. Flatten only the
+     presentational text wrapper so the amount can use the full second line
+     between the icon and chevron instead of competing with the status pill. */
+  .category-budget-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "icon name status status"
+      "icon amounts amounts chevron";
+    row-gap: 12px;
+  }
+
+  .category-budget-summary-text {
+    display: contents;
+  }
+
+  .category-budgets-panel--list .category-budget-name {
+    grid-area: name;
+    min-width: 0;
+  }
+
+  .category-budget-summary-amounts {
+    grid-area: amounts;
+    margin-top: 0;
+  }
+
+  .category-budget-summary-amount-full {
+    display: none;
+  }
+
+  .category-budget-summary-amount-whole {
+    display: inline;
+  }
+
+  .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+    align-self: start;
+    justify-self: end;
+  }
+
+  .category-budget-chevron {
+    align-self: end;
+    justify-self: end;
+  }
+}
+
+/* Browsers without size containers fall back to the narrow row layout on
+   phones. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 600px) {
+    .category-budget-summary {
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-areas:
+        "icon name status status"
+        "icon amounts amounts chevron";
+      row-gap: 12px;
+    }
+
+    .category-budget-summary-text {
+      display: contents;
+    }
+
+    .category-budgets-panel--list .category-budget-name {
+      grid-area: name;
+      min-width: 0;
+    }
+
+    .category-budget-summary-amounts {
+      grid-area: amounts;
+      margin-top: 0;
+    }
+
+    .category-budget-summary-amount-full {
+      display: none;
+    }
+
+    .category-budget-summary-amount-whole {
+      display: inline;
+    }
+
+    .category-budgets-panel--list .category-budget-summary > .category-budget-status {
+      align-self: start;
+      justify-self: end;
+    }
+
+    .category-budget-chevron {
+      align-self: end;
+      justify-self: end;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-budget-chevron,
+  .category-budget-detail,
+  .category-budget-detail-content,
+  .category-budgets-panel--list .category-budgets-list {
+    transition: none;
+  }
+}

@@ -13,6 +13,7 @@ const {
   resumeDefinition,
   endDefinition,
   editDefinition,
+  skipOccurrence,
 } = require("../../Services/RecurringServices/recurringLifecycleService");
 
 // Maps a service failure `reason` to an HTTP response. One place for this
@@ -106,6 +107,27 @@ function respondToFailure(res, result) {
         errorCode: "INVALID_END_DATE",
       });
 
+    case "invalid_date":
+      return res.status(400).json({
+        message: "A valid date (YYYY-MM-DD) is required to skip an occurrence",
+        success: false,
+        errorCode: "INVALID_DATE",
+      });
+
+    case "invalid_date_in_past":
+      return res.status(400).json({
+        message: "Cannot skip an occurrence that is already in the past",
+        success: false,
+        errorCode: "INVALID_DATE_IN_PAST",
+      });
+
+    case "already_skipped":
+      return res.status(409).json({
+        message: "This occurrence has already been skipped",
+        success: false,
+        errorCode: "ALREADY_SKIPPED",
+      });
+
     default:
       // Unreached in practice -- every reason the service can return is
       // handled above. A safe, generic fallback rather than leaking an
@@ -192,4 +214,40 @@ const editRecurring = async (req, res) => {
   }
 };
 
-module.exports = { pauseRecurring, resumeRecurring, endRecurring, editRecurring };
+const skipRecurring = async (req, res) => {
+  const id = validateId(req, res);
+  if (id === null) return;
+
+  const scheduleVersion = extractScheduleVersion(req.body);
+  if (scheduleVersion === null) {
+    return res.status(400).json({
+      message: "scheduleVersion (a non-negative integer) is required",
+      success: false,
+      errorCode: "INVALID_SCHEDULE_VERSION",
+    });
+  }
+
+  const { date } = req.body;
+  if (!date || typeof date !== "string") {
+    return res.status(400).json({
+      message: "A valid date (YYYY-MM-DD) is required to skip an occurrence",
+      success: false,
+      errorCode: "INVALID_DATE",
+    });
+  }
+
+  try {
+    const result = await skipOccurrence(req.userId, id, date, scheduleVersion);
+    if (!result.ok) return respondToFailure(res, result);
+    return res.status(200).json({
+      message: "Occurrence skipped successfully",
+      success: true,
+      data: result.definition,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal Server Error", success: false });
+  }
+};
+
+module.exports = { pauseRecurring, resumeRecurring, endRecurring, editRecurring, skipRecurring };

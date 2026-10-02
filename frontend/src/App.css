@@ -2,7 +2,63 @@
 
 /* ========== Light Theme ========== */
 .light-theme {
-  --bg-color: #FFE4E1;
+  --bg-color: #F7F1F4;
+}
+
+/* ========== Universal Light Theme Scrollbars ========== */
+html.light-theme,
+body.light-theme,
+.light-theme,
+.light-theme *,
+:root:not(.dark-theme) * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(225, 29, 116, 0.38) transparent;
+}
+
+html.light-theme::-webkit-scrollbar,
+body.light-theme::-webkit-scrollbar,
+.light-theme::-webkit-scrollbar,
+.light-theme *::-webkit-scrollbar,
+:root:not(.dark-theme) *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.light-theme::-webkit-scrollbar-track,
+body.light-theme::-webkit-scrollbar-track,
+.light-theme::-webkit-scrollbar-track,
+.light-theme *::-webkit-scrollbar-track,
+:root:not(.dark-theme) *::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+html.light-theme::-webkit-scrollbar-thumb,
+body.light-theme::-webkit-scrollbar-thumb,
+.light-theme::-webkit-scrollbar-thumb,
+.light-theme *::-webkit-scrollbar-thumb,
+:root:not(.dark-theme) *::-webkit-scrollbar-thumb {
+  background: rgba(225, 29, 116, 0.38);
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+html.light-theme::-webkit-scrollbar-thumb:hover,
+body.light-theme::-webkit-scrollbar-thumb:hover,
+.light-theme::-webkit-scrollbar-thumb:hover,
+.light-theme *::-webkit-scrollbar-thumb:hover,
+:root:not(.dark-theme) *::-webkit-scrollbar-thumb:hover {
+  background: rgba(225, 29, 116, 0.65);
+}
+
+html.light-theme::-webkit-scrollbar-button,
+body.light-theme::-webkit-scrollbar-button,
+.light-theme::-webkit-scrollbar-button,
+.light-theme *::-webkit-scrollbar-button,
+:root:not(.dark-theme) *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* ========== Dark Theme ========== */

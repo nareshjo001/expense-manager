@@ -39,8 +39,15 @@ function setupMutations({ saveMutate = jest.fn(), deleteMutate = jest.fn() } = {
   return { saveMutate, deleteMutate };
 }
 
+const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+
+beforeEach(() => {
+  window.HTMLElement.prototype.scrollIntoView = jest.fn();
+});
+
 afterEach(() => {
   jest.clearAllMocks();
+  window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 describe("MerchantRules -- loading/error/empty states", () => {
@@ -93,9 +100,9 @@ describe("MerchantRules -- listing and editing", () => {
     setupMutations();
     render(<MerchantRules />);
 
-    expect(screen.getByText("starbucks")).toBeInTheDocument();
+    expect(screen.getByText("Starbucks")).toBeInTheDocument();
     expect(screen.getByText("Food")).toBeInTheDocument();
-    expect(screen.getByText("shell gas")).toBeInTheDocument();
+    expect(screen.getByText("Shell Gas")).toBeInTheDocument();
     expect(screen.getByText("Transport")).toBeInTheDocument();
   });
 
@@ -144,6 +151,22 @@ describe("MerchantRules -- listing and editing", () => {
     expect(screen.getByLabelText(/merchant/i)).toHaveValue("");
     expect(screen.getByRole("button", { name: /add rule/i })).toBeInTheDocument();
   });
+
+  it("clicking Edit auto-scrolls up to visually focus the form card", () => {
+    setupMutations();
+    const scrollIntoViewMock = jest.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const { container } = render(<MerchantRules />);
+    const card = container.querySelector(".merchant-rules-card");
+
+    expect(card).not.toHaveClass("merchant-rules-card--editing");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[0]);
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(card).toHaveClass("merchant-rules-card--editing");
+  });
 });
 
 describe("MerchantRules -- deleting a rule", () => {
@@ -191,5 +214,93 @@ describe("MerchantRules -- deleting a rule", () => {
     fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
 
     expect(merchantRuleDeleteErrorToast).toHaveBeenCalledWith({ message: "nope" });
+  });
+});
+
+describe("MerchantRules -- Saved Rules display formatting & scrollable list behavior", () => {
+  it("displays the first word of the category with its first letter capitalized", () => {
+    const customRules = [
+      { _id: "r1", merchantKey: "swiggy", category: "food & drink" },
+      { _id: "r2", merchantKey: "bigbasket", category: "groceries online" },
+      { _id: "r3", merchantKey: "netflix", category: "ENTERTAINMENT" },
+    ];
+    useMerchantRulesQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { success: true, data: customRules },
+      refetch: jest.fn(),
+    });
+    setupMutations();
+
+    render(<MerchantRules />);
+
+    expect(screen.getByText("Food")).toBeInTheDocument();
+    expect(screen.getByText("Groceries")).toBeInTheDocument();
+    expect(screen.getByText("Entertainment")).toBeInTheDocument();
+  });
+
+  it("displays merchant names with their first letter capitalized (e.g. exam fee -> Exam Fee)", () => {
+    const customRules = [
+      { _id: "r-exam", merchantKey: "exam fee", category: "Education" },
+      { _id: "r-swiggy", merchantKey: "swiggy", category: "food" },
+    ];
+    useMerchantRulesQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { success: true, data: customRules },
+      refetch: jest.fn(),
+    });
+    setupMutations();
+
+    render(<MerchantRules />);
+
+    expect(screen.getByText("Exam Fee")).toBeInTheDocument();
+    expect(screen.getByText("Education")).toBeInTheDocument();
+    expect(screen.getByText("Swiggy")).toBeInTheDocument();
+    expect(screen.getByText("Food")).toBeInTheDocument();
+  });
+
+  it("does not apply scrollable class when 5 or fewer rules exist", () => {
+    const fiveRules = Array.from({ length: 5 }, (_, i) => ({
+      _id: `rule-${i + 1}`,
+      merchantKey: `merchant-${i + 1}`,
+      category: "Food",
+    }));
+
+    useMerchantRulesQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { success: true, data: fiveRules },
+      refetch: jest.fn(),
+    });
+    setupMutations();
+
+    const { container } = render(<MerchantRules />);
+    const list = container.querySelector(".merchant-rules-list");
+
+    expect(list).not.toHaveClass("merchant-rules-list--scrollable");
+    expect(list.children).toHaveLength(5);
+  });
+
+  it("applies scrollable class when more than 5 rules exist", () => {
+    const sixRules = Array.from({ length: 6 }, (_, i) => ({
+      _id: `rule-${i + 1}`,
+      merchantKey: `merchant-${i + 1}`,
+      category: "Food",
+    }));
+
+    useMerchantRulesQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { success: true, data: sixRules },
+      refetch: jest.fn(),
+    });
+    setupMutations();
+
+    const { container } = render(<MerchantRules />);
+    const list = container.querySelector(".merchant-rules-list");
+
+    expect(list).toHaveClass("merchant-rules-list--scrollable");
+    expect(list.children).toHaveLength(6);
   });
 });

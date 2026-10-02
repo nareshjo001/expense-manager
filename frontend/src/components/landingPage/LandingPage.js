@@ -20,10 +20,11 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import './LandingPage.css';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
-import { FaWallet, FaPlusCircle, FaChartBar, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaFileExport, FaReceipt, FaFileImport, FaRobot } from "react-icons/fa";
+import { FaWallet, FaPlusCircle, FaChartBar, FaChartPie, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaFileExport, FaReceipt, FaFileImport, FaRobot, FaAngleDoubleLeft, FaAngleDoubleRight } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
+import BudgetsPage from '../expensesHandling/budget/BudgetsPage';
 
 // FE-003-T03 -- lazy-loaded route-level pages.
 //
@@ -74,6 +75,11 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 600);
 
+    // UI-REDESIGN desktop-header-sidebar -- desktop-only sidebar collapse
+    // state. Purely local/visual: does not affect routing, mobile layout,
+    // or any other existing behavior.
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
     // Shared with AddExpense so it can load and edit a specific expense.
     const [isEdit, setIsEdit] = useState({
         enableEdit: false,
@@ -82,6 +88,15 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
     const location = useLocation();
     const navigate = useNavigate();
+
+    // UI-REDESIGN desktop-header-sidebar -- active-destination highlighting
+    // for the new sidebar, based on the real current route. The desktop nav
+    // previously had no active-state concept at all (only the mobile bottom
+    // nav did, via its own inline location.pathname checks below).
+    const isRouteActive = (path) => location.pathname === path;
+    // "Charts" has no single route of its own (it fans out to /chart/line,
+    // /chart/bar, /chart/pie), so its active state covers any chart route.
+    const isChartsActive = location.pathname.startsWith('/chart');
 
     // REC-003-T05 -- the upcoming-recurring view's "Edit" action opens the
     // underlying historical expense (see UpcomingRecurring.js's own header
@@ -103,7 +118,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 600);
-        
+
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -233,30 +248,76 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
         <>
             <div className={`app-container ${theme} ${confirmDeleteId ? 'blur-background' : ''}`}>
 
-                    <header className="app-header">
-                        <div className="desktop-header">
-                            <div className="app-nav-toggle">
-                                <nav className="app-navigation">
+                    <div className={`app-shell ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
 
-                                    <Link className="nav-link" to="/">
-                                        <span className="nav-item">
-                                            <FaWallet /> Expenses
-                                        </span>
+                        {/* UI-REDESIGN desktop-header-sidebar -- desktop-only sidebar.
+                            Hidden via CSS at <=600px, exactly like the row it replaces
+                            (.desktop-header) was; mobile keeps its own separate header/
+                            bottom-nav/settings-drawer below, untouched. */}
+                        <aside className="app-sidebar" aria-label="Primary">
+                            <div className="sidebar-brand-row">
+                                <div className="sidebar-brand">
+                                    <span className="sidebar-brand-mark" aria-hidden="true">B</span>
+                                    <div className="sidebar-brand-text">
+                                        <span className="sidebar-brand-name">Balensia</span>
+                                        <span className="sidebar-brand-tagline">Track • Plan • Save</span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="sidebar-collapse-btn"
+                                    onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                                    aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                                    title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                                >
+                                    {isSidebarCollapsed ? <FaAngleDoubleRight /> : <FaAngleDoubleLeft />}
+                                </button>
+                            </div>
+
+                            <nav className="sidebar-nav">
+                                <div className="sidebar-group">
+                                    <span className="sidebar-group-label">Main</span>
+
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/') ? 'sidebar-link-active' : ''}`}
+                                        to="/"
+                                        title="Expenses"
+                                    >
+                                        <FaWallet className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Expenses</span>
                                     </Link>
 
-                                    <Link className="nav-link" to="/add">
-                                        <span className="nav-item">
-                                            <FaPlusCircle /> Add
-                                        </span>
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/add') ? 'sidebar-link-active' : ''}`}
+                                        to="/add"
+                                        title="Add Expense"
+                                    >
+                                        <FaPlusCircle className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Add Expense</span>
                                     </Link>
 
-                                    <div className="nav-link dropdown">
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/budgets') ? 'sidebar-link-active' : ''}`}
+                                        to="/budgets"
+                                        title="Budgets"
+                                    >
+                                        <FaChartPie className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Budgets</span>
+                                    </Link>
+                                </div>
+
+                                <div className="sidebar-group">
+                                    <span className="sidebar-group-label">Insights</span>
+
+                                    <div className="sidebar-link dropdown">
                                         <span
-                                            className="nav-item dropdown-toggle"
+                                            className={`sidebar-link-trigger dropdown-toggle ${isChartsActive ? 'sidebar-link-active' : ''}`}
                                             role="button"
                                             tabIndex={0}
                                             aria-haspopup="true"
                                             aria-expanded={isMobile ? showMobileDropdown : undefined}
+                                            title="Charts"
                                             onClick={() => {
                                                 if (isMobile) setShowMobileDropdown(true);
                                             }}
@@ -267,128 +328,181 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                             onFocus={prefetchCharts}
                                             onTouchStart={prefetchCharts}
                                         >
-                                            <FaChartBar /> Charts
+                                            <FaChartBar className="sidebar-link-icon" />
+                                            <span className="sidebar-link-label">Charts</span>
                                         </span>
 
                                         {!isMobile && (
-                                            <div className="dropdown-menu">
+                                            <div className="dropdown-menu sidebar-chart-menu">
                                                 {renderDropdownLinks()}
                                             </div>
                                         )}
                                     </div>
 
                                     <Link
-                                        className="nav-link"
+                                        className={`sidebar-link ${isRouteActive('/analysis') ? 'sidebar-link-active' : ''}`}
                                         to="/analysis"
+                                        title="Analysis"
                                         onMouseEnter={loadInsights}
                                         onFocus={loadInsights}
                                         onTouchStart={loadInsights}
                                     >
-                                        <span className="nav-item">
-                                            <FaSearchDollar /> Analysis
-                                        </span>
+                                        <FaSearchDollar className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Analysis</span>
                                     </Link>
-
-                                    <Link className="nav-link" to="/rules">
-                                        <span className="nav-item">
-                                            <FaTags /> Rules
-                                        </span>
-                                    </Link>
-
-                                    <Link className="nav-link" to="/recurring">
-                                        <span className="nav-item">
-                                            <FaSyncAlt /> Recurring
-                                        </span>
-                                    </Link>
-
-                                    <Link className="nav-link" to="/notification-preferences">
-                                        <span className="nav-item">
-                                            <FaBell /> Notifications
-                                        </span>
-                                    </Link>
-
-                                    <Link className="nav-link" to="/sia-settings">
-                                        <span className="nav-item">
-                                            <FaRobot /> SIA Settings
-                                        </span>
-                                    </Link>
-
-                                    <Link className="nav-link" to="/export">
-                                        <span className="nav-item">
-                                            <FaFileExport /> Export
-                                        </span>
-                                    </Link>
-
-                                    <Link className="nav-link" to="/receipts">
-                                        <span className="nav-item">
-                                            <FaReceipt /> Receipts
-                                        </span>
-                                    </Link>
-
-                                    <Link className="nav-link" to="/import">
-                                        <span className="nav-item">
-                                            <FaFileImport /> Import
-                                        </span>
-                                    </Link>
-
-                                </nav>
-
-                                <div className="header-buttons">
-                                    <button className="toggle-button" onClick={toggleTheme}>
-                                        {theme === 'light-theme' ? <FaMoon /> : <FaSun />}
-                                        {theme === 'light-theme' ? 'Dark Mode' : 'Light Mode'}
-                                    </button>
-
-                                    <button className="logout-button" onClick={handleLogout}>
-                                        <FaSignOutAlt /> Logout
-                                    </button>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="desktop-typewriter">
-                                <p>Track your expenses easily!</p>
-                        </div>
+                                <div className="sidebar-group">
+                                    <span className="sidebar-group-label">Tools</span>
 
-                        <div className="mobile-header">
-                            <div className="typewriter">
-                                <p>Track your expenses easily!</p>
-                            </div>
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/rules') ? 'sidebar-link-active' : ''}`}
+                                        to="/rules"
+                                        title="Rules"
+                                    >
+                                        <FaTags className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Rules</span>
+                                    </Link>
+
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/recurring') ? 'sidebar-link-active' : ''}`}
+                                        to="/recurring"
+                                        title="Recurring"
+                                    >
+                                        <FaSyncAlt className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Recurring</span>
+                                    </Link>
+
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/receipts') ? 'sidebar-link-active' : ''}`}
+                                        to="/receipts"
+                                        title="Receipts"
+                                    >
+                                        <FaReceipt className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Receipts</span>
+                                    </Link>
+
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/import') ? 'sidebar-link-active' : ''}`}
+                                        to="/import"
+                                        title="Import"
+                                    >
+                                        <FaFileImport className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Import</span>
+                                    </Link>
+
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/export') ? 'sidebar-link-active' : ''}`}
+                                        to="/export"
+                                        title="Export"
+                                    >
+                                        <FaFileExport className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Export</span>
+                                    </Link>
+                                </div>
+
+                            </nav>
+
+                            <Link
+                                className={`sidebar-link ${isRouteActive('/sia-settings') ? 'sidebar-link-active' : ''}`}
+                                to="/sia-settings"
+                                title="SIA Settings"
+                            >
+                                <FaRobot className="sidebar-link-icon" />
+                                <span className="sidebar-link-label">SIA Settings</span>
+                            </Link>
 
                             <button
-                                className="mobile-settings"
-                                onClick={() => setIsSettingsOpen(true)}
+                                type="button"
+                                className="sidebar-logout"
+                                onClick={handleLogout}
+                                title="Logout"
                             >
-                                <FaBars />
+                                <FaSignOutAlt className="sidebar-link-icon" />
+                                <span className="sidebar-link-label">Logout</span>
                             </button>
+                        </aside>
+
+                        <div className="app-content-column">
+
+                            {/* UI-REDESIGN desktop-header-sidebar -- compact desktop top
+                                header. Only a theme toggle (existing toggleTheme) and a
+                                notification-preferences link are wired here: the reference
+                                also shows an "Ask SIA" action and a profile control, but
+                                neither has a supported existing app behavior to attach to
+                                (see spec/ui-redesign/desktop-header-sidebar.md, findings
+                                3-4), so both are omitted rather than faked. Hidden via CSS
+                                at <=600px alongside .app-sidebar. */}
+                            <div className="app-topbar">
+                                <div className="desktop-typewriter">
+                                    <p>Track your expenses easily!</p>
+                                </div>
+
+                                <div className="app-topbar-controls">
+                                    <button
+                                        type="button"
+                                        className="topbar-theme-toggle"
+                                        onClick={toggleTheme}
+                                        aria-label={theme === 'light-theme' ? 'Switch to dark mode' : 'Switch to light mode'}
+                                    >
+                                        <FaSun className={`topbar-theme-icon ${theme === 'light-theme' ? 'topbar-theme-icon-active' : ''}`} />
+                                        <FaMoon className={`topbar-theme-icon ${theme === 'dark-theme' ? 'topbar-theme-icon-active' : ''}`} />
+                                    </button>
+
+                                    <Link
+                                        className="topbar-icon-btn"
+                                        to="/notification-preferences"
+                                        aria-label="Notifications"
+                                        title="Notifications"
+                                    >
+                                        <FaBell />
+                                    </Link>
+                                </div>
+                            </div>
+
+                            <header className="app-header">
+                                <div className="mobile-header">
+                                    <div className="typewriter">
+                                        <p>Track your expenses easily!</p>
+                                    </div>
+
+                                    <button
+                                        className="mobile-settings"
+                                        onClick={() => setIsSettingsOpen(true)}
+                                    >
+                                        <FaBars />
+                                    </button>
+                                </div>
+                            </header>
+
+                            <main className="app-main">
+                                {/* FE-003-T03/T06 -- only the four lazy routes above can actually
+                                    suspend; the other routes render synchronously as before and
+                                    never show this fallback. role="status"/aria-live so a screen
+                                    reader announces the wait instead of going silent. */}
+                                <Suspense fallback={<div className="route-loading" role="status" aria-live="polite">Loading…</div>}>
+                                    <Routes>
+                                        <Route path="/" element={<ExpensesPage onDelete={onDelete} setIsEdit={setIsEdit} />} />
+                                        <Route path="/budgets" element={<BudgetsPage />} />
+                                        <Route path="/add" element={<Add isEdit={isEdit} setIsEdit={setIsEdit} />} />
+                                        <Route path="/chart/line" element={<TrendChartPage />} />
+                                        <Route path="/chart/bar" element={<BarChartPage />} />
+                                        <Route path="/chart/pie" element={<PieChartPage />} />
+                                        <Route path="/analysis" element={<Insights />} />
+                                        <Route path="/rules" element={<MerchantRules />} />
+                                        <Route path="/recurring" element={<RecurringPage onEditExpense={handleEditFromRecurring} />} />
+                                        <Route path="/notification-preferences" element={<NotificationPreferences />} />
+                                        <Route path="/sia-settings" element={<SiaPreferences />} />
+                                        <Route path="/export" element={<DataExport />} />
+                                        <Route path="/receipts" element={<ReceiptInbox />} />
+                                        <Route path="/import" element={<ImportWizard />} />
+                                    </Routes>
+                                </Suspense>
+                            </main>
                         </div>
-                    </header>
+                    </div>
 
-                    <main className="app-main">
-                        {/* FE-003-T03/T06 -- only the four lazy routes above can actually
-                            suspend; the other routes render synchronously as before and
-                            never show this fallback. role="status"/aria-live so a screen
-                            reader announces the wait instead of going silent. */}
-                        <Suspense fallback={<div className="route-loading" role="status" aria-live="polite">Loading…</div>}>
-                            <Routes>
-                                <Route path="/" element={<ExpensesPage onDelete={onDelete} setIsEdit={setIsEdit} />} />
-                                <Route path="/add" element={<Add isEdit={isEdit} setIsEdit={setIsEdit} />} />
-                                <Route path="/chart/line" element={<TrendChartPage />} />
-                                <Route path="/chart/bar" element={<BarChartPage />} />
-                                <Route path="/chart/pie" element={<PieChartPage />} />
-                                <Route path="/analysis" element={<Insights />} />
-                                <Route path="/rules" element={<MerchantRules />} />
-                                <Route path="/recurring" element={<RecurringPage onEditExpense={handleEditFromRecurring} />} />
-                                <Route path="/notification-preferences" element={<NotificationPreferences />} />
-                                <Route path="/sia-settings" element={<SiaPreferences />} />
-                                <Route path="/export" element={<DataExport />} />
-                                <Route path="/receipts" element={<ReceiptInbox />} />
-                                <Route path="/import" element={<ImportWizard />} />
-                            </Routes>
-                        </Suspense>
-                    </main>
-
-                    {isMobile && 
+                    {isMobile &&
                         <nav className="mobile-bottom-nav">
                             <Link to="/" className={location.pathname === "/" ? "active-nav" : ""}>
                                 <FaWallet />
@@ -398,6 +512,11 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             <Link to="/add" className={location.pathname === "/add" ? "active-nav" : ""}>
                                 <FaPlusCircle />
                                 <span>Add</span>
+                            </Link>
+
+                            <Link to="/budgets" className={location.pathname === "/budgets" ? "active-nav" : ""}>
+                                <FaChartPie />
+                                <span>Budgets</span>
                             </Link>
 
                             <span
@@ -413,7 +532,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <FaChartBar />
                                 <span>Charts</span>
                             </span>
-                            
+
                             <Link
                                 to="/analysis"
                                 className={location.pathname === "/analysis" ? "active-nav" : ""}
@@ -473,7 +592,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                         </>
                     )}
 
-                    {isSettingsOpen && 
+                    {isSettingsOpen &&
                         <>
                             <div
                                 className="dropdown-overlay"

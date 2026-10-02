@@ -52,6 +52,11 @@ function makeFakeModel(seedDocs = []) {
         const doc = [...store.values()].find((d) => matches(d, filter));
         if (!doc) return null;
         if (update.$set) Object.assign(doc, update.$set);
+        if (update.$addToSet) {
+          for (const [field, val] of Object.entries(update.$addToSet)) {
+            doc[field] = Array.from(new Set([...(doc[field] || []), val]));
+          }
+        }
         if (update.$inc) {
           for (const [field, amount] of Object.entries(update.$inc)) {
             doc[field] = (doc[field] || 0) + amount;
@@ -367,5 +372,75 @@ describe("compare-and-set concurrency (REC-002-T04)", () => {
     const staleEdit = await service.editDefinition(USER_ID, "rec1", { expenseAmount: 1 }, 0);
     expect(staleEdit.ok).toBe(false);
     expect(staleEdit.reason).toBe("version_conflict");
+  });
+});
+
+describe("skipOccurrence", () => {
+  test("skips a future occurrence, adds to skippedDates, bumps scheduleVersion without changing nextDueDate", async () => {
+    const { service } = loadService([baseDefinition({ nextDueDate: new Date("2026-10-01T00:00:00.000Z") })]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-12-01", 0);
+
+    expect(result.ok).toBe(true);
+    expect(result.definition.skippedDates).toContain("2026-12-01");
+    expect(result.definition.scheduleVersion).toBe(1);
+    expect(result.definition.nextDueDate).toEqual(new Date("2026-10-01T00:00:00.000Z"));
+  });
+
+  test("skipping the current nextDueDate occurrence advances nextDueDate to next month", async () => {
+    const { service } = loadService([baseDefinition({ nextDueDate: new Date("2026-10-01T00:00:00.000Z") })]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-10-01", 0);
+
+    expect(result.ok).toBe(true);
+    expect(result.definition.skippedDates).toContain("2026-10-01");
+    expect(result.definition.scheduleVersion).toBe(1);
+    expect(result.definition.nextDueDate).toEqual(new Date(Date.UTC(2026, 10, 1, 0, 0, 0))); // Nov 1
+  });
+
+  test("rejects invalid date format", async () => {
+    const { service } = loadService([baseDefinition()]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "not-a-date", 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("invalid_date");
+  });
+
+  test("rejects an already skipped date", async () => {
+    const { service } = loadService([
+      baseDefinition({
+        nextDueDate: new Date("2026-10-01T00:00:00.000Z"),
+        skippedDates: ["2026-11-01"],
+      }),
+    ]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-11-01", 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("already_skipped");
+  });
+
+  test("rejects skipping a date in the past", async () => {
+    const { service } = loadService([baseDefinition({ nextDueDate: new Date("2026-10-01T00:00:00.000Z") })]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-08-01", 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("invalid_date_in_past");
+  });
+
+  test("rejects skipping an ended definition", async () => {
+    const { service } = loadService([baseDefinition({ status: "ended" })]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-10-01", 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("already_ended");
+  });
+
+  test("rejects skipping a paused definition", async () => {
+    const { service } = loadService([baseDefinition({ status: "paused" })]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-10-01", 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("already_paused");
+  });
+
+  test("stale scheduleVersion causes version_conflict", async () => {
+    const { service } = loadService([baseDefinition({ scheduleVersion: 3 })]);
+    const result = await service.skipOccurrence(USER_ID, "rec1", "2026-11-01", 1);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("version_conflict");
+    expect(result.current.scheduleVersion).toBe(3);
   });
 });

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { FaFileAlt, FaChevronDown } from "react-icons/fa";
 import "./ImportWizard.css";
 
 import QueryState from "../common/QueryState";
@@ -67,6 +68,8 @@ const ImportWizard = () => {
   const [rowActionError, setRowActionError] = useState(null);
   const [pendingRowIndex, setPendingRowIndex] = useState(null);
   const [committedSession, setCommittedSession] = useState(null);
+
+  const fileInputRef = useRef(null);
 
   const headersMutation = useImportHeadersMutation();
   const createSessionMutation = useCreateImportSessionMutation();
@@ -209,212 +212,274 @@ const ImportWizard = () => {
   };
 
   return (
-    <div className="import-wizard">
-      <div className="import-wizard-header">
-        <h2>Import Expenses from CSV</h2>
-        <ol className="import-wizard-steps" aria-label="Import steps">
-          <li className={step === "upload" ? "active" : ""}>1. Upload</li>
-          <li className={step === "mapping" ? "active" : ""}>2. Map columns</li>
-          <li className={step === "preview" ? "active" : ""}>3. Preview</li>
-          <li className={step === "done" ? "active" : ""}>4. Done</li>
-        </ol>
-      </div>
-
-      {step === "upload" && (
-        <div className="import-wizard-upload">
-          <div className="import-field">
-            <label htmlFor="import-file-input">Select a CSV file</label>
-            <input
-              id="import-file-input"
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              aria-describedby={uploadError ? "import-file-error" : undefined}
-            />
+    <div className="import-wizard import-wizard-page">
+      <div className="import-wizard-card">
+        <div className="import-wizard-header">
+          <div className="import-wizard-title-wrapper">
+            <span className="import-wizard-accent-bar" aria-hidden="true" />
+            <h2 className="import-wizard-heading">Import Expenses from CSV</h2>
           </div>
 
-          {headersMutation.isPending && (
-            <p className="import-wizard-hint" role="status">Reading this file…</p>
-          )}
-
-          {uploadError && (
-            <p id="import-file-error" className="import-wizard-error" role="alert">
-              {uploadError}
-            </p>
-          )}
+          <ol className="import-wizard-steps" aria-label="Import steps">
+            <li className={step === "upload" ? "active" : ""}>
+              <span className="import-step-pill">1. Upload</span>
+            </li>
+            <li className={step === "mapping" ? "active" : ""}>
+              <span className="import-step-pill">2. Map columns</span>
+            </li>
+            <li className={step === "preview" ? "active" : ""}>
+              <span className="import-step-pill">3. Preview</span>
+            </li>
+            <li className={step === "done" ? "active" : ""}>
+              <span className="import-step-pill">4. Done</span>
+            </li>
+          </ol>
         </div>
-      )}
 
-      {step === "mapping" && (
-        <div className="import-wizard-mapping">
-          <p className="import-wizard-hint">
-            Match each column in your file to an expense field. We've pre-filled our best guess below.
-          </p>
-
-          {MAPPING_FIELDS.map(({ key, label, required }) => (
-            <div className="import-field" key={key}>
-              <label htmlFor={`import-map-${key}`}>
-                {label}
-                {required ? "" : " (optional)"}
+        {step === "upload" && (
+          <div className="import-wizard-upload">
+            <div className="import-field">
+              <label htmlFor="import-file-input" className="import-section-label">
+                Select a CSV file
               </label>
-              <select
-                id={`import-map-${key}`}
-                value={mapping[key]}
-                onChange={(e) => handleMappingChange(key, e.target.value)}
+
+              <div
+                className="import-upload-surface"
+                onClick={() => fileInputRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
               >
-                <option value="">{required ? "Choose a column" : "None"}</option>
-                {headerRow.map((header) => (
-                  <option key={header} value={header}>
-                    {header}
-                  </option>
-                ))}
-              </select>
+                <div className="import-upload-left">
+                  <div className="import-upload-icon-badge" aria-hidden="true">
+                    <FaFileAlt className="import-upload-icon" />
+                  </div>
+                  <div className="import-upload-text">
+                    <span className="import-upload-title">Choose a CSV file to upload</span>
+                    <span className="import-upload-status">
+                      {selectedFile ? selectedFile.name : "No file chosen"}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="import-choose-file-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  Choose File
+                </button>
+
+                <input
+                  id="import-file-input"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                  className="import-file-input-hidden"
+                  aria-describedby={uploadError ? "import-file-error" : undefined}
+                />
+              </div>
             </div>
-          ))}
 
-          <div className="import-wizard-actions">
-            <button type="button" className="import-wizard-secondary-btn" onClick={resetWizard}>
-              Start over
-            </button>
-            <button
-              type="button"
-              className="import-wizard-primary-btn"
-              onClick={handlePreview}
-              disabled={!isMappingComplete || createSessionMutation.isPending}
-            >
-              {createSessionMutation.isPending ? "Loading preview…" : "Preview"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === "preview" && (
-        <div className="import-wizard-preview">
-          <QueryState
-            isLoading={sessionQuery.isLoading}
-            isError={sessionQuery.isError}
-            isEmpty={!sessionQuery.isLoading && !sessionQuery.isError && !session}
-            onRetry={sessionQuery.refetch}
-            loadingLabel="Loading your preview…"
-            errorLabel="We couldn't load this import's preview. Please try again."
-            emptyLabel="This import session isn't available."
-          >
-            {session && (
-              <>
-                <div className="import-wizard-totals">
-                  <span className="import-wizard-total import-wizard-total--accepted">
-                    {acceptedRows.length} accepted
-                  </span>
-                  <span className="import-wizard-total import-wizard-total--skipped">
-                    {skippedRows.length} skipped
-                  </span>
-                  <span className="import-wizard-total import-wizard-total--pending">
-                    {pendingRows.length} pending
-                  </span>
-                  <span className="import-wizard-total import-wizard-total--errors">
-                    {errorRows.length} with errors
-                  </span>
-                </div>
-
-                {rowActionError && (
-                  <p className="import-wizard-error" role="alert">{rowActionError}</p>
-                )}
-
-                <ul className="import-row-list">
-                  {rows.map((row) => {
-                    const rowHasErrors = hasRowErrors(row);
-                    const mapped = row.mapped || {};
-                    const isRowPending = pendingRowIndex === row.rowIndex && decideRowMutation.isPending;
-
-                    return (
-                      <li key={row.rowIndex} className={`import-row-item import-row-item--${row.decision}`}>
-                        <div className="import-row-main">
-                          <span className="import-row-name">{mapped.expenseName || "—"}</span>
-                          <span className="import-row-meta">
-                            {formatMoney(mapped.expenseAmount)}
-                            {mapped.expenseDate ? ` · ${mapped.expenseDate}` : ""}
-                            {mapped.expenseCategory ? ` · ${mapped.expenseCategory}` : ""}
-                          </span>
-                          <span className="import-row-raw">Raw: {(row.raw || []).join(" | ")}</span>
-                        </div>
-
-                        <div className="import-row-flags">
-                          {row.duplicateCandidateExpenseId && (
-                            <span className="import-row-badge import-row-badge--duplicate">
-                              Possible duplicate of an existing expense
-                            </span>
-                          )}
-                          {row.suggestedCategory && (
-                            <span className="import-row-badge import-row-badge--suggestion">
-                              Suggested: {row.suggestedCategory}
-                            </span>
-                          )}
-                          {rowHasErrors && (
-                            <ul className="import-row-errors">
-                              {row.validationErrors.map((code) => (
-                                <li key={code}>{ROW_ERROR_MESSAGES[code] || code}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-
-                        <div className="import-row-actions">
-                          <button
-                            type="button"
-                            className="import-row-accept-btn"
-                            onClick={() => handleRowDecision(row.rowIndex, "accept")}
-                            disabled={rowHasErrors || isRowPending || row.decision === "accept"}
-                            title={rowHasErrors ? "Fix this row's errors before accepting it" : undefined}
-                          >
-                            Accept
-                          </button>
-                          <button
-                            type="button"
-                            className="import-row-skip-btn"
-                            onClick={() => handleRowDecision(row.rowIndex, "skip")}
-                            disabled={isRowPending || row.decision === "skip"}
-                          >
-                            Skip
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                <div className="import-wizard-actions">
-                  <button
-                    type="button"
-                    className="import-wizard-primary-btn"
-                    onClick={handleCommit}
-                    disabled={commitCount === 0 || commitMutation.isPending}
-                  >
-                    {commitMutation.isPending ? "Committing…" : `Commit ${commitCount} row${commitCount === 1 ? "" : "s"}`}
-                  </button>
-                </div>
-              </>
+            {headersMutation.isPending && (
+              <p className="import-wizard-hint" role="status">Reading this file…</p>
             )}
-          </QueryState>
-        </div>
-      )}
 
-      {step === "done" && committedSession && (
-        <div className="import-wizard-done">
-          <p className="import-wizard-done-summary">
-            {committedSession.committedCount} expense{committedSession.committedCount === 1 ? "" : "s"} added,{" "}
-            {committedSession.skippedCount} skipped.
-          </p>
-
-          <div className="import-wizard-actions">
-            <Link to="/" className="import-wizard-primary-btn import-wizard-link-btn">
-              View Expenses
-            </Link>
-            <button type="button" className="import-wizard-secondary-btn" onClick={resetWizard}>
-              Import another file
-            </button>
+            {uploadError && (
+              <p id="import-file-error" className="import-wizard-error" role="alert">
+                {uploadError}
+              </p>
+            )}
           </div>
-        </div>
-      )}
+        )}
+
+        {step === "mapping" && (
+          <div className="import-wizard-mapping">
+            <p className="import-wizard-hint">
+              Match each column in your file to an expense field. We've pre-filled our best guess below.
+            </p>
+
+            <div className="import-mapping-grid">
+              {MAPPING_FIELDS.map(({ key, label, required }) => (
+                <div className="import-field" key={key}>
+                  <label htmlFor={`import-map-${key}`}>
+                    {label}
+                    {required ? "" : " (optional)"}
+                  </label>
+                  <div className="import-select-wrapper">
+                    <select
+                      id={`import-map-${key}`}
+                      value={mapping[key]}
+                      onChange={(e) => handleMappingChange(key, e.target.value)}
+                    >
+                      <option value="">{required ? "Choose a column" : "None"}</option>
+                      {headerRow.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="import-select-arrow" aria-hidden="true">
+                      <FaChevronDown />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="import-wizard-actions">
+              <button type="button" className="import-wizard-secondary-btn" onClick={resetWizard}>
+                Start over
+              </button>
+              <button
+                type="button"
+                className="import-wizard-primary-btn"
+                onClick={handlePreview}
+                disabled={!isMappingComplete || createSessionMutation.isPending}
+              >
+                {createSessionMutation.isPending ? "Loading preview…" : "Preview"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "preview" && (
+          <div className="import-wizard-preview">
+            <QueryState
+              isLoading={sessionQuery.isLoading}
+              isError={sessionQuery.isError}
+              isEmpty={!sessionQuery.isLoading && !sessionQuery.isError && !session}
+              onRetry={sessionQuery.refetch}
+              loadingLabel="Loading your preview…"
+              errorLabel="We couldn't load this import's preview. Please try again."
+              emptyLabel="This import session isn't available."
+            >
+              {session && (
+                <>
+                  <div className="import-wizard-totals">
+                    <span className="import-wizard-total import-wizard-total--accepted">
+                      {acceptedRows.length} accepted
+                    </span>
+                    <span className="import-wizard-total import-wizard-total--skipped">
+                      {skippedRows.length} skipped
+                    </span>
+                    <span className="import-wizard-total import-wizard-total--pending">
+                      {pendingRows.length} pending
+                    </span>
+                    <span className="import-wizard-total import-wizard-total--errors">
+                      {errorRows.length} with errors
+                    </span>
+                  </div>
+
+                  {rowActionError && (
+                    <p className="import-wizard-error" role="alert">{rowActionError}</p>
+                  )}
+
+                  <ul className="import-row-list">
+                    {rows.map((row) => {
+                      const rowHasErrors = hasRowErrors(row);
+                      const mapped = row.mapped || {};
+                      const isRowPending = pendingRowIndex === row.rowIndex && decideRowMutation.isPending;
+
+                      return (
+                        <li key={row.rowIndex} className={`import-row-item import-row-item--${row.decision}`}>
+                          <div className="import-row-main">
+                            <span className="import-row-name">{mapped.expenseName || "—"}</span>
+                            <span className="import-row-meta">
+                              {formatMoney(mapped.expenseAmount)}
+                              {mapped.expenseDate ? ` · ${mapped.expenseDate}` : ""}
+                              {mapped.expenseCategory ? ` · ${mapped.expenseCategory}` : ""}
+                            </span>
+                            <span className="import-row-raw">Raw: {(row.raw || []).join(" | ")}</span>
+                          </div>
+
+                          <div className="import-row-flags">
+                            {row.duplicateCandidateExpenseId && (
+                              <span className="import-row-badge import-row-badge--duplicate">
+                                Possible duplicate of an existing expense
+                              </span>
+                            )}
+                            {row.suggestedCategory && (
+                              <span className="import-row-badge import-row-badge--suggestion">
+                                Suggested: {row.suggestedCategory}
+                              </span>
+                            )}
+                            {rowHasErrors && (
+                              <ul className="import-row-errors">
+                                {row.validationErrors.map((code) => (
+                                  <li key={code}>{ROW_ERROR_MESSAGES[code] || code}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+
+                          <div className="import-row-actions">
+                            <button
+                              type="button"
+                              className="import-row-accept-btn"
+                              onClick={() => handleRowDecision(row.rowIndex, "accept")}
+                              disabled={rowHasErrors || isRowPending || row.decision === "accept"}
+                              title={rowHasErrors ? "Fix this row's errors before accepting it" : undefined}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              className="import-row-skip-btn"
+                              onClick={() => handleRowDecision(row.rowIndex, "skip")}
+                              disabled={isRowPending || row.decision === "skip"}
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <div className="import-wizard-actions">
+                    <button
+                      type="button"
+                      className="import-wizard-primary-btn"
+                      onClick={handleCommit}
+                      disabled={commitCount === 0 || commitMutation.isPending}
+                    >
+                      {commitMutation.isPending ? "Committing…" : `Commit ${commitCount} row${commitCount === 1 ? "" : "s"}`}
+                    </button>
+                  </div>
+                </>
+              )}
+            </QueryState>
+          </div>
+        )}
+
+        {step === "done" && committedSession && (
+          <div className="import-wizard-done">
+            <p className="import-wizard-done-summary">
+              {committedSession.committedCount} expense{committedSession.committedCount === 1 ? "" : "s"} added,{" "}
+              {committedSession.skippedCount} skipped.
+            </p>
+
+            <div className="import-wizard-actions">
+              <Link to="/" className="import-wizard-primary-btn import-wizard-link-btn">
+                View Expenses
+              </Link>
+              <button type="button" className="import-wizard-secondary-btn" onClick={resetWizard}>
+                Import another file
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

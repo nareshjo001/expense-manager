@@ -7,12 +7,19 @@ export default function ScrollToTopButton() {
 
   useEffect(() => {
     const checkScrollTop = () => {
-      setShowButton(window.scrollY > 300);
+      const isHiddenPage = Boolean(
+        document.querySelector('.notification-prefs-page')
+      );
+      setShowButton(!isHiddenPage && window.scrollY > 300);
     };
 
     window.addEventListener('scroll', checkScrollTop);
+    window.addEventListener('popstate', checkScrollTop);
 
-    return () => window.removeEventListener('scroll', checkScrollTop);
+    return () => {
+      window.removeEventListener('scroll', checkScrollTop);
+      window.removeEventListener('popstate', checkScrollTop);
+    };
   }, []);
 
   const scrollToTop = () => {

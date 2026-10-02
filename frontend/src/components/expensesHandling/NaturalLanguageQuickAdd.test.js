@@ -109,4 +109,35 @@ describe("NaturalLanguageQuickAdd", () => {
     onError({ response: { status: 429 } });
     expect(expenseAddErrorToast).not.toHaveBeenCalled();
   });
+
+  it("shows the Quick Add header and keeps the input's label, example placeholder and 200-character limit", () => {
+    render(<NaturalLanguageQuickAdd setIsQuickAdd={jest.fn()} setBillData={jest.fn()} />);
+
+    expect(screen.getByRole("heading", { name: "Quick Add" })).toBeInTheDocument();
+    expect(screen.getByText("Add your expense in seconds")).toBeInTheDocument();
+    const input = screen.getByLabelText("Describe the expense in one sentence");
+    expect(input).toHaveAttribute("placeholder", 'e.g. "spent 250 on lunch yesterday at Cafe X"');
+    expect(input).toHaveAttribute("maxLength", "200");
+  });
+
+  it("shows Parsing... on a disabled button while a parse is running", () => {
+    useParseExpenseMutation.mockReturnValue({ mutate, isPending: true });
+    render(<NaturalLanguageQuickAdd setIsQuickAdd={jest.fn()} setBillData={jest.fn()} />);
+    fireEvent.change(screen.getByLabelText(/describe the expense/i), { target: { value: "spent 10 on tea" } });
+
+    expect(screen.getByRole("button", { name: "Parsing..." })).toBeDisabled();
+  });
+
+  it("links the inline couldn't-parse message to the input", () => {
+    render(<NaturalLanguageQuickAdd setIsQuickAdd={jest.fn()} setBillData={jest.fn()} />);
+    fireEvent.change(screen.getByLabelText(/describe the expense/i), { target: { value: "gibberish" } });
+    fireEvent.click(screen.getByRole("button", { name: "Parse Expense" }));
+
+    act(() => {
+      mutate.mock.calls[0][1].onSuccess({ success: false, code: "COULD_NOT_PARSE", message: "Couldn't understand that." });
+    });
+
+    expect(screen.getByLabelText(/describe the expense/i)).toHaveAttribute("aria-describedby", "nl-quick-add-message");
+    expect(screen.getByRole("status")).toHaveAttribute("id", "nl-quick-add-message");
+  });
 });

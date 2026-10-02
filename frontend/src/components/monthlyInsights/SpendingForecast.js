@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { FaChartLine } from "react-icons/fa6";
 import "./SpendingForecast.css";
 
 // DAT-001-T06 -- was a private copy of this formatter; now the shared one,
@@ -42,8 +41,8 @@ function BudgetRiskBlock({ budgetRisk }) {
   const presentation = RISK_PRESENTATION[budgetRisk.status];
   if (!presentation) return null;
   return (
-    <div className="forecast-budget-block">
-      <div>
+    <div className={`forecast-budget-block risk-${presentation.tone}`}>
+      <div className="forecast-budget-info">
         <p className="forecast-budget-kicker">Projected budget position</p>
         <p className="forecast-budget-line">
           {isFiniteNumber(budgetRisk.budgetAmount) ? formatMoney(budgetRisk.budgetAmount) : "—"} budget
@@ -66,12 +65,19 @@ function BudgetRiskBlock({ budgetRisk }) {
   );
 }
 
-function ForecastShell({ children }) {
+function ForecastShell({ children, targetMonth }) {
   return (
-    <section className="forecast-container" aria-labelledby="forecast-heading">
-      <div className="forecast-heading-row">
-        <div className="heading-icon"><FaChartLine size={18} color="#FFFFFF" /></div>
-        <h1 id="forecast-heading" className="forecast-h-text">Month-end Forecast</h1>
+    <section className="forecast-container" aria-label="Month-end Forecast">
+      <div className="forecast-section-header">
+        <div className="forecast-title-wrapper">
+          <span className="forecast-accent-bar" aria-hidden="true" />
+          <h2 id="forecast-heading" className="forecast-section-title">
+            Projected Spending
+          </h2>
+        </div>
+        <p className="forecast-section-subtitle">
+          {targetMonth ? `Detailed month-end projection · ${targetMonth}` : "Detailed month-end projection & category analysis"}
+        </p>
       </div>
       <div className="forecast-card">{children}</div>
     </section>
@@ -89,7 +95,7 @@ function EmptyForecast({ title, children }) {
   );
 }
 
-export default function SpendingForecast({ report }) {
+export default function SpendingForecast({ report, hide }) {
   const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const forecast = report?.forecast;
   const currentMonth = forecast?.currentMonthForecast;
@@ -100,10 +106,13 @@ export default function SpendingForecast({ report }) {
           (entry) =>
             entry &&
             typeof entry.category === "string" &&
-            isFiniteNumber(entry.projectedAmount)
+            isFiniteNumber(entry.projectedAmount) &&
+            Math.round(entry.projectedAmount) > 0
         )
       : [];
   }, [currentMonth]);
+
+  if (hide) return null;
 
   if (!forecast || typeof forecast !== "object" || !currentMonth || typeof currentMonth !== "object") {
     return (
@@ -137,46 +146,49 @@ export default function SpendingForecast({ report }) {
       : "History quality unavailable";
 
   return (
-    <ForecastShell>
-      <div className="forecast-hero">
-        <div>
-          <p className="forecast-target-label">
-            {targetMonth ? `Projected spending · ${targetMonth}` : "Projected spending · current month"}
-          </p>
-          <p className="forecast-headline-amount">{formatMoney(currentMonth.estimate)}</p>
-          <p className="forecast-headline-caption">Projected total by month end</p>
+    <ForecastShell targetMonth={targetMonth}>
+      <div className="forecast-hero-showcase">
+        <div className="forecast-hero-main">
+          <div className="forecast-target-tag">
+            <span className="forecast-target-label">
+              {targetMonth ? `Projected spending · ${targetMonth}` : "Projected spending · current month"}
+            </span>
+          </div>
+          <div className="forecast-amount-wrap">
+            <span className="forecast-headline-amount">{formatMoney(currentMonth.estimate)}</span>
+            <span className="forecast-headline-caption">Projected total by month end</span>
+          </div>
+          {lower !== null && upper !== null && (
+            <p className="forecast-range-text">
+              Reasonable range <strong>{formatMoney(lower)}</strong> – <strong>{formatMoney(upper)}</strong>
+            </p>
+          )}
+          <div className="forecast-badge-row">
+            <span className="forecast-badge neutral">{qualityLabel}</span>
+            {historyMonths !== null && (
+              <span className="forecast-badge neutral">
+                {historyMonths} complete {historyMonths === 1 ? "month" : "months"} used
+              </span>
+            )}
+          </div>
         </div>
-        <div className="forecast-summary-grid">
-          <div className="forecast-summary-item">
-            <span>Spent so far</span>
-            <strong>{formatMoney(currentMonth.spentSoFar)}</strong>
+
+        <div className="forecast-metrics-cards">
+          <div className="forecast-metric-card metric-spent">
+            <span className="metric-card-label">Spent so far</span>
+            <strong className="metric-card-val">{formatMoney(currentMonth.spentSoFar)}</strong>
           </div>
           {typeof currentMonth.forecastableSpentSoFar === 'number' && (
-            <div className="forecast-summary-item">
-              <span>Forecastable so far</span>
-              <strong>{formatMoney(currentMonth.forecastableSpentSoFar)}</strong>
+            <div className="forecast-metric-card metric-forecastable">
+              <span className="metric-card-label">Forecastable so far</span>
+              <strong className="metric-card-val">{formatMoney(currentMonth.forecastableSpentSoFar)}</strong>
             </div>
           )}
-          <div className="forecast-summary-item">
-            <span>Expected remaining</span>
-            <strong>{formatMoney(currentMonth.expectedRemaining)}</strong>
+          <div className="forecast-metric-card metric-remaining">
+            <span className="metric-card-label">Expected remaining</span>
+            <strong className="metric-card-val">{formatMoney(currentMonth.expectedRemaining)}</strong>
           </div>
         </div>
-      </div>
-
-      {lower !== null && upper !== null && (
-        <p className="forecast-range-text">
-          Reasonable range <strong>{formatMoney(lower)}</strong> – <strong>{formatMoney(upper)}</strong>
-        </p>
-      )}
-
-      <div className="forecast-badge-row">
-        <span className="forecast-badge neutral">{qualityLabel}</span>
-        {historyMonths !== null && (
-          <span className="forecast-badge neutral">
-            {historyMonths} complete {historyMonths === 1 ? "month" : "months"} used
-          </span>
-        )}
       </div>
 
       <BudgetRiskBlock budgetRisk={currentMonth.budgetRisk} />
@@ -190,18 +202,18 @@ export default function SpendingForecast({ report }) {
             aria-controls="forecast-category-breakdown"
             onClick={() => setCategoriesExpanded((expanded) => !expanded)}
           >
-            <span>
+            <div className="forecast-category-toggle-left">
               <span className="forecast-category-toggle-title">Projected by category</span>
               <span className="forecast-category-toggle-meta">
-                {categories.length} {categories.length === 1 ? "category" : "categories"}
+                {categories.length} {categories.length === 1 ? "category" : "categories"} · Full breakdown
               </span>
-            </span>
-            <span className="forecast-category-toggle-indicator">
+            </div>
+            <div className="forecast-category-toggle-indicator">
               <span>{categoriesExpanded ? "Collapse" : "Expand"}</span>
               <span className={`forecast-category-chevron ${categoriesExpanded ? "expanded" : ""}`} aria-hidden="true">
                 ▾
               </span>
-            </span>
+            </div>
           </button>
           {categoriesExpanded && (
             <ul id="forecast-category-breakdown" className="forecast-category-list">

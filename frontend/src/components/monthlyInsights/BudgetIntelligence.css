@@ -1,324 +1,520 @@
-/* GLOBAL FIX */
-*{
-  box-sizing:border-box;
+/* ==========================================================================
+   BUDGET INTELLIGENCE + MONTH-END FORECAST MERGED CONTAINER
+   Unified card matching media_1790786515682.png
+   ========================================================================== */
+
+/* Main Merged Container */
+.budget-intel-merged-container {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 248, 250, 0.93) 100%);
+  border: 1px solid rgba(251, 146, 60, 0.28);
+  border-radius: 22px;
+  padding: 24px 28px;
+  box-shadow: 0 10px 32px rgba(249, 115, 22, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  position: relative;
+  overflow: hidden;
 }
 
-/* ========== Light Theme ========== */
-.light-theme {
-  --menu-color: #9d174d;
+.dark-theme .budget-intel-merged-container {
+  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
+  border-color: rgba(251, 146, 60, 0.22);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
-/* ========== Dark Theme ========== */
-.dark-theme {
-  --menu-color: #1D4ED8;
+/* ================= 1. Left Column: Budget Intelligence ================= */
+.budget-intel-left-col {
+  flex: 1 1 58%;
+  min-width: 0;
+  padding-right: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-/* WRAPPER */
-.budget-intelligence-card {
-  width:100%;
+/* Status Header */
+.budget-intel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-/* HEADING */
-.budget-intelligence-heading {
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:15px;
+.budget-intel-icon-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
-.budget-intelligence-h-text {
-  font-size:18px !important;
-  font-weight:600;
-  color:var(--text-color);
+.dark-theme .budget-intel-icon-tile {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* MAIN CARD */
-.budget-intelligence-report-card {
-  width:100%;
-  padding:24px;
-  border-radius:20px;
-  background:
-    linear-gradient(#ffffff,#ffffff) padding-box,
-    linear-gradient(180deg,#f1f5f9,#e5e7eb) border-box;
-  border:1px solid transparent;
-  box-shadow: var(--card-box-shadow);
-  border-left:5px solid #ffffff;
-  transition:all .25s ease;
-  overflow:hidden;
+.budget-intel-title-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
 }
 
-.budget-intelligence-report-card:hover {
-  transform:translateY(-3px);
-  box-shadow:
-    0 20px 40px rgba(0,0,0,0.08);
+.budget-intel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-/* RISK COLORS */
-.budget-intelligence-report-card.EXCEEDED {
-  border-left-color: #dc2626; /* Red */
+.budget-intel-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--bih-title, #9d174d) !important;
+  margin: 0;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
 }
 
-.budget-intelligence-report-card.CRITICAL {
-  border-left-color: #b91c1c; /* Dark Red */
+.dark-theme .budget-intel-title {
+  color: var(--bih-title, #fdf2f8) !important;
 }
 
-.budget-intelligence-report-card.HIGH_RISK {
-  border-left-color: #ea580c; /* Orange */
+/* Priority Badge / Tag */
+.budget-intel-priority-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.3;
 }
 
-.budget-intelligence-report-card.AT_RISK {
-  border-left-color: #f97316; /* Light Orange */
-}
-
-.budget-intelligence-report-card.WARNING {
-  border-left-color: #eab308; /* Yellow */
-}
-
-.budget-intelligence-report-card.SAFE {
-  border-left-color: #10b981; /* Green */
-}
-
-.budget-intelligence-report-card.OTHERS {
-  border-left-color: #3b82f6; /* Blue */
-}
-
-/* REPORT HEADER */
-.budget-intelligence-report-heading {
-  display:flex;
-  align-items:center;
-  gap:12px;
-  flex-wrap:wrap;
-  min-width:0;
-}
-
-.budget-intelligence-report-heading h1 {
-  font-size:18px !important;
-  font-weight:650;
-  color:#111827;
-}
-
-/* PRIORITY BADGE */
-.budget-intelligence-report-priority {
-  font-size:11px;
-  font-weight:700;
-  padding:5px 10px;
-  border-radius:999px;
-  letter-spacing:.5px;
-  display:inline-flex;
-  align-items:center;
-}
-
-/* EXCEEDED */
-.budget-intelligence-report-priority.EXCEEDED {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-/* CRITICAL */
-.budget-intelligence-report-priority.CRITICAL {
+.budget-intel-priority-badge.CRITICAL {
   background: #fee2e2;
   color: #b91c1c;
 }
 
-/* HIGH RISK */
-.budget-intelligence-report-priority.HIGH_RISK {
+.budget-intel-priority-badge.EXCEEDED {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.budget-intel-priority-badge.HIGH_RISK {
   background: #ffedd5;
   color: #ea580c;
 }
 
-/* AT RISK */
-.budget-intelligence-report-priority.AT_RISK {
+.budget-intel-priority-badge.AT_RISK {
   background: #fff7ed;
   color: #f97316;
 }
 
-/* WARNING */
-.budget-intelligence-report-priority.WARNING {
+.budget-intel-priority-badge.WARNING {
   background: #fef9c3;
   color: #ca8a04;
 }
 
-/* SAFE */
-.budget-intelligence-report-priority.SAFE {
+.budget-intel-priority-badge.SAFE {
   background: #d1fae5;
   color: #10b981;
 }
 
-/* OTHERS */
-.budget-intelligence-report-priority.OTHERS {
+.budget-intel-priority-badge.OTHERS {
   background: #dbeafe;
   color: #2563eb;
 }
 
-.budget-intelligence-p-text {
-  font-size:15px;
-  color:#4b5563;
-  line-height:1.5;
-  word-break:break-word;
-  overflow-wrap:break-word;
+/* Dark theme priority badge */
+.dark-theme .budget-intel-priority-badge.CRITICAL,
+.dark-theme .budget-intel-priority-badge.EXCEEDED {
+  background: rgba(220, 38, 38, 0.25);
+  color: #fca5a5;
 }
 
-/* PROGRESS SECTION */
-.budget-intelligence-report-bar-container {
-  margin-top:20px;
+.dark-theme .budget-intel-priority-badge.HIGH_RISK,
+.dark-theme .budget-intel-priority-badge.AT_RISK {
+  background: rgba(234, 88, 12, 0.25);
+  color: #fdba74;
 }
 
-.budget-intelligence-report-bar {
-  background: var(--progress-bg);
+.dark-theme .budget-intel-priority-badge.WARNING {
+  background: rgba(202, 138, 4, 0.25);
+  color: #fde047;
 }
 
-/* PROGRESS HEADER */
-.budget-progress-header {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:8px;
-  min-width:0;
+.dark-theme .budget-intel-priority-badge.SAFE {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
 }
 
-.budget-progress-title {
-  font-size:14px;
-  font-weight:500;
-  color:#374151;
+.dark-theme .budget-intel-priority-badge.OTHERS {
+  background: rgba(37, 99, 235, 0.25);
+  color: #93c5fd;
+}
+
+.budget-intel-message {
+  font-size: 13.5px;
+  font-weight: 450;
+  color: var(--bih-subtitle, #64748b) !important;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.dark-theme .budget-intel-message {
+  color: var(--bih-subtitle, #94a3b8) !important;
+}
+
+/* Budget Progress */
+.budget-progress-section {
+  margin-top: 4px;
+}
+
+.budget-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.budget-progress-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.dark-theme .budget-progress-label {
+  color: #cbd5e1;
 }
 
 .budget-progress-percent {
-  font-size:18px;
-  font-weight:700;
-  color:#e11d48;
-  flex-shrink:0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
 }
 
-/* PROGRESS BAR */
-.budget-intelligence-report-bar {
-  width:100%;
-  height:10px;
-  border-radius:999px;
-  background:#eef2f7;
-  overflow:hidden;
-  position:relative;
+.budget-progress-percent.WARNING,
+.budget-progress-percent.HIGH_RISK,
+.budget-progress-percent.AT_RISK {
+  color: #e11d48;
 }
 
-/* PROGRESS FILL */
-.progress-fill {
+.budget-progress-percent.CRITICAL,
+.budget-progress-percent.EXCEEDED {
+  color: #dc2626;
+}
+
+.budget-progress-percent.SAFE {
+  color: #16a34a;
+}
+
+.budget-progress-percent.OTHERS {
+  color: #64748b;
+}
+
+.budget-progress-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.dark-theme .budget-progress-bar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.budget-progress-bar-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width .4s ease;
-  background: linear-gradient(90deg, #60a5fa, #2563eb);
+  transition: width 0.4s ease;
 }
 
-.progress-fill.EXCEEDED {
-  background: linear-gradient(90deg, #ef4444, #dc2626);
+.budget-progress-bar-fill.WARNING,
+.budget-progress-bar-fill.HIGH_RISK,
+.budget-progress-bar-fill.AT_RISK {
+  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
 }
 
-.progress-fill.CRITICAL {
-  background: linear-gradient(90deg, #dc2626, #991b1b);
+.budget-progress-bar-fill.CRITICAL,
+.budget-progress-bar-fill.EXCEEDED {
+  background: linear-gradient(90deg, #f43f5e 0%, #dc2626 100%);
 }
 
-.progress-fill.HIGH_RISK {
-  background: linear-gradient(90deg, #fb923c, #ea580c);
+.budget-progress-bar-fill.SAFE {
+  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
 }
 
-.progress-fill.AT_RISK {
-  background: linear-gradient(90deg, #fdba74, #f97316);
+.budget-progress-bar-fill.OTHERS {
+  background: linear-gradient(90deg, #38bdf8 0%, #0284c7 100%);
 }
 
-.progress-fill.WARNING {
-  background: linear-gradient(90deg, #fde047, #ca8a04);
+.budget-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
 }
 
-.progress-fill.SAFE {
-  background: linear-gradient(90deg, #34d399, #10b981);
+.budget-label-spent,
+.budget-label-budget {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
 }
 
-.progress-fill.OTHERS {
-  background: linear-gradient(90deg, #60a5fa, #2563eb);
+.dark-theme .budget-label-spent,
+.dark-theme .budget-label-budget {
+  color: #94a3b8;
 }
 
-/* BAR LABELS */
-.budget-bar-labels {
-  display:flex;
-  justify-content:space-between;
-  margin-top:8px;
-  font-size:13px;
-  color:#6b7280;
-  font-weight:500;
-  flex-wrap:wrap;
-  gap:6px;
+/* Smart Tip Card */
+.budget-smart-tip-card {
+  background: #fdf2f8;
+  border: 1px solid rgba(244, 114, 182, 0.22);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-/* SMART TIP */
-.budget-intelligence-smart-tip {
-  margin-top:18px;
-  padding:14px 16px;
-  border-radius:12px;
-  background:#f5efe4;          
-  border:2px solid #facc15;     
-  display:flex;
-  flex-direction:column;
+.dark-theme .budget-smart-tip-card {
+  background: rgba(50, 26, 48, 0.55);
+  border-color: rgba(244, 114, 182, 0.2);
 }
 
-/* label row */
-.budget-intelligence-smart-tip-label {
-  display:flex;
-  align-items:center;
-  gap:10px;
+.budget-smart-tip-icon-tile {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #fce7f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #db2777;
 }
 
-/* title */
-.budget-intelligence-smart-tip-label h5 {
-  font-size:16px;
-  font-weight:700;
-  color:#7c2d12;
-  margin:0;
+.dark-theme .budget-smart-tip-icon-tile {
+  background: rgba(219, 39, 119, 0.2);
+  color: #f472b6;
 }
 
-/* description */
-.budget-intelligence-smart-tip p {
-  font-size:14px;
-  color:#9a3412;
-  margin-left:34px; 
+.budget-smart-tip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
-/* RESPONSIVE */
-@media (max-width:768px) {
-  .budget-intelligence-h-text {
-    font-size:16px !important;
+.budget-smart-tip-heading {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #db2777;
+  margin: 0;
+}
+
+.dark-theme .budget-smart-tip-heading {
+  color: #f472b6;
+}
+
+.budget-smart-tip-text {
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dark-theme .budget-smart-tip-text {
+  color: #cbd5e1;
+}
+
+/* ================= 2. Right Column: Month-end Forecast ================= */
+.budget-intel-right-col {
+  flex: 1 1 42%;
+  min-width: 0;
+  padding-left: 28px;
+  border-left: 1px solid rgba(244, 114, 182, 0.18);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.dark-theme .budget-intel-right-col {
+  border-left-color: rgba(244, 114, 182, 0.15);
+}
+
+.budget-forecast-panel {
+  background: rgba(253, 242, 248, 0.35);
+  border-radius: 18px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dark-theme .budget-forecast-panel {
+  background: rgba(42, 24, 40, 0.35);
+}
+
+.budget-forecast-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.budget-forecast-icon-tile {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #fce7f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #db2777;
+}
+
+.dark-theme .budget-forecast-icon-tile {
+  background: rgba(219, 39, 119, 0.2);
+  color: #f472b6;
+}
+
+.budget-forecast-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.dark-theme .budget-forecast-title {
+  color: #fdf2f8;
+}
+
+.budget-forecast-metric-card {
+  background: #ffffff;
+  border: 1px solid rgba(244, 114, 182, 0.22);
+  border-radius: 14px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.dark-theme .budget-forecast-metric-card {
+  background: rgba(38, 22, 38, 0.95);
+  border-color: rgba(244, 114, 182, 0.2);
+}
+
+.forecast-stat-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.forecast-stat-amount {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.forecast-stat-amount.spend {
+  color: #be185d;
+}
+
+.dark-theme .forecast-stat-amount.spend {
+  color: #f472b6;
+}
+
+.forecast-stat-amount.safe {
+  color: #16a34a;
+}
+
+.dark-theme .forecast-stat-amount.safe {
+  color: #4ade80;
+}
+
+.forecast-stat-amount.over {
+  color: #dc2626;
+}
+
+.dark-theme .forecast-stat-amount.over {
+  color: #f87171;
+}
+
+.forecast-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0;
+}
+
+.dark-theme .forecast-stat-label {
+  color: #94a3b8;
+}
+
+.forecast-stat-divider {
+  width: 1px;
+  height: 38px;
+  background: #e2e8f0;
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+
+.dark-theme .forecast-stat-divider {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.budget-forecast-footnote {
+  font-size: 11.5px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.dark-theme .budget-forecast-footnote {
+  color: #94a3b8;
+}
+
+/* ================= 3. Responsive Breakpoints ================= */
+@media (max-width: 768px) {
+  .budget-intel-merged-container {
+    flex-direction: column;
+    padding: 18px 16px;
+    border-radius: 18px;
   }
 
-  .budget-intelligence-report-card {
-    padding:18px;
+  .budget-intel-left-col {
+    padding-right: 0;
+    padding-bottom: 20px;
+    border-right: none;
+    border-bottom: 1px solid rgba(244, 114, 182, 0.18);
   }
 
-  .budget-intelligence-report-heading h1 {
-    font-size:16px !important;
+  .budget-intel-right-col {
+    padding-left: 0;
+    padding-top: 20px;
+    border-left: none;
   }
 
-  .budget-progress-percent {
-    font-size:16px;
-  }
-
-}
-
-@media (max-width:480px) {
-  .budget-intelligence-card {
-    padding:10px;
-  }
-
-  .budget-progress-header {
-    flex-direction:row;
-  }
-
-  .budget-intelligence-smart-tip {
-    padding:10px;
-  }
-
-  .budget-intelligence-smart-tip-label h5 {
-    font-size:16px;
-  }
-
-  .budget-intelligence-smart-tip p {
-    font-size:14px;
-    margin-left:28px; 
+  .forecast-stat-amount {
+    font-size: 20px;
   }
 }

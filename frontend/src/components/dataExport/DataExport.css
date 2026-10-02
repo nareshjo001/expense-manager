@@ -1,112 +1,476 @@
-/* DAT-004 -- financial data export screen. */
+/* DAT-004 -- Financial Data Export Screen Redesign. */
+
+.data-export-page {
+    --de-title: #831843;
+    --de-label: #334155;
+    --de-muted: #64748b;
+    --de-accent: #db2777;
+    --de-accent-dark: #be185d;
+    --de-accent-soft: #fdf2f8;
+    --de-accent-border: #fce7f3;
+    --de-card-bg: #ffffff;
+    --de-card-border: rgba(244, 114, 182, 0.28);
+    --de-card-shadow: 0 10px 30px rgba(225, 29, 116, 0.06), 0 2px 8px rgba(0, 0, 0, 0.02);
+    --de-input-bg: #ffffff;
+    --de-input-border: rgba(244, 114, 182, 0.35);
+    --de-input-focus: #ec4899;
+    --de-btn-gradient: linear-gradient(90deg, #ec4899 0%, #db2777 100%);
+    --de-btn-shadow: 0 4px 16px rgba(225, 29, 116, 0.28);
+    --de-item-bg: #ffffff;
+    --de-item-border: rgba(244, 114, 182, 0.22);
+
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 20px 24px 36px;
+    box-sizing: border-box;
+    background: radial-gradient(circle at 12% 18%, rgba(253, 242, 248, 0.7) 0%, rgba(255, 241, 242, 0.3) 50%, transparent 100%);
+}
+
+/* Ensure SIA launcher button is removed on the Data Export page */
+body:has(.data-export-page) .sia-entry-point {
+    display: none !important;
+}
+
+.dark-theme .data-export-page {
+    --de-title: #fdf2f8;
+    --de-label: #cbd5e1;
+    --de-muted: #94a3b8;
+    --de-accent: #f472b6;
+    --de-accent-dark: #f472b6;
+    --de-accent-soft: rgba(244, 114, 182, 0.15);
+    --de-accent-border: rgba(244, 114, 182, 0.25);
+    --de-card-bg: rgba(31, 41, 55, 0.85);
+    --de-card-border: rgba(244, 114, 182, 0.22);
+    --de-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+    --de-input-bg: rgba(17, 24, 39, 0.6);
+    --de-input-border: rgba(244, 114, 182, 0.3);
+    --de-input-focus: #f472b6;
+    --de-btn-gradient: linear-gradient(90deg, #e11d74 0%, #db2777 100%);
+    --de-btn-shadow: 0 4px 16px rgba(225, 29, 116, 0.4);
+    --de-item-bg: rgba(26, 34, 46, 0.95);
+    --de-item-border: rgba(244, 114, 182, 0.2);
+
+    background: radial-gradient(circle at 12% 18%, rgba(36, 17, 31, 0.6) 0%, rgba(26, 10, 22, 0.3) 50%, transparent 100%);
+}
+
+/* ================= Card Surfaces ================= */
+.data-export-card {
+    background: var(--de-card-bg);
+    border-radius: 22px;
+    border: 1px solid var(--de-card-border);
+    box-shadow: var(--de-card-shadow);
+    padding: 28px 32px 32px;
+    margin-bottom: 24px;
+    box-sizing: border-box;
+    position: relative;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* ================= Header ================= */
+.data-export-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 24px;
+}
+
+.data-export-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.data-export-accent-bar {
+    display: inline-block;
+    width: 4px;
+    height: 26px;
+    background: var(--de-accent);
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.dark-theme .data-export-accent-bar {
+    background: #f472b6;
+}
 
 .data-export-heading {
-    margin-bottom: 4px;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--de-title);
+    letter-spacing: -0.015em;
+    line-height: 1.25;
 }
 
 .data-export-subheading {
-    margin-top: 0;
-    margin-bottom: 20px;
-    opacity: 0.8;
-    font-size: 0.9rem;
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--de-muted);
+    line-height: 1.48;
 }
 
+/* ================= Form & 3-Column Grid ================= */
 .data-export-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    max-width: 420px;
-    margin-bottom: 28px;
-}
-
-.data-export-form select,
-.data-export-form input[type="date"] {
     width: 100%;
-    padding: 10px 14px;
-    font-size: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(127, 127, 127, 0.35);
-    background: rgba(127, 127, 127, 0.08);
-    color: inherit;
+    margin: 0;
     box-sizing: border-box;
 }
 
-.data-export-date-range {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+.data-export-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 20px;
+    row-gap: 18px;
+    align-items: flex-start;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-.data-export-date-range .field {
-    flex: 1;
-    min-width: 140px;
+.data-export-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+}
+
+.data-export-field label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--de-label);
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.data-export-field--data {
+    grid-column: 1;
+}
+
+.data-export-field--format {
+    grid-column: 2;
+}
+
+.data-export-grid-spacer {
+    grid-column: 3;
+    display: block;
+}
+
+.data-export-field--from {
+    grid-column: 1;
+}
+
+.data-export-field--to {
+    grid-column: 2;
+}
+
+.data-export-btn-wrapper {
+    grid-column: 3;
+    align-self: flex-end;
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.data-export-budgets-hint-wrapper {
+    grid-column: 1 / span 2;
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+}
+
+.data-export-btn-wrapper--budgets {
+    grid-column: 3;
+    align-self: center;
+}
+
+/* ================= Input Wrapper & Controls ================= */
+.data-export-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 48px;
+    border-radius: 14px;
+    border: 1px solid var(--de-input-border);
+    background: var(--de-input-bg);
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.data-export-input-wrapper:focus-within {
+    border-color: var(--de-input-focus);
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);
+}
+
+.data-export-input-icon {
+    position: absolute;
+    left: 14px;
+    font-size: 16px;
+    color: var(--de-accent-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.data-export-input-wrapper select {
+    width: 100%;
+    height: 100%;
+    padding-left: 42px;
+    padding-right: 38px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.data-export-input-wrapper select:focus {
+    outline: none;
+}
+
+.data-export-select-arrow {
+    position: absolute;
+    right: 14px;
+    font-size: 12px;
+    color: var(--de-accent-dark);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.data-export-input-wrapper input[type="date"] {
+    width: 100%;
+    height: 100%;
+    padding-left: 42px;
+    padding-right: 14px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.92rem;
+    font-weight: 500;
+    outline: none;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.data-export-input-wrapper input[type="date"]:focus {
+    outline: none;
+}
+
+.data-export-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(27%) sepia(85%) saturate(3065%) hue-rotate(320deg) brightness(88%) contrast(92%);
+    opacity: 0.85;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.data-export-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.dark-theme .data-export-input-wrapper input[type="date"] {
+    color-scheme: dark;
+}
+
+.dark-theme .data-export-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(74%) sepia(35%) saturate(1200%) hue-rotate(295deg) brightness(100%) contrast(95%);
 }
 
 .data-export-hint {
-    font-size: 0.8rem;
-    opacity: 0.7;
-    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--de-muted);
+    margin: 6px 0 0;
+    line-height: 1.4;
 }
 
-.data-export-history h3 {
-    margin-bottom: 10px;
+/* ================= Export Button ================= */
+.data-export-submit-btn {
+    width: 100%;
+    height: 48px;
+    padding: 0 28px;
+    border-radius: 14px;
+    border: none;
+    background: var(--de-btn-gradient);
+    color: #ffffff;
+    font-size: 0.98rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: var(--de-btn-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    box-sizing: border-box;
+    white-space: nowrap;
 }
 
+.data-export-submit-btn:hover:not(:disabled) {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(225, 29, 116, 0.38);
+}
+
+.data-export-submit-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(225, 29, 116, 0.2);
+}
+
+.data-export-submit-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.data-export-btn-icon {
+    font-size: 19px;
+    stroke-width: 2.2;
+    flex-shrink: 0;
+}
+
+/* ================= Past Exports Card ================= */
+.data-export-history-card {
+    margin-bottom: 0;
+}
+
+.data-export-history-header {
+    margin-bottom: 18px;
+}
+
+.data-export-history-heading {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--de-title);
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+}
+
+/* Empty State inside Past Exports */
+.data-export-history .query-state-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px 16px 28px;
+    box-sizing: border-box;
+}
+
+.data-export-history .query-state-empty::before {
+    content: "";
+    display: block;
+    width: 68px;
+    height: 44px;
+    margin-bottom: 12px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='44' viewBox='0 0 68 44' fill='none'%3E%3Cline x1='13' y1='12' x2='18' y2='15' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='13' y1='32' x2='18' y2='29' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='55' y1='12' x2='50' y2='15' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='55' y1='32' x2='50' y2='29' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Crect x='22' y='2' width='24' height='24' rx='8' fill='%23fdf2f8'/%3E%3Cpath d='M29 9H34.5L38 12.5V20C38 20.5523 37.5523 21 37 21H29C28.4477 21 28 20.5523 28 20V10C28 9.4477 28.4477 9 29 9Z' stroke='%23db2777' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M34.5 9V12.5H38' stroke='%23db2777' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cline x1='30.5' y1='15' x2='34.5' y2='15' stroke='%23db2777' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='30.5' y1='17.5' x2='34.5' y2='17.5' stroke='%23db2777' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.dark-theme .data-export-history .query-state-empty::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='44' viewBox='0 0 68 44' fill='none'%3E%3Cline x1='13' y1='12' x2='18' y2='15' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='13' y1='32' x2='18' y2='29' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='55' y1='12' x2='50' y2='15' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='55' y1='32' x2='50' y2='29' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'/%3E%3Crect x='22' y='2' width='24' height='24' rx='8' fill='rgba(244,114,182,0.18)'/%3E%3Cpath d='M29 9H34.5L38 12.5V20C38 20.5523 37.5523 21 37 21H29C28.4477 21 28 20.5523 28 20V10C28 9.4477 28.4477 9 29 9Z' stroke='%23f472b6' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M34.5 9V12.5H38' stroke='%23f472b6' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cline x1='30.5' y1='15' x2='34.5' y2='15' stroke='%23f472b6' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='30.5' y1='17.5' x2='34.5' y2='17.5' stroke='%23f472b6' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.data-export-history .query-state-empty .query-state-message {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--de-title);
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+}
+
+.data-export-history .query-state-empty .query-state-hint {
+    font-size: 0.875rem;
+    color: var(--de-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* ================= Past Exports List ================= */
 .data-export-list {
     list-style: none;
     padding: 0;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .data-export-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: 10px;
-    background: rgba(127, 127, 127, 0.08);
-    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: var(--de-item-bg);
+    border: 1px solid var(--de-item-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.025);
+    box-sizing: border-box;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.data-export-item:hover {
+    box-shadow: 0 6px 18px rgba(225, 29, 116, 0.08);
+    border-color: rgba(244, 114, 182, 0.38);
 }
 
 .data-export-item-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     min-width: 0;
+    flex: 1;
 }
 
 .data-export-item-title-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .data-export-item-name {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: var(--de-title);
     overflow-wrap: anywhere;
 }
 
 .data-export-item-meta {
     font-size: 0.85rem;
-    opacity: 0.75;
+    color: var(--de-muted);
 }
 
+/* Status Badges */
 .data-export-badge {
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 2px 8px;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
     border-radius: 999px;
 }
 
 .data-export-badge--queued {
     background: rgba(245, 158, 11, 0.18);
-    color: #92400e;
+    color: #b45309;
 }
 
 .data-export-badge--processing {
@@ -121,20 +485,115 @@
 
 .data-export-badge--failed {
     background: rgba(239, 68, 68, 0.18);
-    color: #991b1b;
+    color: #b91c1c;
 }
 
 .data-export-badge--expired {
     background: rgba(107, 114, 128, 0.18);
-    color: #374151;
+    color: #4b5563;
 }
 
+/* Download Link */
 .data-export-download-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
     font-weight: 600;
     text-decoration: none;
-    color: inherit;
-    border: 1px solid currentColor;
-    border-radius: 8px;
-    padding: 6px 12px;
+    color: var(--de-accent);
+    background: var(--de-accent-soft);
+    border: 1.5px solid rgba(219, 39, 119, 0.35);
+    border-radius: 10px;
+    padding: 8px 16px;
     flex-shrink: 0;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+.data-export-download-link:hover {
+    background: var(--de-accent);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(219, 39, 119, 0.25);
+}
+
+.data-export-download-icon {
+    font-size: 13px;
+}
+
+/* ================= Responsive Layout (Mobile & Tablet) ================= */
+@media (max-width: 768px) {
+    .data-export-page {
+        padding: 16px 14px 28px;
+    }
+
+    .data-export-card {
+        padding: 20px 18px 22px;
+        border-radius: 18px;
+        margin-bottom: 18px;
+    }
+
+    .data-export-header {
+        gap: 6px;
+        margin-bottom: 18px;
+    }
+
+    .data-export-accent-bar {
+        height: 22px;
+    }
+
+    .data-export-heading {
+        font-size: 1.25rem;
+    }
+
+    .data-export-subheading {
+        font-size: 0.82rem;
+    }
+
+    .data-export-form-grid {
+        grid-template-columns: 1fr;
+        row-gap: 16px;
+    }
+
+    .data-export-field--data,
+    .data-export-field--format,
+    .data-export-field--from,
+    .data-export-field--to,
+    .data-export-btn-wrapper,
+    .data-export-budgets-hint-wrapper {
+        grid-column: 1 !important;
+    }
+
+    .data-export-grid-spacer {
+        display: none;
+    }
+
+    .data-export-btn-wrapper {
+        margin-top: 6px;
+    }
+
+    .data-export-submit-btn {
+        width: 100%;
+        height: 50px;
+        border-radius: 9999px;
+        font-size: 0.98rem;
+    }
+
+    .data-export-history-heading {
+        font-size: 1.15rem;
+    }
+
+    .data-export-item {
+        padding: 14px 16px;
+        border-radius: 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .data-export-download-link {
+        width: 100%;
+        justify-content: center;
+        box-sizing: border-box;
+    }
 }

@@ -1,0 +1,153 @@
+/* Empty category-budget panel only; imported after the existing section styles. */
+.category-budgets-panel--empty {
+  --cb-empty-cloud-back: rgba(249, 188, 218, 0.25);
+  --cb-empty-cloud-front: rgba(248, 178, 210, 0.3);
+  --cb-empty-halo: #f7a7cc;
+  --cb-empty-board-top: #fffafd;
+  --cb-empty-board-bottom: #ffeaf3;
+  --cb-empty-bullet: #f58dbc;
+  --cb-empty-decor: rgba(238, 99, 163, 0.28);
+
+  isolation: isolate;
+  min-height: 0;
+  padding: 26px 24px 30px;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(255, 193, 221, 0.32), transparent 56%),
+    linear-gradient(145deg, #fffbfd, #fff2f7);
+  border-color: #f6dbe8;
+  outline: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 8px 22px rgba(118, 46, 81, 0.08);
+}
+
+.category-budgets-panel--empty > .category-budgets-card-wave {
+  display: none;
+}
+
+.category-budgets-empty-decor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.category-budgets-empty-decor > path:not(.category-budgets-empty-decor-star) {
+  fill: none;
+  stroke: var(--cb-empty-decor);
+  stroke-width: 2;
+  stroke-dasharray: 12 13;
+}
+
+.category-budgets-empty-decor > circle {
+  fill: var(--cb-empty-decor);
+  opacity: 0.38;
+}
+
+.category-budgets-empty-decor-star {
+  fill: #ef78ae;
+  opacity: 0.8;
+}
+
+.category-budgets-panel--empty .category-budgets-empty {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  justify-content: flex-start;
+}
+
+.category-budgets-panel--empty .category-budgets-empty-art-container {
+  width: min(100%, 440px);
+  margin: 0 auto 32px;
+}
+
+.category-budgets-panel--empty .category-budgets-empty-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+}
+
+.cb-empty-halo-start { stop-color: var(--cb-empty-halo); stop-opacity: 0.72; }
+.cb-empty-halo-end { stop-color: var(--cb-empty-halo); stop-opacity: 0; }
+.cb-empty-board-start { stop-color: var(--cb-empty-board-top); }
+.cb-empty-board-end { stop-color: var(--cb-empty-board-bottom); }
+.cb-empty-cloud-back { fill: var(--cb-empty-cloud-back); }
+.cb-empty-cloud-front { fill: var(--cb-empty-cloud-front); }
+.cb-empty-bullet { fill: var(--cb-empty-bullet); }
+.cb-empty-art-sparkle { fill: #ef78ae; }
+.cb-empty-art-sparkle--pale { fill: #ffd0e4; }
+
+.light-theme .category-budgets-panel--empty .category-budgets-empty-title {
+  width: 100%;
+  max-width: none;
+  margin: 0 0 8px;
+  color: #861944;
+  font-size: clamp(20px, 1.55vw, 26px);
+  line-height: 1.25;
+}
+
+.light-theme .category-budgets-panel--empty .category-budgets-empty-subtitle {
+  max-width: 620px;
+  margin: 0;
+  color: #a3426e;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.dark-theme .category-budgets-panel--empty {
+  --cb-empty-cloud-back: rgba(181, 75, 125, 0.17);
+  --cb-empty-cloud-front: rgba(196, 79, 134, 0.23);
+  --cb-empty-halo: #bd4582;
+  --cb-empty-board-top: #422037;
+  --cb-empty-board-bottom: #33192c;
+  --cb-empty-bullet: #f282b6;
+  --cb-empty-decor: rgba(237, 133, 181, 0.3);
+
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(141, 49, 91, 0.22), transparent 58%),
+    linear-gradient(145deg, #2d1a2a, #231521);
+  border-color: rgba(196, 104, 149, 0.4);
+  outline-color: rgba(255, 194, 224, 0.07);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .category-budgets-panel--empty .category-budgets-empty-title {
+  width: 100%;
+  max-width: none;
+  margin: 0 0 8px;
+  color: #fce5ef;
+  font-size: clamp(20px, 1.55vw, 26px);
+  line-height: 1.25;
+}
+
+.dark-theme .category-budgets-panel--empty .category-budgets-empty-subtitle {
+  max-width: 620px;
+  margin: 0;
+  color: #dfa8c2;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  .category-budgets-panel--empty {
+    padding: 20px 14px 24px;
+  }
+
+  .category-budgets-panel--empty .category-budgets-empty-art-container {
+    width: min(100%, 300px);
+    margin-bottom: 14px;
+  }
+
+  .light-theme .category-budgets-panel--empty .category-budgets-empty-title,
+  .dark-theme .category-budgets-panel--empty .category-budgets-empty-title {
+    font-size: 18px;
+  }
+
+  .light-theme .category-budgets-panel--empty .category-budgets-empty-subtitle,
+  .dark-theme .category-budgets-panel--empty .category-budgets-empty-subtitle {
+    font-size: 13.5px;
+  }
+}

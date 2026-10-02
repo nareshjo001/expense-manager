@@ -351,3 +351,39 @@ describe("REC-002-T03 -- endDate cutoff", () => {
     expect(occurrences.length).toBeGreaterThan(1);
   });
 });
+
+describe("skippedDates -- skipping specific occurrences", () => {
+  test("omits an occurrence whose calendar date is in skippedDates", () => {
+    const { occurrences } = projectUpcoming(
+      [
+        definition({
+          nextDueDate: utc(2026, 10, 1),
+          skippedDates: ["2026-11-01"],
+          scheduleVersion: 2,
+        }),
+      ],
+      { from: utc(2026, 9, 15), to: utc(2027, 1, 15), now: utc(2026, 9, 15), timeZone: "UTC" }
+    );
+
+    const dates = occurrences.map((o) => o.dueCalendarDate);
+    expect(dates).toEqual(["2026-10-01", "2026-12-01", "2027-01-01"]);
+    expect(occurrences[0].scheduleVersion).toBe(2);
+  });
+
+  test("does not count a skipped occurrence towards overdueCount", () => {
+    const { summary, occurrences } = projectUpcoming(
+      [
+        definition({
+          nextDueDate: utc(2026, 8, 1),
+          skippedDates: ["2026-08-01"],
+        }),
+      ],
+      { from: utc(2026, 7, 1), to: utc(2026, 10, 15), now: utc(2026, 9, 15), timeZone: "UTC" }
+    );
+
+    // 2026-08-01 was skipped, so only 2026-09-01 is overdue (relative to 2026-09-15)
+    expect(summary.overdueCount).toBe(1);
+    expect(occurrences.map((o) => o.dueCalendarDate)).toEqual(["2026-09-01", "2026-10-01"]);
+  });
+});
+
