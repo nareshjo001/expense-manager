@@ -147,10 +147,17 @@ const startServer = async () => {
 
   } catch (err) {
 
-    // Name only, never the raw error: a startup failure object can carry a
+    // Name, code and syscall only, never the raw error: a startup failure object can carry a
     // connection string (see OBS-001-T01). reportError() below forwards the
     // redaction-safe detail.
-    logEvent({ level: "error", scope: "process", event: "startup_failed", errorName: err && err.name });
+    logEvent({
+      level: "error",
+      scope: "process",
+      event: "startup_failed",
+      errorName: err && err.name,
+      errorCode: err && err.code,
+      errorSyscall: err && err.syscall,
+    });
 
     reportError(err, { scope: "process", event: "startup_failed" });
 
