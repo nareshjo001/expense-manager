@@ -7,9 +7,17 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGO_CONN);
     logEvent({ level: 'info', scope: 'mongo', event: 'db_connected' });
   } catch (err) {
-    // errorName only: a Mongo connection error message can echo the host
-    // and user from MONGO_CONN.
-    logEvent({ level: 'error', scope: 'mongo', event: 'db_connection_failed', errorName: err && err.name });
+    // Redaction-safe error metadata: a Mongo connection error message can echo
+    // the host and user from MONGO_CONN, so message is excluded. Name, code and
+    // syscall are safe error taxonomy that clarify DNS vs network vs auth failure.
+    logEvent({
+      level: 'error',
+      scope: 'mongo',
+      event: 'db_connection_failed',
+      errorName: err && err.name,
+      errorCode: err && err.code,
+      errorSyscall: err && err.syscall,
+    });
     throw err;
   }
 };
