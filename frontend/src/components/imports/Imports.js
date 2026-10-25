@@ -14,6 +14,7 @@ import DataExport from '../dataExport/DataExport';
 import ReceiptInbox from '../receiptInbox/ReceiptInbox';
 import ImportWizard from '../importWizard/ImportWizard';
 import SiaPreferences from '../sia/SiaPreferences';
+import DataTransfer from '../dataTransfer/DataTransfer';
 
 // FE-003-T01 -- TrendChartPage/BarChartPage/PieChartPage/Insights removed from
 // this barrel: FE-003-T03 moved every real consumer (App.js, LandingPage.js) off
@@ -43,5 +44,6 @@ export {
     DataExport,
     ReceiptInbox,
     ImportWizard,
-    SiaPreferences
+    SiaPreferences,
+    DataTransfer
 };
