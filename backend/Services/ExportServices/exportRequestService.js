@@ -96,7 +96,7 @@ function toSafeShape(doc) {
     readyAt: doc.readyAt,
     expiresAt: doc.expiresAt,
     createdAt: doc.createdAt,
-    downloadUrl: doc.status === EXPORT_STATUSES.READY && doc.filePath ? `/api/export/download/${doc.downloadToken}` : null,
+    downloadUrl: doc.status === EXPORT_STATUSES.READY ? `/api/export/download/${doc.downloadToken}` : null,
   };
 }
 
@@ -203,12 +203,48 @@ async function resolveDownload({ userId, token }) {
     status: EXPORT_STATUSES.READY,
   }).lean();
 
-  if (!doc || !doc.expiresAt || doc.expiresAt <= now || !doc.filePath) {
-    throw makeError("resolveDownload: no ready, unexpired export for this token/user.", ERROR_CODES.NOT_FOUND);
+  if (!doc) {
+    throw makeError("resolveDownload: no ready export for this token/user.", ERROR_CODES.NOT_FOUND);
+  }
+
+  if (doc.expiresAt && doc.expiresAt <= now) {
+    throw makeError("resolveDownload: export has expired.", ERROR_CODES.NOT_FOUND);
   }
 
   const contentType = doc.format === EXPORT_FORMATS.CSV ? "text/csv" : "application/json";
-  return { filePath: doc.filePath, fileName: doc.fileName, contentType };
+  const fileName = doc.fileName || buildExportFileName(doc.domain, doc.format);
+
+  if (doc.filePath) {
+    return { filePath: doc.filePath, fileName, contentType };
+  }
+
+  const { content } = await generateExportPayload({
+    userId,
+    domain: doc.domain,
+    format: doc.format,
+    dateFrom: doc.dateFrom,
+    dateTo: doc.dateTo,
+  });
+
+  return { content, fileName, contentType };
+}
+
+async function deleteExportRequest({ userId, id }) {
+  const doc = await ExportRequest.findOneAndDelete({ _id: id, userId });
+  if (!doc) {
+    throw makeError(`deleteExportRequest: no export request "${id}" for this user.`, ERROR_CODES.NOT_FOUND);
+  }
+
+  if (doc.filePath) {
+    try {
+      const fsPromises = require("fs/promises");
+      await fsPromises.unlink(doc.filePath);
+    } catch {
+      // file may already be removed or missing
+    }
+  }
+
+  return { id: String(doc._id), success: true };
 }
 
 module.exports = {
@@ -217,4 +253,5 @@ module.exports = {
   listExportRequests,
   getExportRequestStatus,
   resolveDownload,
+  deleteExportRequest,
 };

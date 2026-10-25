@@ -635,6 +635,56 @@ const exportCreateErrorToast = (data = {}) => {
     );
 };
 
+const exportDeleteSuccessToast = () => {
+    toast.dismiss();
+    toast.success(
+        <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+            Export deleted.
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 3000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                background: "linear-gradient(145deg, #d1fae5, #a7f3d0)",
+                color: "#065f46",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
+const exportDeleteErrorToast = (data = {}) => {
+    toast.dismiss();
+    toast.error(
+        <div>
+            <div style={{ fontSize: '0.9em', marginTop: '4px' }}>
+                {data?.message || "Couldn't delete this export."}
+            </div>
+        </div>,
+        {
+            position: "top-right",
+            autoClose: 4000,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            style: {
+                backgroundColor: "#fee2e2",
+                color: "#991b1b",
+                borderRadius: "12px",
+                fontSize: "1rem",
+                fontWeight: "500",
+            },
+            containerId: "below-header",
+        }
+    );
+};
+
 // OCR-004 -- receipt inbox action feedback: linking/unlinking a receipt to
 // an expense, saving a review correction, and deleting a receipt. Error
 // toasts map the contract's errorCode values to a message a user can act
@@ -1063,6 +1113,8 @@ export {
     exportQueuedToast,
     exportDownloadReadyToast,
     exportCreateErrorToast,
+    exportDeleteSuccessToast,
+    exportDeleteErrorToast,
     receiptLinkSuccessToast,
     receiptLinkErrorToast,
     receiptUnlinkSuccessToast,

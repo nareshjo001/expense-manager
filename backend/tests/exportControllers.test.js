@@ -54,6 +54,7 @@ function loadControllers(serviceMock = {}, fsMock = {}) {
     listExportRequests: jest.fn(),
     getExportRequestStatus: jest.fn(),
     resolveDownload: jest.fn(),
+    deleteExportRequest: jest.fn(),
     ERROR_CODES,
     ...serviceMock,
   }));
@@ -63,6 +64,7 @@ function loadControllers(serviceMock = {}, fsMock = {}) {
     list: require("../Controllers/Export/list"),
     status: require("../Controllers/Export/status"),
     download: require("../Controllers/Export/download"),
+    del: require("../Controllers/Export/delete"),
   };
 }
 
@@ -271,5 +273,30 @@ describe("downloadExport", () => {
     await download.downloadExport(makeReq({ params: { token: "tok" } }), res);
 
     expect(res.status).toHaveBeenCalledWith(404);
+  });
+});
+
+describe("deleteExport", () => {
+  test("200s on successful export deletion", async () => {
+    const deleteExportRequest = jest.fn().mockResolvedValue({ id: "r1", success: true });
+    const { del } = loadControllers({ deleteExportRequest });
+    const res = makeRes();
+
+    await del.deleteExport(makeReq({ params: { id: "r1" } }), res);
+
+    expect(deleteExportRequest).toHaveBeenCalledWith({ userId: USER_ID, id: "r1" });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(jsonBody(res).success).toBe(true);
+  });
+
+  test("404s when the export is not found or belongs to another user", async () => {
+    const deleteExportRequest = jest.fn().mockRejectedValue(makeError("NOT_FOUND"));
+    const { del } = loadControllers({ deleteExportRequest });
+    const res = makeRes();
+
+    await del.deleteExport(makeReq({ params: { id: "unknown" } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(jsonBody(res).success).toBe(false);
   });
 });

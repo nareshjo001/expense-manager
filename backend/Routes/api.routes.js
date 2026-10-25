@@ -44,6 +44,7 @@ const {
     listExports,
     getExportStatus,
     downloadExport,
+    deleteExport,
 } = require('../Controllers/Export');
 // IMP-001 -- CSV transaction import (headers preview, session create/list/
 // get, row decisions, commit). multer wrapping mirrors Routes/bill.routes.js's
@@ -159,6 +160,7 @@ router.post('/export', verifyToken, createExport);
 router.get('/export', verifyToken, listExports);
 router.get('/export/:id/status', verifyToken, getExportStatus);
 router.get('/export/download/:token', verifyToken, downloadExport);
+router.delete('/export/:id', verifyToken, deleteExport);
 
 // ================= RECEIPT ROUTES =================
 // OCR-004-T04 -- always scoped to the authenticated user (req.userId); a
