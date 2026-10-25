@@ -559,6 +559,9 @@ const EXPORT_ERROR_MESSAGES = {
     INVALID_COMBINATION: "That combination isn't supported -- exporting all data only works as JSON.",
     TOO_MANY_ROWS: "That export has too many rows to generate right now. Try narrowing the date range.",
     MISSING_FIELDS: "Please choose a data type and format before exporting.",
+    MISSING_DATES: "Please select both a start date and an end date.",
+    INVALID_DATE: "Please select valid dates.",
+    INVALID_DATE_RANGE: "Start date cannot be after end date.",
 };
 
 const exportQueuedToast = () => {

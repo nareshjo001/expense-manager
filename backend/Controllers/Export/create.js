@@ -53,6 +53,23 @@ const createExport = async (req, res) => {
       });
     }
 
+    if (domain !== "budgets") {
+      if (!dateFrom || !dateTo) {
+        return res.status(400).json({
+          message: "Start date and end date are required",
+          success: false,
+          errorCode: "MISSING_DATES",
+        });
+      }
+      if (dateFrom > dateTo) {
+        return res.status(400).json({
+          message: "Start date cannot be after end date",
+          success: false,
+          errorCode: "INVALID_DATE_RANGE",
+        });
+      }
+    }
+
     const result = await createExportRequest({ userId: req.userId, domain, format, dateFrom, dateTo });
 
     if (result.mode === "sync") {

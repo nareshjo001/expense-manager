@@ -403,6 +403,46 @@ body:has(.data-export-page) .sia-entry-point {
 }
 
 /* ================= Past Exports List ================= */
+.data-export-list-container {
+    max-height: 298px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(219, 39, 119, 0.35) rgba(244, 114, 182, 0.08);
+}
+
+.data-export-list-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.data-export-list-container::-webkit-scrollbar-track {
+    background: rgba(244, 114, 182, 0.08);
+    border-radius: 999px;
+}
+
+.data-export-list-container::-webkit-scrollbar-thumb {
+    background: rgba(219, 39, 119, 0.35);
+    border-radius: 999px;
+}
+
+.data-export-list-container::-webkit-scrollbar-thumb:hover {
+    background: var(--de-accent);
+}
+
+.dark-theme .data-export-list-container {
+    scrollbar-color: rgba(244, 114, 182, 0.3) rgba(244, 114, 182, 0.05);
+}
+
+.dark-theme .data-export-list-container::-webkit-scrollbar-track {
+    background: rgba(244, 114, 182, 0.05);
+}
+
+.dark-theme .data-export-list-container::-webkit-scrollbar-thumb {
+    background: rgba(244, 114, 182, 0.3);
+}
+
 .data-export-list {
     list-style: none;
     padding: 0;
@@ -682,6 +722,23 @@ body:has(.data-export-page) .sia-entry-point {
     }
 }
 
+.data-export-menu-dropdown--up {
+    top: auto;
+    bottom: calc(100% + 6px);
+    animation: deMenuFadeInUp 0.15s ease-out;
+}
+
+@keyframes deMenuFadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 .data-export-menu-item {
     display: flex;
     align-items: center;
@@ -816,6 +873,10 @@ body:has(.data-export-page) .sia-entry-point {
 @media (max-width: 600px) {
     .data-export-page {
         padding: 14px 14px 28px;
+    }
+
+    .data-export-list-container {
+        max-height: 440px;
     }
 
     .data-export-item {
