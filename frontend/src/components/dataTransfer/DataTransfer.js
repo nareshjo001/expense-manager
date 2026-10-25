@@ -72,7 +72,9 @@ const DataTransfer = ({ initialTab }) => {
         </button>
       </div>
 
-      {activeTab === "import" ? <ImportWizard /> : <DataExport />}
+      <div key={activeTab} className="add-expense-wrapper data-transfer-panel">
+        {activeTab === "import" ? <ImportWizard /> : <DataExport />}
+      </div>
     </div>
   );
 };

@@ -25,11 +25,15 @@ describe("DataTransfer -- Import / Export unified toggle", () => {
     mockNavigate.mockClear();
   });
 
-  it("defaults to Import tab and marks that half as pressed", () => {
+  it("defaults to Import tab and marks that half as pressed with slide-in wrapper", () => {
     const { container } = render(<DataTransfer />);
 
     expect(screen.getByTestId("import-wizard-view")).toBeInTheDocument();
     expect(screen.queryByTestId("data-export-view")).toBeNull();
+
+    const panel = container.querySelector(".data-transfer-panel");
+    expect(panel).toBeInTheDocument();
+    expect(panel).toHaveClass("add-expense-wrapper");
 
     const importBtn = screen.getByRole("button", { name: "Import" });
     const exportBtn = screen.getByRole("button", { name: "Export" });
@@ -43,11 +47,15 @@ describe("DataTransfer -- Import / Export unified toggle", () => {
     expect(slider).not.toHaveClass("right");
   });
 
-  it("activates Export tab when initialTab='export' is supplied", () => {
+  it("activates Export tab when initialTab='export' is supplied with slide-in wrapper", () => {
     const { container } = render(<DataTransfer initialTab="export" />);
 
     expect(screen.getByTestId("data-export-view")).toBeInTheDocument();
     expect(screen.queryByTestId("import-wizard-view")).toBeNull();
+
+    const panel = container.querySelector(".data-transfer-panel");
+    expect(panel).toBeInTheDocument();
+    expect(panel).toHaveClass("add-expense-wrapper");
 
     const importBtn = screen.getByRole("button", { name: "Import" });
     const exportBtn = screen.getByRole("button", { name: "Export" });
@@ -84,7 +92,7 @@ describe("DataTransfer -- Import / Export unified toggle", () => {
     expect(screen.getByRole("button", { name: "Export" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("switches to Export and back to Import when buttons are clicked", () => {
+  it("switches to Export and back to Import when buttons are clicked with slide-in wrapper", () => {
     const { container } = render(<DataTransfer />);
 
     const slider = container.querySelector(".form-toggle-slider");
@@ -96,6 +104,7 @@ describe("DataTransfer -- Import / Export unified toggle", () => {
 
     expect(screen.getByTestId("data-export-view")).toBeInTheDocument();
     expect(screen.queryByTestId("import-wizard-view")).toBeNull();
+    expect(container.querySelector(".data-transfer-panel")).toHaveClass("add-expense-wrapper");
     expect(exportBtn).toHaveAttribute("aria-pressed", "true");
     expect(exportBtn).toHaveClass("active");
     expect(slider).toHaveClass("right");
@@ -106,6 +115,7 @@ describe("DataTransfer -- Import / Export unified toggle", () => {
 
     expect(screen.getByTestId("import-wizard-view")).toBeInTheDocument();
     expect(screen.queryByTestId("data-export-view")).toBeNull();
+    expect(container.querySelector(".data-transfer-panel")).toHaveClass("add-expense-wrapper");
     expect(importBtn).toHaveAttribute("aria-pressed", "true");
     expect(importBtn).toHaveClass("active");
     expect(slider).not.toHaveClass("right");
