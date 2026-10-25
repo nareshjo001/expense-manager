@@ -128,14 +128,23 @@ const DataExport = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    if (!isBudgetsDomain) {
+      if (!dateFrom || !dateTo) {
+        exportCreateErrorToast({ errorCode: "MISSING_DATES" });
+        return;
+      }
+      if (new Date(dateFrom) > new Date(dateTo)) {
+        exportCreateErrorToast({ errorCode: "INVALID_DATE_RANGE" });
+        return;
+      }
+    }
+
     const payload = {
       domain,
       format: formatValue,
-      // Contract: dateFrom/dateTo are not applicable/ignored for domain
-      // "budgets" -- never sent for it here, regardless of what was typed
-      // into the (hidden, for that domain) date fields before switching.
-      ...(!isBudgetsDomain && dateFrom ? { dateFrom } : {}),
-      ...(!isBudgetsDomain && dateTo ? { dateTo } : {}),
+      // Contract: dateFrom/dateTo are mandatory for expenses/income/all,
+      // but not applicable/ignored for domain "budgets".
+      ...(!isBudgetsDomain ? { dateFrom, dateTo } : {}),
     };
 
     createMutation.mutate(payload, {
@@ -269,7 +278,9 @@ const DataExport = () => {
             ) : (
               <>
                 <div className="data-export-field field data-export-field--from">
-                  <label htmlFor="data-export-date-from">From (optional)</label>
+                  <label htmlFor="data-export-date-from">
+                    Start date <span className="data-export-required-star" aria-hidden="true">*</span>
+                  </label>
                   <div className="data-export-input-wrapper">
                     <span className="data-export-input-icon" aria-hidden="true">
                       <FaRegCalendarAlt />
@@ -278,13 +289,16 @@ const DataExport = () => {
                       id="data-export-date-from"
                       type="date"
                       value={dateFrom}
+                      required={!isBudgetsDomain}
                       onChange={(e) => setDateFrom(e.target.value)}
                     />
                   </div>
                 </div>
 
                 <div className="data-export-field field data-export-field--to">
-                  <label htmlFor="data-export-date-to">To (optional)</label>
+                  <label htmlFor="data-export-date-to">
+                    End date <span className="data-export-required-star" aria-hidden="true">*</span>
+                  </label>
                   <div className="data-export-input-wrapper">
                     <span className="data-export-input-icon" aria-hidden="true">
                       <FaRegCalendarAlt />
@@ -293,6 +307,7 @@ const DataExport = () => {
                       id="data-export-date-to"
                       type="date"
                       value={dateTo}
+                      required={!isBudgetsDomain}
                       onChange={(e) => setDateTo(e.target.value)}
                     />
                   </div>
@@ -337,120 +352,129 @@ const DataExport = () => {
           emptyLabel="No exports yet."
           emptyHint="Requests you create above will show up here."
         >
-          <ul className="data-export-list">
-            {requests.map((request) => (
-              <li key={request.id} className="data-export-item">
-                {/* Left: Format icon badge & Title/subtitle */}
-                <div className="data-export-item-left">
-                  <div className="data-export-format-badge" aria-hidden="true">
-                    <svg
-                      className="data-export-format-badge-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M4 4C4 2.89543 4.89543 2 6 2H14.5858C15.1163 2 15.6251 2.21071 16 2.58579L19.4142 6C19.7893 6.37486 20 6.88371 20 7.41421V20C20 21.1046 19.1046 22 18 22H6C4.89543 22 4 21.1046 4 20V4Z"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M14 2V7C14 7.55228 14.4477 8 15 8H20"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="data-export-format-badge-text">
-                      {(request.format || "csv").toUpperCase()}
+          <div className="data-export-list-container">
+            <ul className="data-export-list">
+              {requests.map((request, index) => (
+                <li key={request.id} className="data-export-item">
+                  {/* Left: Format icon badge & Title/subtitle */}
+                  <div className="data-export-item-left">
+                    <div className="data-export-format-badge" aria-hidden="true">
+                      <svg
+                        className="data-export-format-badge-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M4 4C4 2.89543 4.89543 2 6 2H14.5858C15.1163 2 15.6251 2.21071 16 2.58579L19.4142 6C19.7893 6.37486 20 6.88371 20 7.41421V20C20 21.1046 19.1046 22 18 22H6C4.89543 22 4 21.1046 4 20V4Z"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M14 2V7C14 7.55228 14.4477 8 15 8H20"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span className="data-export-format-badge-text">
+                        {(request.format || "csv").toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="data-export-item-details">
+                      <h4 className="data-export-item-title">
+                        {DOMAIN_LABEL[request.domain] || request.domain} (
+                        {FORMAT_LABEL[request.format] || request.format})
+                      </h4>
+                      <p className="data-export-item-subtitle">
+                        Requested {formatRequestDate(request.createdAt) || "--"}
+                        {typeof request.rowCount === "number" ? ` · ${request.rowCount} rows` : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Middle: Date columns */}
+                  <div className="data-export-item-dates">
+                    <div className="data-export-date-group">
+                      <span className="data-export-date-label">Start date</span>
+                      <div className="data-export-date-value">
+                        <FiCalendar className="data-export-date-icon" aria-hidden="true" />
+                        <span>{formatFilterDate(request.dateFrom)}</span>
+                      </div>
+                    </div>
+                    <div className="data-export-date-group">
+                      <span className="data-export-date-label">End date</span>
+                      <div className="data-export-date-value">
+                        <FiCalendar className="data-export-date-icon" aria-hidden="true" />
+                        <span>{formatFilterDate(request.dateTo)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Status pill and Action Menu */}
+                  <div className="data-export-item-actions-col">
+                    <span className={`data-export-status-pill data-export-status-pill--${request.status}`}>
+                      <span className="data-export-status-dot" aria-hidden="true" />
+                      <span>{STATUS_LABEL[request.status] || request.status}</span>
                     </span>
-                  </div>
 
-                  <div className="data-export-item-details">
-                    <h4 className="data-export-item-title">
-                      {DOMAIN_LABEL[request.domain] || request.domain} (
-                      {FORMAT_LABEL[request.format] || request.format})
-                    </h4>
-                    <p className="data-export-item-subtitle">
-                      Requested {formatRequestDate(request.createdAt) || "--"}
-                      {typeof request.rowCount === "number" ? ` · ${request.rowCount} rows` : ""}
-                    </p>
-                  </div>
-                </div>
+                    <div className="data-export-actions-wrapper">
+                      <button
+                        type="button"
+                        className="data-export-menu-trigger"
+                        aria-label="Export actions"
+                        aria-haspopup="menu"
+                        aria-expanded={openMenuId === request.id}
+                        onClick={() =>
+                          setOpenMenuId((prev) => (prev === request.id ? null : request.id))
+                        }
+                      >
+                        <FiMoreHorizontal aria-hidden="true" />
+                      </button>
 
-                {/* Middle: Date columns */}
-                <div className="data-export-item-dates">
-                  <div className="data-export-date-group">
-                    <span className="data-export-date-label">Start date</span>
-                    <div className="data-export-date-value">
-                      <FiCalendar className="data-export-date-icon" aria-hidden="true" />
-                      <span>{formatFilterDate(request.dateFrom)}</span>
-                    </div>
-                  </div>
-                  <div className="data-export-date-group">
-                    <span className="data-export-date-label">End date</span>
-                    <div className="data-export-date-value">
-                      <FiCalendar className="data-export-date-icon" aria-hidden="true" />
-                      <span>{formatFilterDate(request.dateTo)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Status pill and Action Menu */}
-                <div className="data-export-item-actions-col">
-                  <span className={`data-export-status-pill data-export-status-pill--${request.status}`}>
-                    <span className="data-export-status-dot" aria-hidden="true" />
-                    <span>{STATUS_LABEL[request.status] || request.status}</span>
-                  </span>
-
-                  <div className="data-export-actions-wrapper">
-                    <button
-                      type="button"
-                      className="data-export-menu-trigger"
-                      aria-label="Export actions"
-                      aria-haspopup="menu"
-                      aria-expanded={openMenuId === request.id}
-                      onClick={() =>
-                        setOpenMenuId((prev) => (prev === request.id ? null : request.id))
-                      }
-                    >
-                      <FiMoreHorizontal aria-hidden="true" />
-                    </button>
-
-                    {openMenuId === request.id && (
-                      <div className="data-export-menu-dropdown" role="menu">
-                        {request.status === "ready" && (
+                      {openMenuId === request.id && (
+                        <div
+                          className={`data-export-menu-dropdown ${
+                            index >= 2 || (requests.length <= 2 && index === 1)
+                              ? "data-export-menu-dropdown--up"
+                              : ""
+                          }`}
+                          role="menu"
+                        >
+                          {request.status === "ready" && (
+                            <button
+                              type="button"
+                              className="data-export-menu-item"
+                              role="menuitem"
+                              onClick={() => handleDownload(request)}
+                              disabled={downloadingId === request.id}
+                            >
+                              <FiDownload className="data-export-menu-item-icon" aria-hidden="true" />
+                              <span>
+                                {downloadingId === request.id ? "Downloading..." : "Download"}
+                              </span>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="data-export-menu-item"
+                            className="data-export-menu-item data-export-menu-item--delete"
                             role="menuitem"
-                            onClick={() => handleDownload(request)}
-                            disabled={downloadingId === request.id}
+                            onClick={() => handleDelete(request)}
+                            disabled={deleteMutation.isPending}
                           >
-                            <FiDownload className="data-export-menu-item-icon" aria-hidden="true" />
-                            <span>
-                              {downloadingId === request.id ? "Downloading..." : "Download"}
-                            </span>
+                            <FiTrash2 className="data-export-menu-item-icon" aria-hidden="true" />
+                            <span>Delete</span>
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="data-export-menu-item data-export-menu-item--delete"
-                          role="menuitem"
-                          onClick={() => handleDelete(request)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <FiTrash2 className="data-export-menu-item-icon" aria-hidden="true" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         </QueryState>
       </section>
     </div>

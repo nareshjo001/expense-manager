@@ -81,8 +81,8 @@ function sampleRequests() {
       status: "ready",
       rowCount: 120,
       fileName: "income.json",
-      dateFrom: null,
-      dateTo: null,
+      dateFrom: "2026-09-01",
+      dateTo: "2026-09-30",
       createdAt: "2026-09-02T10:00:00.000Z",
       expiresAt: "2026-09-09T10:00:00.000Z",
       downloadUrl: "/api/export/download/token-2",
@@ -150,13 +150,42 @@ describe("DataExport -- form", () => {
 
     render(<DataExport />);
 
-    expect(screen.getByLabelText(/from \(optional\)/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/start date/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/^data$/i), { target: { value: "budgets" } });
 
-    expect(screen.queryByLabelText(/from \(optional\)/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/to \(optional\)/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/start date/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/end date/i)).not.toBeInTheDocument();
     expect(screen.getByText(/date range doesn't apply to budgets/i)).toBeInTheDocument();
+  });
+
+  it("prevents submission and toasts MISSING_DATES if dates are missing for non-budgets domain", () => {
+    const mutate = setupCreateMutation();
+    setupDeleteMutation();
+    setupQuery([]);
+
+    render(<DataExport />);
+
+    fireEvent.change(screen.getByLabelText(/^data$/i), { target: { value: "expenses" } });
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+
+    expect(mutate).not.toHaveBeenCalled();
+    expect(exportCreateErrorToast).toHaveBeenCalledWith({ errorCode: "MISSING_DATES" });
+  });
+
+  it("prevents submission and toasts INVALID_DATE_RANGE if startDate is after endDate", () => {
+    const mutate = setupCreateMutation();
+    setupDeleteMutation();
+    setupQuery([]);
+
+    render(<DataExport />);
+
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-02-01" } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: "2026-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+
+    expect(mutate).not.toHaveBeenCalled();
+    expect(exportCreateErrorToast).toHaveBeenCalledWith({ errorCode: "INVALID_DATE_RANGE" });
   });
 
   it("submits the mutation with the selected domain/format/date range", () => {
@@ -168,8 +197,8 @@ describe("DataExport -- form", () => {
 
     fireEvent.change(screen.getByLabelText(/^data$/i), { target: { value: "income" } });
     fireEvent.change(screen.getByLabelText(/^format$/i), { target: { value: "json" } });
-    fireEvent.change(screen.getByLabelText(/from \(optional\)/i), { target: { value: "2026-01-01" } });
-    fireEvent.change(screen.getByLabelText(/to \(optional\)/i), { target: { value: "2026-01-31" } });
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: "2026-01-31" } });
     fireEvent.click(screen.getByRole("button", { name: /export/i }));
 
     expect(mutate).toHaveBeenCalledWith(
@@ -204,6 +233,8 @@ describe("DataExport -- form", () => {
     setupQuery([]);
 
     render(<DataExport />);
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: "2026-01-31" } });
     fireEvent.click(screen.getByRole("button", { name: /export/i }));
     capturedOnSuccess({ file: false });
 
@@ -221,6 +252,8 @@ describe("DataExport -- form", () => {
     setupQuery([]);
 
     render(<DataExport />);
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: "2026-01-31" } });
     fireEvent.click(screen.getByRole("button", { name: /export/i }));
     capturedOnSuccess({ file: true, filename: "expenses.csv" });
 
@@ -238,6 +271,8 @@ describe("DataExport -- form", () => {
     setupQuery([]);
 
     render(<DataExport />);
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: "2026-01-31" } });
     fireEvent.click(screen.getByRole("button", { name: /export/i }));
     capturedOnError({ response: { data: { errorCode: "TOO_MANY_ROWS" } } });
 
@@ -278,12 +313,12 @@ describe("DataExport -- past exports list", () => {
     expect(screen.getByText(/no exports yet/i)).toBeInTheDocument();
   });
 
-  it("renders each request with its domain/format, dates, and status badge", () => {
+  it("renders each request with its domain/format, dates, and status badge inside scrollable container", () => {
     setupQuery(sampleRequests());
     setupCreateMutation();
     setupDeleteMutation();
 
-    render(<DataExport />);
+    const { container } = render(<DataExport />);
 
     expect(screen.getByText(/expenses \(csv\)/i)).toBeInTheDocument();
     expect(screen.getByText("Queued")).toBeInTheDocument();
@@ -295,6 +330,9 @@ describe("DataExport -- past exports list", () => {
     // Check dates rendered
     expect(screen.getByText("01 Oct 2026")).toBeInTheDocument();
     expect(screen.getByText("25 Oct 2026")).toBeInTheDocument();
+
+    // Check scroll container exists
+    expect(container.querySelector(".data-export-list-container")).toBeInTheDocument();
   });
 
   it("opens the actions menu on clicking the 3-dots button", () => {
@@ -312,6 +350,20 @@ describe("DataExport -- past exports list", () => {
 
     expect(screen.getByRole("menuitem", { name: /download/i })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+  });
+
+  it("opens the dropdown upward for the 3rd or later item to prevent clipping in scroll container", () => {
+    setupQuery(sampleRequests());
+    setupCreateMutation();
+    setupDeleteMutation();
+
+    const { container } = render(<DataExport />);
+
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+    // Open 3rd item's menu (index 2)
+    fireEvent.click(menuTriggers[2]);
+
+    expect(container.querySelector(".data-export-menu-dropdown--up")).toBeInTheDocument();
   });
 
   it("shows only delete (no download) in actions menu for queued or failed request", () => {

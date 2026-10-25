@@ -92,12 +92,51 @@ describe("createExport", () => {
     const res = makeRes();
 
     await create.createExport(
-      makeReq({ body: { domain: "expenses", format: "csv", dateFrom: "not-a-date" } }),
+      makeReq({ body: { domain: "expenses", format: "csv", dateFrom: "not-a-date", dateTo: "2026-01-31" } }),
       res
     );
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(jsonBody(res).errorCode).toBe("INVALID_DATE");
+  });
+
+  test("400s with MISSING_DATES when domain is not budgets and dates are missing", async () => {
+    const { create } = loadControllers();
+    const res = makeRes();
+
+    await create.createExport(makeReq({ body: { domain: "expenses", format: "csv" } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(jsonBody(res).errorCode).toBe("MISSING_DATES");
+  });
+
+  test("400s with INVALID_DATE_RANGE when dateFrom is after dateTo", async () => {
+    const { create } = loadControllers();
+    const res = makeRes();
+
+    await create.createExport(
+      makeReq({ body: { domain: "expenses", format: "csv", dateFrom: "2026-02-01", dateTo: "2026-01-01" } }),
+      res
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(jsonBody(res).errorCode).toBe("INVALID_DATE_RANGE");
+  });
+
+  test("allows budgets export without dates", async () => {
+    const createExportRequest = jest.fn().mockResolvedValue({
+      mode: "sync",
+      content: "[]",
+      contentType: "application/json",
+      fileName: "budgets.json",
+      rowCount: 2,
+    });
+    const { create } = loadControllers({ createExportRequest });
+    const res = makeRes();
+
+    await create.createExport(makeReq({ body: { domain: "budgets", format: "json" } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 
   test("200s with the file content and attachment headers on a sync export", async () => {
@@ -111,7 +150,10 @@ describe("createExport", () => {
     const { create } = loadControllers({ createExportRequest });
     const res = makeRes();
 
-    await create.createExport(makeReq({ body: { domain: "expenses", format: "csv" } }), res);
+    await create.createExport(
+      makeReq({ body: { domain: "expenses", format: "csv", dateFrom: "2026-01-01", dateTo: "2026-01-31" } }),
+      res
+    );
 
     expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "text/csv");
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -133,7 +175,10 @@ describe("createExport", () => {
     const { create } = loadControllers({ createExportRequest });
     const res = makeRes();
 
-    await create.createExport(makeReq({ body: { domain: "expenses", format: "csv" } }), res);
+    await create.createExport(
+      makeReq({ body: { domain: "expenses", format: "csv", dateFrom: "2026-01-01", dateTo: "2026-01-31" } }),
+      res
+    );
 
     expect(res.status).toHaveBeenCalledWith(202);
     const body = jsonBody(res);
@@ -152,7 +197,7 @@ describe("createExport", () => {
     const { create } = loadControllers({ createExportRequest });
     const res = makeRes();
 
-    await create.createExport(makeReq({ body: { domain: "all", format: "csv" } }), res);
+    await create.createExport(makeReq({ body: { domain: "all", format: "csv", dateFrom: "2026-01-01", dateTo: "2026-01-31" } }), res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(jsonBody(res).errorCode).toBe(code);
@@ -164,7 +209,7 @@ describe("createExport", () => {
     const { create } = loadControllers({ createExportRequest });
     const res = makeRes();
 
-    await create.createExport(makeReq({ body: { domain: "expenses", format: "csv" } }), res);
+    await create.createExport(makeReq({ body: { domain: "expenses", format: "csv", dateFrom: "2026-01-01", dateTo: "2026-01-31" } }), res);
 
     expect(res.status).toHaveBeenCalledWith(500);
     const body = jsonBody(res);
