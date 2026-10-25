@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { format as formatDate, parseISO } from "date-fns";
-import { FiUpload } from "react-icons/fi";
+import { FiUpload, FiCalendar, FiMoreHorizontal, FiDownload, FiTrash2 } from "react-icons/fi";
 import {
   FaDatabase,
   FaFileAlt,
   FaRegCalendarAlt,
   FaChevronDown,
-  FaDownload,
 } from "react-icons/fa";
 import "../expensesHandling/AddExpense.css";
 import "./DataExport.css";
@@ -14,10 +13,14 @@ import "./DataExport.css";
 import QueryState from "../common/QueryState";
 import { useExportRequestsQuery } from "../../hooks/queries/useExportRequestsQuery";
 import { useCreateExportMutation } from "../../hooks/mutations/useCreateExportMutation";
+import { useDeleteExportMutation } from "../../hooks/mutations/useDeleteExportMutation";
+import { downloadExportFile } from "../../api/exportApi";
 import {
   exportQueuedToast,
   exportDownloadReadyToast,
   exportCreateErrorToast,
+  exportDeleteSuccessToast,
+  exportDeleteErrorToast,
 } from "../alertsEffects/toastMessages";
 
 // DAT-004 -- lets a user export their expenses/income/budgets as a CSV or
@@ -57,14 +60,31 @@ function formatRequestDate(value) {
   }
 }
 
+function formatFilterDate(value) {
+  if (!value) return "--";
+  try {
+    const date = typeof value === "string" && value.length === 10
+      ? parseISO(value)
+      : new Date(value);
+    if (isNaN(date.getTime())) return "--";
+    return formatDate(date, "dd MMM yyyy");
+  } catch {
+    return "--";
+  }
+}
+
 const DataExport = () => {
   const requestsQuery = useExportRequestsQuery();
   const createMutation = useCreateExportMutation();
+  const deleteMutation = useDeleteExportMutation();
 
   const [domain, setDomain] = useState("expenses");
   const [formatValue, setFormatValue] = useState("csv");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const isAllDomain = domain === "all";
   const isBudgetsDomain = domain === "budgets";
@@ -79,6 +99,29 @@ const DataExport = () => {
       setFormatValue("json");
     }
   }, [isAllDomain, formatValue]);
+
+  // Close open action menu on outside click or escape key
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handleDocumentClick = (event) => {
+      if (event.target.closest(".data-export-actions-wrapper")) return;
+      setOpenMenuId(null);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openMenuId]);
 
   const requests = requestsQuery.data?.success ? requestsQuery.data.data : [];
 
@@ -105,6 +148,44 @@ const DataExport = () => {
       },
       onError: (error) => {
         exportCreateErrorToast(error.response?.data);
+      },
+    });
+  };
+
+  const handleDownload = async (request) => {
+    setOpenMenuId(null);
+    const token =
+      request.downloadToken ||
+      (request.downloadUrl ? request.downloadUrl.split("/").pop() : null);
+    if (!token) return;
+
+    try {
+      setDownloadingId(request.id);
+      const result = await downloadExportFile(token);
+      const url = window.URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename || `${request.domain}-export.${request.format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      exportDownloadReadyToast(result.filename);
+    } catch {
+      // ignore download failure or error handled by axios interceptor
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDelete = (request) => {
+    setOpenMenuId(null);
+    deleteMutation.mutate(request.id, {
+      onSuccess: () => {
+        exportDeleteSuccessToast();
+      },
+      onError: (error) => {
+        exportDeleteErrorToast(error?.response?.data);
       },
     });
   };
@@ -259,33 +340,114 @@ const DataExport = () => {
           <ul className="data-export-list">
             {requests.map((request) => (
               <li key={request.id} className="data-export-item">
-                <div className="data-export-item-text">
-                  <div className="data-export-item-title-row">
-                    <span className="data-export-item-name">
-                      {DOMAIN_LABEL[request.domain] || request.domain} (
-                      {FORMAT_LABEL[request.format] || request.format})
-                    </span>
-                    <span className={`data-export-badge data-export-badge--${request.status}`}>
-                      {STATUS_LABEL[request.status] || request.status}
+                {/* Left: Format icon badge & Title/subtitle */}
+                <div className="data-export-item-left">
+                  <div className="data-export-format-badge" aria-hidden="true">
+                    <svg
+                      className="data-export-format-badge-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M4 4C4 2.89543 4.89543 2 6 2H14.5858C15.1163 2 15.6251 2.21071 16 2.58579L19.4142 6C19.7893 6.37486 20 6.88371 20 7.41421V20C20 21.1046 19.1046 22 18 22H6C4.89543 22 4 21.1046 4 20V4Z"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M14 2V7C14 7.55228 14.4477 8 15 8H20"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="data-export-format-badge-text">
+                      {(request.format || "csv").toUpperCase()}
                     </span>
                   </div>
-                  <span className="data-export-item-meta">
-                    Requested {formatRequestDate(request.createdAt) || "--"}
-                    {typeof request.rowCount === "number" ? ` · ${request.rowCount} rows` : ""}
-                  </span>
+
+                  <div className="data-export-item-details">
+                    <h4 className="data-export-item-title">
+                      {DOMAIN_LABEL[request.domain] || request.domain} (
+                      {FORMAT_LABEL[request.format] || request.format})
+                    </h4>
+                    <p className="data-export-item-subtitle">
+                      Requested {formatRequestDate(request.createdAt) || "--"}
+                      {typeof request.rowCount === "number" ? ` · ${request.rowCount} rows` : ""}
+                    </p>
+                  </div>
                 </div>
 
-                {request.status === "ready" && request.downloadUrl && (
-                  <a
-                    className="data-export-download-link"
-                    href={request.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <FaDownload className="data-export-download-icon" aria-hidden="true" />
-                    <span>Download</span>
-                  </a>
-                )}
+                {/* Middle: Date columns */}
+                <div className="data-export-item-dates">
+                  <div className="data-export-date-group">
+                    <span className="data-export-date-label">Start date</span>
+                    <div className="data-export-date-value">
+                      <FiCalendar className="data-export-date-icon" aria-hidden="true" />
+                      <span>{formatFilterDate(request.dateFrom)}</span>
+                    </div>
+                  </div>
+                  <div className="data-export-date-group">
+                    <span className="data-export-date-label">End date</span>
+                    <div className="data-export-date-value">
+                      <FiCalendar className="data-export-date-icon" aria-hidden="true" />
+                      <span>{formatFilterDate(request.dateTo)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Status pill and Action Menu */}
+                <div className="data-export-item-actions-col">
+                  <span className={`data-export-status-pill data-export-status-pill--${request.status}`}>
+                    <span className="data-export-status-dot" aria-hidden="true" />
+                    <span>{STATUS_LABEL[request.status] || request.status}</span>
+                  </span>
+
+                  <div className="data-export-actions-wrapper">
+                    <button
+                      type="button"
+                      className="data-export-menu-trigger"
+                      aria-label="Export actions"
+                      aria-haspopup="menu"
+                      aria-expanded={openMenuId === request.id}
+                      onClick={() =>
+                        setOpenMenuId((prev) => (prev === request.id ? null : request.id))
+                      }
+                    >
+                      <FiMoreHorizontal aria-hidden="true" />
+                    </button>
+
+                    {openMenuId === request.id && (
+                      <div className="data-export-menu-dropdown" role="menu">
+                        {request.status === "ready" && (
+                          <button
+                            type="button"
+                            className="data-export-menu-item"
+                            role="menuitem"
+                            onClick={() => handleDownload(request)}
+                            disabled={downloadingId === request.id}
+                          >
+                            <FiDownload className="data-export-menu-item-icon" aria-hidden="true" />
+                            <span>
+                              {downloadingId === request.id ? "Downloading..." : "Download"}
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="data-export-menu-item data-export-menu-item--delete"
+                          role="menuitem"
+                          onClick={() => handleDelete(request)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <FiTrash2 className="data-export-menu-item-icon" aria-hidden="true" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </li>
             ))}
           </ul>

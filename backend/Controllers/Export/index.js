@@ -3,4 +3,5 @@ module.exports = {
     listExports: require('./list').listExports,
     getExportStatus: require('./status').getExportStatus,
     downloadExport: require('./download').downloadExport,
-}
+    deleteExport: require('./delete').deleteExport,
+};

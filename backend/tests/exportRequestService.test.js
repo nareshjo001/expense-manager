@@ -53,6 +53,12 @@ function buildStore(seedDocs = []) {
         return doc ? { ...doc } : null;
       },
     })),
+    findOneAndDelete: jest.fn(async (filter = {}) => {
+      const idx = state.findIndex((d) => matches(d, filter));
+      if (idx === -1) return null;
+      const [removed] = state.splice(idx, 1);
+      return { ...removed };
+    }),
   };
 }
 
@@ -201,7 +207,7 @@ describe("createExportRequest -- sync path", () => {
     const history = await service.listExportRequests({ userId: USER_ID });
     expect(history).toHaveLength(1);
     expect(history[0].status).toBe("ready");
-    expect(history[0].downloadUrl).toBeNull();
+    expect(history[0].downloadUrl).toEqual(expect.stringContaining("/api/export/download/"));
   });
 
   test("does not persist an ExportRequest if generation fails", async () => {
@@ -363,6 +369,49 @@ describe("resolveDownload", () => {
     });
 
     await expect(service.resolveDownload({ userId: USER_ID, token: "tok" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+  test("generates payload on demand when filePath is missing", async () => {
+    const { service, generateExportPayload } = loadService({
+      docs: [readyRequest({ _id: "r1", userId: USER_ID, downloadToken: "sync-tok", format: "csv", filePath: null })],
+      generateImpl: async () => ({ content: "id,amount\r\n1,250", contentType: "text/csv" }),
+    });
+
+    const result = await service.resolveDownload({ userId: USER_ID, token: "sync-tok" });
+    expect(result.content).toBe("id,amount\r\n1,250");
+    expect(result.contentType).toBe("text/csv");
+    expect(generateExportPayload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("deleteExportRequest", () => {
+  test("deletes an export request for the authenticated user", async () => {
+    const { service, store } = loadService({
+      docs: [readyRequest({ _id: "r1", userId: USER_ID })],
+    });
+
+    const result = await service.deleteExportRequest({ userId: USER_ID, id: "r1" });
+    expect(result.success).toBe(true);
+    expect(result.id).toBe("r1");
+    expect(store.findOneAndDelete).toHaveBeenCalledWith({ _id: "r1", userId: USER_ID });
+    expect(store.state).toHaveLength(0);
+  });
+
+  test("throws NOT_FOUND when attempting to delete another user's export", async () => {
+    const { service } = loadService({
+      docs: [readyRequest({ _id: "r1", userId: OTHER_USER_ID })],
+    });
+
+    await expect(service.deleteExportRequest({ userId: USER_ID, id: "r1" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  test("throws NOT_FOUND when the export id does not exist", async () => {
+    const { service } = loadService({ docs: [] });
+
+    await expect(service.deleteExportRequest({ userId: USER_ID, id: "unknown" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });

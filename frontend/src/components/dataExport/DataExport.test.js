@@ -4,14 +4,18 @@
 // component's own logic (what it renders, what it submits, how it reacts
 // to the mutation's result) is the thing under test.
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import DataExport from "./DataExport";
 import { useExportRequestsQuery } from "../../hooks/queries/useExportRequestsQuery";
 import { useCreateExportMutation } from "../../hooks/mutations/useCreateExportMutation";
+import { useDeleteExportMutation } from "../../hooks/mutations/useDeleteExportMutation";
+import { downloadExportFile } from "../../api/exportApi";
 import {
   exportQueuedToast,
   exportDownloadReadyToast,
   exportCreateErrorToast,
+  exportDeleteSuccessToast,
+  exportDeleteErrorToast,
 } from "../alertsEffects/toastMessages";
 
 jest.mock("../../hooks/queries/useExportRequestsQuery", () => ({
@@ -20,10 +24,18 @@ jest.mock("../../hooks/queries/useExportRequestsQuery", () => ({
 jest.mock("../../hooks/mutations/useCreateExportMutation", () => ({
   useCreateExportMutation: jest.fn(),
 }));
+jest.mock("../../hooks/mutations/useDeleteExportMutation", () => ({
+  useDeleteExportMutation: jest.fn(),
+}));
+jest.mock("../../api/exportApi", () => ({
+  downloadExportFile: jest.fn(),
+}));
 jest.mock("../alertsEffects/toastMessages", () => ({
   exportQueuedToast: jest.fn(),
   exportDownloadReadyToast: jest.fn(),
   exportCreateErrorToast: jest.fn(),
+  exportDeleteSuccessToast: jest.fn(),
+  exportDeleteErrorToast: jest.fn(),
 }));
 
 function setupQuery(data, overrides = {}) {
@@ -36,8 +48,13 @@ function setupQuery(data, overrides = {}) {
   });
 }
 
-function setupMutation(mutate = jest.fn()) {
+function setupCreateMutation(mutate = jest.fn()) {
   useCreateExportMutation.mockReturnValue({ mutate, isPending: false });
+  return mutate;
+}
+
+function setupDeleteMutation(mutate = jest.fn()) {
+  useDeleteExportMutation.mockReturnValue({ mutate, isPending: false });
   return mutate;
 }
 
@@ -50,9 +67,12 @@ function sampleRequests() {
       status: "queued",
       rowCount: null,
       fileName: null,
+      dateFrom: "2026-10-01",
+      dateTo: "2026-10-25",
       createdAt: "2026-09-01T10:00:00.000Z",
       expiresAt: null,
       downloadUrl: null,
+      downloadToken: null,
     },
     {
       id: "2",
@@ -61,9 +81,12 @@ function sampleRequests() {
       status: "ready",
       rowCount: 120,
       fileName: "income.json",
+      dateFrom: null,
+      dateTo: null,
       createdAt: "2026-09-02T10:00:00.000Z",
       expiresAt: "2026-09-09T10:00:00.000Z",
       downloadUrl: "/api/export/download/token-2",
+      downloadToken: "token-2",
     },
     {
       id: "3",
@@ -72,12 +95,21 @@ function sampleRequests() {
       status: "failed",
       rowCount: null,
       fileName: null,
+      dateFrom: null,
+      dateTo: null,
       createdAt: "2026-09-03T10:00:00.000Z",
       expiresAt: null,
       downloadUrl: null,
+      downloadToken: null,
     },
   ];
 }
+
+beforeAll(() => {
+  window.URL.createObjectURL = jest.fn(() => "blob:mock-url");
+  window.URL.revokeObjectURL = jest.fn();
+  jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+});
 
 afterEach(() => {
   jest.clearAllMocks();
@@ -86,7 +118,8 @@ afterEach(() => {
 describe("DataExport -- form", () => {
   it("renders every domain and format option", () => {
     setupQuery([]);
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
@@ -99,7 +132,8 @@ describe("DataExport -- form", () => {
 
   it("disables CSV and forces the format back to JSON once domain is All", () => {
     setupQuery([]);
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
@@ -111,7 +145,8 @@ describe("DataExport -- form", () => {
 
   it("hides the date range fields and shows an explanatory note when domain is Budgets", () => {
     setupQuery([]);
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
@@ -125,7 +160,8 @@ describe("DataExport -- form", () => {
   });
 
   it("submits the mutation with the selected domain/format/date range", () => {
-    const mutate = setupMutation();
+    const mutate = setupCreateMutation();
+    setupDeleteMutation();
     setupQuery([]);
 
     render(<DataExport />);
@@ -143,7 +179,8 @@ describe("DataExport -- form", () => {
   });
 
   it("does not send a date range when domain is Budgets", () => {
-    const mutate = setupMutation();
+    const mutate = setupCreateMutation();
+    setupDeleteMutation();
     setupQuery([]);
 
     render(<DataExport />);
@@ -162,7 +199,8 @@ describe("DataExport -- form", () => {
     const mutate = jest.fn((_payload, { onSuccess }) => {
       capturedOnSuccess = onSuccess;
     });
-    setupMutation(mutate);
+    setupCreateMutation(mutate);
+    setupDeleteMutation();
     setupQuery([]);
 
     render(<DataExport />);
@@ -178,7 +216,8 @@ describe("DataExport -- form", () => {
     const mutate = jest.fn((_payload, { onSuccess }) => {
       capturedOnSuccess = onSuccess;
     });
-    setupMutation(mutate);
+    setupCreateMutation(mutate);
+    setupDeleteMutation();
     setupQuery([]);
 
     render(<DataExport />);
@@ -194,7 +233,8 @@ describe("DataExport -- form", () => {
     const mutate = jest.fn((_payload, { onError }) => {
       capturedOnError = onError;
     });
-    setupMutation(mutate);
+    setupCreateMutation(mutate);
+    setupDeleteMutation();
     setupQuery([]);
 
     render(<DataExport />);
@@ -208,7 +248,8 @@ describe("DataExport -- form", () => {
 describe("DataExport -- past exports list", () => {
   it("shows the loading state while the query is in flight", () => {
     setupQuery(null, { isLoading: true });
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
@@ -218,7 +259,8 @@ describe("DataExport -- past exports list", () => {
   it("shows the error state with a working retry button", () => {
     const refetch = jest.fn();
     setupQuery(null, { isError: true, refetch });
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
@@ -228,16 +270,18 @@ describe("DataExport -- past exports list", () => {
 
   it("shows the empty state when there are no past exports", () => {
     setupQuery([]);
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
     expect(screen.getByText(/no exports yet/i)).toBeInTheDocument();
   });
 
-  it("renders each request with its domain/format and status badge", () => {
+  it("renders each request with its domain/format, dates, and status badge", () => {
     setupQuery(sampleRequests());
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
@@ -247,16 +291,103 @@ describe("DataExport -- past exports list", () => {
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByText(/budgets \(json\)/i)).toBeInTheDocument();
     expect(screen.getByText("Failed")).toBeInTheDocument();
+
+    // Check dates rendered
+    expect(screen.getByText("01 Oct 2026")).toBeInTheDocument();
+    expect(screen.getByText("25 Oct 2026")).toBeInTheDocument();
   });
 
-  it("shows a download link only for the ready request, pointing at its downloadUrl", () => {
+  it("opens the actions menu on clicking the 3-dots button", () => {
     setupQuery(sampleRequests());
-    setupMutation();
+    setupCreateMutation();
+    setupDeleteMutation();
 
     render(<DataExport />);
 
-    const links = screen.getAllByRole("link", { name: /download/i });
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "/api/export/download/token-2");
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+    expect(menuTriggers).toHaveLength(3);
+
+    // Open ready request's menu (second item)
+    fireEvent.click(menuTriggers[1]);
+
+    expect(screen.getByRole("menuitem", { name: /download/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+  });
+
+  it("shows only delete (no download) in actions menu for queued or failed request", () => {
+    setupQuery(sampleRequests());
+    setupCreateMutation();
+    setupDeleteMutation();
+
+    render(<DataExport />);
+
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+
+    // Open queued request's menu (first item)
+    fireEvent.click(menuTriggers[0]);
+
+    expect(screen.queryByRole("menuitem", { name: /download/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+  });
+
+  it("triggers on-demand download and toast when clicking Download", async () => {
+    setupQuery(sampleRequests());
+    setupCreateMutation();
+    setupDeleteMutation();
+
+    downloadExportFile.mockResolvedValueOnce({
+      blob: new Blob(["test-data"], { type: "application/json" }),
+      filename: "income-export.json",
+    });
+
+    render(<DataExport />);
+
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+    fireEvent.click(menuTriggers[1]);
+
+    const downloadBtn = screen.getByRole("menuitem", { name: /download/i });
+    fireEvent.click(downloadBtn);
+
+    await waitFor(() => {
+      expect(downloadExportFile).toHaveBeenCalledWith("token-2");
+      expect(exportDownloadReadyToast).toHaveBeenCalledWith("income-export.json");
+    });
+  });
+
+  it("triggers delete mutation and toast when clicking Delete", () => {
+    let capturedOnSuccess;
+    const mutate = jest.fn((id, { onSuccess }) => {
+      capturedOnSuccess = onSuccess;
+    });
+    setupQuery(sampleRequests());
+    setupCreateMutation();
+    setupDeleteMutation(mutate);
+
+    render(<DataExport />);
+
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+    fireEvent.click(menuTriggers[0]);
+
+    const deleteBtn = screen.getByRole("menuitem", { name: /delete/i });
+    fireEvent.click(deleteBtn);
+
+    expect(mutate).toHaveBeenCalledWith("1", expect.objectContaining({ onSuccess: expect.any(Function) }));
+    capturedOnSuccess();
+    expect(exportDeleteSuccessToast).toHaveBeenCalled();
+  });
+
+  it("closes the open menu on Escape key press", () => {
+    setupQuery(sampleRequests());
+    setupCreateMutation();
+    setupDeleteMutation();
+
+    render(<DataExport />);
+
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+    fireEvent.click(menuTriggers[1]);
+    expect(screen.getByRole("menuitem", { name: /download/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menuitem", { name: /download/i })).not.toBeInTheDocument();
   });
 });
