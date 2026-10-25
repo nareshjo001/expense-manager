@@ -150,7 +150,7 @@ describe("createExportRequest -- row limit", () => {
 });
 
 describe("createExportRequest -- sync path", () => {
-  test("a row count of 0 is a valid empty export, generated synchronously", async () => {
+  test("a row count of 0 is a valid empty export, generated synchronously and persisted as completed", async () => {
     const { service, store, generateExportPayload } = loadService({
       countImpl: async () => 0,
       generateImpl: async () => ({ content: "[]", rowCount: 0, contentType: "application/json" }),
@@ -163,10 +163,20 @@ describe("createExportRequest -- sync path", () => {
     expect(result.content).toBe("[]");
     expect(result.fileName).toEqual(expect.stringContaining("expenses"));
     expect(generateExportPayload).toHaveBeenCalledTimes(1);
-    expect(store.create).not.toHaveBeenCalled();
+    expect(store.create).toHaveBeenCalledTimes(1);
+    expect(store.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        domain: "expenses",
+        format: "json",
+        status: "ready",
+        rowCount: 0,
+        fileName: expect.stringContaining("expenses"),
+      })
+    );
   });
 
-  test("a row count below SYNC_ROW_LIMIT generates inline and creates no ExportRequest document", async () => {
+  test("a row count below SYNC_ROW_LIMIT generates inline and persists an ExportRequest document with no fake download URL", async () => {
     const { SYNC_ROW_LIMIT } = require("../utils/exportTypes");
     const { service, store } = loadService({
       countImpl: async () => SYNC_ROW_LIMIT - 1,
@@ -177,6 +187,35 @@ describe("createExportRequest -- sync path", () => {
 
     expect(result.mode).toBe("sync");
     expect(result.contentType).toBe("text/csv");
+    expect(store.create).toHaveBeenCalledTimes(1);
+    expect(store.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        domain: "expenses",
+        format: "csv",
+        status: "ready",
+        rowCount: SYNC_ROW_LIMIT - 1,
+      })
+    );
+
+    const history = await service.listExportRequests({ userId: USER_ID });
+    expect(history).toHaveLength(1);
+    expect(history[0].status).toBe("ready");
+    expect(history[0].downloadUrl).toBeNull();
+  });
+
+  test("does not persist an ExportRequest if generation fails", async () => {
+    const { service, store } = loadService({
+      countImpl: async () => 10,
+      generateImpl: async () => {
+        throw new Error("Generation error");
+      },
+    });
+
+    await expect(
+      service.createExportRequest({ userId: USER_ID, domain: "expenses", format: "csv" })
+    ).rejects.toThrow("Generation error");
+
     expect(store.create).not.toHaveBeenCalled();
   });
 });
