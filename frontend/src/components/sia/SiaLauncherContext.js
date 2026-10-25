@@ -48,6 +48,8 @@ export const SiaLauncherProvider = ({ children }) => {
           location.pathname.startsWith("/export/") ||
           location.pathname === "/import" ||
           location.pathname.startsWith("/import/") ||
+          location.pathname === "/data-transfer" ||
+          location.pathname.startsWith("/data-transfer/") ||
           location.pathname === "/recurring" ||
           location.pathname.startsWith("/recurring/") ||
           location.pathname === "/receipts" ||

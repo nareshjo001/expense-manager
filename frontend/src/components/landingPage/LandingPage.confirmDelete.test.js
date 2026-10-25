@@ -66,6 +66,7 @@ jest.mock("../imports/Imports", () => {
     // react-router-dom Route above renders every route's element
     // unconditionally regardless of path.
     SiaPreferences: () => null,
+    DataTransfer: () => null,
   };
 });
 

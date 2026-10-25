@@ -11,16 +11,15 @@ import {
     RecurringPage,
     NotificationPreferences,
     SiaPreferences,
-    DataExport,
     ReceiptInbox,
-    ImportWizard
+    DataTransfer
 } from '../imports/Imports';
 import icons from '../imports/iconsImport';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import './LandingPage.css';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
-import { FaWallet, FaPlusCircle, FaChartBar, FaChartPie, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaFileExport, FaReceipt, FaFileImport, FaRobot, FaAngleDoubleLeft, FaAngleDoubleRight } from "react-icons/fa";
+import { FaWallet, FaPlusCircle, FaChartBar, FaChartPie, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaReceipt, FaRobot, FaAngleDoubleLeft, FaAngleDoubleRight, FaExchangeAlt } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
@@ -383,21 +382,12 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                     </Link>
 
                                     <Link
-                                        className={`sidebar-link ${isRouteActive('/import') ? 'sidebar-link-active' : ''}`}
-                                        to="/import"
-                                        title="Import"
+                                        className={`sidebar-link ${isRouteActive('/data-transfer') || isRouteActive('/import') || isRouteActive('/export') ? 'sidebar-link-active' : ''}`}
+                                        to="/data-transfer"
+                                        title="Data Transfer"
                                     >
-                                        <FaFileImport className="sidebar-link-icon" />
-                                        <span className="sidebar-link-label">Import</span>
-                                    </Link>
-
-                                    <Link
-                                        className={`sidebar-link ${isRouteActive('/export') ? 'sidebar-link-active' : ''}`}
-                                        to="/export"
-                                        title="Export"
-                                    >
-                                        <FaFileExport className="sidebar-link-icon" />
-                                        <span className="sidebar-link-label">Export</span>
+                                        <FaExchangeAlt className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Data Transfer</span>
                                     </Link>
                                 </div>
 
@@ -493,9 +483,10 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         <Route path="/recurring" element={<RecurringPage onEditExpense={handleEditFromRecurring} />} />
                                         <Route path="/notification-preferences" element={<NotificationPreferences />} />
                                         <Route path="/sia-settings" element={<SiaPreferences />} />
-                                        <Route path="/export" element={<DataExport />} />
+                                        <Route path="/data-transfer" element={<DataTransfer />} />
+                                        <Route path="/export" element={<DataTransfer initialTab="export" />} />
                                         <Route path="/receipts" element={<ReceiptInbox />} />
-                                        <Route path="/import" element={<ImportWizard />} />
+                                        <Route path="/import" element={<DataTransfer initialTab="import" />} />
                                     </Routes>
                                 </Suspense>
                             </main>
@@ -562,19 +553,14 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <span>SIA Settings</span>
                             </Link>
 
-                            <Link to="/export" className={location.pathname === "/export" ? "active-nav" : ""}>
-                                <FaFileExport />
-                                <span>Export</span>
-                            </Link>
-
                             <Link to="/receipts" className={location.pathname === "/receipts" ? "active-nav" : ""}>
                                 <FaReceipt />
                                 <span>Receipts</span>
                             </Link>
 
-                            <Link to="/import" className={location.pathname === "/import" ? "active-nav" : ""}>
-                                <FaFileImport />
-                                <span>Import</span>
+                            <Link to="/data-transfer" className={["/data-transfer", "/export", "/import"].includes(location.pathname) ? "active-nav" : ""}>
+                                <FaExchangeAlt />
+                                <span>Data Transfer</span>
                             </Link>
                         </nav>
                     }

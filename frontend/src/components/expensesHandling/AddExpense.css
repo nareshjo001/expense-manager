@@ -1310,4 +1310,22 @@
   .add-form-toggle-icon {
     transition: none;
   }
+
+  .data-transfer-panel.add-expense-wrapper {
+    transform: none;
+    animation: none;
+  }
+}
+
+/* Data Transfer content panel: slides in from right on toggle, matching Add Expense / Add Income */
+.data-transfer-panel.add-expense-wrapper {
+  display: block;
+  width: 100%;
+  padding: 0;
+}
+
+@media (max-width: 600px) {
+  .data-transfer-panel.add-expense-wrapper {
+    padding-top: 0;
+  }
 }

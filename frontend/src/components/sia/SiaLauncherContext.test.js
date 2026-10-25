@@ -166,6 +166,12 @@ describe("SiaLauncherContext -- SiaLauncherProvider contract", () => {
     expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
   });
 
+  it("hides only the base launcher on the Data Transfer route", () => {
+    renderProvider(<span>data transfer page</span>, { route: "/data-transfer" });
+
+    expect(screen.queryByRole("button", { name: "Ask SIA" })).not.toBeInTheDocument();
+  });
+
   it("hides only the base launcher on the Recurring route", () => {
     renderProvider(<span>recurring page</span>, { route: "/recurring" });
 
