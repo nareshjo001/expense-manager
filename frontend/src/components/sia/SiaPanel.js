@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FiArrowUpRight, FiClock, FiPlus, FiSend, FiX } from "react-icons/fi";
+import { FiClock, FiPlus, FiSend, FiX, FiChevronRight } from "react-icons/fi";
+import { FaChartBar, FaChartPie, FaChartLine, FaRupeeSign, FaBullseye, FaExclamationCircle, FaWallet } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import SiaSessionList from "./SiaSessionList";
 import SiaGroundingDisclosure from "./SiaGroundingDisclosure";
@@ -40,6 +41,36 @@ function getPlanSummaryLabel(planSummary) {
     return planSummary.periodLabel.trim();
   }
   return null;
+}
+
+
+function getSuggestionIcon(id) {
+  switch (id) {
+    case "spending-current":
+      return <FaChartBar />;
+    case "category-highest":
+      return <FaChartPie />;
+    case "comparison-month":
+      return <FaChartLine />;
+    case "income-expenses":
+      return <FaRupeeSign />;
+    case "budget-track":
+      return <FaBullseye />;
+    case "spending-trend":
+      return <FaChartLine />;
+    case "unusual-recent":
+      return <FaExclamationCircle />;
+    case "cash-flow":
+      return <FaWallet />;
+    default:
+      return <FaChartBar />;
+  }
+}
+
+function formatMessageTime(timestamp) {
+  const date = timestamp ? new Date(timestamp) : new Date();
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function getInterpretationLabel(interpretation) {
@@ -349,7 +380,7 @@ const SiaPanel = ({
           </button>
           <button
             type="button"
-            className="sia-panel-close"
+            className="sia-panel-close sia-header-btn"
             aria-label="Close SIA"
             title="Close"
             onClick={handleClose}
@@ -419,14 +450,27 @@ const SiaPanel = ({
             {showSuggestions && (
               <div className="sia-suggestions">
                 <div className="sia-welcome">
-                  <span className="sia-welcome-icon" aria-hidden="true">
-                    <HiSparkles />
-                  </span>
-                  <div>
+                  <div className="sia-welcome-content">
                     <h3 className="sia-welcome-title">Make sense of your money</h3>
                     <p className="sia-welcome-copy">
                       Ask about your spending, budget, forecasts, or financial risks.
                     </p>
+                  </div>
+                  <div className="sia-welcome-art" aria-hidden="true">
+                    <svg width="68" height="68" viewBox="0 0 68 68" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="34" cy="34" r="32" fill="url(#siaWelcomeGlow)" />
+                      <rect x="20" y="34" width="7" height="18" rx="3.5" fill="#e11d48" fillOpacity="0.75" />
+                      <rect x="30.5" y="24" width="7" height="28" rx="3.5" fill="#d81b60" fillOpacity="0.85" />
+                      <rect x="41" y="16" width="7" height="36" rx="3.5" fill="#c2185b" />
+                      <path d="M53 11L54.5 15L58.5 16.5L54.5 18L53 22L51.5 18L47.5 16.5L51.5 15L53 11Z" fill="#e11d48" />
+                      <path d="M19 44L20 46L22 47L20 48L19 50L18 48L16 47L18 46L19 44Z" fill="#e11d48" fillOpacity="0.6" />
+                      <defs>
+                        <radialGradient id="siaWelcomeGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(34 34) scale(32)">
+                          <stop stopColor="#f472b6" stopOpacity="0.32" />
+                          <stop offset="1" stopColor="#ffe4e6" stopOpacity="0.04" />
+                        </radialGradient>
+                      </defs>
+                    </svg>
                   </div>
                 </div>
                 <p className="sia-suggestions-label">Popular questions</p>
@@ -439,8 +483,11 @@ const SiaPanel = ({
                         onClick={() => handleSuggestion(suggestion.text)}
                         disabled={blockedByAvailability}
                       >
-                        <span>{suggestion.text}</span>
-                        <FiArrowUpRight aria-hidden="true" />
+                        <span className="sia-suggestion-icon-badge" aria-hidden="true">
+                          {getSuggestionIcon(suggestion.id)}
+                        </span>
+                        <span className="sia-suggestion-text">{suggestion.text}</span>
+                        <FiChevronRight className="sia-suggestion-arrow" aria-hidden="true" />
                       </button>
                     </li>
                   ))}
@@ -453,6 +500,8 @@ const SiaPanel = ({
               const isLastMessage = index === messages.length - 1;
               const interpretationLabel = getInterpretationLabel(message.interpretation);
               const planSummaryLabel = getPlanSummaryLabel(message.planSummary);
+              const formattedTime = formatMessageTime(message.createdAt);
+
               return (
               <div
                 key={message.id}
@@ -460,72 +509,68 @@ const SiaPanel = ({
                   message.role === "user" ? "sia-message sia-message-user" : "sia-message sia-message-assistant"
                 }
               >
-                <span className="sia-visually-hidden">
-                  {message.role === "user" ? "You said:" : "SIA said:"}
-                </span>
-                {message.role === "assistant" ? (
-                  <div className="sia-message-text sia-markdown">{renderSiaAnswer(message.content)}</div>
-                ) : (
-                  <p className="sia-message-text">{message.content}</p>
-                )}
-
-                {/* A small, human-readable trust label from server-derived
-                    period metadata. Metrics/internal ids are never rendered. */}
-                {message.role === "assistant" &&
-                  !isClarification &&
-                  (planSummaryLabel ? (
-                    <p className="sia-interpretation">Using {planSummaryLabel}</p>
-                  ) : (
-                    interpretationLabel && <p className="sia-interpretation">Using {interpretationLabel}</p>
-                  ))}
-
-                {/* Workstream 3, part D: each clarification option is its
-                    own accessible button. Clicking one re-submits through
-                    conversation.submitClarificationOption -- the EXACT
-                    same ask-mutation path a typed follow-up uses, never a
-                    one-off fetch. */}
-                {isClarification && (
-                  <div className="sia-clarification-options" role="group" aria-label="Clarification options">
-                    <ul className="sia-clarification-option-list">
-                      {message.options.map((option, optionIndex) => (
-                        <li key={option.id ?? option.label}>
-                          <button
-                            type="button"
-                            className="sia-suggestion sia-clarification-option"
-                            onClick={() => {
-                              if (blockedByAvailability) return;
-                              submitClarificationOption(option);
-                            }}
-                            disabled={blockedByAvailability || isBusy}
-                            ref={isLastMessage && optionIndex === 0 ? firstClarificationOptionRef : undefined}
-                          >
-                            {option.label}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                {message.role === "assistant" && (
+                  <div className="sia-message-avatar" aria-hidden="true">
+                    <HiSparkles />
                   </div>
                 )}
 
-                {/* Batch 3F: only ever considered for an assistant turn --
-                    a user message's `grounding` is never set in the first
-                    place, but the role check here is an explicit second
-                    guard, matching this file's existing defence-in-depth
-                    style (see blockedByAvailability above). */}
-                {message.role === "assistant" && <SiaGroundingDisclosure grounding={message.grounding} />}
+                <div className="sia-message-bubble">
+                  <span className="sia-visually-hidden">
+                    {message.role === "user" ? "You said:" : "SIA said:"}
+                  </span>
+                  {message.role === "assistant" ? (
+                    <div className="sia-message-text sia-markdown">{renderSiaAnswer(message.content)}</div>
+                  ) : (
+                    <p className="sia-message-text">{message.content}</p>
+                  )}
 
-                {/* Workstream 3, part F: speaks ONLY this message's own
-                    rendered answer text -- never grounding internals,
-                    interpretation metadata, or (for a clarification) the
-                    option list as a batch. Renders nothing when
-                    speechSynthesis is unsupported. `stopSignal` changes
-                    whenever the active conversation identity changes (a
-                    new pending question, a mode switch, or the whole panel
-                    unmounting via onClose), which is this component's one
-                    cleanup trigger for every "stop speaking" case. */}
-                {message.role === "assistant" && !isClarification && (
-                  <SiaSpeakButton text={message.content} stopSignal={`${activeSessionId || ""}:${pending ? "pending" : "idle"}:${mode}`} />
-                )}
+                  {message.role === "assistant" &&
+                    !isClarification &&
+                    (planSummaryLabel ? (
+                      <p className="sia-interpretation">Using {planSummaryLabel}</p>
+                    ) : (
+                      interpretationLabel && <p className="sia-interpretation">Using {interpretationLabel}</p>
+                    ))}
+
+                  {isClarification && (
+                    <div className="sia-clarification-options" role="group" aria-label="Clarification options">
+                      <ul className="sia-clarification-option-list">
+                        {message.options.map((option, optionIndex) => (
+                          <li key={option.id ?? option.label}>
+                            <button
+                              type="button"
+                              className="sia-suggestion sia-clarification-option"
+                              onClick={() => {
+                                if (blockedByAvailability) return;
+                                submitClarificationOption(option);
+                              }}
+                              disabled={blockedByAvailability || isBusy}
+                              ref={isLastMessage && optionIndex === 0 ? firstClarificationOptionRef : undefined}
+                            >
+                              {option.label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {message.role === "assistant" && <SiaGroundingDisclosure grounding={message.grounding} />}
+
+                  {message.role === "assistant" && !isClarification && (
+                    <div className="sia-message-actions">
+                      <SiaSpeakButton text={message.content} stopSignal={`${activeSessionId || ""}:${pending ? "pending" : "idle"}:${mode}`} />
+                    </div>
+                  )}
+
+                  <div className="sia-message-footer">
+                    <span className="sia-message-time">{formattedTime}</span>
+                    {message.role === "user" && (
+                      <span className="sia-message-status" aria-hidden="true">✓✓</span>
+                    )}
+                  </div>
+                </div>
 
                 {failed && failed.messageId === message.id && (
                   <div className="sia-error-block">
@@ -536,9 +581,6 @@ const SiaPanel = ({
                         ? "This question could not be retried safely. Please dismiss it and ask again."
                         : failed.message}
                     </p>
-                    {/* A conflict can never be resolved by resending the
-                        same key, so Retry is deliberately not offered for
-                        it -- only a deliberate fresh submission can. */}
                     {failed.code !== SIA_ERROR_CODE.CONFLICT && (
                       <button type="button" className="sia-secondary-btn" onClick={retry}>
                         Retry
@@ -554,17 +596,19 @@ const SiaPanel = ({
             })}
 
             {pending && (
-              <p className="sia-pending" role="status">
-                <span className="sia-thinking-mark" aria-hidden="true">
+              <div className="sia-message sia-message-assistant sia-message-pending" role="status">
+                <div className="sia-message-avatar" aria-hidden="true">
                   <HiSparkles />
-                </span>
-                <span>SIA is thinking</span>
-                <span className="sia-thinking-dots" aria-hidden="true">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-              </p>
+                </div>
+                <div className="sia-message-bubble sia-pending-bubble">
+                  <span className="sia-visually-hidden">SIA is thinking</span>
+                  <span className="sia-thinking-dots" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                </div>
+              </div>
             )}
 
             <div ref={transcriptEndRef} />
@@ -587,32 +631,30 @@ const SiaPanel = ({
                 ref={composerRef}
               />
 
-              <div className="sia-composer-footer">
-                {/* Only surfaces near the limit rather than counting from
-                    zero, so it is information when it matters and noise
-                    never. */}
-                <div className="sia-composer-meta">
-                  {trimmedLength > MAX_QUESTION_LENGTH - 100 && (
-                    <span className={isOverLimit ? "sia-counter sia-counter-over" : "sia-counter"} role="status">
-                      {trimmedLength} / {MAX_QUESTION_LENGTH}
-                    </span>
-                  )}
-                </div>
-
-                <div className="sia-composer-actions">
-                  {/* Workstream 3, part C: renders nothing at all when the
-                      browser can't record (SIA_RECORDER_STATE.UNSUPPORTED
-                      path) or when the backend has not confirmed voice input. */}
-                  {voiceAvailable && (
-                    <SiaVoiceRecorderControls recorder={voiceRecorder} disabled={composerDisabled} />
-                  )}
-                  <button type="submit" className="sia-panel-submit" disabled={submitDisabled}>
-                    <span>Ask</span>
-                    <FiSend aria-hidden="true" />
-                  </button>
-                </div>
+              <div className="sia-composer-actions">
+                {voiceAvailable && (
+                  <SiaVoiceRecorderControls recorder={voiceRecorder} disabled={composerDisabled} />
+                )}
+                <button
+                  type="submit"
+                  className="sia-panel-submit"
+                  disabled={submitDisabled}
+                  aria-label="Ask"
+                  title="Ask"
+                >
+                  <FiSend aria-hidden="true" />
+                  <span className="sia-visually-hidden">Ask</span>
+                </button>
               </div>
             </div>
+
+            {trimmedLength > MAX_QUESTION_LENGTH - 100 && (
+              <div className="sia-composer-meta">
+                <span className={isOverLimit ? "sia-counter sia-counter-over" : "sia-counter"} role="status">
+                  {trimmedLength} / {MAX_QUESTION_LENGTH}
+                </span>
+              </div>
+            )}
 
             {voiceInsertError && (
               <p className="sia-error sia-voice-insert-error" role="alert">

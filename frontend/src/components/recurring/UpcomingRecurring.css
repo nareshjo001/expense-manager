@@ -555,3 +555,41 @@ body:has(.upcoming-recurring) .sia-entry-point {
     font-size: 0.95rem;
   }
 }
+
+.light-theme .upcoming-recurring-page button.primary-btn,
+.light-theme .upcoming-recurring-page button[type="submit"],
+.light-theme .upcoming-recurring-page .upcoming-action-btn {
+  background: #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .upcoming-recurring-page button.primary-btn:hover,
+.light-theme .upcoming-recurring-page button[type="submit"]:hover,
+.light-theme .upcoming-recurring-page .upcoming-action-btn:hover {
+  background: #F48FBE !important;
+}
+
+.light-theme .upcoming-recurring-page button.primary-btn:active,
+.light-theme .upcoming-recurring-page button[type="submit"]:active,
+.light-theme .upcoming-recurring-page .upcoming-action-btn:active {
+  background: #EE7FB0 !important;
+}
+
+.dark-theme .upcoming-recurring-page button.primary-btn,
+.dark-theme .upcoming-recurring-page button[type="submit"],
+.dark-theme .upcoming-recurring-page .upcoming-action-btn {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .upcoming-recurring-page button.primary-btn:hover,
+.dark-theme .upcoming-recurring-page button[type="submit"]:hover,
+.dark-theme .upcoming-recurring-page .upcoming-action-btn:hover {
+  background: #60A5FA !important;
+}
+
+.dark-theme .upcoming-recurring-page button.primary-btn:active,
+.dark-theme .upcoming-recurring-page button[type="submit"]:active,
+.dark-theme .upcoming-recurring-page .upcoming-action-btn:active {
+  background: #2563EB !important;
+}

@@ -689,3 +689,33 @@
     transform-origin: bottom right;
   }
 }
+
+.light-theme .ai-summary-generate-btn {
+  background: #F8AECB !important;
+  color: #72143D !important;
+}
+.light-theme .ai-summary-generate-btn:hover:not(:disabled) {
+  background: #F48FBE !important;
+}
+.light-theme .ai-summary-generate-btn:active:not(:disabled) {
+  background: #EE7FB0 !important;
+}
+.light-theme .ai-summary-generate-btn:disabled {
+  background: #FAD9E7 !important;
+  color: #C49EAF !important;
+}
+
+.dark-theme .ai-summary-generate-btn {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+.dark-theme .ai-summary-generate-btn:hover:not(:disabled) {
+  background: #60A5FA !important;
+}
+.dark-theme .ai-summary-generate-btn:active:not(:disabled) {
+  background: #2563EB !important;
+}
+.dark-theme .ai-summary-generate-btn:disabled {
+  background: #1E293B !important;
+  color: #64748B !important;
+}

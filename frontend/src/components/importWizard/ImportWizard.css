@@ -755,3 +755,101 @@ body:has(.import-wizard-page) .sia-entry-point {
         box-sizing: border-box;
     }
 }
+
+/* Light Theme Button Palette */
+.light-theme .import-choose-file-btn,
+:root:not(.dark-theme) .import-choose-file-btn,
+.light-theme .import-wizard-primary-btn,
+:root:not(.dark-theme) .import-wizard-primary-btn {
+    background: #F8AECB !important;
+    color: #72143D !important;
+    box-shadow: 0 4px 12px rgba(248, 174, 203, 0.4) !important;
+}
+
+.light-theme .import-choose-file-btn:hover,
+:root:not(.dark-theme) .import-choose-file-btn:hover,
+.light-theme .import-wizard-primary-btn:hover:not(:disabled),
+:root:not(.dark-theme) .import-wizard-primary-btn:hover:not(:disabled) {
+    background: #F48FBE !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(244, 143, 190, 0.45) !important;
+}
+
+.light-theme .import-choose-file-btn:active,
+:root:not(.dark-theme) .import-choose-file-btn:active,
+.light-theme .import-wizard-primary-btn:active:not(:disabled),
+:root:not(.dark-theme) .import-wizard-primary-btn:active:not(:disabled) {
+    background: #EE7FB0 !important;
+    transform: translateY(0);
+}
+
+.light-theme .import-wizard-primary-btn:disabled,
+:root:not(.dark-theme) .import-wizard-primary-btn:disabled {
+    background: #FAD9E7 !important;
+    color: #C49EAF !important;
+    box-shadow: none !important;
+}
+
+.light-theme .import-wizard-secondary-btn,
+:root:not(.dark-theme) .import-wizard-secondary-btn {
+    background: transparent !important;
+    border: 1.5px solid #F8AECB !important;
+    color: #72143D !important;
+}
+
+.light-theme .import-wizard-secondary-btn:hover,
+:root:not(.dark-theme) .import-wizard-secondary-btn:hover {
+    background: #FDEEF5 !important;
+    border-color: #F48FBE !important;
+    color: #72143D !important;
+}
+
+.light-theme .import-wizard-secondary-btn:active,
+:root:not(.dark-theme) .import-wizard-secondary-btn:active {
+    background: #FAD9E7 !important;
+    border-color: #EE7FB0 !important;
+}
+
+/* Dark Theme Button Palette */
+.dark-theme .import-choose-file-btn,
+.dark-theme .import-wizard-primary-btn {
+    background: #3B82F6 !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
+}
+
+.dark-theme .import-choose-file-btn:hover,
+.dark-theme .import-wizard-primary-btn:hover:not(:disabled) {
+    background: #60A5FA !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(96, 165, 250, 0.45) !important;
+}
+
+.dark-theme .import-choose-file-btn:active,
+.dark-theme .import-wizard-primary-btn:active:not(:disabled) {
+    background: #2563EB !important;
+    transform: translateY(0);
+}
+
+.dark-theme .import-wizard-primary-btn:disabled {
+    background: #1E293B !important;
+    color: #64748B !important;
+    box-shadow: none !important;
+}
+
+.dark-theme .import-wizard-secondary-btn {
+    background: transparent !important;
+    border: 1.5px solid #3B82F6 !important;
+    color: #FFFFFF !important;
+}
+
+.dark-theme .import-wizard-secondary-btn:hover {
+    background: #1A2748 !important;
+    border-color: #60A5FA !important;
+    color: #FFFFFF !important;
+}
+
+.dark-theme .import-wizard-secondary-btn:active {
+    background: #1E293B !important;
+    border-color: #2563EB !important;
+}

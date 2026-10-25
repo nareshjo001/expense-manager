@@ -243,7 +243,7 @@ const TrendChartPage = ({ expenses }) => {
       )}
 
       {viewBy === '' && (
-        <p style={{ textAlign: 'center', fontSize: '20px' }}>
+        <p className="chart-empty-prompt" style={{ textAlign: 'center', fontSize: '20px' }}>
           Select desirable filter to visualize!
         </p>
       )}

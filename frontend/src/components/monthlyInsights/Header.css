@@ -1375,3 +1375,47 @@
     grid-template-columns: repeat(2, 1fr) !important;
   }
 }
+
+.light-theme .budget-modal-actions .save-btn {
+  background: #F8AECB;
+  color: #72143D;
+}
+.light-theme .budget-modal-actions .save-btn:hover {
+  background: #F48FBE;
+}
+.light-theme .budget-modal-actions .save-btn:active {
+  background: #EE7FB0;
+}
+.light-theme .budget-modal-actions .cancel-btn {
+  background: transparent;
+  border: 1.5px solid #F8AECB;
+  color: #72143D;
+}
+.light-theme .budget-modal-actions .cancel-btn:hover {
+  background: #FDEEF5;
+  border-color: #F48FBE;
+}
+
+.dark-theme .budget-modal-actions .save-btn {
+  background: #3B82F6;
+  color: #FFFFFF;
+}
+.dark-theme .budget-modal-actions .save-btn:hover {
+  background: #60A5FA;
+}
+.dark-theme .budget-modal-actions .save-btn:active {
+  background: #2563EB;
+}
+.dark-theme .budget-modal-actions .cancel-btn {
+  background: transparent;
+  border: 1.5px solid #3B82F6;
+  color: #FFFFFF;
+}
+.dark-theme .budget-modal-actions .cancel-btn:hover {
+  background: #1A2748;
+  border-color: #60A5FA;
+}
+.dark-theme .budget-modal-actions .cancel-btn:active {
+  background: #1E293B;
+  border-color: #2563EB;
+}

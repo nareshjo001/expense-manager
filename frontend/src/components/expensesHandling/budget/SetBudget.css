@@ -31,10 +31,29 @@
   background: var(--surface-card);
 }
 
+
 .light-theme .setbudget-button,
 .light-theme .set-budget .confirm:not(:disabled) {
-  color: #FFFFFF;
+  background: #F8AECB;
+  color: #72143D;
 }
+
+.light-theme .setbudget-button:hover,
+.light-theme .set-budget .confirm:not(:disabled):hover {
+  background: #F48FBE;
+}
+
+.light-theme .setbudget-button:active,
+.light-theme .set-budget .confirm:not(:disabled):active {
+  background: #EE7FB0;
+}
+
+.light-theme .set-budget .confirm:disabled,
+.light-theme .setbudget-button:disabled {
+  background: #FAD9E7;
+  color: #C49EAF;
+}
+
 
 .set-budget input:focus{
   box-shadow: var(--box-shadow);
@@ -116,4 +135,37 @@
   .set-budget input {
     width: 50%;
   }
+}
+
+.dark-theme .setbudget-button,
+.dark-theme .set-budget .confirm:not(:disabled) {
+  background: #3B82F6;
+  color: #FFFFFF;
+}
+
+.dark-theme .setbudget-button:hover,
+.dark-theme .set-budget .confirm:not(:disabled):hover {
+  background: #60A5FA;
+}
+
+.dark-theme .setbudget-button:active,
+.dark-theme .set-budget .confirm:not(:disabled):active {
+  background: #2563EB;
+}
+
+.dark-theme .set-budget .confirm:disabled,
+.dark-theme .setbudget-button:disabled {
+  background: #1E293B;
+  color: #64748B;
+}
+
+.dark-theme .set-budget input {
+  border-color: #1E293B;
+  background: #080E1C;
+  color: #FFFFFF;
+}
+
+.dark-theme .set-budget input:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }

@@ -55,6 +55,22 @@ describe("mapAndValidateRow", () => {
     });
   });
 
+  test("DD-MM-YYYY date format maps cleanly to normalized YYYY-MM-DD", () => {
+    const rawRow = ["25-10-2026", "250.00", "Programming Course", "Education"];
+    const { mapped, validationErrors } = mapAndValidateRow({ headerRow, rawRow, columnMapping });
+
+    expect(validationErrors).toEqual([]);
+    expect(mapped.expenseDate).toBe("2026-10-25");
+  });
+
+  test("DD/MM/YYYY date format maps cleanly to normalized YYYY-MM-DD", () => {
+    const rawRow = ["25/10/2026", "250.00", "Programming Course", "Education"];
+    const { mapped, validationErrors } = mapAndValidateRow({ headerRow, rawRow, columnMapping });
+
+    expect(validationErrors).toEqual([]);
+    expect(mapped.expenseDate).toBe("2026-10-25");
+  });
+
   test("missing merchant cell -> MISSING_MERCHANT, expenseName null", () => {
     const rawRow = ["2026-01-15", "42.50", "", "Groceries"];
     const { mapped, validationErrors } = mapAndValidateRow({ headerRow, rawRow, columnMapping });

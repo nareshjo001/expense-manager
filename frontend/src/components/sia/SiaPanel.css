@@ -1605,6 +1605,532 @@
    same safe-fallback pattern used on the desktop panel above -- dvh
    accounts for mobile browsers' collapsing/expanding chrome so the panel
    never sits taller than the actually-visible viewport. */
+
+/* ==========================================================================
+   Ask SIA Redesign: Matching Mockup (Initial Welcome & Chat UI)
+   ========================================================================== */
+
+.sia-panel {
+  border-radius: 24px;
+  background: var(--sia-bg);
+  box-shadow: 0 20px 50px rgba(88, 51, 72, 0.16);
+  border: 1px solid var(--sia-border);
+}
+
+/* Header */
+.sia-panel-header {
+  min-height: 64px;
+  padding: 14px 18px;
+  background: var(--sia-bg);
+  border-bottom: 1px solid var(--sia-border);
+  box-shadow: none;
+}
+
+.sia-panel-brand {
+  gap: 12px;
+}
+
+.sia-brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #cb1e5c;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 10px rgba(203, 30, 92, 0.25);
+  flex-shrink: 0;
+}
+
+.sia-brand-mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.sia-panel-heading {
+  color: var(--sia-text);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sia-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 999px;
+}
+
+.sia-header-btn,
+.sia-panel-close.sia-header-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  color: var(--sia-muted-text);
+  background: transparent;
+  border: none;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sia-header-btn:hover:not(:disabled),
+.sia-panel-close.sia-header-btn:hover,
+.sia-header-btn-active {
+  background: rgba(203, 30, 92, 0.1);
+  color: var(--sia-accent);
+}
+
+/* Welcome Card (Hero) */
+.sia-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 20px;
+  background: linear-gradient(135deg, #fff2f6 0%, #ffeaf2 100%);
+  border: 1px solid rgba(225, 29, 116, 0.14);
+  border-radius: 20px;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 16px rgba(203, 30, 92, 0.05);
+}
+
+.dark-theme .sia-welcome {
+  background: linear-gradient(135deg, #261622 0%, #1e131b 100%);
+  border-color: rgba(244, 114, 182, 0.2);
+}
+
+.sia-welcome-content {
+  flex: 1;
+}
+
+.sia-welcome-title {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #581838;
+}
+
+.dark-theme .sia-welcome-title {
+  color: #fbcfe8;
+}
+
+.sia-welcome-copy {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #7a5068;
+}
+
+.dark-theme .sia-welcome-copy {
+  color: #cbd5e1;
+}
+
+.sia-welcome-art {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Suggestions List */
+.sia-suggestions-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a6a7c;
+  margin: 0 4px 12px;
+}
+
+.dark-theme .sia-suggestions-label {
+  color: #94a3b8;
+}
+
+.sia-suggestion-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sia-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(88, 51, 72, 0.04);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.sia-suggestion:hover:not(:disabled) {
+  background: var(--sia-accent-soft);
+  border-color: var(--sia-border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(203, 30, 92, 0.08);
+}
+
+.sia-suggestion-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(203, 30, 92, 0.08);
+  color: #cb1e5c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.dark-theme .sia-suggestion-icon-badge {
+  background: rgba(244, 114, 182, 0.15);
+  color: #f472b6;
+}
+
+.sia-suggestion-text {
+  flex: 1;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--sia-text);
+  line-height: 1.35;
+}
+
+.sia-suggestion-arrow {
+  font-size: 1.1rem;
+  color: #cb1e5c;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.dark-theme .sia-suggestion-arrow {
+  color: #f472b6;
+}
+
+/* Chat Messages */
+.sia-transcript {
+  padding: 18px 20px;
+  gap: 16px;
+}
+
+/* User Message */
+.sia-message-user {
+  max-width: 82%;
+  align-self: flex-end;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.sia-message-user .sia-message-bubble {
+  background: #cb1e5c;
+  color: #ffffff;
+  border-radius: 18px 18px 4px 18px;
+  padding: 12px 18px;
+  box-shadow: 0 4px 14px rgba(203, 30, 92, 0.22);
+}
+
+.sia-message-user .sia-message-text {
+  color: #ffffff;
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.sia-message-user .sia-message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.sia-message-status {
+  font-size: 0.82rem;
+  letter-spacing: -0.1em;
+}
+
+/* Assistant Message */
+.sia-message-assistant {
+  max-width: 88%;
+  align-self: flex-start;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.sia-message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #cb1e5c;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+  box-shadow: 0 2px 8px rgba(203, 30, 92, 0.25);
+}
+
+.dark-theme .sia-message-avatar {
+  background: #be185d;
+}
+
+.sia-message-assistant .sia-message-bubble {
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 4px 18px 18px 18px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 10px rgba(88, 51, 72, 0.05);
+  flex: 1;
+}
+
+.sia-message-assistant .sia-message-text {
+  color: var(--sia-text);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.sia-message-assistant .sia-message-text strong {
+  font-weight: 700;
+  color: #111827;
+}
+
+.dark-theme .sia-message-assistant .sia-message-text strong {
+  color: #ffffff;
+}
+
+.sia-message-assistant .sia-message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--sia-muted-text);
+}
+
+/* Grounding Disclosure Pill */
+.sia-grounding {
+  margin-top: 10px;
+}
+
+.sia-grounding-toggle {
+  min-height: 30px;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #6b4d5e;
+  background: var(--sia-surface);
+  border: 1px solid var(--sia-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dark-theme .sia-grounding-toggle {
+  color: #cbd5e1;
+}
+
+.sia-grounding-toggle:hover {
+  background: var(--sia-accent-soft);
+  border-color: var(--sia-border-strong);
+}
+
+/* Listen / Speak Button */
+.sia-message-actions {
+  margin-top: 10px;
+}
+
+.sia-speak-btn {
+  min-height: 32px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--sia-border);
+  background: var(--sia-surface);
+  color: #581838;
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dark-theme .sia-speak-btn {
+  color: #fbcfe8;
+}
+
+.sia-speak-btn:hover {
+  background: var(--sia-accent-soft);
+  border-color: var(--sia-border-strong);
+}
+
+.sia-speak-icon {
+  font-size: 0.95rem;
+}
+
+/* Pending / Thinking State */
+.sia-message-pending {
+  align-self: flex-start;
+}
+
+.sia-pending-bubble {
+  background: #fdf5f9;
+  border: 1px solid #fae1ee;
+  border-radius: 14px;
+  padding: 10px 16px;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 2px 6px rgba(203, 30, 92, 0.05);
+}
+
+.dark-theme .sia-pending-bubble {
+  background: #251622;
+  border-color: #3b2234;
+}
+
+.sia-pending-bubble .sia-thinking-dots i {
+  width: 6px;
+  height: 6px;
+  background: #cb1e5c;
+}
+
+/* Bottom Composer */
+.sia-composer {
+  padding: 12px 18px 18px;
+  background: var(--sia-bg);
+  border-top: 1px solid var(--sia-border);
+  box-shadow: 0 -4px 16px rgba(88, 51, 72, 0.04);
+}
+
+.sia-composer-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 18px;
+  background: var(--sia-surface);
+  border: 1.5px solid var(--sia-border);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(100, 30, 60, 0.04);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.sia-composer-box:focus-within {
+  border-color: #cb1e5c;
+  box-shadow: 0 0 0 3px rgba(203, 30, 92, 0.12);
+}
+
+.sia-panel-input {
+  flex: 1 1 auto;
+  min-height: 24px;
+  max-height: 90px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--sia-text);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  outline: none;
+  resize: none;
+}
+
+.sia-panel-input::placeholder {
+  color: var(--sia-muted-text);
+  opacity: 0.75;
+}
+
+.sia-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sia-mic-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sia-border);
+  background: transparent;
+  color: #cb1e5c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.dark-theme .sia-mic-btn {
+  color: #f472b6;
+}
+
+.sia-mic-btn:hover:not(:disabled) {
+  background: var(--sia-accent-soft);
+  border-color: var(--sia-border-strong);
+}
+
+.sia-panel-submit {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 12px;
+  background: #cb1e5c;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(203, 30, 92, 0.3);
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.sia-panel-submit:hover:not(:disabled) {
+  background: #a91248;
+  transform: scale(1.04);
+}
+
+.sia-panel-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
 @media screen and (max-width: 600px) {
   .sia-entry-point {
     /* Reserve space for both the fixed bottom navigation and its nearby
@@ -1708,4 +2234,126 @@
     transition: none;
     animation: none;
   }
+}
+
+/* Light Theme Button Palette Overrides */
+.sia-root.light-theme .sia-entry-point,
+:root:not(.dark-theme) .sia-entry-point {
+  background: #F8AECB;
+  color: #72143D;
+  border: 1px solid #EE7FB0;
+}
+
+.sia-root.light-theme .sia-entry-point:hover,
+:root:not(.dark-theme) .sia-entry-point:hover {
+  background: #F48FBE;
+  color: #72143D;
+}
+
+.sia-root.light-theme .sia-entry-point:active,
+:root:not(.dark-theme) .sia-entry-point:active {
+  background: #EE7FB0;
+  color: #72143D;
+}
+
+.sia-root.light-theme .sia-entry-point svg,
+:root:not(.dark-theme) .sia-entry-point svg,
+.sia-root.light-theme .sia-entry-point span,
+:root:not(.dark-theme) .sia-entry-point span {
+  color: #72143D;
+  fill: currentColor;
+}
+
+.sia-root.light-theme .sia-send-button {
+  background: #F8AECB;
+  color: #72143D;
+}
+
+.sia-root.light-theme .sia-send-button:hover:not(:disabled) {
+  background: #F48FBE;
+}
+
+.sia-root.light-theme .sia-send-button:active:not(:disabled) {
+  background: #EE7FB0;
+}
+
+.sia-root.light-theme .sia-send-button:disabled {
+  background: #FAD9E7;
+  color: #C49EAF;
+}
+
+.sia-root.light-theme .sia-quick-prompt {
+  background: #FDEEF5;
+  border-color: #F8AECB;
+  color: #72143D;
+}
+
+.sia-root.light-theme .sia-quick-prompt:hover {
+  background: #F48FBE;
+  border-color: #F48FBE;
+}
+
+.sia-root.light-theme .sia-header-action-button {
+  background: #FDEEF5;
+  color: #72143D;
+}
+
+.sia-root.light-theme .sia-header-action-button:hover {
+  background: #F48FBE;
+}
+
+/* Dark Theme Button Palette Overrides */
+.sia-root.dark-theme .sia-entry-point {
+  background: #3B82F6;
+  color: #FFFFFF;
+}
+
+.sia-root.dark-theme .sia-entry-point:hover {
+  background: #60A5FA;
+}
+
+.sia-root.dark-theme .sia-entry-point:active {
+  background: #2563EB;
+}
+
+.sia-root.dark-theme .sia-send-button,
+.dark-theme .sia-panel-submit {
+  background: #3B82F6;
+  color: #FFFFFF;
+}
+
+.sia-root.dark-theme .sia-send-button:hover:not(:disabled),
+.dark-theme .sia-panel-submit:hover:not(:disabled) {
+  background: #60A5FA;
+}
+
+.sia-root.dark-theme .sia-send-button:active:not(:disabled),
+.dark-theme .sia-panel-submit:active:not(:disabled) {
+  background: #2563EB;
+}
+
+.sia-root.dark-theme .sia-send-button:disabled,
+.dark-theme .sia-panel-submit:disabled {
+  background: #1E293B;
+  color: #64748B;
+}
+
+.sia-root.dark-theme .sia-quick-prompt {
+  background: #1A2748;
+  border-color: #3B82F6;
+  color: #FFFFFF;
+}
+
+.sia-root.dark-theme .sia-quick-prompt:hover {
+  background: #60A5FA;
+  border-color: #60A5FA;
+}
+
+.sia-root.dark-theme .sia-header-action-button {
+  background: #1A2748;
+  color: #FFFFFF;
+}
+
+.sia-root.dark-theme .sia-header-action-button:hover {
+  background: #60A5FA;
 }

@@ -48,6 +48,7 @@ export function siaConversationReducer(state, action) {
         id: nextMessageId(),
         role: "user",
         content: action.question,
+        createdAt: Date.now(),
       };
       return {
         ...state,
@@ -80,6 +81,7 @@ export function siaConversationReducer(state, action) {
         // Workstream 3: the server's period/metric interpretation summary
         interpretation: action.interpretation,
         planSummary: action.planSummary,
+        createdAt: Date.now(),
       };
       return {
         ...state,
@@ -188,7 +190,13 @@ export function normalizeServerMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-    .map((m) => ({ id: nextMessageId(), role: m.role, content: m.content, grounding: m.grounding }));
+    .map((m) => ({
+      id: nextMessageId(),
+      role: m.role,
+      content: m.content,
+      grounding: m.grounding,
+      createdAt: m.createdAt || m.timestamp || Date.now(),
+    }));
 }
 
 export const MAX_QUESTION_LENGTH = 500;

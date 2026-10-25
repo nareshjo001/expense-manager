@@ -6,6 +6,7 @@
 // suggestedMapping, and mapAndValidateRow is run once per CSV data row
 // while building an ImportSession's `rows` subdocuments.
 const { sanitizeCsvCell } = require("../../utils/csvStreamParser");
+const { parseCsvDate } = require("../../utils/dateParsing");
 const {
   IMPORT_TARGET_FIELDS,
   IMPORT_ROW_ERROR_CODES,
@@ -89,12 +90,12 @@ function mapAndValidateRow({ headerRow, rawRow, columnMapping }) {
     validationErrors.push(IMPORT_ROW_ERROR_CODES.MISSING_DATE);
     expenseDate = null;
   } else {
-    const parsedDate = new Date(dateCell);
-    if (Number.isNaN(parsedDate.getTime())) {
+    const parsedDate = parseCsvDate(dateCell);
+    if (!parsedDate) {
       validationErrors.push(IMPORT_ROW_ERROR_CODES.INVALID_DATE);
       expenseDate = null;
     } else {
-      expenseDate = dateCell;
+      expenseDate = parsedDate;
     }
   }
 

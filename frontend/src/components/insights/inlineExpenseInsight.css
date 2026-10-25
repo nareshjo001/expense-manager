@@ -125,12 +125,20 @@
     box-shadow: 0 10px 24px rgba(59, 130, 246, 0.35);
 }
 
+.light-theme .insight-title {
+    color: #9d174d;
+}
+
 .light-theme .insight-item {
     background: rgba(255, 255, 255, 0.6);
 }
 
 .light-theme .insight-item p {
-    color: var(--text-color);
+    color: #9d174d;
+}
+
+.dark-theme .insight-title {
+    color: rgba(249, 250, 251, 0.9);
 }
 
 .dark-theme .insight-item {

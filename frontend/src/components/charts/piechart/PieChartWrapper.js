@@ -15,7 +15,7 @@ const renderActiveShape = (theme, isCount, isMobile) => (props) => {
   const sin = Math.sin(-RADIAN * midAngle);
   const cos = Math.cos(-RADIAN * midAngle);
   
-  const light = ['#ad1457', '#000']; 
+  const light = ['#ad1457', '#9d174d']; 
   const dark = ['#F3E8FF', '#60A5FA'];
   const hoverColors = theme === 'dark-theme' ? dark : light;
   
@@ -189,6 +189,7 @@ const PieChartWrapper = ({ data, show }) => {
   return (
       <div style={{ width: '100%', height: 420, position: 'relative' }}>
         <p
+          className="chart-interaction-hint"
           style={{
             position: 'absolute',
             top: 12,
