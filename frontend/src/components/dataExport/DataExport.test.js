@@ -352,18 +352,37 @@ describe("DataExport -- past exports list", () => {
     expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
   });
 
-  it("opens the dropdown upward for the 3rd or later item to prevent clipping in scroll container", () => {
+  it("opens the dropdown upward on top to prevent clipping in scroll container", () => {
     setupQuery(sampleRequests());
     setupCreateMutation();
     setupDeleteMutation();
 
-    const { container } = render(<DataExport />);
+    render(<DataExport />);
 
     const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
-    // Open 3rd item's menu (index 2)
-    fireEvent.click(menuTriggers[2]);
+    fireEvent.click(menuTriggers[0]);
 
-    expect(container.querySelector(".data-export-menu-dropdown--up")).toBeInTheDocument();
+    expect(document.body.querySelector(".data-export-menu-dropdown--up")).toBeInTheDocument();
+  });
+
+  it("ensures only one menu can be open at a time and closes on scroll", () => {
+    setupQuery(sampleRequests());
+    setupCreateMutation();
+    setupDeleteMutation();
+
+    render(<DataExport />);
+
+    const menuTriggers = screen.getAllByRole("button", { name: /export actions/i });
+    fireEvent.click(menuTriggers[0]);
+    expect(document.body.querySelectorAll(".data-export-menu-dropdown")).toHaveLength(1);
+
+    // Clicking second trigger switches menu, still exactly 1 open
+    fireEvent.click(menuTriggers[1]);
+    expect(document.body.querySelectorAll(".data-export-menu-dropdown")).toHaveLength(1);
+
+    // Scrolling closes the menu
+    fireEvent.scroll(window);
+    expect(document.body.querySelectorAll(".data-export-menu-dropdown")).toHaveLength(0);
   });
 
   it("shows only delete (no download) in actions menu for queued or failed request", () => {

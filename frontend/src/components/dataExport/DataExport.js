@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { format as formatDate, parseISO } from "date-fns";
 import { FiUpload, FiCalendar, FiMoreHorizontal, FiDownload, FiTrash2 } from "react-icons/fi";
 import {
@@ -84,6 +85,7 @@ const DataExport = () => {
   const [dateTo, setDateTo] = useState("");
 
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuCoords, setMenuCoords] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
 
   const isAllDomain = domain === "all";
@@ -100,30 +102,67 @@ const DataExport = () => {
     }
   }, [isAllDomain, formatValue]);
 
-  // Close open action menu on outside click or escape key
+  // Close open action menu on outside click, window/container scroll, or escape key
   useEffect(() => {
     if (!openMenuId) return;
 
-    const handleDocumentClick = (event) => {
-      if (event.target.closest(".data-export-actions-wrapper")) return;
+    const handleScroll = () => {
       setOpenMenuId(null);
+      setMenuCoords(null);
+    };
+
+    const handleDocumentClick = (event) => {
+      if (
+        event.target.closest(".data-export-menu-dropdown") ||
+        event.target.closest(".data-export-menu-trigger")
+      ) {
+        return;
+      }
+      setOpenMenuId(null);
+      setMenuCoords(null);
     };
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         setOpenMenuId(null);
+        setMenuCoords(null);
       }
     };
 
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleScroll);
     document.addEventListener("mousedown", handleDocumentClick);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleScroll);
       document.removeEventListener("mousedown", handleDocumentClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [openMenuId]);
 
   const requests = requestsQuery.data?.success ? requestsQuery.data.data : [];
+  const activeRequest = requests.find((r) => r.id === openMenuId);
+
+  const handleToggleMenu = (e, request) => {
+    e.stopPropagation();
+    if (openMenuId === request.id) {
+      setOpenMenuId(null);
+      setMenuCoords(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      // Keep menu on top (above the trigger button) when opened.
+      // If trigger is very close to top of viewport (< 90px), fall back to opening downward.
+      const shouldOpenUpward = rect.top === 0 || rect.top >= 90;
+      setOpenMenuId(request.id);
+      setMenuCoords({
+        openUpward: shouldOpenUpward,
+        top: shouldOpenUpward ? undefined : rect.bottom + 6,
+        bottom: shouldOpenUpward ? window.innerHeight - rect.top + 6 : undefined,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -163,6 +202,7 @@ const DataExport = () => {
 
   const handleDownload = async (request) => {
     setOpenMenuId(null);
+    setMenuCoords(null);
     const token =
       request.downloadToken ||
       (request.downloadUrl ? request.downloadUrl.split("/").pop() : null);
@@ -189,6 +229,7 @@ const DataExport = () => {
 
   const handleDelete = (request) => {
     setOpenMenuId(null);
+    setMenuCoords(null);
     deleteMutation.mutate(request.id, {
       onSuccess: () => {
         exportDeleteSuccessToast();
@@ -354,7 +395,7 @@ const DataExport = () => {
         >
           <div className="data-export-list-container">
             <ul className="data-export-list">
-              {requests.map((request, index) => (
+              {requests.map((request) => (
                 <li key={request.id} className="data-export-item">
                   {/* Left: Format icon badge & Title/subtitle */}
                   <div className="data-export-item-left">
@@ -427,48 +468,10 @@ const DataExport = () => {
                         aria-label="Export actions"
                         aria-haspopup="menu"
                         aria-expanded={openMenuId === request.id}
-                        onClick={() =>
-                          setOpenMenuId((prev) => (prev === request.id ? null : request.id))
-                        }
+                        onClick={(e) => handleToggleMenu(e, request)}
                       >
                         <FiMoreHorizontal aria-hidden="true" />
                       </button>
-
-                      {openMenuId === request.id && (
-                        <div
-                          className={`data-export-menu-dropdown ${
-                            index >= 2 || (requests.length <= 2 && index === 1)
-                              ? "data-export-menu-dropdown--up"
-                              : ""
-                          }`}
-                          role="menu"
-                        >
-                          {request.status === "ready" && (
-                            <button
-                              type="button"
-                              className="data-export-menu-item"
-                              role="menuitem"
-                              onClick={() => handleDownload(request)}
-                              disabled={downloadingId === request.id}
-                            >
-                              <FiDownload className="data-export-menu-item-icon" aria-hidden="true" />
-                              <span>
-                                {downloadingId === request.id ? "Downloading..." : "Download"}
-                              </span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="data-export-menu-item data-export-menu-item--delete"
-                            role="menuitem"
-                            onClick={() => handleDelete(request)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <FiTrash2 className="data-export-menu-item-icon" aria-hidden="true" />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </li>
@@ -477,6 +480,50 @@ const DataExport = () => {
           </div>
         </QueryState>
       </section>
+
+      {/* Render the single active dropdown menu via Portal into document.body */}
+      {activeRequest && menuCoords && typeof document !== "undefined" && createPortal(
+        <div
+          className={`data-export-menu-dropdown ${
+            menuCoords.openUpward ? "data-export-menu-dropdown--up" : ""
+          }`}
+          role="menu"
+          style={{
+            position: "fixed",
+            ...(menuCoords.top !== undefined
+              ? { top: `${menuCoords.top}px` }
+              : { bottom: `${menuCoords.bottom}px` }),
+            right: `${menuCoords.right}px`,
+            zIndex: 99999,
+          }}
+        >
+          {activeRequest.status === "ready" && (
+            <button
+              type="button"
+              className="data-export-menu-item"
+              role="menuitem"
+              onClick={() => handleDownload(activeRequest)}
+              disabled={downloadingId === activeRequest.id}
+            >
+              <FiDownload className="data-export-menu-item-icon" aria-hidden="true" />
+              <span>
+                {downloadingId === activeRequest.id ? "Downloading..." : "Download"}
+              </span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="data-export-menu-item data-export-menu-item--delete"
+            role="menuitem"
+            onClick={() => handleDelete(activeRequest)}
+            disabled={deleteMutation.isPending}
+          >
+            <FiTrash2 className="data-export-menu-item-icon" aria-hidden="true" />
+            <span>Delete</span>
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
