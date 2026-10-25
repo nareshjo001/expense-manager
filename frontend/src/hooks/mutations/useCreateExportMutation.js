@@ -7,10 +7,9 @@ import { queryKeys } from "../../query/queryKeys";
 // resolves to either `{ file: true, blob, filename, contentType }` (a
 // small/sync export) or the queued-export JSON envelope (a large/
 // background export); this hook's only job is to ACT on that difference:
-//   - a file response triggers an immediate browser download and is done;
-//   - a queued response needs the export-requests list to pick the new
-//     request up, so that list query is invalidated -- same
-//     invalidate-on-success shape as useSaveNotificationPreferencesMutation.
+//   - a file response triggers an immediate browser download;
+//   - both sync and queued exports persist a record so the past exports
+//     list query is invalidated to immediately show the new record.
 // Toasting which of the two happened is left to the caller (DataExport.js),
 // same split as every other mutation hook in this app: the hook manages
 // cache state, the component manages user feedback via its own
@@ -34,9 +33,8 @@ export const useCreateExportMutation = () => {
     onSuccess: (result) => {
       if (result?.file) {
         triggerBrowserDownload(result.blob, result.filename);
-      } else {
-        queryClient.invalidateQueries({ queryKey: queryKeys.exports.lists() });
       }
+      queryClient.invalidateQueries({ queryKey: queryKeys.exports.lists() });
     },
   });
 };

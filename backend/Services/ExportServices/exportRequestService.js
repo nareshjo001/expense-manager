@@ -96,7 +96,7 @@ function toSafeShape(doc) {
     readyAt: doc.readyAt,
     expiresAt: doc.expiresAt,
     createdAt: doc.createdAt,
-    downloadUrl: doc.status === EXPORT_STATUSES.READY ? `/api/export/download/${doc.downloadToken}` : null,
+    downloadUrl: doc.status === EXPORT_STATUSES.READY && doc.filePath ? `/api/export/download/${doc.downloadToken}` : null,
   };
 }
 
@@ -125,7 +125,23 @@ async function createExportRequest({ userId, domain, format, dateFrom, dateTo })
   if (rowCount < SYNC_ROW_LIMIT) {
     const { content, contentType } = await generateExportPayload({ userId, domain, format, dateFrom, dateTo });
     const fileName = buildExportFileName(domain, format);
-    return { mode: "sync", content, contentType, fileName, rowCount };
+    const downloadToken = generateDownloadToken();
+
+    const created = await ExportRequest.create({
+      userId,
+      domain,
+      format,
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+      status: EXPORT_STATUSES.READY,
+      downloadToken,
+      fileName,
+      rowCount,
+      sizeBytes: Buffer.byteLength(content, "utf8"),
+      readyAt: new Date(),
+    });
+
+    return { mode: "sync", id: String(created._id), content, contentType, fileName, rowCount };
   }
 
   const downloadToken = generateDownloadToken();
