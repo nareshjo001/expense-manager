@@ -19,6 +19,20 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    // Automatically remove static Content-Type: application/json for FormData
+    // so Axios and the browser generate the correct multipart/form-data boundary
+    if (config.data instanceof FormData) {
+      if (config.headers) {
+        if (typeof config.headers.delete === "function") {
+          config.headers.delete("Content-Type");
+          config.headers.delete("content-type");
+        } else {
+          delete config.headers["Content-Type"];
+          delete config.headers["content-type"];
+        }
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

@@ -7,6 +7,23 @@ export const uploadBill = async (file, signal) => {
   formData.append("bill", file);
 
   // Content-Type is intentionally left unset so axios/the browser generates the multipart boundary for FormData.
-  const { data } = await api.post("/bills/bill-upload", formData, { signal });
+  const { data } = await api.post("/bills/bill-upload", formData, {
+    signal,
+    headers: {
+      "Content-Type": undefined,
+    },
+    transformRequest: (body, headers) => {
+      if (headers) {
+        if (typeof headers.delete === "function") {
+          headers.delete("Content-Type");
+          headers.delete("content-type");
+        } else {
+          delete headers["Content-Type"];
+          delete headers["content-type"];
+        }
+      }
+      return body;
+    },
+  });
   return data;
 };

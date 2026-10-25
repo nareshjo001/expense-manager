@@ -364,8 +364,8 @@ body:has(.notification-prefs-page) .scroll-top-btn {
     padding: 0 32px;
     border-radius: 9999px;
     border: none;
-    background: linear-gradient(90deg, #f472b6 0%, #db2777 100%);
-    color: #ffffff;
+    background: #F8AECB;
+    color: #72143D;
     font-weight: 600;
     font-size: 0.95rem;
     cursor: pointer;
@@ -868,8 +868,8 @@ body:has(.notification-prefs-page) .scroll-top-btn {
         font-size: 0.98rem;
         font-weight: 600;
         letter-spacing: -0.01em;
-        background: linear-gradient(90deg, #e11d74 0%, #db2777 100%);
-        color: #ffffff;
+        background: #F8AECB;
+        color: #72143D;
         box-shadow: 0 4px 16px rgba(225, 29, 116, 0.3);
         border: none;
         display: flex;
@@ -889,4 +889,62 @@ body:has(.notification-prefs-page) .scroll-top-btn {
         grid-template-columns: 1fr;
         gap: 12px;
     }
+}
+
+.light-theme .notification-prefs-save,
+:root:not(.dark-theme) .notification-prefs-save,
+.light-theme .notification-prefs-page button,
+:root:not(.dark-theme) .notification-prefs-page button {
+  background: #F8AECB !important;
+  color: #72143D !important;
+  box-shadow: 0 4px 12px rgba(248, 174, 203, 0.4) !important;
+}
+
+.light-theme .notification-prefs-save:hover:not(:disabled),
+:root:not(.dark-theme) .notification-prefs-save:hover:not(:disabled),
+.light-theme .notification-prefs-page button:hover:not(:disabled),
+:root:not(.dark-theme) .notification-prefs-page button:hover:not(:disabled) {
+  background: #F48FBE !important;
+  box-shadow: 0 6px 18px rgba(244, 143, 190, 0.45) !important;
+}
+
+.light-theme .notification-prefs-save:active:not(:disabled),
+:root:not(.dark-theme) .notification-prefs-save:active:not(:disabled),
+.light-theme .notification-prefs-page button:active:not(:disabled),
+:root:not(.dark-theme) .notification-prefs-page button:active:not(:disabled) {
+  background: #EE7FB0 !important;
+}
+
+.light-theme .notification-prefs-save:disabled,
+:root:not(.dark-theme) .notification-prefs-save:disabled,
+.light-theme .notification-prefs-page button:disabled,
+:root:not(.dark-theme) .notification-prefs-page button:disabled {
+  background: #FAD9E7 !important;
+  color: #C49EAF !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .notification-prefs-save,
+.dark-theme .notification-prefs-page button {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
+}
+
+.dark-theme .notification-prefs-save:hover:not(:disabled),
+.dark-theme .notification-prefs-page button:hover:not(:disabled) {
+  background: #60A5FA !important;
+  box-shadow: 0 6px 18px rgba(96, 165, 250, 0.45) !important;
+}
+
+.dark-theme .notification-prefs-save:active:not(:disabled),
+.dark-theme .notification-prefs-page button:active:not(:disabled) {
+  background: #2563EB !important;
+}
+
+.dark-theme .notification-prefs-save:disabled,
+.dark-theme .notification-prefs-page button:disabled {
+  background: #1E293B !important;
+  color: #64748B !important;
+  box-shadow: none !important;
 }

@@ -80,3 +80,38 @@
     transition: none;
   }
 }
+
+.light-theme .sia-ask-btn,
+:root:not(.dark-theme) .sia-ask-btn {
+  background: #F8AECB;
+  color: #72143D;
+  border-color: #EE7FB0;
+}
+
+.light-theme .sia-ask-btn:hover,
+:root:not(.dark-theme) .sia-ask-btn:hover {
+  background: #F48FBE;
+  color: #72143D;
+}
+
+.light-theme .sia-ask-btn:active,
+:root:not(.dark-theme) .sia-ask-btn:active {
+  background: #EE7FB0;
+  color: #72143D;
+}
+
+.dark-theme .sia-ask-btn {
+  background: #3B82F6;
+  color: #FFFFFF;
+  border-color: #2563EB;
+}
+
+.dark-theme .sia-ask-btn:hover {
+  background: #60A5FA;
+  color: #FFFFFF;
+}
+
+.dark-theme .sia-ask-btn:active {
+  background: #2563EB;
+  color: #FFFFFF;
+}

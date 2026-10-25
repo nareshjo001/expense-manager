@@ -20,7 +20,24 @@ export const getImportHeaders = async (file, signal) => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const { data } = await api.post("/api/imports/headers", formData, { signal });
+  const { data } = await api.post("/api/imports/headers", formData, {
+    signal,
+    headers: {
+      "Content-Type": undefined,
+    },
+    transformRequest: (body, headers) => {
+      if (headers) {
+        if (typeof headers.delete === "function") {
+          headers.delete("Content-Type");
+          headers.delete("content-type");
+        } else {
+          delete headers["Content-Type"];
+          delete headers["content-type"];
+        }
+      }
+      return body;
+    },
+  });
   return data;
 };
 
@@ -33,7 +50,24 @@ export const createImportSession = async (file, columnMapping, signal) => {
   formData.append("file", file);
   formData.append("columnMapping", JSON.stringify(columnMapping));
 
-  const { data } = await api.post("/api/imports/sessions", formData, { signal });
+  const { data } = await api.post("/api/imports/sessions", formData, {
+    signal,
+    headers: {
+      "Content-Type": undefined,
+    },
+    transformRequest: (body, headers) => {
+      if (headers) {
+        if (typeof headers.delete === "function") {
+          headers.delete("Content-Type");
+          headers.delete("content-type");
+        } else {
+          delete headers["Content-Type"];
+          delete headers["content-type"];
+        }
+      }
+      return body;
+    },
+  });
   return data;
 };
 

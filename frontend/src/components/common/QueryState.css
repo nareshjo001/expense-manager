@@ -53,3 +53,32 @@
 @keyframes query-state-spin {
   to { transform: rotate(360deg); }
 }
+
+.light-theme .query-state-retry,
+:root:not(.dark-theme) .query-state-retry {
+  background: #F8AECB;
+  color: #72143D;
+}
+
+.light-theme .query-state-retry:hover,
+:root:not(.dark-theme) .query-state-retry:hover {
+  background: #F48FBE;
+}
+
+.light-theme .query-state-retry:active,
+:root:not(.dark-theme) .query-state-retry:active {
+  background: #EE7FB0;
+}
+
+.dark-theme .query-state-retry {
+  background: #3B82F6;
+  color: #FFFFFF;
+}
+
+.dark-theme .query-state-retry:hover {
+  background: #60A5FA;
+}
+
+.dark-theme .query-state-retry:active {
+  background: #2563EB;
+}

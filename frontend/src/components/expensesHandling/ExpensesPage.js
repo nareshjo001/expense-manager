@@ -92,6 +92,39 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
     isInsightReady,
   } = useExpenseInsights();
 
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef(null);
+
+  const handleFilterSelect = useCallback((nextFilter) => {
+    setFilter(nextFilter);
+    setPeriod('');
+    setStartDate('');
+    setEndDate('');
+    setSearchFilters(emptySearchFilters);
+    clearExpenseInsights();
+    setIsFilterDropdownOpen(false);
+  }, [clearExpenseInsights]);
+
+  useEffect(() => {
+    if (!isFilterDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFilterDropdownOpen]);
+
   const expensesQuery = useExpensesQuery(filter, period);
 
   // EXP-003-T05 -- the only expense mode with real cursor pagination
@@ -335,22 +368,63 @@ const ExpensesPage = ({ onDelete, setIsEdit }) => {
               <option value="thisyear">This Year</option>
             </select>
           )}
-          <select
-            className="select-button filter-button"
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-              setPeriod('');
-              setStartDate('');
-              setEndDate('');
-              setSearchFilters(emptySearchFilters);
-              clearExpenseInsights();
-            }}
-          >
-            <option value="">Filter By</option>
-            <option value="bycategory">Category</option>
-            <option value="custom">Custom</option>
-          </select>
+          <div className="custom-filter-dropdown-wrapper" ref={filterDropdownRef}>
+            {/* Native select kept in sync for accessibility and testing compatibility */}
+            <select
+              className="select-button filter-button custom-filter-native-select"
+              value={filter}
+              onChange={(e) => handleFilterSelect(e.target.value)}
+              aria-label="Filter expenses by"
+              tabIndex={-1}
+            >
+              <option value="">Filter By</option>
+              <option value="bycategory">Category</option>
+              <option value="custom">Custom</option>
+            </select>
+
+            <button
+              type="button"
+              className="select-button filter-button custom-filter-trigger"
+              onClick={() => setIsFilterDropdownOpen((prev) => !prev)}
+              aria-haspopup="listbox"
+              aria-expanded={isFilterDropdownOpen}
+              aria-label={`Filter By: ${filter === 'bycategory' ? 'Category' : filter === 'custom' ? 'Custom' : 'None'}`}
+            >
+              <span>{filter === 'bycategory' ? 'Category' : filter === 'custom' ? 'Custom' : 'Filter By'}</span>
+            </button>
+
+            {isFilterDropdownOpen && (
+              <div className="custom-filter-dropdown-menu" role="listbox" aria-label="Filter options">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={filter === ''}
+                  className={`custom-filter-dropdown-item ${filter === '' ? 'active' : ''}`}
+                  onClick={() => handleFilterSelect('')}
+                >
+                  Filter By
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={filter === 'bycategory'}
+                  className={`custom-filter-dropdown-item ${filter === 'bycategory' ? 'active' : ''}`}
+                  onClick={() => handleFilterSelect('bycategory')}
+                >
+                  Category
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={filter === 'custom'}
+                  className={`custom-filter-dropdown-item ${filter === 'custom' ? 'active' : ''}`}
+                  onClick={() => handleFilterSelect('custom')}
+                >
+                  Custom
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         { Object.keys(groupedExpenses).length !== 0 && <p className="mobile-view">Your Expenses</p>}
       </div>

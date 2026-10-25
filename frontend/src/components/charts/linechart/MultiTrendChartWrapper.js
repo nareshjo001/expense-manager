@@ -58,17 +58,17 @@ const MultiLineChartWrapper = ({
         <div
           className="custom-tooltip"
           style={{
-            background: theme === 'dark-theme' ? '#1f2937' : '#fff',
-            color: theme === 'dark-theme' ? '#F9FAFB' : '#111',
+            background: 'var(--tooltip-bg, rgba(0, 0, 0, 0.8))',
+            color: '#ffffff',
             padding: '10px',
             borderRadius: '8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
           }}
         >
-          <p><strong>{label}</strong></p>
+          <p style={{ color: '#ffffff', margin: 0 }}><strong>{label}</strong></p>
           {payload.map((entry, index) => (
-            <p key={`item-${index}`} style={{ color: entry.stroke, margin: 0 }}>
-              <strong>{entry.name}:</strong> {formatMoney(entry.value)}
+            <p key={`item-${index}`} style={{ color: entry.stroke || '#ffffff', margin: 0 }}>
+              <strong style={{ color: '#ffffff' }}>{entry.name}:</strong> {formatMoney(entry.value)}
             </p>
           ))}
         </div>

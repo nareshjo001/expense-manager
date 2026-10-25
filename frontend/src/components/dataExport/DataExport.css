@@ -907,3 +907,41 @@ body:has(.data-export-page) .sia-entry-point {
         margin-left: 0;
     }
 }
+
+.light-theme .data-export-page button.primary-btn,
+.light-theme .data-export-page .export-btn,
+.light-theme .data-export-page button[type="submit"] {
+  background: #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .data-export-page button.primary-btn:hover,
+.light-theme .data-export-page .export-btn:hover,
+.light-theme .data-export-page button[type="submit"]:hover {
+  background: #F48FBE !important;
+}
+
+.light-theme .data-export-page button.primary-btn:active,
+.light-theme .data-export-page .export-btn:active,
+.light-theme .data-export-page button[type="submit"]:active {
+  background: #EE7FB0 !important;
+}
+
+.dark-theme .data-export-page button.primary-btn,
+.dark-theme .data-export-page .export-btn,
+.dark-theme .data-export-page button[type="submit"] {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .data-export-page button.primary-btn:hover,
+.dark-theme .data-export-page .export-btn:hover,
+.dark-theme .data-export-page button[type="submit"]:hover {
+  background: #60A5FA !important;
+}
+
+.dark-theme .data-export-page button.primary-btn:active,
+.dark-theme .data-export-page .export-btn:active,
+.dark-theme .data-export-page button[type="submit"]:active {
+  background: #2563EB !important;
+}

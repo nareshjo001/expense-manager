@@ -25,10 +25,17 @@ const ALLOWED_CSV_MIME_TYPES = [
   "application/csv",
   "application/vnd.ms-excel",
   "text/plain",
+  "text/x-csv",
+  "application/x-csv",
+  "text/comma-separated-values",
+  "application/octet-stream",
 ];
 
 const fileFilter = (req, file, cb) => {
-  if (ALLOWED_CSV_MIME_TYPES.includes(file.mimetype)) {
+  const isAllowedMime = ALLOWED_CSV_MIME_TYPES.includes(file.mimetype);
+  const isCsvExtension = typeof file.originalname === "string" && file.originalname.toLowerCase().endsWith(".csv");
+
+  if (isAllowedMime || isCsvExtension) {
     cb(null, true);
   } else {
     const error = new Error("Only CSV files are allowed.");

@@ -294,3 +294,60 @@
     font-size: 0.95rem;
   }
 }
+.light-theme .save-btn,
+:root:not(.dark-theme) .save-btn {
+  background: #F8AECB;
+  color: #72143D;
+}
+
+.light-theme .save-btn:hover,
+:root:not(.dark-theme) .save-btn:hover {
+  background: #F48FBE;
+}
+
+.light-theme .save-btn:active,
+:root:not(.dark-theme) .save-btn:active {
+  background: #EE7FB0;
+}
+
+.light-theme .cancel-btn,
+:root:not(.dark-theme) .cancel-btn {
+  background: transparent;
+  border: 1.5px solid #F8AECB;
+  color: #72143D;
+}
+
+.light-theme .cancel-btn:hover,
+:root:not(.dark-theme) .cancel-btn:hover {
+  background: #FDEEF5;
+  border-color: #F48FBE;
+}
+
+.dark-theme .save-btn {
+  background: #3B82F6;
+  color: #FFFFFF;
+}
+
+.dark-theme .save-btn:hover {
+  background: #60A5FA;
+}
+
+.dark-theme .save-btn:active {
+  background: #2563EB;
+}
+
+.dark-theme .cancel-btn {
+  background: transparent;
+  border: 1.5px solid #3B82F6;
+  color: #FFFFFF;
+}
+
+.dark-theme .cancel-btn:hover {
+  background: #1A2748;
+  border-color: #60A5FA;
+}
+
+.dark-theme .cancel-btn:active {
+  background: #1E293B;
+  border-color: #2563EB;
+}

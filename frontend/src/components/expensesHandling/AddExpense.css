@@ -428,8 +428,9 @@
   --ae-placeholder: #8c7e87;
   --ae-divider: #eadde3;
   --ae-focus-ring: rgba(216, 27, 96, 0.16);
-  --ae-primary: #d81b60;
-  --ae-primary-hover: #c2185b;
+  --ae-primary: #F8AECB;
+  --ae-primary-hover: #F48FBE;
+  --ae-primary-active: #EE7FB0;
 
   display: block;
   padding: 20px 24px 36px;
@@ -437,25 +438,57 @@
 
 .dark-theme .add-expense-page,
 .dark-theme .add-income-page {
-  --ae-title: #fdf2f8;
-  --ae-label: #f5e6ee;
-  --ae-muted: #d4a3be;
-  --ae-accent: #f472b6;
-  --ae-accent-soft: rgba(244, 114, 182, 0.12);
-  --ae-soft-bg: rgba(58, 27, 49, 0.6);
-  --ae-soft-border: rgba(120, 42, 85, 0.5);
-  --ae-icon-bg: rgba(194, 24, 91, 0.25);
-  --ae-card-bg: rgba(36, 20, 32, 0.95);
-  --ae-card-border: rgba(120, 42, 85, 0.5);
+  --ae-title: #FFFFFF;
+  --ae-label: #FFFFFF;
+  --ae-muted: #94A3B8;
+  --ae-accent: #3B82F6;
+  --ae-accent-soft: rgba(59, 130, 246, 0.15);
+  --ae-soft-bg: #0C1427;
+  --ae-soft-border: #1E293B;
+  --ae-icon-bg: rgba(37, 99, 235, 0.25);
+  --ae-card-bg: #0C1427;
+  --ae-card-border: #1E293B;
   --ae-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --ae-input-bg: rgba(255, 255, 255, 0.04);
-  --ae-input-border: rgba(244, 166, 199, 0.22);
-  --ae-addon-bg: rgba(255, 255, 255, 0.03);
-  --ae-placeholder: #a78b9b;
-  --ae-divider: rgba(244, 166, 199, 0.18);
-  --ae-focus-ring: rgba(244, 114, 182, 0.25);
-  --ae-primary: #db2777;
-  --ae-primary-hover: #be185d;
+  --ae-input-bg: #080E1C;
+  --ae-input-border: #1E293B;
+  --ae-addon-bg: #080E1C;
+  --ae-placeholder: #64748B;
+  --ae-divider: #1E293B;
+  --ae-focus-ring: rgba(59, 130, 246, 0.25);
+  --ae-primary: #2563EB;
+  --ae-primary-hover: #3B82F6;
+  --ae-primary-active: #1D4ED8;
+}
+
+.dark-theme .add-expense-action-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.dark-theme .add-expense-action-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dark-theme .add-expense-action-icon {
+  color: #60A5FA;
+  background: rgba(37, 99, 235, 0.25);
+}
+
+.dark-theme .add-expense-divider {
+  color: #64748B;
+}
+
+.dark-theme .add-expense-divider::before,
+.dark-theme .add-expense-divider::after {
+  background: #1E293B;
+}
+
+.dark-theme .add-expense-required,
+.dark-theme .add-income-required {
+  color: #EF4444;
+}
+
+.dark-theme .add-expense-input-addon {
+  color: #94A3B8;
 }
 
 .add-expense-page-inner {
@@ -992,32 +1025,32 @@
 }
 
 .dark-theme .add-income-source-menu {
-  border-color: #6b264d;
-  background: #2b1425;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
-  color: #fdf2f8;
-  scrollbar-color: #a75483 #3a1b32;
+  border-color: #1E293B;
+  background: #0C1427;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  color: #FFFFFF;
+  scrollbar-color: #334155 #0F172A;
 }
 
 .dark-theme .add-income-source-menu::-webkit-scrollbar-track {
-  background: #3a1b32;
+  background: #0F172A;
 }
 
 .dark-theme .add-income-source-menu::-webkit-scrollbar-thumb {
-  background: #a75483;
+  background: #334155;
 }
 
 .dark-theme .add-income-source-option:hover,
 .dark-theme .add-income-source-option[aria-selected="true"] {
-  background: #4a203b;
+  background: #1E293B;
 }
 
 .dark-theme .add-income-source-option[aria-selected="true"] {
-  outline-color: #f472b6;
+  outline-color: #3B82F6;
 }
 
 .dark-theme .add-income-source-empty {
-  color: #d4a3be;
+  color: #94A3B8;
 }
 
 /* Amount (leading rupee sign) and Date (trailing calendar) input groups. */
@@ -1179,18 +1212,18 @@
 }
 
 .dark-theme .add-form-toggle {
-  --ft-bg: rgba(36, 20, 32, 0.95);
-  --ft-border: rgba(120, 42, 85, 0.5);
-  --ft-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
-  --ft-active-bg: linear-gradient(90deg, rgba(219, 39, 119, 0.34) 0%, rgba(219, 39, 119, 0.16) 100%);
-  --ft-active-shadow: none;
-  --ft-active-text: #f9a8d4;
-  --ft-active-icon-bg: rgba(244, 114, 182, 0.24);
-  --ft-text: #f5e6ee;
-  --ft-icon: #cbb8c6;
+  --ft-bg: #0C1427;
+  --ft-border: #1E293B;
+  --ft-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --ft-active-bg: linear-gradient(90deg, #1D4ED8 0%, #2563EB 100%);
+  --ft-active-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+  --ft-active-text: #FFFFFF;
+  --ft-active-icon-bg: rgba(255, 255, 255, 0.2);
+  --ft-text: #94A3B8;
+  --ft-icon: #94A3B8;
   --ft-icon-bg: rgba(255, 255, 255, 0.08);
-  --ft-icon-hover-bg: rgba(255, 255, 255, 0.14);
-  --ft-focus: rgba(244, 114, 182, 0.7);
+  --ft-icon-hover-bg: rgba(255, 255, 255, 0.15);
+  --ft-focus: rgba(59, 130, 246, 0.7);
 }
 
 /* Same width as the page cards below (1040px max, 24px gutters). The 8px
@@ -1328,4 +1361,124 @@
   .data-transfer-panel.add-expense-wrapper {
     padding-top: 0;
   }
+}
+
+.light-theme .add-expense-page .submit-btn,
+.light-theme .add-income-page .submit-btn {
+  background: var(--ae-primary, #F8AECB);
+  color: #72143D;
+  box-shadow: 0 4px 12px rgba(248, 174, 203, 0.4);
+}
+
+.light-theme .add-expense-page .submit-btn:hover,
+.light-theme .add-income-page .submit-btn:hover {
+  background: var(--ae-primary-hover, #F48FBE);
+}
+
+.light-theme .add-expense-page .submit-btn:active,
+.light-theme .add-income-page .submit-btn:active {
+  background: var(--ae-primary-active, #EE7FB0);
+}
+
+.light-theme .add-expense-page .submit-btn:disabled,
+.light-theme .add-income-page .submit-btn:disabled {
+  background: #FAD9E7;
+  color: #C49EAF;
+  box-shadow: none;
+}
+
+.light-theme .open-bill-upload-btn {
+  background: #F8AECB;
+  color: #72143D;
+}
+
+.light-theme .open-bill-upload-btn:hover {
+  background: #F48FBE;
+}
+
+.light-theme .open-bill-upload-btn:active {
+  background: #EE7FB0;
+}
+
+.light-theme .add-expense-quick-action-btn:hover {
+  background: #F48FBE;
+  border-color: #F48FBE;
+}
+
+.dark-theme .add-expense-page .submit-btn,
+.dark-theme .add-income-page .submit-btn {
+  background: var(--ae-primary, #2563EB);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.dark-theme .add-expense-page .submit-btn:hover,
+.dark-theme .add-income-page .submit-btn:hover {
+  background: var(--ae-primary-hover, #3B82F6);
+}
+
+.dark-theme .add-expense-page .submit-btn:active,
+.dark-theme .add-income-page .submit-btn:active {
+  background: var(--ae-primary-active, #1D4ED8);
+}
+
+.dark-theme .add-expense-page .submit-btn:disabled,
+.dark-theme .add-income-page .submit-btn:disabled {
+  background: #1E293B;
+  color: #64748B;
+  box-shadow: none;
+}
+
+.dark-theme .open-bill-upload-btn,
+.dark-theme .add-expense-page .add-expense-action-btn {
+  background: #2563EB;
+  color: #FFFFFF;
+  border-color: #2563EB;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.dark-theme .open-bill-upload-btn:hover,
+.dark-theme .add-expense-page .add-expense-action-btn:hover {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.dark-theme .open-bill-upload-btn:active,
+.dark-theme .add-expense-page .add-expense-action-btn:active {
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+}
+
+.dark-theme .add-expense-quick-action-btn:hover {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.dark-theme .receipt-review-banner,
+.dark-theme .ml-suggestion {
+  background: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.dark-theme .ml-suggestion-accept-btn {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #FBBF24;
+}
+
+.dark-theme .ml-suggestion-accept-btn:hover {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.dark-theme .ml-suggestion-save-rule-btn {
+  background: #D97706;
+  color: #FFFFFF;
+}
+
+.dark-theme .ml-suggestion-save-rule-btn:hover {
+  background: #B45309;
+}
+
+.dark-theme .field-confidence.low {
+  color: #FBBF24;
 }

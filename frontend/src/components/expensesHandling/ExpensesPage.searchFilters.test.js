@@ -9,7 +9,7 @@
 // .test.js already cover the rest of this component; this file is
 // dedicated to the new filter wiring only.
 import React from "react";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import ExpensesPage from "./ExpensesPage";
 import { useExpensesQuery } from "../../hooks/queries/useExpensesQuery";
 import { useInfiniteExpensesQuery } from "../../hooks/queries/useInfiniteExpensesQuery";
@@ -200,5 +200,25 @@ describe("ExpensesPage -- EXP-002-T05 filter bar wiring", () => {
 
     expect(screen.queryByText("Name: coffee")).not.toBeInTheDocument();
     expect(lastSearchFiltersArg().nameContains).toBeUndefined();
+  });
+
+  it("re-opens the custom date range modal when choosing Custom option again while in custom view", () => {
+    render(<ExpensesPage onDelete={jest.fn()} setIsEdit={jest.fn()} />);
+    enterCustomMode();
+
+    // Verify modal is closed and custom view is active
+    expect(screen.queryByText("Choose the custom date range...")).not.toBeInTheDocument();
+
+    // Open custom filter dropdown and click Custom again
+    const trigger = screen.getByRole("button", { name: /Filter By: Custom/i });
+    fireEvent.click(trigger);
+
+    // Click the "Custom" option inside the dropdown menu
+    const menu = screen.getByRole("listbox", { name: "Filter options" });
+    const customOption = within(menu).getByRole("option", { name: "Custom" });
+    fireEvent.click(customOption);
+
+    // Custom date range modal re-opens as expected!
+    expect(screen.getByText("Choose the custom date range...")).toBeInTheDocument();
   });
 });

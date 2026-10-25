@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { FiVolume2 } from "react-icons/fi";
 
 // Workstream 3, part F -- an explicit, NEVER-autoplaying "Listen"/"Stop"
 function isSpeechSynthesisAvailable() {
@@ -107,7 +108,8 @@ const SiaSpeakButton = ({ text, stopSignal }) => {
       onClick={isSpeaking ? handleStop : handleListen}
       aria-label={isSpeaking ? "Stop reading" : "Listen to answer"}
     >
-      {isSpeaking ? "Stop" : "Listen"}
+      <FiVolume2 className="sia-speak-icon" aria-hidden="true" />
+      <span>{isSpeaking ? "Stop" : "Listen"}</span>
     </button>
   );
 };

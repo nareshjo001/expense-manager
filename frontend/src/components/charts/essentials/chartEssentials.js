@@ -5,7 +5,7 @@ export const getSelectStyles = (theme) => {
   return {
     control: (base, state) => ({
       ...base,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#ffe4e6',
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
       borderColor: state.isFocused
         ? (isDark ? '#60A5FA' : '#f472b6')
         : (isDark ? '#3B82F6' : '#f9a8d4'),
@@ -30,8 +30,18 @@ export const getSelectStyles = (theme) => {
         ? (isDark ? '#ffffff' : '#9d174d')
         : isDark
         ? '#F9FAFB'
-        : '#333',
+        : '#9d174d',
       cursor: 'pointer',
+    }),
+
+    singleValue: (base) => ({
+      ...base,
+      color: isDark ? '#fff' : '#9d174d',
+    }),
+
+    input: (base) => ({
+      ...base,
+      color: isDark ? '#fff' : '#9d174d',
     }),
 
     menu: (base) => ({

@@ -65,3 +65,32 @@
     }
   }
 }
+
+.light-theme .scroll-top-btn,
+:root:not(.dark-theme) .scroll-top-btn {
+  background-color: #F8AECB;
+  color: #72143D;
+}
+
+.light-theme .scroll-top-btn:hover,
+:root:not(.dark-theme) .scroll-top-btn:hover {
+  background-color: #F48FBE;
+}
+
+.light-theme .scroll-top-btn:active,
+:root:not(.dark-theme) .scroll-top-btn:active {
+  background-color: #EE7FB0;
+}
+
+.dark-theme .scroll-top-btn {
+  background-color: #3B82F6;
+  color: #FFFFFF;
+}
+
+.dark-theme .scroll-top-btn:hover {
+  background-color: #60A5FA;
+}
+
+.dark-theme .scroll-top-btn:active {
+  background-color: #2563EB;
+}

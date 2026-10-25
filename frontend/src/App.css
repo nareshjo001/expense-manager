@@ -3,6 +3,19 @@
 /* ========== Light Theme ========== */
 .light-theme {
   --bg-color: #F7F1F4;
+  --btn-primary-bg: #F8AECB;
+  --btn-primary-hover: #F48FBE;
+  --btn-primary-active: #EE7FB0;
+  --btn-primary-disabled: #FAD9E7;
+  --btn-primary-text: #72143D;
+  --btn-primary-text-disabled: #C49EAF;
+  --btn-secondary-border: #F8AECB;
+  --btn-secondary-border-hover: #F48FBE;
+  --btn-secondary-border-active: #EE7FB0;
+  --btn-secondary-bg-hover: #FDEEF5;
+  --btn-secondary-bg-active: #FAD9E7;
+  --btn-secondary-text: #72143D;
+  --btn-subtle-bg: #FDEEF5;
 }
 
 /* ========== Universal Light Theme Scrollbars ========== */
@@ -64,6 +77,19 @@ body.light-theme::-webkit-scrollbar-button,
 /* ========== Dark Theme ========== */
 .dark-theme {
   --bg-color: #1F2937;
+  --btn-primary-bg: #3B82F6;
+  --btn-primary-hover: #60A5FA;
+  --btn-primary-active: #2563EB;
+  --btn-primary-disabled: #1E293B;
+  --btn-primary-text: #FFFFFF;
+  --btn-primary-text-disabled: #64748B;
+  --btn-secondary-border: #3B82F6;
+  --btn-secondary-border-hover: #60A5FA;
+  --btn-secondary-border-active: #2563EB;
+  --btn-secondary-bg-hover: #1A2748;
+  --btn-secondary-bg-active: #1E293B;
+  --btn-secondary-text: #FFFFFF;
+  --btn-subtle-bg: #1A2748;
 }
 
 * {

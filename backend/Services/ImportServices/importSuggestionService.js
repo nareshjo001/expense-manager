@@ -29,6 +29,7 @@
 const { ExpenseModel } = require("../../config/Schemas");
 const MerchantCategoryRule = require("../../models/MerchantCategoryRule");
 const { normalizeMerchantKey } = require("../../utils/merchantNormalization");
+const { parseCsvDate } = require("../../utils/dateParsing");
 const {
   buildDuplicateSignature,
   isProbableDuplicateMatch,
@@ -71,6 +72,10 @@ function isEligibleRow(row) {
 // normalizeDateKey already expects.
 function toCanonicalDateOnlyString(value) {
   if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") {
+    const parsed = parseCsvDate(value);
+    if (parsed) return parsed;
+  }
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   const year = date.getUTCFullYear();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useContext, Suspense, lazy, useRef } from 'react';
 import { onKeyActivate } from '../../utils/onKeyActivate';
 import {
     ThemeContext,
@@ -17,6 +17,8 @@ import {
 import icons from '../imports/iconsImport';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import './LandingPage.css';
+import appLogoPink from '../../icons/Logo Pink.png';
+import appLogoDark from '../../icons/Logo Dark.png';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
 import { FaWallet, FaPlusCircle, FaChartBar, FaChartPie, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaReceipt, FaRobot, FaAngleDoubleLeft, FaAngleDoubleRight, FaExchangeAlt } from "react-icons/fa";
@@ -78,6 +80,18 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
     // state. Purely local/visual: does not affect routing, mobile layout,
     // or any other existing behavior.
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [chartsFlyoutCoords, setChartsFlyoutCoords] = useState(null);
+    const chartsDropdownRef = useRef(null);
+
+    const updateChartsCoords = () => {
+        if (chartsDropdownRef.current) {
+            const rect = chartsDropdownRef.current.getBoundingClientRect();
+            setChartsFlyoutCoords({
+                top: rect.top,
+                left: isSidebarCollapsed ? rect.right + 12 : rect.left + 106
+            });
+        }
+    };
 
     // Shared with AddExpense so it can load and edit a specific expense.
     const [isEdit, setIsEdit] = useState({
@@ -253,10 +267,10 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                             Hidden via CSS at <=600px, exactly like the row it replaces
                             (.desktop-header) was; mobile keeps its own separate header/
                             bottom-nav/settings-drawer below, untouched. */}
-                        <aside className="app-sidebar" aria-label="Primary">
+                        <aside className="app-sidebar" aria-label="Primary" onScroll={updateChartsCoords}>
                             <div className="sidebar-brand-row">
                                 <div className="sidebar-brand">
-                                    <span className="sidebar-brand-mark" aria-hidden="true">B</span>
+                                    <img src={theme === "dark-theme" ? appLogoDark : appLogoPink} alt="Balensia logo" className="sidebar-brand-mark" />
                                     <div className="sidebar-brand-text">
                                         <span className="sidebar-brand-name">Balensia</span>
                                         <span className="sidebar-brand-tagline">Track • Plan • Save</span>
@@ -288,15 +302,6 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                     </Link>
 
                                     <Link
-                                        className={`sidebar-link ${isRouteActive('/add') ? 'sidebar-link-active' : ''}`}
-                                        to="/add"
-                                        title="Add Expense"
-                                    >
-                                        <FaPlusCircle className="sidebar-link-icon" />
-                                        <span className="sidebar-link-label">Add Expense</span>
-                                    </Link>
-
-                                    <Link
                                         className={`sidebar-link ${isRouteActive('/budgets') ? 'sidebar-link-active' : ''}`}
                                         to="/budgets"
                                         title="Budgets"
@@ -304,19 +309,39 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         <FaChartPie className="sidebar-link-icon" />
                                         <span className="sidebar-link-label">Budgets</span>
                                     </Link>
+
+                                    <Link
+                                        className={`sidebar-link ${isRouteActive('/add') ? 'sidebar-link-active' : ''}`}
+                                        to="/add"
+                                        title="Add"
+                                    >
+                                        <FaPlusCircle className="sidebar-link-icon" />
+                                        <span className="sidebar-link-label">Add</span>
+                                    </Link>
                                 </div>
 
                                 <div className="sidebar-group">
                                     <span className="sidebar-group-label">Insights</span>
 
-                                    <div className="sidebar-link dropdown">
+                                    <div
+                                        className="dropdown sidebar-dropdown"
+                                        ref={chartsDropdownRef}
+                                        onMouseEnter={() => {
+                                            prefetchCharts();
+                                            updateChartsCoords();
+                                        }}
+                                        onFocus={() => {
+                                            prefetchCharts();
+                                            updateChartsCoords();
+                                        }}
+                                    >
                                         <span
                                             className={`sidebar-link-trigger dropdown-toggle ${isChartsActive ? 'sidebar-link-active' : ''}`}
                                             role="button"
                                             tabIndex={0}
                                             aria-haspopup="true"
                                             aria-expanded={isMobile ? showMobileDropdown : undefined}
-                                            title="Charts"
+                                            title={isSidebarCollapsed ? "Charts" : undefined}
                                             onClick={() => {
                                                 if (isMobile) setShowMobileDropdown(true);
                                             }}
@@ -332,7 +357,13 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                         </span>
 
                                         {!isMobile && (
-                                            <div className="dropdown-menu sidebar-chart-menu">
+                                            <div
+                                                className="dropdown-menu sidebar-chart-menu"
+                                                style={chartsFlyoutCoords ? {
+                                                    top: `${chartsFlyoutCoords.top}px`,
+                                                    left: `${chartsFlyoutCoords.left}px`
+                                                } : undefined}
+                                            >
                                                 {renderDropdownLinks()}
                                             </div>
                                         )}
@@ -393,15 +424,6 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
 
                             </nav>
 
-                            <Link
-                                className={`sidebar-link ${isRouteActive('/sia-settings') ? 'sidebar-link-active' : ''}`}
-                                to="/sia-settings"
-                                title="SIA Settings"
-                            >
-                                <FaRobot className="sidebar-link-icon" />
-                                <span className="sidebar-link-label">SIA Settings</span>
-                            </Link>
-
                             <button
                                 type="button"
                                 className="sidebar-logout"
@@ -440,7 +462,16 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                     </button>
 
                                     <Link
-                                        className="topbar-icon-btn"
+                                        className={`topbar-icon-btn ${isRouteActive('/sia-settings') ? 'topbar-icon-btn-active' : ''}`}
+                                        to="/sia-settings"
+                                        aria-label="SIA Settings"
+                                        title="SIA Settings"
+                                    >
+                                        <FaRobot />
+                                    </Link>
+
+                                    <Link
+                                        className={`topbar-icon-btn ${isRouteActive('/notification-preferences') ? 'topbar-icon-btn-active' : ''}`}
                                         to="/notification-preferences"
                                         aria-label="Notifications"
                                         title="Notifications"
@@ -500,14 +531,14 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <span>Expenses</span>
                             </Link>
 
-                            <Link to="/add" className={location.pathname === "/add" ? "active-nav" : ""}>
-                                <FaPlusCircle />
-                                <span>Add</span>
-                            </Link>
-
                             <Link to="/budgets" className={location.pathname === "/budgets" ? "active-nav" : ""}>
                                 <FaChartPie />
                                 <span>Budgets</span>
+                            </Link>
+
+                            <Link to="/add" className={location.pathname === "/add" ? "active-nav" : ""}>
+                                <FaPlusCircle />
+                                <span>Add</span>
                             </Link>
 
                             <span

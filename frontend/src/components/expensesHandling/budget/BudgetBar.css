@@ -192,3 +192,31 @@
     height: 16px;
   }
 }
+
+.dark-theme .budgets-top-bar-card {
+  background: #0C1427;
+  border-color: #1E293B;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.dark-theme .budget-label {
+  color: #FFFFFF;
+}
+
+.dark-theme .progress-container {
+  background-color: #080E1C;
+  border: 1px solid #1E293B;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.dark-theme .bar-circle {
+  background: #2563EB;
+  border: 2px solid #60A5FA;
+  outline: none;
+  box-shadow: 0 0 14px rgba(59, 130, 246, 0.6);
+  color: #FFFFFF;
+}
+
+.dark-theme .progress-bar {
+  background: linear-gradient(90deg, #2563EB 0%, #3B82F6 100%);
+}

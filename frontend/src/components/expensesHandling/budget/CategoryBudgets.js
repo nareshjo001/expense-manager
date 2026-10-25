@@ -225,144 +225,88 @@ const CardCornerWave = ({ tone = 'pink' }) => (
   </div>
 );
 
-const SparkleStar = ({ className = '' }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className={`category-budgets-sparkle-star ${className}`}
-    aria-hidden="true"
-  >
-    <path d="M12 0 Q12 12 24 12 Q12 12 12 24 Q12 12 0 12 Q12 12 12 0 Z" />
-  </svg>
-);
-
-const PanelTopWave = () => (
-  <div className="category-budgets-panel-wave-tr" aria-hidden="true">
-    <svg viewBox="0 0 300 150" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M0 0 C78 2, 105 53, 164 60 C222 67, 260 93, 300 150 L300 0 Z"
-        fill="url(#cb-panel-tr-grad)"
-      />
-      <path
-        d="M86 0 C154 8, 169 46, 222 39 C255 35, 274 14, 300 0 Z"
-        fill="url(#cb-panel-tr-top-grad)"
-      />
-      <defs>
-        <linearGradient id="cb-panel-tr-grad" x1="300" y1="0" x2="35" y2="130" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#f472b6" stopOpacity="0.4" />
-          <stop offset="60%" stopColor="#fbcfe8" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#fdf2f8" stopOpacity="0.02" />
-        </linearGradient>
-        <linearGradient id="cb-panel-tr-top-grad" x1="300" y1="0" x2="85" y2="65" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#f9a8d4" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="#fce7f3" stopOpacity="0.04" />
-        </linearGradient>
-      </defs>
-    </svg>
-    <div className="category-budgets-panel-sparkle">
-      <SparkleStar />
-      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--upper" />
-      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--lower" />
-    </div>
-  </div>
-);
-
-const FormRightWave = () => (
-  <div className="category-budgets-form-wave" aria-hidden="true">
-    <svg viewBox="0 0 340 140" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M0 75 C70 70, 115 30, 185 50 C245 68, 290 28, 340 10 L340 140 L0 140 Z"
-        fill="url(#cb-form-wave-grad)"
-      />
-      <defs>
-        <linearGradient id="cb-form-wave-grad" x1="340" y1="10" x2="60" y2="135" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#f472b6" stopOpacity="0.32" />
-          <stop offset="60%" stopColor="#fbcfe8" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#fdf2f8" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-    </svg>
-    <div className="category-budgets-form-sparkle">
-      <SparkleStar />
-      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--upper" />
-      <SparkleStar className="category-budgets-sparkle-star--white category-budgets-sparkle-star--lower" />
-    </div>
-  </div>
-);
-
 const EmptyCategoryBudgetsArt = () => (
   <div className="category-budgets-empty-art-container" aria-hidden="true">
     <svg
-      viewBox="0 0 460 270"
+      viewBox="0 0 340 220"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className="category-budgets-empty-svg"
     >
       <defs>
-        <radialGradient id="cb-empty-scene-halo">
-          <stop className="cb-empty-halo-start" offset="0%" />
-          <stop className="cb-empty-halo-end" offset="100%" />
+        <radialGradient id="cb-empty-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--cb-empty-glow-start, #fce7f3)" stopOpacity="0.85" />
+          <stop offset="60%" stopColor="var(--cb-empty-glow-mid, #fdf2f8)" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="var(--cb-empty-glow-end, #fdf2f8)" stopOpacity="0" />
         </radialGradient>
-        <linearGradient id="cb-empty-board-fill" x1="155" y1="65" x2="305" y2="240" gradientUnits="userSpaceOnUse">
-          <stop className="cb-empty-board-start" />
-          <stop className="cb-empty-board-end" offset="100%" />
-        </linearGradient>
-        <linearGradient id="cb-empty-outline-fill" x1="150" y1="70" x2="310" y2="240" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#f9abd0" />
-          <stop offset="100%" stopColor="#dc3f8d" />
-        </linearGradient>
-        <linearGradient id="cb-empty-clip-fill" x1="225" y1="48" x2="225" y2="81" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ff91c2" />
-          <stop offset="55%" stopColor="#f14b9a" />
-          <stop offset="100%" stopColor="#c91968" />
-        </linearGradient>
-        <linearGradient id="cb-empty-line-fill" x1="190" y1="0" x2="285" y2="0" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffa8d0" />
-          <stop offset="100%" stopColor="#f274b1" />
-        </linearGradient>
-        <linearGradient id="cb-empty-plus-fill" x1="277" y1="192" x2="344" y2="259" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ff81bc" />
-          <stop offset="52%" stopColor="#e92b82" />
-          <stop offset="100%" stopColor="#ac0753" />
-        </linearGradient>
       </defs>
-      <ellipse cx="230" cy="243" rx="178" ry="28" fill="url(#cb-empty-scene-halo)" />
-      <circle className="cb-empty-cloud-back" cx="205" cy="145" r="105" />
-      <circle className="cb-empty-cloud-back" cx="282" cy="149" r="94" />
-      <circle className="cb-empty-cloud-front" cx="104" cy="225" r="48" />
-      <circle className="cb-empty-cloud-front" cx="156" cy="226" r="54" />
-      <circle className="cb-empty-cloud-front" cx="325" cy="221" r="58" />
-      <circle className="cb-empty-cloud-front" cx="376" cy="228" r="45" />
-      <path className="cb-empty-cloud-front" d="M72 235 Q139 177 203 225 Q270 181 337 231 L393 255 H61 Z" />
-      <path className="cb-empty-art-sparkle" d="M106 150 Q106 162 119 163 Q106 164 106 177 Q104 164 92 163 Q104 162 106 150 Z" />
-      <path className="cb-empty-art-sparkle" d="M359 65 Q359 78 372 79 Q359 80 359 93 Q357 80 345 79 Q357 78 359 65 Z" />
-      <path className="cb-empty-art-sparkle cb-empty-art-sparkle--pale" d="M389 181 Q389 187 395 188 Q389 189 389 195 Q388 189 382 188 Q388 187 389 181 Z" />
-      <rect x="151" y="66" width="160" height="177" rx="18" fill="url(#cb-empty-board-fill)" stroke="url(#cb-empty-outline-fill)" strokeWidth="7" />
-      <rect x="193" y="53" width="76" height="28" rx="10" fill="url(#cb-empty-clip-fill)" />
-      <circle cx="231" cy="54" r="13" fill="url(#cb-empty-clip-fill)" />
-      <circle cx="231" cy="51" r="4" fill="#fff6fa" />
-      <circle className="cb-empty-bullet" cx="189" cy="111" r="7" />
-      <rect x="205" y="106" width="77" height="10" rx="5" fill="url(#cb-empty-line-fill)" />
-      <circle className="cb-empty-bullet" cx="189" cy="145" r="7" />
-      <rect x="205" y="140" width="77" height="10" rx="5" fill="url(#cb-empty-line-fill)" />
-      <circle className="cb-empty-bullet" cx="189" cy="179" r="7" />
-      <rect x="205" y="174" width="51" height="10" rx="5" fill="url(#cb-empty-line-fill)" />
-      <circle cx="311" cy="212" r="35" fill="url(#cb-empty-plus-fill)" />
-      <ellipse cx="299" cy="192" rx="14" ry="7" fill="#ffffff" fillOpacity="0.22" transform="rotate(-30 299 192)" />
-      <path d="M311 196 V228 M295 212 H327" stroke="#ffffff" strokeWidth="5" strokeLinecap="round" />
+
+      {/* Soft background glow */}
+      <ellipse cx="140" cy="115" rx="85" ry="55" fill="url(#cb-empty-glow)" />
+      <ellipse cx="200" cy="125" rx="75" ry="50" fill="url(#cb-empty-glow)" />
+      <ellipse cx="170" cy="120" rx="95" ry="55" fill="url(#cb-empty-glow)" />
+
+      {/* Accent rays at top right */}
+      <path
+        d="M236 44 L240 34"
+        stroke="var(--cb-empty-accent, #db2777)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M246 52 L256 46"
+        stroke="var(--cb-empty-accent, #db2777)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+      />
+
+      {/* Clipboard board */}
+      <rect
+        x="105"
+        y="48"
+        width="130"
+        height="142"
+        rx="16"
+        fill="var(--cb-empty-board-bg, #ffffff)"
+        stroke="var(--cb-empty-accent, #db2777)"
+        strokeWidth="5.5"
+      />
+
+      {/* Top Clip */}
+      <rect
+        x="138"
+        y="42"
+        width="64"
+        height="18"
+        rx="7"
+        fill="var(--cb-empty-accent, #db2777)"
+      />
+      <path
+        d="M158 44 C158 35 163 32 170 32 C177 32 182 35 182 44 Z"
+        fill="var(--cb-empty-accent, #db2777)"
+      />
+      <circle cx="170" cy="40" r="4" fill="var(--cb-empty-board-bg, #ffffff)" />
+
+      {/* Checklist items */}
+      <circle cx="135" cy="85" r="5.5" fill="var(--cb-empty-bullet, #f472b6)" />
+      <rect x="150" y="80.5" width="68" height="9" rx="4.5" fill="var(--cb-empty-line, #fbcfe8)" />
+
+      <circle cx="135" cy="115" r="5.5" fill="var(--cb-empty-bullet, #f472b6)" />
+      <rect x="150" y="110.5" width="68" height="9" rx="4.5" fill="var(--cb-empty-line, #fbcfe8)" />
+
+      <circle cx="135" cy="145" r="5.5" fill="var(--cb-empty-bullet, #f472b6)" />
+      <rect x="150" y="140.5" width="48" height="9" rx="4.5" fill="var(--cb-empty-line, #fbcfe8)" />
+
+      {/* Plus badge on bottom right */}
+      <circle cx="235" cy="172" r="26" fill="var(--cb-empty-accent, #db2777)" />
+      <path
+        d="M235 160 V184 M223 172 H247"
+        stroke="#ffffff"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+      />
     </svg>
   </div>
-);
-
-const EmptyPanelDecor = () => (
-  <svg className="category-budgets-empty-decor" viewBox="0 0 900 500" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-    <path d="M-12 232 C26 89 98 104 158 76 C199 57 201 37 231 12" />
-    <path d="M694 513 C734 448 792 467 842 421 C869 397 878 374 914 341" />
-    <circle cx="54" cy="225" r="15" />
-    <circle cx="846" cy="462" r="14" />
-    <path className="category-budgets-empty-decor-star" d="M576 102 Q576 113 588 114 Q576 115 576 127 Q575 115 563 114 Q575 113 576 102 Z" />
-    <path className="category-budgets-empty-decor-star" d="M330 209 Q330 216 338 217 Q330 218 330 225 Q329 218 322 217 Q329 216 330 209 Z" />
-  </svg>
 );
 
 // Populated-list row: a collapsible summary (icon, name, "spent of budget",
@@ -823,7 +767,6 @@ const CategoryBudgets = () => {
               {totals.totalBudgetMinor === null ? 'Not set' : formatMinor(totals.totalBudgetMinor)}
             </strong>
           </div>
-          <CardCornerWave tone="pink" />
         </div>
 
         {/* Card 2: Allocated */}
@@ -837,7 +780,6 @@ const CategoryBudgets = () => {
               {formatMinor(totals.allocatedMinor)}
             </strong>
           </div>
-          <CardCornerWave tone="purple" />
         </div>
 
         {/* Card 3: Unallocated */}
@@ -858,7 +800,6 @@ const CategoryBudgets = () => {
               <span className="sr-only"> ({formatMinor(totals.unallocatedMinor)} unallocated)</span>
             )}
           </div>
-          <CardCornerWave tone="coral" />
         </div>
 
         {/* Card 4: Unbudgeted Spending */}
@@ -872,7 +813,6 @@ const CategoryBudgets = () => {
               {formatMinor(totals.unbudgetedSpentMinor)}
             </strong>
           </div>
-          <CardCornerWave tone="pink" />
         </div>
       </div>
 
@@ -894,8 +834,6 @@ const CategoryBudgets = () => {
 
   const renderForm = () => (
     <div className="category-budgets-form-card">
-      <FormRightWave />
-
       <div className="category-budgets-form-header">
         <div className="category-budgets-form-badge" aria-hidden="true">
           <FaPlus />
@@ -1104,25 +1042,22 @@ const CategoryBudgets = () => {
             <div className={`category-budgets-panels${categories.length > 0 ? ' category-budgets-panels--list' : ''}`}>
               {/* Left Panel: Category Budgets or Illustrated Empty State */}
               <div className={`category-budgets-panel category-budgets-panel--left${categories.length === 0 ? ' category-budgets-panel--empty' : ' category-budgets-panel--list'}`}>
-                <CardCornerWave />
                 {categories.length === 0 ? (
-                  <>
-                    <EmptyPanelDecor />
-                    <div className="category-budgets-empty">
-                      <EmptyCategoryBudgetsArt />
-                      <h3 className="category-budgets-empty-title">
-                        No category budgets set.
-                      </h3>
-                      {writable && (
-                        <p className="category-budgets-empty-subtitle">
-                          Give a category like Food or Travel its own limit to track it separately from
-                          your overall budget.
-                        </p>
-                      )}
-                    </div>
-                  </>
+                  <div className="category-budgets-empty">
+                    <EmptyCategoryBudgetsArt />
+                    <h3 className="category-budgets-empty-title">
+                      No category budgets set.
+                    </h3>
+                    {writable && (
+                      <p className="category-budgets-empty-subtitle">
+                        Give a category like Food or Travel its own limit to track it separately from
+                        your overall budget.
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <>
+                    <CardCornerWave />
                     <div className="category-budgets-list-header">
                       <div className="category-budgets-list-icon" aria-hidden="true">
                         <FaChartBar />
@@ -1160,7 +1095,6 @@ const CategoryBudgets = () => {
 
               {/* Right Panel: Unbudgeted Categories */}
               <div className="category-budgets-panel category-budgets-panel--right">
-                <PanelTopWave />
 
                 <div className="category-budgets-panel-header">
                   <div className="category-budgets-panel-icon-wrap" aria-hidden="true">

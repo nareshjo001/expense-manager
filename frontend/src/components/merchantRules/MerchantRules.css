@@ -643,3 +643,79 @@ body:has(.merchant-rules-page) .sia-entry-point {
         padding: 8px 12px;
     }
 }
+
+.light-theme .merchant-rules-page button.primary-btn,
+.light-theme .merchant-rules-page .merchant-rules-add-btn,
+.light-theme .merchant-rules-page .merchant-rules-save-btn,
+.light-theme .merchant-rules-page button[type="submit"] {
+  background: #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .merchant-rules-page button.primary-btn:hover,
+.light-theme .merchant-rules-page .merchant-rules-add-btn:hover,
+.light-theme .merchant-rules-page .merchant-rules-save-btn:hover,
+.light-theme .merchant-rules-page button[type="submit"]:hover {
+  background: #F48FBE !important;
+}
+
+.light-theme .merchant-rules-page button.primary-btn:active,
+.light-theme .merchant-rules-page .merchant-rules-add-btn:active,
+.light-theme .merchant-rules-page .merchant-rules-save-btn:active,
+.light-theme .merchant-rules-page button[type="submit"]:active {
+  background: #EE7FB0 !important;
+}
+
+.light-theme .merchant-rules-page button.secondary-btn,
+.light-theme .merchant-rules-page .merchant-rules-cancel-btn {
+  background: transparent !important;
+  border: 1.5px solid #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .merchant-rules-page button.secondary-btn:hover,
+.light-theme .merchant-rules-page .merchant-rules-cancel-btn:hover {
+  background: #FDEEF5 !important;
+  border-color: #F48FBE !important;
+}
+
+.dark-theme .merchant-rules-page button.primary-btn,
+.dark-theme .merchant-rules-page .merchant-rules-add-btn,
+.dark-theme .merchant-rules-page .merchant-rules-save-btn,
+.dark-theme .merchant-rules-page button[type="submit"] {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .merchant-rules-page button.primary-btn:hover,
+.dark-theme .merchant-rules-page .merchant-rules-add-btn:hover,
+.dark-theme .merchant-rules-page .merchant-rules-save-btn:hover,
+.dark-theme .merchant-rules-page button[type="submit"]:hover {
+  background: #60A5FA !important;
+}
+
+.dark-theme .merchant-rules-page button.primary-btn:active,
+.dark-theme .merchant-rules-page .merchant-rules-add-btn:active,
+.dark-theme .merchant-rules-page .merchant-rules-save-btn:active,
+.dark-theme .merchant-rules-page button[type="submit"]:active {
+  background: #2563EB !important;
+}
+
+.dark-theme .merchant-rules-page button.secondary-btn,
+.dark-theme .merchant-rules-page .merchant-rules-cancel-btn {
+  background: transparent !important;
+  border: 1.5px solid #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .merchant-rules-page button.secondary-btn:hover,
+.dark-theme .merchant-rules-page .merchant-rules-cancel-btn:hover {
+  background: #1A2748 !important;
+  border-color: #60A5FA !important;
+}
+
+.dark-theme .merchant-rules-page button.secondary-btn:active,
+.dark-theme .merchant-rules-page .merchant-rules-cancel-btn:active {
+  background: #1E293B !important;
+  border-color: #2563EB !important;
+}

@@ -18,6 +18,7 @@ const { ExpenseModel } = require("../../config/Schemas");
 const { reserve, abandon, synchronizeAfterMutation } = require("../syncRecoveryService");
 const { clearUserExpenseCache } = require("../../utils/expenseCache");
 const { normalizeCategory } = require("../../utils/categoryNormalization");
+const { parseCsvDate } = require("../../utils/dateParsing");
 const {
   IMPORT_SESSION_STATUSES,
   IMPORT_ROW_DECISIONS,
@@ -117,7 +118,9 @@ function evaluateRowEligibility(row) {
     return { eligible: false };
   }
 
-  const expenseDate = new Date(mapped.expenseDate);
+  const rawDate = mapped.expenseDate;
+  const parsed = parseCsvDate(rawDate);
+  const expenseDate = parsed ? new Date(parsed) : new Date(rawDate);
   if (Number.isNaN(expenseDate.getTime())) {
     return { eligible: false };
   }
