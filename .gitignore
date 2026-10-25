@@ -22,3 +22,4 @@ workflow/
 output/
 outputs/
 tmp/
+test-results/

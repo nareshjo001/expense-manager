@@ -37,7 +37,7 @@ jobs:
     env:
       MONGO_CONN: ${{ secrets.PROD_MONGO_CONN }}
       BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
-      BACKUP_DESTINATION_DIR: ${{ github.workspace }}/backend/.prod-backup-output
+      BACKUP_DESTINATION_DIR: ${{ github.workspace }}/backend/prod-backup-output
     defaults:
       run:
         working-directory: backend
@@ -101,6 +101,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: prod-mongo-backup-${{ github.run_id }}
-          path: backend/.prod-backup-output
+          path: backend/prod-backup-output
+          include-hidden-files: true
           retention-days: 90
           if-no-files-found: error
