@@ -38,14 +38,14 @@
   --bu-muted: #94A3B8;
   --bu-subtle: #64748B;
   --bu-accent: #60A5FA;
-  --bu-card-bg: #0C1427;
-  --bu-card-border: #1E293B;
+  --bu-card-bg: #102036;
+  --bu-card-border: #1A2C46;
   --bu-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --bu-back-bg: #1E293B;
-  --bu-back-hover: #334155;
-  --bu-zone-bg: #080E1C;
-  --bu-zone-hover: #0E172A;
-  --bu-zone-border: #1E293B;
+  --bu-back-bg: #1A2C46;
+  --bu-back-hover: #223B5D;
+  --bu-zone-bg: #11223B;
+  --bu-zone-hover: #132744;
+  --bu-zone-border: #1A2C46;
   --bu-icon-bg: rgba(37, 99, 235, 0.25);
   --bu-focus-ring: rgba(59, 130, 246, 0.25);
   --bu-focus-ring-strong: rgba(59, 130, 246, 0.4);
@@ -404,6 +404,8 @@
   }
 }
 
+.light-theme .bill-upload-btn,
+:root:not(.dark-theme) .bill-upload-btn,
 .light-theme .bill-upload-wrapper .bill-upload-scan-btn,
 .light-theme .bill-upload-wrapper button[type="submit"],
 .light-theme .bill-upload-wrapper .bill-upload-action-btn {
@@ -434,24 +436,25 @@
 .dark-theme .bill-upload-wrapper .bill-upload-scan-btn,
 .dark-theme .bill-upload-wrapper button[type="submit"],
 .dark-theme .bill-upload-wrapper .bill-upload-action-btn {
-  background: #2563EB;
+  background: #3B82F6;
   color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  box-shadow: none;
 }
 
 .dark-theme .bill-upload-btn:hover:not(:disabled),
 .dark-theme .bill-upload-wrapper .bill-upload-scan-btn:hover,
 .dark-theme .bill-upload-wrapper button[type="submit"]:hover,
 .dark-theme .bill-upload-wrapper .bill-upload-action-btn:hover {
-  background: #3B82F6;
-  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.45);
+  background: #60A5FA;
+  box-shadow: none;
+  filter: none;
 }
 
 .dark-theme .bill-upload-btn:active:not(:disabled),
 .dark-theme .bill-upload-wrapper .bill-upload-scan-btn:active,
 .dark-theme .bill-upload-wrapper button[type="submit"]:active,
 .dark-theme .bill-upload-wrapper .bill-upload-action-btn:active {
-  background: #1D4ED8;
+  background: #2563EB;
 }
 
 .dark-theme .bill-upload-btn:disabled,

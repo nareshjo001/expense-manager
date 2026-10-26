@@ -74,6 +74,56 @@ body.light-theme::-webkit-scrollbar-button,
   height: 0;
 }
 
+/* ========== Universal Dark Theme Scrollbars ========== */
+html.dark-theme,
+body.dark-theme,
+.dark-theme,
+.dark-theme * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
+}
+
+html.dark-theme::-webkit-scrollbar,
+body.dark-theme::-webkit-scrollbar,
+.dark-theme::-webkit-scrollbar,
+.dark-theme *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.dark-theme::-webkit-scrollbar-track,
+body.dark-theme::-webkit-scrollbar-track,
+.dark-theme::-webkit-scrollbar-track,
+.dark-theme *::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+html.dark-theme::-webkit-scrollbar-thumb,
+body.dark-theme::-webkit-scrollbar-thumb,
+.dark-theme::-webkit-scrollbar-thumb,
+.dark-theme *::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.38);
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+html.dark-theme::-webkit-scrollbar-thumb:hover,
+body.dark-theme::-webkit-scrollbar-thumb:hover,
+.dark-theme::-webkit-scrollbar-thumb:hover,
+.dark-theme *::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.65);
+}
+
+html.dark-theme::-webkit-scrollbar-button,
+body.dark-theme::-webkit-scrollbar-button,
+.dark-theme::-webkit-scrollbar-button,
+.dark-theme *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* ========== Dark Theme ========== */
 .dark-theme {
   --bg-color: #1F2937;
@@ -92,12 +142,26 @@ body.light-theme::-webkit-scrollbar-button,
   --btn-subtle-bg: #1A2748;
 }
 
-* {
-  transition: 
-    background-color 0.4s ease,
-    color 0.4s ease,
-    border-color 0.4s ease,
-    box-shadow 0.4s ease;
+/* Circular View Transition for Smooth Theme Toggle */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+/* Fallback smooth transition for browsers without View Transition API */
+html.theme-transitioning,
+html.theme-transitioning body,
+html.theme-transitioning .app-container {
+  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 body, html {
@@ -117,8 +181,8 @@ body, html {
   justify-content: center;
   align-items: center;
   min-height: 100dvh;
-  padding: 1rem;
   box-sizing: border-box;
+  background: linear-gradient(135deg, #e0effd 0%, #edf6fe 50%, #f6fafe 100%);
 }
 
 /* ================= Notification Modal ================= */
@@ -190,26 +254,100 @@ body, html {
   font-size: 0.95rem;
 }
 
-/* Primary (Enable) */
-.notification-buttons button:first-child {
-  background: #ec4899;
-  color: white;
+/* Light Theme Button Palette */
+.notification-buttons button:first-child,
+.light-theme .notification-buttons button:first-child,
+:root:not(.dark-theme) .notification-buttons button:first-child {
+  background: #F8AECB;
+  color: #72143D;
+  box-shadow: 0 4px 12px rgba(248, 174, 203, 0.4);
 }
 
-.notification-buttons button:first-child:hover {
-  transform: translateY(-2px);
-  opacity: 0.92;
+.notification-buttons button:first-child:hover,
+.light-theme .notification-buttons button:first-child:hover,
+:root:not(.dark-theme) .notification-buttons button:first-child:hover {
+  background: #F48FBE;
+  box-shadow: 0 6px 18px rgba(244, 143, 190, 0.45);
+  transform: translateY(-1px);
 }
 
-/* Secondary (Later) */
-.notification-buttons button:last-child {
+.notification-buttons button:first-child:active,
+.light-theme .notification-buttons button:first-child:active,
+:root:not(.dark-theme) .notification-buttons button:first-child:active {
+  background: #EE7FB0;
+  transform: translateY(0);
+}
+
+.notification-buttons button:last-child,
+.light-theme .notification-buttons button:last-child,
+:root:not(.dark-theme) .notification-buttons button:last-child {
   background: transparent;
-  color: #ec4899;
-  opacity: 0.8;
+  color: #72143D;
+  border: 1.5px solid #F8AECB;
 }
 
-.notification-buttons button:last-child:hover {
-  opacity: 1;
+.notification-buttons button:last-child:hover,
+.light-theme .notification-buttons button:last-child:hover,
+:root:not(.dark-theme) .notification-buttons button:last-child:hover {
+  background: #FDEEF5;
+  border-color: #F48FBE;
+}
+
+.notification-buttons button:last-child:active,
+.light-theme .notification-buttons button:last-child:active,
+:root:not(.dark-theme) .notification-buttons button:last-child:active {
+  background: #FAD9E7;
+  border-color: #EE7FB0;
+}
+
+/* Dark Theme Button Palette */
+.dark-theme .notification-content {
+  background: #102036;
+  border: 1px solid #1A2C46;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+.dark-theme .notification-content h3 {
+  color: #FFFFFF;
+}
+
+.dark-theme .notification-content p {
+  color: #94A3B8;
+}
+
+.dark-theme .notification-buttons button:first-child {
+  background: #3B82F6;
+  color: #FFFFFF;
+  box-shadow: none;
+}
+
+.dark-theme .notification-buttons button:first-child:hover {
+  background: #60A5FA;
+  box-shadow: none;
+  filter: none;
+  transform: translateY(-1px);
+}
+
+.dark-theme .notification-buttons button:first-child:active {
+  background: #2563EB;
+  box-shadow: none;
+  transform: translateY(0);
+}
+
+.dark-theme .notification-buttons button:last-child {
+  background: transparent;
+  color: #FFFFFF;
+  border: 1.5px solid #3B82F6;
+}
+
+.dark-theme .notification-buttons button:last-child:hover {
+  background: #1A2748;
+  border-color: #60A5FA;
+}
+
+.dark-theme .notification-buttons button:last-child:active {
+  background: #1E293B;
+  border-color: #2563EB;
 }
 
 /* Apple pop animation */

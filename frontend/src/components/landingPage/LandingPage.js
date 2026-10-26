@@ -478,6 +478,18 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                     >
                                         <FaBell />
                                     </Link>
+
+                                    {isSidebarCollapsed && (
+                                        <button
+                                            type="button"
+                                            className="topbar-icon-btn topbar-logout-btn"
+                                            onClick={handleLogout}
+                                            aria-label="Logout"
+                                            title="Logout"
+                                        >
+                                            <FaSignOutAlt />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 

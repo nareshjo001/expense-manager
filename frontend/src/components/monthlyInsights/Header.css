@@ -474,24 +474,24 @@
 }
 
 .dark-theme .income-insights-header {
-  --iih-bg: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  --iih-border: rgba(244, 114, 182, 0.22);
-  --iih-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
-  --iih-title: #fdf2f8;
+  --iih-bg: #102036;
+  --iih-border: #1a2c46;
+  --iih-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  --iih-title: #ffffff;
   --iih-subtitle: #94a3b8;
-  --iih-card-bg: rgba(36, 23, 38, 0.92);
-  --iih-card-border: rgba(244, 114, 182, 0.2);
+  --iih-card-bg: #16263d;
+  --iih-card-border: #1f3654;
   --iih-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  --iih-card-hover-border: rgba(244, 114, 182, 0.5);
+  --iih-card-hover-border: #3b82f6;
   --iih-card-hover-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
-  --iih-icon-tile-bg: rgba(244, 114, 182, 0.18);
-  --iih-icon-tile-border: rgba(244, 114, 182, 0.3);
-  --iih-icon-tile-color: #f472b6;
-  --iih-pill-bg: rgba(45, 27, 48, 0.85);
-  --iih-pill-border: rgba(244, 114, 182, 0.3);
-  --iih-pill-color: #f472b6;
-  --iih-accent-bars: #f472b6;
-  --iih-val-text: #fdf2f8;
+  --iih-icon-tile-bg: rgba(59, 130, 246, 0.18);
+  --iih-icon-tile-border: rgba(59, 130, 246, 0.35);
+  --iih-icon-tile-color: #60a5fa;
+  --iih-pill-bg: #11223b;
+  --iih-pill-border: #1f3654;
+  --iih-pill-color: #60a5fa;
+  --iih-accent-bars: #3b82f6;
+  --iih-val-text: #ffffff;
   --iih-trend-green: #34d399;
 }
 
@@ -609,8 +609,8 @@
 }
 
 .dark-theme .period-selector-pill select option {
-  background: #241726;
-  color: #fdf2f8;
+  background: #11223b;
+  color: #ffffff;
 }
 
 .period-selector-chevron {
@@ -730,8 +730,8 @@
 }
 
 .dark-theme .income-insights-header .income-card-icon-badge {
-  background: rgba(244, 114, 182, 0.2);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
 }
 
 .income-insights-header .income-card-header-graphic {
@@ -869,12 +869,12 @@
 }
 
 .dark-theme .income-insights-header .income-view-btn {
-  background: rgba(244, 114, 182, 0.25);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
 }
 
 .dark-theme .income-insights-header .income-view-btn:hover {
-  background: rgba(244, 114, 182, 0.4);
+  background: rgba(59, 130, 246, 0.35);
 }
 
 .income-insights-header .income-insight-graphic {
@@ -981,23 +981,23 @@
 }
 
 .dark-theme .budget-insights-header {
-  --bih-bg: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  --bih-border: rgba(244, 114, 182, 0.22);
-  --bih-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
-  --bih-title: #fdf2f8;
+  --bih-bg: #102036;
+  --bih-border: #1a2c46;
+  --bih-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  --bih-title: #ffffff;
   --bih-subtitle: #94a3b8;
-  --bih-card-bg: rgba(36, 23, 38, 0.92);
-  --bih-card-border: rgba(244, 114, 182, 0.2);
+  --bih-card-bg: #16263d;
+  --bih-card-border: #1f3654;
   --bih-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  --bih-card-hover-border: rgba(244, 114, 182, 0.5);
+  --bih-card-hover-border: #3b82f6;
   --bih-card-hover-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
-  --bih-icon-tile-bg: rgba(244, 114, 182, 0.18);
-  --bih-icon-tile-border: rgba(244, 114, 182, 0.3);
-  --bih-icon-tile-color: #f472b6;
-  --bih-pill-bg: rgba(244, 114, 182, 0.22);
-  --bih-pill-color: #f472b6;
-  --bih-accent-bars: #f472b6;
-  --bih-val-text: #fdf2f8;
+  --bih-icon-tile-bg: rgba(59, 130, 246, 0.18);
+  --bih-icon-tile-border: rgba(59, 130, 246, 0.35);
+  --bih-icon-tile-color: #60a5fa;
+  --bih-pill-bg: rgba(59, 130, 246, 0.15);
+  --bih-pill-color: #60a5fa;
+  --bih-accent-bars: #3b82f6;
+  --bih-val-text: #ffffff;
 }
 
 /* Header Top Row */
@@ -1259,6 +1259,39 @@
   display: block;
 }
 
+/* Decorative Chart Overrides for Dark Mode */
+.dark-theme .insight-decor-wave path[stroke] {
+  stroke: #60a5fa !important;
+}
+.dark-theme .insight-decor-wave stop {
+  stop-color: #3b82f6 !important;
+}
+.dark-theme .insight-decor-wave circle {
+  fill: #60a5fa !important;
+}
+.dark-theme .insight-decor-bars rect {
+  fill: #60a5fa !important;
+}
+.dark-theme .insight-decor-donut circle:first-child {
+  stroke: rgba(255, 255, 255, 0.12) !important;
+}
+.dark-theme .insight-decor-donut circle:last-child {
+  stroke: #60a5fa !important;
+}
+.dark-theme .budget-decor-bars rect {
+  fill: #60a5fa !important;
+}
+
+.dark-theme .budget-insights-header .edit-budget-icon {
+  background: rgba(59, 130, 246, 0.18) !important;
+  color: #60a5fa !important;
+}
+
+.dark-theme .budget-insights-header .edit-budget-icon:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.32) !important;
+  color: #93c5fd !important;
+}
+
 /* Accessibility: sr-only utility */
 .sr-only {
   position: absolute;
@@ -1272,17 +1305,17 @@
   border: 0;
 }
 
-/* Edit Budget Modal Pink Theme Enhancements */
+/* Edit Budget Modal Dark Theme */
 .dark-theme .edit-budget-modal {
-  background: #1f1422;
-  border-color: rgba(244, 114, 182, 0.25);
-  color: #fdf2f8;
+  background: #102036;
+  border-color: #1a2c46;
+  color: #ffffff;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
 }
 
 .dark-theme .budget-current-value {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #11223b;
+  border-color: #1f3654;
 }
 
 .dark-theme .budget-current-value span {
@@ -1290,7 +1323,7 @@
 }
 
 .dark-theme .budget-current-value h3 {
-  color: #fdf2f8 !important;
+  color: #ffffff !important;
 }
 
 .dark-theme .budget-input-group label {
@@ -1298,9 +1331,9 @@
 }
 
 .dark-theme .budget-input-group input {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(244, 114, 182, 0.25);
-  color: #fdf2f8;
+  background: #11223b;
+  border-color: #1f3654;
+  color: #ffffff;
 }
 
 .save-btn {

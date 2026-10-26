@@ -175,7 +175,7 @@ export default function OverallInsight({ report, hide = false }) {
             <div
               className="stability-donut circle"
               style={{
-                background: `conic-gradient(#be185d 0% ${insight.stabilityDetails.stabilityScore}%, #e2e8f0 ${insight.stabilityDetails.stabilityScore}% 100%)`
+                background: `conic-gradient(var(--stability-track-active, #be185d) 0% ${insight.stabilityDetails.stabilityScore}%, var(--stability-track-bg, #e2e8f0) ${insight.stabilityDetails.stabilityScore}% 100%)`
               }}
             >
               <div className="stability-donut-inner">

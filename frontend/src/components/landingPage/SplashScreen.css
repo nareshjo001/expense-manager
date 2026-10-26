@@ -25,9 +25,14 @@ html, body {
 
 /* Container for the splash screen */
 .splash-screen {
+  position: fixed;
+  inset: 0;
   width: 100vw;
   height: 100vh;
-  background: inherit; /* Inherit animated gradient from parent */
+  z-index: 99999;
+  background: linear-gradient(270deg, #1f4f96, #003366, #1b2949, #000);
+  background-size: 600% 600%;
+  animation: bgshift 10s ease infinite;
 }
 
 /* ========== Central Animated Stage ========== */

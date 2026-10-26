@@ -1546,7 +1546,6 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
-.sia-root.dark-theme .sia-message-assistant,
 .sia-root.dark-theme .sia-suggestion,
 .sia-root.dark-theme .sia-history-open {
   background: #1f2937;
@@ -1644,6 +1643,12 @@
   flex-shrink: 0;
 }
 
+.sia-root.dark-theme .sia-brand-mark,
+.dark-theme .sia-brand-mark {
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
 .sia-brand-mark svg {
   width: 20px;
   height: 20px;
@@ -1691,6 +1696,16 @@
   color: var(--sia-accent);
 }
 
+.sia-root.dark-theme .sia-header-btn:hover:not(:disabled),
+.sia-root.dark-theme .sia-panel-close.sia-header-btn:hover,
+.sia-root.dark-theme .sia-header-btn-active,
+.dark-theme .sia-header-btn:hover:not(:disabled),
+.dark-theme .sia-panel-close.sia-header-btn:hover,
+.dark-theme .sia-header-btn-active {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
 /* Welcome Card (Hero) */
 .sia-welcome {
   display: flex;
@@ -1705,9 +1720,11 @@
   box-shadow: 0 4px 16px rgba(203, 30, 92, 0.05);
 }
 
+.sia-root.dark-theme .sia-welcome,
 .dark-theme .sia-welcome {
-  background: linear-gradient(135deg, #261622 0%, #1e131b 100%);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: linear-gradient(145deg, #16263D 0%, #11223B 100%);
+  border-color: #1F3654;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .sia-welcome-content {
@@ -1721,8 +1738,9 @@
   color: #581838;
 }
 
+.sia-root.dark-theme .sia-welcome-title,
 .dark-theme .sia-welcome-title {
-  color: #fbcfe8;
+  color: #ffffff;
 }
 
 .sia-welcome-copy {
@@ -1732,6 +1750,7 @@
   color: #7a5068;
 }
 
+.sia-root.dark-theme .sia-welcome-copy,
 .dark-theme .sia-welcome-copy {
   color: #cbd5e1;
 }
@@ -1741,6 +1760,45 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.sia-root.dark-theme .sia-welcome-art circle,
+.dark-theme .sia-welcome-art circle {
+  fill: rgba(59, 130, 246, 0.15) !important;
+}
+
+.sia-root.dark-theme .sia-welcome-art rect:nth-of-type(1),
+.dark-theme .sia-welcome-art rect:nth-of-type(1) {
+  fill: #3b82f6 !important;
+  fill-opacity: 0.8 !important;
+}
+
+.sia-root.dark-theme .sia-welcome-art rect:nth-of-type(2),
+.dark-theme .sia-welcome-art rect:nth-of-type(2) {
+  fill: #60a5fa !important;
+  fill-opacity: 0.9 !important;
+}
+
+.sia-root.dark-theme .sia-welcome-art rect:nth-of-type(3),
+.dark-theme .sia-welcome-art rect:nth-of-type(3) {
+  fill: #93c5fd !important;
+}
+
+.sia-root.dark-theme .sia-welcome-art path,
+.dark-theme .sia-welcome-art path {
+  fill: #60a5fa !important;
+}
+
+.sia-root.dark-theme .sia-welcome-art stop:first-child,
+.dark-theme .sia-welcome-art stop:first-child {
+  stop-color: #3b82f6 !important;
+  stop-opacity: 0.35 !important;
+}
+
+.sia-root.dark-theme .sia-welcome-art stop:last-child,
+.dark-theme .sia-welcome-art stop:last-child {
+  stop-color: #1e3a5f !important;
+  stop-opacity: 0.05 !important;
 }
 
 /* Suggestions List */
@@ -1781,11 +1839,25 @@
   transition: all 0.15s ease;
 }
 
+.sia-root.dark-theme .sia-suggestion,
+.dark-theme .sia-suggestion {
+  background: #16263D;
+  border-color: #1F3654;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
 .sia-suggestion:hover:not(:disabled) {
   background: var(--sia-accent-soft);
   border-color: var(--sia-border-strong);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(203, 30, 92, 0.08);
+}
+
+.sia-root.dark-theme .sia-suggestion:hover:not(:disabled),
+.dark-theme .sia-suggestion:hover:not(:disabled) {
+  background: #192a42;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .sia-suggestion-icon-badge {
@@ -1801,9 +1873,10 @@
   flex-shrink: 0;
 }
 
+.sia-root.dark-theme .sia-suggestion-icon-badge,
 .dark-theme .sia-suggestion-icon-badge {
-  background: rgba(244, 114, 182, 0.15);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
 }
 
 .sia-suggestion-text {
@@ -1821,8 +1894,9 @@
   flex-shrink: 0;
 }
 
+.sia-root.dark-theme .sia-suggestion-arrow,
 .dark-theme .sia-suggestion-arrow {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 /* Chat Messages */
@@ -1849,6 +1923,13 @@
   box-shadow: 0 4px 14px rgba(203, 30, 92, 0.22);
 }
 
+.sia-root.dark-theme .sia-message-user .sia-message-bubble,
+.dark-theme .sia-message-user .sia-message-bubble {
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
+}
+
 .sia-message-user .sia-message-text {
   color: #ffffff;
   font-size: 0.94rem;
@@ -1863,6 +1944,11 @@
   margin-top: 6px;
   font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.75);
+}
+
+.sia-root.dark-theme .sia-message-user .sia-message-footer,
+.dark-theme .sia-message-user .sia-message-footer {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .sia-message-status {
@@ -1884,6 +1970,17 @@
   border-radius: 0;
 }
 
+.sia-root.dark-theme .sia-message-assistant,
+.dark-theme .sia-message-assistant,
+.sia-root.dark-theme .sia-message-user,
+.dark-theme .sia-message-user {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
 .sia-message-avatar {
   width: 32px;
   height: 32px;
@@ -1899,8 +1996,10 @@
   box-shadow: 0 2px 8px rgba(203, 30, 92, 0.25);
 }
 
+.sia-root.dark-theme .sia-message-avatar,
 .dark-theme .sia-message-avatar {
-  background: #be185d;
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
 
 .sia-message-assistant .sia-message-bubble {
@@ -1910,6 +2009,13 @@
   padding: 14px 18px;
   box-shadow: 0 2px 10px rgba(88, 51, 72, 0.05);
   flex: 1;
+}
+
+.sia-root.dark-theme .sia-message-assistant .sia-message-bubble,
+.dark-theme .sia-message-assistant .sia-message-bubble {
+  background: #16263D;
+  border-color: #1F3654;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
 .sia-message-assistant .sia-message-text {
@@ -1954,13 +2060,29 @@
   transition: all 0.15s ease;
 }
 
+.sia-root.dark-theme .sia-grounding-toggle,
 .dark-theme .sia-grounding-toggle {
+  background: #11223B;
+  border-color: #1F3654;
   color: #cbd5e1;
 }
 
 .sia-grounding-toggle:hover {
   background: var(--sia-accent-soft);
   border-color: var(--sia-border-strong);
+}
+
+.sia-root.dark-theme .sia-grounding-toggle:hover,
+.dark-theme .sia-grounding-toggle:hover {
+  background: #1E3A5F;
+  border-color: #3B82F6;
+  color: #ffffff;
+}
+
+.sia-root.dark-theme .sia-grounding-panel,
+.dark-theme .sia-grounding-panel {
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 /* Listen / Speak Button */
@@ -1984,13 +2106,23 @@
   transition: all 0.15s ease;
 }
 
+.sia-root.dark-theme .sia-speak-btn,
 .dark-theme .sia-speak-btn {
-  color: #fbcfe8;
+  background: #11223B;
+  border-color: #1F3654;
+  color: #93c5fd;
 }
 
 .sia-speak-btn:hover {
   background: var(--sia-accent-soft);
   border-color: var(--sia-border-strong);
+}
+
+.sia-root.dark-theme .sia-speak-btn:hover,
+.dark-theme .sia-speak-btn:hover {
+  background: #1E3A5F;
+  border-color: #3B82F6;
+  color: #ffffff;
 }
 
 .sia-speak-icon {
@@ -2012,15 +2144,22 @@
   box-shadow: 0 2px 6px rgba(203, 30, 92, 0.05);
 }
 
+.sia-root.dark-theme .sia-pending-bubble,
 .dark-theme .sia-pending-bubble {
-  background: #251622;
-  border-color: #3b2234;
+  background: #16263D;
+  border-color: #1F3654;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 
 .sia-pending-bubble .sia-thinking-dots i {
   width: 6px;
   height: 6px;
   background: #cb1e5c;
+}
+
+.sia-root.dark-theme .sia-pending-bubble .sia-thinking-dots i,
+.dark-theme .sia-pending-bubble .sia-thinking-dots i {
+  background: #60a5fa;
 }
 
 /* Bottom Composer */
@@ -2046,6 +2185,12 @@
 .sia-composer-box:focus-within {
   border-color: #cb1e5c;
   box-shadow: 0 0 0 3px rgba(203, 30, 92, 0.12);
+}
+
+.sia-root.dark-theme .sia-composer-box:focus-within,
+.dark-theme .sia-composer-box:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 .sia-panel-input {
@@ -2093,7 +2238,7 @@
 }
 
 .dark-theme .sia-mic-btn {
-  color: #f472b6;
+  color: #60A5FA;
 }
 
 .sia-mic-btn:hover:not(:disabled) {
@@ -2264,20 +2409,28 @@
   fill: currentColor;
 }
 
-.sia-root.light-theme .sia-send-button {
+.sia-root.light-theme .sia-send-button,
+.sia-root.light-theme .sia-panel-submit,
+:root:not(.dark-theme) .sia-panel-submit {
   background: #F8AECB;
   color: #72143D;
 }
 
-.sia-root.light-theme .sia-send-button:hover:not(:disabled) {
+.sia-root.light-theme .sia-send-button:hover:not(:disabled),
+.sia-root.light-theme .sia-panel-submit:hover:not(:disabled),
+:root:not(.dark-theme) .sia-panel-submit:hover:not(:disabled) {
   background: #F48FBE;
 }
 
-.sia-root.light-theme .sia-send-button:active:not(:disabled) {
+.sia-root.light-theme .sia-send-button:active:not(:disabled),
+.sia-root.light-theme .sia-panel-submit:active:not(:disabled),
+:root:not(.dark-theme) .sia-panel-submit:active:not(:disabled) {
   background: #EE7FB0;
 }
 
-.sia-root.light-theme .sia-send-button:disabled {
+.sia-root.light-theme .sia-send-button:disabled,
+.sia-root.light-theme .sia-panel-submit:disabled,
+:root:not(.dark-theme) .sia-panel-submit:disabled {
   background: #FAD9E7;
   color: #C49EAF;
 }
@@ -2303,39 +2456,57 @@
 }
 
 /* Dark Theme Button Palette Overrides */
-.sia-root.dark-theme .sia-entry-point {
+.sia-root.dark-theme .sia-entry-point,
+.dark-theme .sia-entry-point {
   background: #3B82F6;
   color: #FFFFFF;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 
-.sia-root.dark-theme .sia-entry-point:hover {
+.sia-root.dark-theme .sia-entry-point:hover,
+.dark-theme .sia-entry-point:hover {
   background: #60A5FA;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45), 0 6px 16px rgba(59, 130, 246, 0.45);
 }
 
-.sia-root.dark-theme .sia-entry-point:active {
+.sia-root.dark-theme .sia-entry-point:active,
+.dark-theme .sia-entry-point:active {
   background: #2563EB;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+@media (max-width: 600px) {
+  .sia-root.dark-theme .sia-entry-point,
+  .dark-theme .sia-entry-point {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(37, 99, 235, 0.3);
+  }
 }
 
 .sia-root.dark-theme .sia-send-button,
 .dark-theme .sia-panel-submit {
   background: #3B82F6;
   color: #FFFFFF;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
 }
 
 .sia-root.dark-theme .sia-send-button:hover:not(:disabled),
 .dark-theme .sia-panel-submit:hover:not(:disabled) {
   background: #60A5FA;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
 }
 
 .sia-root.dark-theme .sia-send-button:active:not(:disabled),
 .dark-theme .sia-panel-submit:active:not(:disabled) {
   background: #2563EB;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
 }
 
 .sia-root.dark-theme .sia-send-button:disabled,
 .dark-theme .sia-panel-submit:disabled {
   background: #1E293B;
   color: #64748B;
+  box-shadow: none;
 }
 
 .sia-root.dark-theme .sia-quick-prompt {

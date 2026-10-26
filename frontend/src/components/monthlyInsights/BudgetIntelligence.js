@@ -175,7 +175,7 @@ export default function BudgetIntelligence({ data, forecast, report }) {
         {/* Smart Tip Card */}
         <div className="budget-smart-tip-card">
           <div className="budget-smart-tip-icon-tile" aria-hidden="true">
-            <FaLightbulb size={16} color="#db2777" />
+            <FaLightbulb size={16} />
           </div>
           <div className="budget-smart-tip-content">
             <h5 className="budget-smart-tip-heading">Smart Tip</h5>
@@ -191,7 +191,7 @@ export default function BudgetIntelligence({ data, forecast, report }) {
         <div className="budget-forecast-panel">
           <div className="budget-forecast-header">
             <div className="budget-forecast-icon-tile" aria-hidden="true">
-              <FaChartLine size={15} color="#db2777" />
+              <FaChartLine size={15} />
             </div>
             <h3 className="budget-forecast-heading">Month-end Forecast</h3>
           </div>

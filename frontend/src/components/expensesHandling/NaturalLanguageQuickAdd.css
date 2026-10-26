@@ -35,14 +35,14 @@
   --qa-text: #FFFFFF;
   --qa-muted: #94A3B8;
   --qa-accent: #60A5FA;
-  --qa-card-bg: #0C1427;
-  --qa-card-border: #1E293B;
+  --qa-card-bg: #102036;
+  --qa-card-border: #1A2C46;
   --qa-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --qa-back-bg: #1E293B;
-  --qa-back-hover: #334155;
+  --qa-back-bg: #1A2C46;
+  --qa-back-hover: #223B5D;
   --qa-tile-bg: rgba(37, 99, 235, 0.25);
-  --qa-input-bg: #080E1C;
-  --qa-input-border: #1E293B;
+  --qa-input-bg: #11223B;
+  --qa-input-border: #1A2C46;
   --qa-placeholder: #64748B;
   --qa-focus-ring: rgba(59, 130, 246, 0.25);
   --qa-cta: #2563EB;
@@ -382,18 +382,19 @@
 
 /* Dark Theme Button Palette */
 .dark-theme .nl-quick-add-btn {
-  background: #2563EB !important;
+  background: #3B82F6 !important;
   color: #FFFFFF !important;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
+  box-shadow: none !important;
 }
 
 .dark-theme .nl-quick-add-btn:hover:not(:disabled) {
-  background: #3B82F6 !important;
-  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.45) !important;
+  background: #60A5FA !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 .dark-theme .nl-quick-add-btn:active:not(:disabled) {
-  background: #1D4ED8 !important;
+  background: #2563EB !important;
 }
 
 .dark-theme .nl-quick-add-btn:disabled {

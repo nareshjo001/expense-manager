@@ -11,9 +11,9 @@
 }
 
 .dark-theme {
-  --forecast-card-border: rgba(244, 114, 182, 0.2);
-  --forecast-accent: #f472b6;
-  --forecast-bar-fill: linear-gradient(90deg, #f472b6, #db2777);
+  --forecast-card-border: #1F3654;
+  --forecast-accent: #60A5FA;
+  --forecast-bar-fill: linear-gradient(90deg, #60A5FA, #3B82F6);
 }
 
 /* Parent Section Container */
@@ -32,9 +32,9 @@
 }
 
 .dark-theme .forecast-container {
-  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  border-color: rgba(244, 114, 182, 0.22);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
+  background: #102036;
+  border-color: #1a2c46;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
 }
 
 /* Header */
@@ -69,7 +69,7 @@
 }
 
 .dark-theme .forecast-section-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .forecast-section-subtitle {
@@ -109,13 +109,13 @@
 }
 
 .dark-theme .forecast-card {
-  background: rgba(36, 23, 38, 0.92);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #16263D;
+  border-color: #1F3654;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .dark-theme .forecast-card:hover {
-  border-color: rgba(244, 114, 182, 0.45);
+  border-color: #3B82F6;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
 }
 
@@ -150,7 +150,7 @@
 }
 
 .dark-theme .forecast-target-label {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-amount-wrap {
@@ -170,7 +170,7 @@
 }
 
 .dark-theme .forecast-headline-amount {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-headline-caption {
@@ -249,9 +249,9 @@
 }
 
 .dark-theme .forecast-badge.neutral {
-  color: #f472b6;
-  background: rgba(244, 114, 182, 0.12);
-  border-color: rgba(244, 114, 182, 0.25);
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.25);
 }
 
 /* Summary Metric Cards / Pills */
@@ -274,8 +274,8 @@
 }
 
 .dark-theme .forecast-metric-card {
-  background: rgba(244, 114, 182, 0.08);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .metric-card-label {
@@ -295,7 +295,7 @@
 }
 
 .dark-theme .metric-card-val {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 /* Budget Risk Block */
@@ -312,8 +312,8 @@
 }
 
 .dark-theme .forecast-budget-block {
-  background: rgba(244, 114, 182, 0.08);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .forecast-budget-info {
@@ -333,7 +333,7 @@
 }
 
 .dark-theme .forecast-budget-kicker {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-budget-line {
@@ -369,8 +369,8 @@
 }
 
 .dark-theme .forecast-category-section {
-  background: rgba(36, 23, 38, 0.85);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .forecast-category-toggle {
@@ -393,12 +393,12 @@
 }
 
 .dark-theme .forecast-category-toggle {
-  background: rgba(244, 114, 182, 0.12);
-  color: #fdf2f8;
+  background: #11223B;
+  color: #ffffff;
 }
 
 .dark-theme .forecast-category-toggle:hover {
-  background: rgba(244, 114, 182, 0.2);
+  background: #16263D;
 }
 
 .forecast-category-toggle:focus-visible {
@@ -418,7 +418,7 @@
 }
 
 .dark-theme .forecast-category-toggle-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .forecast-category-toggle-meta {
@@ -442,7 +442,7 @@
 }
 
 .dark-theme .forecast-category-toggle-indicator {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-category-chevron {
@@ -454,7 +454,7 @@
 }
 
 .dark-theme .forecast-category-chevron {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-category-chevron.expanded {
@@ -483,8 +483,8 @@
 }
 
 .dark-theme .forecast-category-row {
-  background: rgba(244, 114, 182, 0.08);
-  border-color: rgba(244, 114, 182, 0.16);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .forecast-category-label {
@@ -505,7 +505,7 @@
 }
 
 .dark-theme .forecast-category-name {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .forecast-category-subtext {
@@ -528,7 +528,7 @@
 }
 
 .dark-theme .forecast-category-value {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-bar-track {
@@ -540,7 +540,7 @@
 }
 
 .dark-theme .forecast-bar-track {
-  background: rgba(244, 114, 182, 0.14);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .forecast-bar-fill {
@@ -579,7 +579,7 @@
 }
 
 .dark-theme .forecast-empty-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .forecast-empty-text {

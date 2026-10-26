@@ -14,166 +14,523 @@
     animation: slideInFromRight 0.7s ease forwards;
 }
 
-/* Card container */
-.login-card, 
-.forgot-pass-card,
-.reset-pass-card {
+/* ==========================================================================
+   Shared Auth Layout (Split Hero + Dynamic Card)
+   ========================================================================== */
+.login-page-wrapper {
     width: 100%;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 16px 24px;
+}
+
+.login-page-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto;
+    gap: 20px;
+}
+
+/* Left Hero Column */
+.login-hero-column {
+    flex: 1 1 54%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.login-brand-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.login-brand-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(2, 38, 114, 0.28);
+    flex-shrink: 0;
+}
+
+.login-brand-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.login-brand-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.login-brand-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.3px;
+}
+
+.login-brand-tagline {
+    font-size: 13px;
+    font-weight: 500;
+    color: #64748b;
+    margin: 2px 0 0;
+    letter-spacing: 0.5px;
+}
+
+.login-hero-illustration-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.login-hero-img {
+    width: 100%;
+    max-width: 480px;
+    max-height: 420px;
+    height: auto;
+    object-fit: contain;
+    -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000000 62%, transparent 100%);
+    mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000000 62%, transparent 100%);
+}
+
+/* Right Column / Cards */
+.login-card-column {
+    flex: 1 1 46%;
     max-width: 420px;
-    margin: 50px auto;
-    background: #f9fafb;
-    border-radius: 24px;
-    padding: 25px;
-    box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1);
-    text-align: center;
-    transition: box-shadow 0.3s ease;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* Universal Card Container for all Auth Modals */
+.login-card,
+.signup-card,
+.forgot-pass-card,
+.reset-pass-card,
+.otp-card {
+    width: 100%;
+    background: #ffffff;
+    border-radius: 28px;
+    padding: 28px 30px 24px;
+    box-shadow: 0 20px 45px rgba(59, 130, 246, 0.09), 0 2px 12px rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-sizing: border-box;
+    text-align: left;
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
 }
 
 .login-card:hover,
+.signup-card:hover,
 .forgot-pass-card:hover,
-.reset-pass-card:hover {
-    box-shadow: 0 0 10px 1px rgba(0, 102, 255, 0.7);
+.reset-pass-card:hover,
+.otp-card:hover {
+    box-shadow: 0 24px 50px rgba(59, 130, 246, 0.13), 0 4px 14px rgba(0, 0, 0, 0.03);
 }
 
-/* Header */
-.login-header, 
+/* Back Navigation Button */
+.auth-back-btn,
+.signup-card > button,
+.forgot-pass-card > button,
+.reset-pass-card > button,
+.otp-card > button:not(.login-submit):not(.otp-submit) {
+    all: unset;
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #475569;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    margin-bottom: 12px;
+}
+
+.auth-back-btn:hover,
+.signup-card > button:hover,
+.forgot-pass-card > button:hover,
+.reset-pass-card > button:hover,
+.otp-card > button:not(.login-submit):not(.otp-submit):hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    transform: translateX(-2px);
+}
+
+.auth-back-btn img,
+.signup-card > button img,
+.forgot-pass-card > button img,
+.reset-pass-card > button img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+}
+
+/* Headers */
+.login-header,
+.signup-header,
 .forgot-pass-header,
 .reset-pass-header {
-    margin-bottom: 30px;
+    text-align: center;
+    margin-bottom: 18px;
 }
 
 .login-title,
+.signup-title,
 .forgot-pass-text,
-.reset-pass-text {
-    font-size: 36px;
+.reset-pass-text,
+.otp-title {
+    font-size: 25px;
     font-weight: 700;
-    color: #0056b3;
-    margin-bottom: 8px;
+    color: #0f172a;
+    margin: 0 0 6px;
+    letter-spacing: -0.4px;
+    text-align: center;
 }
 
 .login-subtitle,
+.signup-subtitle,
 .forgot-pass-subtext,
-.reset-pass-subtext {
-    font-size: 16px;
-    color: #0056b3;
+.reset-pass-subtext,
+.otp-subtitle {
+    font-size: 13.5px;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.4;
+    text-align: center;
 }
 
-/* Form wrapper */
+/* Form Wrappers */
 .login-form form,
+.signup-form form,
 .forgot-pass form,
 .reset-pass form {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
 }
 
-/* Input fields */
+/* Input Wrappers & Icons */
+.labeled-field-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.login-field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 18px;
+    pointer-events: none;
+    z-index: 2;
+    transition: color 0.15s ease;
+}
+
+.labeled-field-input-wrapper:focus-within .login-field-icon {
+    color: #2563eb;
+}
+
 .login-input,
+.signup-input,
 .forgot-pass-input,
 .reset-pass-input {
     width: 100%;
-    padding: 14px 16px;
-    font-size: 16px;
-    border-radius: 16px;
-    border: 2px solid #d1d5db;
+    height: 45px;
+    padding: 0 14px;
+    font-size: 14px;
+    border-radius: 12px;
+    border: 1.5px solid #e2e8f0;
+    background: #ffffff;
+    color: #0f172a;
     box-sizing: border-box;
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.login-input::placeholder,
+.signup-input::placeholder,
+.forgot-pass-input::placeholder,
+.reset-pass-input::placeholder {
+    color: #94a3b8;
+    font-size: 13.5px;
+}
+
 .login-input:focus,
+.signup-input:focus,
 .forgot-pass-input:focus,
 .reset-pass-input:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-.forgot-password {
-    font-size: 0.95rem;
-    margin-top: -10px;
-    margin-bottom: -8px;
-    color: #0056b3;
-    text-align: right;
+.login-input-with-icon {
+    padding-left: 42px;
+}
+
+.login-input-with-action {
+    padding-right: 42px;
+}
+
+/* Password Toggle Button */
+.login-password-toggle-btn {
+    all: unset;
+    box-sizing: border-box;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 18px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+    z-index: 2;
 }
 
-.login-signup-btn:hover,
-.forgot-password:hover {
+.login-password-toggle-btn:hover {
+    color: #2563eb;
+}
+
+/* Forgot Password Link in Login */
+.forgot-password {
+    display: flex;
+    justify-content: flex-end;
+    margin: -3px 0 1px;
+    text-align: right;
+}
+
+.forgot-password p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #2563eb;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.forgot-password p:hover {
+    color: #1d4ed8;
     text-decoration: underline;
 }
 
-/* Submit button */
+/* Universal Submit Buttons */
 .login-submit,
 .forgot-pass-submit,
-.reset-pass-submit {
-    height: 48px;
-    background-color: #d7eafc !important;
-    color: #0056b3 !important;
+.reset-pass-submit,
+.otp-submit {
+    width: 100%;
+    height: 46px;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%) !important;
+    color: #ffffff !important;
     font-weight: 600;
-    font-size: 18px !important;
-    border: 1px solid #0056b3 !important;
-    border-radius: 9999px !important;
+    font-size: 15.5px !important;
+    border: none !important;
+    border-radius: 12px !important;
     cursor: pointer !important;
-    transition: all 0.2s ease !important;
-}
-
-.login-submit:hover,
-.forgot-pass-submit:hover,
-.reset-pass-submit:hover {
-    color: #f9fafb !important;
-    background: #0056b3 !important;
-}
-
-.reset-pass-submit {
-    margin-top: 16px;
-}
-
-/* Footer */
-.login-footer {
-    margin-top: 8px;
     display: flex;
-    justify-content: center;
     align-items: center;
-    gap: 9px;
-    font-size: 0.93rem;
-    color: #374151;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+    transition: all 0.2s ease !important;
+    margin-top: 4px;
+}
+
+.login-submit:hover:not(:disabled),
+.forgot-pass-submit:hover:not(:disabled),
+.reset-pass-submit:hover:not(:disabled),
+.otp-submit:hover:not(:disabled) {
+    background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%) !important;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.38);
+    transform: translateY(-1px);
+}
+
+.login-submit:active:not(:disabled),
+.forgot-pass-submit:active:not(:disabled),
+.reset-pass-submit:active:not(:disabled),
+.otp-submit:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.login-submit:disabled,
+.forgot-pass-submit:disabled,
+.reset-pass-submit:disabled,
+.otp-submit:disabled {
+    background: #e2e8f0 !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.login-submit-arrow {
+    font-size: 17px;
+    transition: transform 0.2s ease;
+}
+
+.login-submit:hover:not(:disabled) .login-submit-arrow {
+    transform: translateX(3px);
+}
+
+/* Footer / Divider */
+.login-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+    width: 100%;
+}
+
+.login-divider-line {
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+}
+
+.login-footer-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #64748b;
+    white-space: nowrap;
 }
 
 .login-signup-btn {
-    background: none;
     border: none;
-    color: #0056b3;
+    background: transparent;
+    color: #2563eb;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.15s ease;
+}
+
+.login-signup-btn:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   OTP Card Specific Styles
+   ========================================================================== */
+.otp-fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 16px;
+}
+
+.otp-legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.otp-inputs {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 14px 0 10px;
+}
+
+.otp-input {
+    width: 44px;
+    height: 48px;
+    border-radius: 12px;
+    border: 1.5px solid #e2e8f0;
+    background: #ffffff;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    outline: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.otp-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.otp-input.error {
+    border-color: #ef4444;
+}
+
+.otp-email-highlight {
+    color: #2563eb;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.otp-resend {
+    margin-top: 14px;
+    font-size: 13px;
+    color: #64748b;
+    text-align: center;
+}
+
+.otp-resend span,
+.otp-resend span[role="button"] {
+    color: #2563eb;
     font-weight: 600;
     cursor: pointer;
-    transition: scale 0.2s ease;
 }
 
-.reset-pass-submit:disabled {
-    background-color: #e5e7eb !important;
-    color: #9ca3af !important;
-    cursor: not-allowed !important;
-    border: 1px solid #bfdbfe !important;
+.otp-resend span[role="button"]:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
 }
 
-.otp-submit,
-.forgot-pass-submit {
-    width: 100%;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.otp-resend.disabled {
+    color: #94a3b8;
 }
 
-.forgot-pass-submit:disabled {
-    background: linear-gradient(180deg,
-                #eef5ff,
-                #e2ecf9) !important;
-    border: 1px solid #9bbce8 !important;
-    color: #94a3b8 !important;
-    cursor: not-allowed !important;
+.otp-shake {
+    animation: otpShake 0.4s ease;
 }
 
-/* OTP container animation */
+@keyframes otpShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+
+/* OTP Wrapper for Forgot Password animation */
 .otp-wrapper {
     overflow: hidden;
     max-height: 0;
@@ -185,45 +542,110 @@
         transform 0.3s ease;
 }
 
-/* When OTP is sent */
 .otp-wrapper.open {
-    max-height: 100px;
+    max-height: 110px;
     opacity: 1;
     transform: translateY(0);
 }
 
+/* ==========================================================================
+   Responsive Styles
+   ========================================================================== */
+@media (max-width: 860px) {
+    .login-page-wrapper {
+        padding: 24px 16px;
+    }
+
+    .login-page-inner {
+        flex-direction: column;
+        gap: 20px;
+        max-width: 440px;
+    }
+
+    .login-hero-illustration-wrapper {
+        display: none;
+    }
+
+    .login-hero-column {
+        flex: none;
+        width: 100%;
+        align-items: center;
+        text-align: center;
+    }
+
+    .login-brand-header {
+        margin-bottom: 4px;
+        justify-content: center;
+    }
+
+    .login-card-column {
+        flex: none;
+        max-width: 100%;
+    }
+
+    .login-card,
+    .signup-card,
+    .forgot-pass-card,
+    .reset-pass-card,
+    .otp-card {
+        padding: 28px 22px;
+        border-radius: 24px;
+    }
+}
+
 @media (max-width: 480px) {
-    .login-card {
-        padding: 26px 20px;
+    .login-page-wrapper {
+        padding: 16px 12px;
+    }
+
+    .login-card,
+    .signup-card,
+    .forgot-pass-card,
+    .reset-pass-card,
+    .otp-card {
+        padding: 24px 18px;
+        border-radius: 20px;
     }
 
     .login-title,
-    .forgot-pass-text {
-        font-size: 28px;
+    .signup-title,
+    .forgot-pass-text,
+    .reset-pass-text,
+    .otp-title {
+        font-size: 22px;
     }
 
     .login-subtitle,
-    .forgot-pass-subtext {
-        font-size: 15px;
+    .signup-subtitle,
+    .forgot-pass-subtext,
+    .reset-pass-subtext,
+    .otp-subtitle {
+        font-size: 13px;
     }
 
     .login-input,
-    .forgot-pass-input {
-        padding: 12px 14px;
-        font-size: 15px;
+    .signup-input,
+    .forgot-pass-input,
+    .reset-pass-input {
+        height: 44px;
+        font-size: 13.5px;
     }
 
     .login-submit,
-    .forgot-pass-submit {
-        height: 48px;
-        font-size: 16px;
-    }
-    
-    .forgot-password {
-        font-size: 15px;
+    .forgot-pass-submit,
+    .reset-pass-submit,
+    .otp-submit {
+        height: 46px;
+        font-size: 15px !important;
     }
 
-    .login-footer {
-        font-size: 15px;
+    .otp-input {
+        width: 38px;
+        height: 42px;
+        font-size: 18px;
+    }
+
+    .login-footer-content {
+        font-size: 12.5px;
     }
 }

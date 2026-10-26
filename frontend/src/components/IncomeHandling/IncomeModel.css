@@ -351,3 +351,7 @@
   background: #1E293B;
   border-color: #2563EB;
 }
+
+.dark-theme .income-error-text {
+  color: #94A3B8;
+}

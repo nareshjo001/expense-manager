@@ -37,9 +37,9 @@
 }
 
 .dark-theme .analysis-toggle {
-  background: rgba(36, 20, 32, 0.95);
-  border-color: rgba(244, 114, 182, 0.28);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 16px rgba(244, 114, 182, 0.08);
+  background: #102036;
+  border-color: #1a2c46;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 /* Sliding active pill indicator */
@@ -62,8 +62,9 @@
 }
 
 .dark-theme .analysis-toggle-slider {
-  background: linear-gradient(135deg, rgba(219, 39, 119, 0.35) 0%, rgba(190, 24, 93, 0.25) 100%);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.35) 0%, rgba(30, 58, 138, 0.45) 100%);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
 /* Toggle tab button */
@@ -99,11 +100,11 @@
 }
 
 .dark-theme .analysis-toggle-btn {
-  color: #cbd5e1;
+  color: #94a3b8;
 }
 
 .dark-theme .analysis-toggle-btn.active {
-  color: #f472b6;
+  color: #ffffff;
 }
 
 /* Circular Icon Badge */
@@ -137,8 +138,8 @@
 }
 
 .dark-theme .analysis-toggle-btn.active .analysis-toggle-icon {
-  background: rgba(244, 114, 182, 0.25);
-  color: #f472b6;
+  background: rgba(37, 99, 235, 0.35);
+  color: #60a5fa;
 }
 
 .dark-theme .analysis-toggle-btn:not(.active):hover .analysis-toggle-icon {

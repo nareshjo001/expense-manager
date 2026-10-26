@@ -35,29 +35,29 @@
 }
 
 .dark-theme .recurring-mgmt-page {
-  --rm-title: #fdf2f8;
-  --rm-label: #f8fafc;
-  --rm-muted: #94a3b8;
-  --rm-accent: #f472b6;
-  --rm-accent-dark: #f472b6;
-  --rm-accent-soft: rgba(244, 114, 182, 0.15);
-  --rm-accent-border: rgba(244, 114, 182, 0.25);
-  --rm-card-bg: rgba(31, 41, 55, 0.85);
-  --rm-card-border: rgba(244, 114, 182, 0.22);
-  --rm-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-  --rm-item-bg: rgba(26, 34, 46, 0.95);
-  --rm-item-border: rgba(244, 114, 182, 0.2);
-  --rm-item-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --rm-item-hover-border: rgba(244, 114, 182, 0.4);
-  --rm-btn-bg: rgba(17, 24, 39, 0.6);
-  --rm-btn-border: rgba(244, 114, 182, 0.3);
-  --rm-btn-text: #f472b6;
-  --rm-btn-hover-bg: rgba(244, 114, 182, 0.18);
-  --rm-btn-hover-border: rgba(244, 114, 182, 0.6);
-  --rm-btn-hover-text: #fdf2f8;
-  --rm-input-bg: rgba(17, 24, 39, 0.6);
-  --rm-input-border: rgba(244, 114, 182, 0.3);
-  --rm-input-focus: #f472b6;
+  --rm-title: #FFFFFF;
+  --rm-label: #FFFFFF;
+  --rm-muted: #94A3B8;
+  --rm-accent: #3B82F6;
+  --rm-accent-dark: #60A5FA;
+  --rm-accent-soft: rgba(37, 99, 235, 0.2);
+  --rm-accent-border: rgba(59, 130, 246, 0.35);
+  --rm-card-bg: #102036;
+  --rm-card-border: #1A2C46;
+  --rm-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --rm-item-bg: #11223B;
+  --rm-item-border: #1A2C46;
+  --rm-item-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  --rm-item-hover-border: #223B5D;
+  --rm-btn-bg: #102036;
+  --rm-btn-border: #1A2C46;
+  --rm-btn-text: #CBD5E1;
+  --rm-btn-hover-bg: #132642;
+  --rm-btn-hover-border: #3B82F6;
+  --rm-btn-hover-text: #FFFFFF;
+  --rm-input-bg: #11223B;
+  --rm-input-border: #1A2C46;
+  --rm-input-focus: #3B82F6;
 }
 
 /* ================= Header with Vertical Accent Line ================= */
@@ -126,6 +126,25 @@
 
 .recurring-mgmt-list::-webkit-scrollbar-thumb:hover {
   background: var(--rm-accent, #db2777);
+}
+
+.dark-theme .recurring-mgmt-list {
+  scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
+}
+
+.dark-theme .recurring-mgmt-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.dark-theme .recurring-mgmt-list::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.38);
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.dark-theme .recurring-mgmt-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.65);
 }
 
 .recurring-mgmt-item {
@@ -284,7 +303,7 @@
 }
 
 .dark-theme .recurring-mgmt-item-amount {
-  color: #f472b6;
+  color: #FFFFFF;
 }
 
 .recurring-mgmt-item-divider {
@@ -329,7 +348,7 @@
 }
 
 .dark-theme .recurring-mgmt-actions-divider {
-  background: rgba(244, 114, 182, 0.25);
+  background: #1A2C46;
 }
 
 /* ================= Actions ================= */
@@ -385,15 +404,15 @@
 }
 
 .dark-theme .recurring-mgmt-btn--pause {
-  background: rgba(244, 114, 182, 0.15);
-  border-color: rgba(244, 114, 182, 0.35);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93C5FD;
 }
 
 .dark-theme .recurring-mgmt-btn--pause:hover:not(:disabled) {
-  background: rgba(244, 114, 182, 0.25);
-  border-color: rgba(244, 114, 182, 0.6);
-  color: #fdf2f8;
+  background: rgba(59, 130, 246, 0.22);
+  border-color: #60A5FA;
+  color: #FFFFFF;
 }
 
 /* Resume Button (soft green tint) */
@@ -437,15 +456,15 @@
 }
 
 .dark-theme .recurring-mgmt-btn--edit {
-  background: rgba(17, 24, 39, 0.7);
-  border-color: rgba(203, 213, 225, 0.25);
-  color: #cbd5e1;
+  background: #102036;
+  border-color: #1A2C46;
+  color: #CBD5E1;
 }
 
 .dark-theme .recurring-mgmt-btn--edit:hover:not(:disabled) {
-  background: rgba(30, 41, 59, 0.9);
-  border-color: rgba(244, 114, 182, 0.5);
-  color: #f8fafc;
+  background: #132642;
+  border-color: #3B82F6;
+  color: #FFFFFF;
 }
 
 /* End Button (clean white with red/rose accent) */
@@ -463,15 +482,15 @@
 }
 
 .dark-theme .recurring-mgmt-btn--end {
-  background: rgba(225, 29, 72, 0.1);
-  border-color: rgba(244, 63, 94, 0.3);
-  color: #fb7185;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #F87171;
 }
 
 .dark-theme .recurring-mgmt-btn--end:hover:not(:disabled) {
-  background: rgba(225, 29, 72, 0.2);
-  border-color: rgba(244, 63, 94, 0.6);
-  color: #ffe4e6;
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #FCA5A5;
 }
 
 /* ================= Edit Form ================= */
@@ -611,8 +630,14 @@
   margin: 0 0 24px 0;
 }
 
+.dark-theme .recurring-mgmt-page .modal {
+  background: #102036;
+  border: 1px solid #1A2C46;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+}
+
 .dark-theme .recurring-mgmt-page .modal p {
-  color: #e2e8f0;
+  color: #FFFFFF;
 }
 
 .recurring-mgmt-page .modal-buttons {
@@ -764,21 +789,38 @@
 
 .dark-theme .recurring-mgmt-page button.primary-btn,
 .dark-theme .recurring-mgmt-page button[type="submit"],
-.dark-theme .recurring-mgmt-page .recurring-add-btn {
+.dark-theme .recurring-mgmt-page .recurring-add-btn,
+.dark-theme .recurring-mgmt-page .recurring-mgmt-form-actions .submit-btn {
   background: #3B82F6 !important;
   color: #FFFFFF !important;
+  box-shadow: none !important;
 }
 
-.dark-theme .recurring-mgmt-page button.primary-btn:hover,
-.dark-theme .recurring-mgmt-page button[type="submit"]:hover,
-.dark-theme .recurring-mgmt-page .recurring-add-btn:hover {
+.dark-theme .recurring-mgmt-page button.primary-btn:hover:not(:disabled),
+.dark-theme .recurring-mgmt-page button[type="submit"]:hover:not(:disabled),
+.dark-theme .recurring-mgmt-page .recurring-add-btn:hover:not(:disabled),
+.dark-theme .recurring-mgmt-page .recurring-mgmt-form-actions .submit-btn:hover:not(:disabled) {
   background: #60A5FA !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
-.dark-theme .recurring-mgmt-page button.primary-btn:active,
-.dark-theme .recurring-mgmt-page button[type="submit"]:active,
-.dark-theme .recurring-mgmt-page .recurring-add-btn:active {
+.dark-theme .recurring-mgmt-page button.primary-btn:active:not(:disabled),
+.dark-theme .recurring-mgmt-page button[type="submit"]:active:not(:disabled),
+.dark-theme .recurring-mgmt-page .recurring-add-btn:active:not(:disabled),
+.dark-theme .recurring-mgmt-page .recurring-mgmt-form-actions .submit-btn:active:not(:disabled) {
   background: #2563EB !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .recurring-mgmt-page button.primary-btn:disabled,
+.dark-theme .recurring-mgmt-page button[type="submit"]:disabled,
+.dark-theme .recurring-mgmt-page .recurring-add-btn:disabled,
+.dark-theme .recurring-mgmt-page .recurring-mgmt-form-actions .submit-btn:disabled {
+  background: #1E293B !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
 }
 
 .dark-theme .recurring-mgmt-page .modal-buttons button:last-child {

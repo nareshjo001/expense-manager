@@ -43,9 +43,9 @@
 .dark-theme .budget-analysis-parent-container,
 .dark-theme .income-analysis-parent-container,
 .dark-theme .income-insights-parent-container {
-  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  border-color: rgba(244, 114, 182, 0.22);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
+  background: #102036;
+  border-color: #1a2c46;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
 }
 
 .income-analysis-parent-container,

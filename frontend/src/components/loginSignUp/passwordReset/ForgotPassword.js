@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react";
+import { FiMail, FiKey, FiArrowLeft } from "react-icons/fi";
 // FE-002-T02 -- placeholder-only fields replaced with real labels.
 import { LabeledField } from '../../a11y/LabeledField';
 import { onKeyActivate } from "../../../utils/onKeyActivate";
-import back from '../../../icons/left-arrow.png';
+import "../Auth.css";
+import AuthLayout from "../AuthLayout";
 
 import ResetPassword from "./ResetPassword";
 import { signUpSuccessToast, logInErrorToast } from "../../alertsEffects/toastMessages";
@@ -99,6 +101,7 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
 
     const handleResend = async () => {
         if (countdown > 0 || isFetching) return;
+
         setIsFetching(true);
 
         const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
@@ -145,77 +148,90 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
     }
 
     return (
-        <div className="forgot-pass-card fade-from-right" style={{padding: "25px 25px 45px"}}>
-            <button onClick={onBack}>
-                <img src={back} alt="forgot-pass-back" />
-            </button>
-            
-            <header className="forgot-pass-header">
-                <h1 className="forgot-pass-text">Forgot Password ?</h1>
-                <p className="forgot-pass-subtext">
-                    Enter your email address and we'll send you a OTP to reset your password
-                </p>
-            </header>
-            
-            <main className="forgot-pass">
-                <form onSubmit={handleSubmit}>
-                    <LabeledField
-                        label="Email ID"
-                        type="email"
-                        name="email"
-                        inputClassName="forgot-pass-input"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        autoComplete="email"
-                        required
-                        disabled={isOTPSent}
-                    />
-
-                    <div className={`otp-wrapper ${isOTPSent ? "open" : ""}`}>
-                        <LabeledField
-                            label="One-time password"
-                            hint="Six digits, sent to your email."
-                            type="text"
-                            name="otp"
-                            inputClassName="forgot-pass-input"
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={6}
-                            required={isOTPSent}
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="forgot-pass-submit"
-                        disabled={isFetching}
-                    >
-                        {isFetching ? <FetchingLoader /> : isOTPSent ? "Verify" : "Send OTP"}
-                    </button>
-
-                </form>
+        <AuthLayout>
+            <div className="forgot-pass-card">
+                <button 
+                    type="button" 
+                    className="auth-back-btn" 
+                    onClick={onBack}
+                    aria-label="Back to login"
+                    title="Back to login"
+                >
+                    <FiArrowLeft />
+                </button>
                 
-                { isOTPSent && 
-                    <p className={`otp-resend ${countdown > 0 ? "disabled" : ""}`}>
-                        {countdown > 0 ? (
-                        <>Resend OTP in <span>{countdown}s</span></>
-                        ) : (
-                        <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={handleResend}
-                            onKeyDown={onKeyActivate(handleResend)}
-                        >
-                            Resend OTP
-                        </span>
-                        )}
+                <header className="login-header">
+                    <h2 className="login-title">Forgot Password ?</h2>
+                    <p className="login-subtitle">
+                        Enter your email address and we'll send you an OTP to reset your password.
                     </p>
-                }
-            </main>
-        </div>
-    )
-}
+                </header>
+                
+                <main className="login-form">
+                    <form onSubmit={handleSubmit}>
+                        <LabeledField
+                            label="Email ID"
+                            type="email"
+                            name="email"
+                            placeholder="Enter your email"
+                            inputClassName="login-input login-input-with-icon"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            autoComplete="email"
+                            required
+                            disabled={isOTPSent}
+                            leftIcon={<FiMail className="login-field-icon" />}
+                        />
+
+                        <div className={`otp-wrapper ${isOTPSent ? "open" : ""}`}>
+                            <LabeledField
+                                label="One-time password"
+                                hint="Six digits, sent to your email."
+                                type="text"
+                                name="otp"
+                                placeholder="Enter 6-digit code"
+                                inputClassName="login-input login-input-with-icon"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={6}
+                                required={isOTPSent}
+                                leftIcon={<FiKey className="login-field-icon" />}
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="login-submit"
+                            disabled={isFetching}
+                            style={{ marginTop: "8px" }}
+                        >
+                            {isFetching ? <FetchingLoader /> : isOTPSent ? "Verify" : "Send OTP"}
+                        </button>
+
+                    </form>
+                    
+                    {isOTPSent && (
+                        <p className={`otp-resend ${countdown > 0 ? "disabled" : ""}`}>
+                            {countdown > 0 ? (
+                                <>Resend OTP in <span>{countdown}s</span></>
+                            ) : (
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={handleResend}
+                                    onKeyDown={onKeyActivate(handleResend)}
+                                >
+                                    Resend OTP
+                                </span>
+                            )}
+                        </p>
+                    )}
+                </main>
+            </div>
+        </AuthLayout>
+    );
+};
 
 export default ForgotPassword;

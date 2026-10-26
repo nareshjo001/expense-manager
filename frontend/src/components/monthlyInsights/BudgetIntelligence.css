@@ -20,9 +20,9 @@
 }
 
 .dark-theme .budget-intel-merged-container {
-  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  border-color: rgba(251, 146, 60, 0.22);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  background: #16263D;
+  border-color: #1F3654;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 /* ================= 1. Left Column: Budget Intelligence ================= */
@@ -83,7 +83,7 @@
 }
 
 .dark-theme .budget-intel-title {
-  color: var(--bih-title, #fdf2f8) !important;
+  color: #ffffff !important;
 }
 
 /* Priority Badge / Tag */
@@ -208,9 +208,20 @@
   color: #e11d48;
 }
 
+.dark-theme .budget-progress-percent.WARNING,
+.dark-theme .budget-progress-percent.HIGH_RISK,
+.dark-theme .budget-progress-percent.AT_RISK {
+  color: #fbbf24;
+}
+
 .budget-progress-percent.CRITICAL,
 .budget-progress-percent.EXCEEDED {
   color: #dc2626;
+}
+
+.dark-theme .budget-progress-percent.CRITICAL,
+.dark-theme .budget-progress-percent.EXCEEDED {
+  color: #f87171;
 }
 
 .budget-progress-percent.SAFE {
@@ -290,8 +301,8 @@
 }
 
 .dark-theme .budget-smart-tip-card {
-  background: rgba(50, 26, 48, 0.55);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .budget-smart-tip-icon-tile {
@@ -306,9 +317,19 @@
   color: #db2777;
 }
 
+.budget-smart-tip-icon-tile svg {
+  color: inherit;
+  fill: currentColor;
+}
+
 .dark-theme .budget-smart-tip-icon-tile {
-  background: rgba(219, 39, 119, 0.2);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
+.dark-theme .budget-smart-tip-icon-tile svg {
+  color: #60a5fa !important;
+  fill: #60a5fa !important;
 }
 
 .budget-smart-tip-content {
@@ -326,7 +347,7 @@
 }
 
 .dark-theme .budget-smart-tip-heading {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .budget-smart-tip-text {
@@ -353,7 +374,7 @@
 }
 
 .dark-theme .budget-intel-right-col {
-  border-left-color: rgba(244, 114, 182, 0.15);
+  border-left-color: #1F3654;
 }
 
 .budget-forecast-panel {
@@ -366,7 +387,8 @@
 }
 
 .dark-theme .budget-forecast-panel {
-  background: rgba(42, 24, 40, 0.35);
+  background: #11223B;
+  border: 1px solid #1F3654;
 }
 
 .budget-forecast-header {
@@ -387,9 +409,19 @@
   color: #db2777;
 }
 
+.budget-forecast-icon-tile svg {
+  color: inherit;
+  fill: currentColor;
+}
+
 .dark-theme .budget-forecast-icon-tile {
-  background: rgba(219, 39, 119, 0.2);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
+.dark-theme .budget-forecast-icon-tile svg {
+  color: #60a5fa !important;
+  fill: #60a5fa !important;
 }
 
 .budget-forecast-title {
@@ -400,7 +432,7 @@
 }
 
 .dark-theme .budget-forecast-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .budget-forecast-metric-card {
@@ -415,8 +447,8 @@
 }
 
 .dark-theme .budget-forecast-metric-card {
-  background: rgba(38, 22, 38, 0.95);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #16263D;
+  border-color: #1F3654;
 }
 
 .forecast-stat-col {
@@ -440,7 +472,7 @@
 }
 
 .dark-theme .forecast-stat-amount.spend {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .forecast-stat-amount.safe {
@@ -506,6 +538,10 @@
     padding-bottom: 20px;
     border-right: none;
     border-bottom: 1px solid rgba(244, 114, 182, 0.18);
+  }
+
+  .dark-theme .budget-intel-left-col {
+    border-bottom-color: #1F3654;
   }
 
   .budget-intel-right-col {

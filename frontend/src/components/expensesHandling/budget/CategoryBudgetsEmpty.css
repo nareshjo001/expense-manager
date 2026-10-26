@@ -74,15 +74,15 @@
 
 .dark-theme .category-budgets-panel--empty {
   --cb-empty-accent: #3B82F6;
-  --cb-empty-board-bg: #0C1427;
+  --cb-empty-board-bg: #102036;
   --cb-empty-bullet: #60A5FA;
   --cb-empty-line: rgba(59, 130, 246, 0.3);
   --cb-empty-glow-start: rgba(59, 130, 246, 0.22);
   --cb-empty-glow-mid: rgba(59, 130, 246, 0.1);
   --cb-empty-glow-end: rgba(59, 130, 246, 0);
 
-  background: #0C1427;
-  border-color: #1E293B;
+  background: #102036;
+  border-color: #1A2C46;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 

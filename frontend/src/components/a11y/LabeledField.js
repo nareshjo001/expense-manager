@@ -36,6 +36,8 @@ export const LabeledField = ({
   className = "",
   inputClassName = "",
   autoComplete,
+  leftIcon,
+  rightAction,
   ...inputProps
 }) => {
   const reactId = useId();
@@ -48,6 +50,23 @@ export const LabeledField = ({
   const describedBy = [error ? errorId : null, hint ? hintId : null]
     .filter(Boolean)
     .join(" ");
+
+  const inputElement = (
+    <input
+      id={inputId}
+      type={type}
+      name={name}
+      value={value}
+      onChange={onChange}
+      required={required}
+      aria-required={required || undefined}
+      aria-invalid={error ? "true" : undefined}
+      aria-describedby={describedBy || undefined}
+      autoComplete={autoComplete}
+      className={`labeled-field-input ${inputClassName}`.trim()}
+      {...inputProps}
+    />
+  );
 
   return (
     <div className={`labeled-field ${className}`.trim()}>
@@ -66,20 +85,23 @@ export const LabeledField = ({
         </p>
       )}
 
-      <input
-        id={inputId}
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        required={required}
-        aria-required={required || undefined}
-        aria-invalid={error ? "true" : undefined}
-        aria-describedby={describedBy || undefined}
-        autoComplete={autoComplete}
-        className={`labeled-field-input ${inputClassName}`.trim()}
-        {...inputProps}
-      />
+      {leftIcon || rightAction ? (
+        <div className="labeled-field-input-wrapper">
+          {leftIcon && (
+            <span className="labeled-field-left-icon" aria-hidden="true">
+              {leftIcon}
+            </span>
+          )}
+          {inputElement}
+          {rightAction && (
+            <span className="labeled-field-right-action">
+              {rightAction}
+            </span>
+          )}
+        </div>
+      ) : (
+        inputElement
+      )}
 
       {/* role="alert" so a validation message that appears after submit is
           announced immediately, rather than only being found if the user

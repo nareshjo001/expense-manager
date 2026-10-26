@@ -18,9 +18,9 @@
 }
 
 .dark-theme .spending-insights-container {
-  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  border-color: rgba(244, 114, 182, 0.22);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
+  background: #102036;
+  border-color: #1a2c46;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
 }
 
 /* Header */
@@ -44,6 +44,11 @@
   flex-shrink: 0;
 }
 
+.dark-theme .spending-insights-brand-tile {
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+
 .spending-insights-title {
   margin: 0;
   font-size: 22px;
@@ -54,7 +59,7 @@
 }
 
 .dark-theme .spending-insights-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 /* ONE Unified 3-Column Grid for All 6 Cards */
@@ -90,13 +95,13 @@
 }
 
 .dark-theme .spending-insights-card {
-  background: rgba(36, 23, 38, 0.92);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #16263D;
+  border-color: #1F3654;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .dark-theme .spending-insights-card:hover {
-  border-color: rgba(244, 114, 182, 0.45);
+  border-color: #3B82F6;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
 }
 
@@ -152,8 +157,8 @@
 .dark-theme .badge-trophy,
 .dark-theme .badge-droplet,
 .dark-theme .badge-chart {
-  background: rgba(244, 114, 182, 0.2);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
 }
 
 .dark-theme .badge-jump {
@@ -187,7 +192,7 @@
 }
 
 .dark-theme .spending-card-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .spending-card-subtitle {
@@ -228,7 +233,7 @@
 }
 
 .dark-theme .top-category-amount {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .spending-card-desc {
@@ -265,6 +270,14 @@
   transition: width 0.4s ease;
 }
 
+.dark-theme .top-category-progress-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark-theme .top-category-progress-fill {
+  background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);
+}
+
 .top-category-progress-percent {
   font-size: 13.5px;
   font-weight: 800;
@@ -273,7 +286,7 @@
 }
 
 .dark-theme .top-category-progress-percent {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 /* Card 2: Leaky Bucket */
@@ -297,11 +310,23 @@
   justify-content: center;
   position: relative;
   margin-bottom: 8px;
+  color: #db2777;
+}
+
+.leaky-bucket-wallet-tile svg {
+  color: inherit;
+  fill: currentColor;
 }
 
 .dark-theme .leaky-bucket-wallet-tile {
-  background: rgba(244, 114, 182, 0.15);
-  border-color: rgba(244, 114, 182, 0.3);
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+}
+
+.dark-theme .leaky-bucket-wallet-tile svg:first-child {
+  color: #60a5fa !important;
+  fill: #60a5fa !important;
 }
 
 .wallet-sparkles {
@@ -309,6 +334,11 @@
   top: -4px;
   right: -4px;
   pointer-events: none;
+}
+
+.dark-theme .wallet-sparkles path,
+.dark-theme .wallet-sparkles circle {
+  fill: #60a5fa !important;
 }
 
 .leaky-bucket-empty-title {
@@ -319,7 +349,7 @@
 }
 
 .dark-theme .leaky-bucket-empty-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .leaky-bucket-empty-desc {
@@ -351,7 +381,7 @@
 }
 
 .dark-theme .leaky-bucket-amount {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .leaky-bucket-sub {
@@ -397,13 +427,13 @@
 }
 
 .dark-theme .weekday-box {
-  background: rgba(244, 114, 182, 0.1);
-  border-color: rgba(244, 114, 182, 0.25);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .dark-theme .weekend-box {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .weekday-stat-label {
@@ -424,7 +454,7 @@
 }
 
 .dark-theme .weekday-stat-value {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 /* Card 4: Biggest Spending Jump */
@@ -437,8 +467,8 @@
 }
 
 .dark-theme .spending-jump-box {
-  background: rgba(251, 146, 60, 0.1);
-  border-color: rgba(251, 146, 60, 0.25);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .spending-jump-percent {
@@ -509,6 +539,10 @@
   pointer-events: none;
 }
 
+.dark-theme .streak-confetti line[stroke="#ec4899"] {
+  stroke: #60a5fa !important;
+}
+
 .streak-number {
   margin: 0;
   font-size: 36px;
@@ -553,6 +587,11 @@
   position: relative;
 }
 
+.dark-theme .stability-donut {
+  --stability-track-active: #3b82f6;
+  --stability-track-bg: rgba(255, 255, 255, 0.12);
+}
+
 .stability-donut-inner {
   width: 52px;
   height: 52px;
@@ -567,8 +606,8 @@
 }
 
 .dark-theme .stability-donut-inner {
-  background: #241726;
-  color: #fdf2f8;
+  background: #11223B;
+  color: #ffffff;
 }
 
 .stability-label {
@@ -579,7 +618,7 @@
 }
 
 .dark-theme .stability-label {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .stability-desc {
@@ -611,7 +650,7 @@
 }
 
 .dark-theme .insights-empty-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .insights-empty-text {

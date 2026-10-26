@@ -26,23 +26,23 @@
 }
 
 .dark-theme .receipt-inbox-page {
-  --ri-title: #fdf2f8;
-  --ri-label: #f8fafc;
-  --ri-text: #f8fafc;
+  --ri-title: #ffffff;
+  --ri-label: #ffffff;
+  --ri-text: #ffffff;
   --ri-muted: #94a3b8;
-  --ri-accent: #f472b6;
-  --ri-accent-dark: #f472b6;
-  --ri-accent-soft: rgba(244, 114, 182, 0.15);
-  --ri-accent-border: rgba(244, 114, 182, 0.25);
-  --ri-card-bg: rgba(31, 41, 55, 0.85);
-  --ri-card-border: rgba(244, 114, 182, 0.22);
-  --ri-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-  --ri-item-bg: rgba(26, 34, 46, 0.95);
-  --ri-item-border: rgba(244, 114, 182, 0.2);
-  --ri-item-hover-border: rgba(244, 114, 182, 0.5);
-  --ri-input-bg: rgba(17, 24, 39, 0.6);
-  --ri-input-border: rgba(244, 114, 182, 0.3);
-  --ri-input-focus: #f472b6;
+  --ri-accent: #3b82f6;
+  --ri-accent-dark: #60a5fa;
+  --ri-accent-soft: rgba(59, 130, 246, 0.15);
+  --ri-accent-border: rgba(59, 130, 246, 0.3);
+  --ri-card-bg: #102036;
+  --ri-card-border: #1a2c46;
+  --ri-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --ri-item-bg: #11223b;
+  --ri-item-border: #1a2c46;
+  --ri-item-hover-border: #223b5d;
+  --ri-input-bg: #11223b;
+  --ri-input-border: #1a2c46;
+  --ri-input-focus: #3b82f6;
 }
 
 /* ================= Header with BALENISA Vertical Accent Line ================= */
@@ -142,7 +142,14 @@
 }
 
 .dark-theme .receipt-select-wrapper select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2.2' stroke='%23f472b6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2.2' stroke='%2360a5fa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+}
+
+.dark-theme .receipt-select-wrapper select:focus,
+.dark-theme .receipt-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  outline: none;
 }
 
 .receipt-select-wrapper select:focus {
@@ -161,7 +168,7 @@
 }
 
 .dark-theme .receipt-filter-divider {
-  background: rgba(244, 114, 182, 0.25);
+  background: #1a2c46;
 }
 
 .receipt-search-wrapper {
@@ -242,7 +249,7 @@
 }
 
 .dark-theme .receipt-inbox-content-card .query-state-empty::before {
-  background-image: url("data:image/svg+xml,%3Csvg width='112' height='112' viewBox='0 0 112 112' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='56' cy='56' r='44' fill='rgba(244, 114, 182, 0.15)'/%3E%3Cline x1='20' y1='52' x2='27' y2='52' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='22' y1='41' x2='29' y2='45' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='22' y1='63' x2='29' y2='59' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='85' y1='52' x2='92' y2='52' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='83' y1='45' x2='90' y2='41' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='83' y1='59' x2='90' y2='63' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M40 32C40 29.7909 41.7909 28 44 28H68C70.2091 28 72 29.7909 72 32V78L68 75L64 78L60 75L56 78L52 75L48 78L44 75L40 78V32Z' fill='%231f2937' stroke='%23f472b6' stroke-width='2.5' stroke-linejoin='round'/%3E%3Cline x1='48' y1='40' x2='64' y2='40' stroke='%23f472b6' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='48' y1='48' x2='60' y2='48' stroke='%23f472b6' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='48' y1='56' x2='64' y2='56' stroke='%23f472b6' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='48' y1='64' x2='54' y2='64' stroke='%23f9a8d4' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg width='112' height='112' viewBox='0 0 112 112' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='56' cy='56' r='44' fill='rgba(59, 130, 246, 0.12)'/%3E%3Cline x1='20' y1='52' x2='27' y2='52' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='22' y1='41' x2='29' y2='45' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='22' y1='63' x2='29' y2='59' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='85' y1='52' x2='92' y2='52' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='83' y1='45' x2='90' y2='41' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='83' y1='59' x2='90' y2='63' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M40 32C40 29.7909 41.7909 28 44 28H68C70.2091 28 72 29.7909 72 32V78L68 75L64 78L60 75L56 78L52 75L48 78L44 75L40 78V32Z' fill='%2311223b' stroke='%233b82f6' stroke-width='2.5' stroke-linejoin='round'/%3E%3Cline x1='48' y1='40' x2='64' y2='40' stroke='%2360a5fa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='48' y1='48' x2='60' y2='48' stroke='%2360a5fa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='48' y1='56' x2='64' y2='56' stroke='%2360a5fa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='48' y1='64' x2='54' y2='64' stroke='%2393c5fd' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
 .receipt-inbox-content-card .query-state-message {
@@ -303,6 +310,42 @@
   color: #ffffff;
 }
 
+.light-theme .receipt-clear-search-btn,
+:root:not(.dark-theme) .receipt-clear-search-btn {
+  background: transparent !important;
+  border: 1.5px solid #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .receipt-clear-search-btn:hover,
+:root:not(.dark-theme) .receipt-clear-search-btn:hover {
+  background: #FDEEF5 !important;
+  border-color: #F48FBE !important;
+}
+
+.light-theme .receipt-clear-search-btn:active,
+:root:not(.dark-theme) .receipt-clear-search-btn:active {
+  background: #FAD9E7 !important;
+  border-color: #EE7FB0 !important;
+}
+
+.dark-theme .receipt-clear-search-btn {
+  background: transparent !important;
+  border: 1.5px solid #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .receipt-clear-search-btn:hover {
+  background: #1A2748 !important;
+  border-color: #60A5FA !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .receipt-clear-search-btn:active {
+  background: #1E293B !important;
+  border-color: #2563EB !important;
+}
+
 /* ================= Populated Receipt List Cards ================= */
 .receipt-inbox-list {
   list-style: none;
@@ -326,6 +369,12 @@
   transform: translateY(-1px);
   border-color: var(--ri-item-hover-border, rgba(219, 39, 119, 0.5));
   box-shadow: 0 8px 24px rgba(225, 29, 116, 0.08);
+}
+
+.dark-theme .receipt-inbox-item:hover {
+  background: #132642;
+  border-color: #223b5d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .receipt-inbox-item-btn {
@@ -376,6 +425,17 @@
   animation: riPulse 1.2s ease-in-out infinite;
 }
 
+.dark-theme .receipt-thumbnail,
+.dark-theme .receipt-thumbnail-fallback,
+.dark-theme .receipt-thumbnail-loading {
+  background: rgba(30, 58, 138, 0.25);
+  border-color: #1a2c46;
+}
+
+.dark-theme .receipt-thumbnail-fallback {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='%2360a5fa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 14.25v-2.625a3.375 3.375 0 00-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z'/%3E%3C/svg%3E");
+}
+
 @keyframes riPulse {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
@@ -420,7 +480,7 @@
 }
 
 .dark-theme .receipt-inbox-item-amount {
-  color: #f472b6;
+  color: #ffffff;
 }
 
 .receipt-inbox-item-divider {
@@ -456,6 +516,14 @@
 .receipt-inbox-item:hover .receipt-item-chevron {
   color: var(--ri-accent, #db2777);
   transform: translateX(2px);
+}
+
+.dark-theme .receipt-item-chevron {
+  color: #64748b;
+}
+
+.dark-theme .receipt-inbox-item:hover .receipt-item-chevron {
+  color: #60a5fa;
 }
 
 /* ================= Badges (shared with ReceiptDetail.js) ================= */
