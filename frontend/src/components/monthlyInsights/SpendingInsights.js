@@ -139,7 +139,7 @@ export default function SpendingInsights({ report }) {
           ) : (
             <div className="leaky-bucket-empty-body">
               <div className="leaky-bucket-wallet-tile" aria-hidden="true">
-                <FaWallet size={18} color="#db2777" />
+                <FaWallet size={18} />
                 <svg className="wallet-sparkles" width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M8 0L9.5 5.5L15 7L9.5 8.5L8 14L6.5 8.5L1 7L6.5 5.5L8 0Z" fill="#f43f5e" opacity="0.8" />
                   <circle cx="13" cy="3" r="1.5" fill="#f43f5e" />

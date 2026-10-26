@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from "react";
+import { FiArrowLeft } from "react-icons/fi";
 import './OTPForm.css';
+import './Auth.css';
+import AuthLayout from "./AuthLayout";
 import { onKeyActivate } from '../../utils/onKeyActivate';
 
 import { signUpSuccessToast, signUpErrorToast } from '../alertsEffects/toastMessages';
 import { FetchingLoader } from "../alertsEffects/FetchingLoader";
 
 // Six-digit OTP entry with auto-advance/paste handling, resend countdown, and backend verification.
-const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
+const OTPForm = ({ email, onSuccess, setIsSpinnerLoad, onBack }) => {
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
 
     const [otpError, setOtpError] = useState(false);
@@ -97,9 +100,6 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
             setOtpError(true);
             setOtp(['', '', '', '', '', '']);
             otpRefs.current[0]?.focus();
-
-            // Removes the shake class once its animation finishes.
-            setTimeout(() => setOtpError(false), 400);
         } finally {
             setIsSpinnerLoad(false);
         }
@@ -109,7 +109,7 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
         if (countdown > 0 || isFetching) return;
 
         setIsFetching(true);
-        
+
         const BASE_URL = process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, "");
         if (!BASE_URL) {
             setIsFetching(false);
@@ -145,69 +145,77 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad }) => {
     };
 
     return (
-        <div className="otp-card fade-from-right">
-            <h1 className="otp-title">Verify OTP</h1>
-            <p className="otp-subtitle">
-                Enter the 6-digit code sent to {email}
-            </p>
-
-            {/* FE-002-T02/T05 -- six single-character boxes deliberately do NOT
-                use LabeledField: a visible label above each box would be noise,
-                and the group already has one. Instead the boxes are wrapped in a
-                real fieldset/legend so assistive tech announces the group once,
-                and each box carries an aria-label saying which digit it is --
-                without that, all six announce identically as "edit text" and a
-                screen-reader user cannot tell where they are. */}
-            <fieldset className="otp-fieldset">
-                <legend className="otp-legend">Six-digit verification code</legend>
-                <div className={`otp-inputs ${otpError ? "otp-shake" : ""}`}>
-                    {otp.map((digit, index) => (
-                    <input
-                        key={index}
-                        ref={(el) => (otpRefs.current[index] = el)}
-                        className={`otp-input ${otpError ? "error" : ""}`}
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete={index === 0 ? "one-time-code" : "off"}
-                        aria-label={`Digit ${index + 1} of ${otp.length}`}
-                        aria-invalid={otpError ? "true" : undefined}
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(index, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                        onPaste={handleOtpPaste}
-                    />
-                    ))}
-                </div>
-            </fieldset>
-
-            <button
-                className="otp-submit"
-                onClick={handleVerify}
-                disabled={otp.join('').length !== 6}
-            >
-                {isFetching ? <FetchingLoader /> :  "Verify OTP"}
-            </button>
-
-            <p className={`otp-resend ${countdown > 0 ? "disabled" : ""}`}
-                style={{marginBottom: "-5px"}}
-            >
-                {countdown > 0 ? (
-                <>Resend OTP in <span>{countdown}s</span></>
-                ) : (
-                <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={handleResend}
-                    onKeyDown={onKeyActivate(handleResend)}
-                >
-                    Resend OTP
-                </span>
+        <AuthLayout>
+            <div className="otp-card">
+                {onBack && (
+                    <button 
+                        type="button" 
+                        className="auth-back-btn" 
+                        onClick={onBack}
+                        aria-label="Back"
+                        title="Back"
+                    >
+                        <FiArrowLeft />
+                    </button>
                 )}
-            </p>
-        </div>
-    );
 
-}
+                <header className="login-header">
+                    <h2 className="login-title">Verify OTP</h2>
+                    <p className="login-subtitle">
+                        Enter the 6-digit code sent to <strong className="otp-email-highlight">{email}</strong>
+                    </p>
+                </header>
+
+                <fieldset className="otp-fieldset">
+                    <legend className="otp-legend">Six-digit verification code</legend>
+                    <div className={`otp-inputs ${otpError ? "otp-shake" : ""}`}>
+                        {otp.map((digit, index) => (
+                            <input
+                                key={index}
+                                ref={(el) => (otpRefs.current[index] = el)}
+                                className={`otp-input ${otpError ? "error" : ""}`}
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete={index === 0 ? "one-time-code" : "off"}
+                                aria-label={`Digit ${index + 1} of ${otp.length}`}
+                                aria-invalid={otpError ? "true" : undefined}
+                                maxLength={1}
+                                value={digit}
+                                onChange={(e) => handleOtpChange(index, e.target.value)}
+                                onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                                onPaste={handleOtpPaste}
+                            />
+                        ))}
+                    </div>
+                </fieldset>
+
+                <button
+                    type="button"
+                    className="login-submit"
+                    onClick={handleVerify}
+                    disabled={otp.join('').length !== 6 || isFetching}
+                    style={{ marginBottom: "16px" }}
+                >
+                    {isFetching ? <FetchingLoader /> : "Verify OTP"}
+                </button>
+
+                <p className={`otp-resend ${countdown > 0 ? "disabled" : ""}`}>
+                    {countdown > 0 ? (
+                        <>Resend OTP in <span>{countdown}s</span></>
+                    ) : (
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={handleResend}
+                            onKeyDown={onKeyActivate(handleResend)}
+                        >
+                            Resend OTP
+                        </span>
+                    )}
+                </p>
+            </div>
+        </AuthLayout>
+    );
+};
 
 export default OTPForm;

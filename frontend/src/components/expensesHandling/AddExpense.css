@@ -443,21 +443,21 @@
   --ae-muted: #94A3B8;
   --ae-accent: #3B82F6;
   --ae-accent-soft: rgba(59, 130, 246, 0.15);
-  --ae-soft-bg: #0C1427;
-  --ae-soft-border: #1E293B;
+  --ae-soft-bg: #102036;
+  --ae-soft-border: #1A2C46;
   --ae-icon-bg: rgba(37, 99, 235, 0.25);
-  --ae-card-bg: #0C1427;
-  --ae-card-border: #1E293B;
+  --ae-card-bg: #102036;
+  --ae-card-border: #1A2C46;
   --ae-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --ae-input-bg: #080E1C;
-  --ae-input-border: #1E293B;
-  --ae-addon-bg: #080E1C;
+  --ae-input-bg: #11223B;
+  --ae-input-border: #1A2C46;
+  --ae-addon-bg: #11223B;
   --ae-placeholder: #64748B;
-  --ae-divider: #1E293B;
+  --ae-divider: #1A2C46;
   --ae-focus-ring: rgba(59, 130, 246, 0.25);
-  --ae-primary: #2563EB;
-  --ae-primary-hover: #3B82F6;
-  --ae-primary-active: #1D4ED8;
+  --ae-primary: #3B82F6;
+  --ae-primary-hover: #60A5FA;
+  --ae-primary-active: #2563EB;
 }
 
 .dark-theme .add-expense-action-card {
@@ -479,7 +479,7 @@
 
 .dark-theme .add-expense-divider::before,
 .dark-theme .add-expense-divider::after {
-  background: #1E293B;
+  background: #1A2C46;
 }
 
 .dark-theme .add-expense-required,
@@ -1025,24 +1025,31 @@
 }
 
 .dark-theme .add-income-source-menu {
-  border-color: #1E293B;
-  background: #0C1427;
+  border-color: #1A2C46;
+  background: #102036;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
   color: #FFFFFF;
-  scrollbar-color: #334155 #0F172A;
+  scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
 }
 
 .dark-theme .add-income-source-menu::-webkit-scrollbar-track {
-  background: #0F172A;
+  background: transparent;
+  border-radius: 8px;
 }
 
 .dark-theme .add-income-source-menu::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: rgba(96, 165, 250, 0.38);
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.dark-theme .add-income-source-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.65);
 }
 
 .dark-theme .add-income-source-option:hover,
 .dark-theme .add-income-source-option[aria-selected="true"] {
-  background: #1E293B;
+  background: #132642;
 }
 
 .dark-theme .add-income-source-option[aria-selected="true"] {
@@ -1212,8 +1219,8 @@
 }
 
 .dark-theme .add-form-toggle {
-  --ft-bg: #0C1427;
-  --ft-border: #1E293B;
+  --ft-bg: #102036;
+  --ft-border: #1A2C46;
   --ft-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   --ft-active-bg: linear-gradient(90deg, #1D4ED8 0%, #2563EB 100%);
   --ft-active-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
@@ -1407,19 +1414,22 @@
 
 .dark-theme .add-expense-page .submit-btn,
 .dark-theme .add-income-page .submit-btn {
-  background: var(--ae-primary, #2563EB);
+  background: var(--ae-primary, #3B82F6);
   color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  box-shadow: none;
 }
 
 .dark-theme .add-expense-page .submit-btn:hover,
 .dark-theme .add-income-page .submit-btn:hover {
-  background: var(--ae-primary-hover, #3B82F6);
+  background: var(--ae-primary-hover, #60A5FA);
+  box-shadow: none;
+  filter: none;
 }
 
 .dark-theme .add-expense-page .submit-btn:active,
 .dark-theme .add-income-page .submit-btn:active {
-  background: var(--ae-primary-active, #1D4ED8);
+  background: var(--ae-primary-active, #2563EB);
+  box-shadow: none;
 }
 
 .dark-theme .add-expense-page .submit-btn:disabled,
@@ -1431,27 +1441,64 @@
 
 .dark-theme .open-bill-upload-btn,
 .dark-theme .add-expense-page .add-expense-action-btn {
-  background: #2563EB;
+  background: #3B82F6;
   color: #FFFFFF;
-  border-color: #2563EB;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  border-color: #3B82F6;
+  box-shadow: none;
 }
 
 .dark-theme .open-bill-upload-btn:hover,
 .dark-theme .add-expense-page .add-expense-action-btn:hover {
-  background: #3B82F6;
-  border-color: #3B82F6;
+  background: #60A5FA;
+  border-color: #60A5FA;
+  box-shadow: none;
+  filter: none;
 }
 
 .dark-theme .open-bill-upload-btn:active,
 .dark-theme .add-expense-page .add-expense-action-btn:active {
-  background: #1D4ED8;
-  border-color: #1D4ED8;
+  background: #2563EB;
+  border-color: #2563EB;
 }
 
 .dark-theme .add-expense-quick-action-btn:hover {
-  background: #3B82F6;
-  border-color: #3B82F6;
+  background: #60A5FA;
+  border-color: #60A5FA;
+}
+
+.light-theme .back-btn,
+:root:not(.dark-theme) .back-btn {
+  background: transparent !important;
+  border: 1.5px solid #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .back-btn:hover,
+:root:not(.dark-theme) .back-btn:hover {
+  background: #FDEEF5 !important;
+  border-color: #F48FBE !important;
+}
+
+.light-theme .back-btn:active,
+:root:not(.dark-theme) .back-btn:active {
+  background: #FAD9E7 !important;
+  border-color: #EE7FB0 !important;
+}
+
+.dark-theme .back-btn {
+  background: transparent !important;
+  border: 1.5px solid #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .back-btn:hover {
+  background: #1A2748 !important;
+  border-color: #60A5FA !important;
+}
+
+.dark-theme .back-btn:active {
+  background: #1E293B !important;
+  border-color: #2563EB !important;
 }
 
 .dark-theme .receipt-review-banner,

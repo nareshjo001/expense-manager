@@ -19,9 +19,9 @@
 }
 
 .dark-theme .income-insights-section {
-  background: linear-gradient(135deg, rgba(34, 21, 35, 0.95) 0%, rgba(24, 14, 25, 0.98) 100%);
-  border-color: rgba(244, 114, 182, 0.22);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(244, 114, 182, 0.08);
+  background: #102036;
+  border-color: #1a2c46;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
 }
 
 /* Parent Container Integration */
@@ -58,6 +58,11 @@
   flex-shrink: 0;
 }
 
+.dark-theme .income-insights-section-brand-tile {
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+
 .income-insights-section-heading-text {
   display: flex;
   flex-direction: column;
@@ -75,7 +80,7 @@
 }
 
 .dark-theme .income-insights-section-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .income-insights-section-subtitle {
@@ -125,13 +130,13 @@
 }
 
 .dark-theme .income-insight-panel-card {
-  background: rgba(36, 23, 38, 0.92);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #16263D;
+  border-color: #1F3654;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .dark-theme .income-insight-panel-card:hover {
-  border-color: rgba(244, 114, 182, 0.45);
+  border-color: #3B82F6;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
 }
 
@@ -157,8 +162,8 @@
 }
 
 .dark-theme .income-card-icon-badge {
-  background: rgba(244, 114, 182, 0.2);
-  color: #f472b6;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
 }
 
 .income-card-head-text {
@@ -177,7 +182,7 @@
 }
 
 .dark-theme .income-card-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .income-card-subtitle {
@@ -239,8 +244,8 @@
 }
 
 .dark-theme .savings-rate-metric-box {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(244, 114, 182, 0.2);
+  background: #11223B;
+  border-color: #1F3654;
 }
 
 .savings-rate-metric-value {
@@ -252,7 +257,7 @@
 }
 
 .dark-theme .savings-rate-metric-value {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .savings-rate-metric-sub {
@@ -307,7 +312,7 @@
 }
 
 .dark-theme .income-amount-highlight {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .income-card-desc {
@@ -358,7 +363,7 @@
 }
 
 .dark-theme .runway-hero-number {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .runway-sparkles {
@@ -439,6 +444,11 @@
   filter: drop-shadow(0 1px 3px rgba(219, 39, 119, 0.35));
 }
 
+.dark-theme .income-dependency-donut-progress {
+  stroke: #3b82f6 !important;
+  filter: drop-shadow(0 1px 3px rgba(37, 99, 235, 0.45));
+}
+
 .income-dependency-donut-value {
   position: absolute;
   top: 50%;
@@ -453,7 +463,7 @@
 }
 
 .dark-theme .income-dependency-donut-value {
-  color: #f472b6;
+  color: #60a5fa;
 }
 
 .income-dependency-risk-title {
@@ -502,7 +512,7 @@
 }
 
 .dark-theme .insights-empty-title {
-  color: #fdf2f8;
+  color: #ffffff;
 }
 
 .insights-empty-text {

@@ -249,3 +249,129 @@
     border-radius: 10px;
     padding: 8px 12px;
 }
+
+.dark-theme .receipt-duplicate-banner {
+    background: rgba(245, 158, 11, 0.15);
+    color: #FBBF24;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.dark-theme .receipt-duplicate-item {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .receipt-duplicate-link-btn,
+.dark-theme .receipt-duplicate-keep-btn {
+    background: #11223B;
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #FBBF24;
+}
+
+.dark-theme .receipt-duplicate-link-btn:hover,
+.dark-theme .receipt-duplicate-keep-btn:hover {
+    background: #1A2C46;
+}
+
+.dark-theme .receipt-duplicate-resolved-note {
+    background: rgba(255, 255, 255, 0.06);
+    color: #94A3B8;
+}
+
+/* Light Theme Button Palette */
+.light-theme .receipt-link-btn,
+:root:not(.dark-theme) .receipt-link-btn {
+  background: #F8AECB !important;
+  color: #72143D !important;
+  box-shadow: 0 4px 12px rgba(248, 174, 203, 0.4) !important;
+  border: none !important;
+}
+
+.light-theme .receipt-link-btn:hover:not(:disabled),
+:root:not(.dark-theme) .receipt-link-btn:hover:not(:disabled) {
+  background: #F48FBE !important;
+  box-shadow: 0 6px 18px rgba(244, 143, 190, 0.45) !important;
+}
+
+.light-theme .receipt-link-btn:active:not(:disabled),
+:root:not(.dark-theme) .receipt-link-btn:active:not(:disabled) {
+  background: #EE7FB0 !important;
+}
+
+.light-theme .receipt-link-btn:disabled,
+:root:not(.dark-theme) .receipt-link-btn:disabled {
+  background: #FAD9E7 !important;
+  color: #C49EAF !important;
+  box-shadow: none !important;
+}
+
+.light-theme .receipt-unlink-btn,
+:root:not(.dark-theme) .receipt-unlink-btn {
+  background: transparent !important;
+  border: 1.5px solid #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .receipt-unlink-btn:hover,
+:root:not(.dark-theme) .receipt-unlink-btn:hover {
+  background: #FDEEF5 !important;
+  border-color: #F48FBE !important;
+}
+
+.light-theme .receipt-unlink-btn:active,
+:root:not(.dark-theme) .receipt-unlink-btn:active {
+  background: #FAD9E7 !important;
+  border-color: #EE7FB0 !important;
+}
+
+/* Dark Theme Button Palette */
+.dark-theme .receipt-link-btn {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .receipt-link-btn:hover:not(:disabled) {
+  background: #60A5FA !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.dark-theme .receipt-link-btn:active:not(:disabled) {
+  background: #2563EB !important;
+}
+
+.dark-theme .receipt-link-btn:disabled {
+  background: #1E293B !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
+.dark-theme .receipt-unlink-btn {
+  background: transparent !important;
+  border: 1.5px solid #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme .receipt-unlink-btn:hover {
+  background: #1A2748 !important;
+  border-color: #60A5FA !important;
+}
+
+.dark-theme .receipt-unlink-btn:active {
+  background: #1E293B !important;
+  border-color: #2563EB !important;
+}
+
+.dark-theme .receipt-delete-btn {
+  background: #11223B !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.4) !important;
+  color: #F87171 !important;
+}
+
+.dark-theme .receipt-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border-color: #EF4444 !important;
+  color: #FCA5A5 !important;
+}

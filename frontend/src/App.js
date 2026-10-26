@@ -51,7 +51,11 @@ function App() {
       setIsLoading(false);
       return undefined;
     }
-    refreshAccessToken().then((session) => {
+
+    const minSplashDuration = process.env.NODE_ENV === 'test' ? 0 : 2000;
+    const timer = new Promise((resolve) => setTimeout(resolve, minSplashDuration));
+
+    Promise.all([refreshAccessToken(), timer]).then(([session]) => {
       if (!active) return;
       setIsLoggedIn(Boolean(session?.token));
       setIsLoading(false);

@@ -43,13 +43,13 @@
   --cbl-heading: #FFFFFF;
   --cbl-name: #FFFFFF;
   --cbl-muted: #94A3B8;
-  --cbl-row-bg: #080E1C;
-  --cbl-row-border: #1E293B;
-  --cbl-row-bg-open: #0E172A;
-  --cbl-detail-bg: #070D1A;
+  --cbl-row-bg: #11223B;
+  --cbl-row-border: #1A2C46;
+  --cbl-row-bg-open: #132642;
+  --cbl-detail-bg: #0D1C33;
   --cbl-chevron-color: #64748B;
   --cbl-chevron-hover-border: #3B82F6;
-  --cbl-track: #1E293B;
+  --cbl-track: #1A2C46;
   --cbl-focus: #3B82F6;
 
   --cbl-safe-fill: #065F46;
@@ -73,12 +73,12 @@
 }
 
 .dark-theme .category-budgets-panel--list .category-budget-row {
-  background: #080E1C;
-  border-color: #1E293B;
+  background: #11223B;
+  border-color: #1A2C46;
 }
 
 .dark-theme .category-budgets-panel--list .category-budget-summary:hover {
-  background: #0E172A;
+  background: #132642;
 }
 
 .dark-theme .category-budget-summary-spent,
@@ -91,11 +91,11 @@
 }
 
 .dark-theme .category-budgets-list-header {
-  border-bottom-color: #1E293B;
+  border-bottom-color: #1A2C46;
 }
 
 .dark-theme .category-budgets-panels--list .category-budgets-panel--right .category-budgets-panel-header {
-  border-bottom-color: #1E293B;
+  border-bottom-color: #1A2C46;
 }
 
 .category-budgets-panel--list > .category-budgets-card-wave {

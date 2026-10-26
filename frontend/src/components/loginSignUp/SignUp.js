@@ -1,21 +1,24 @@
 import { useState } from "react";
+import { FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiArrowRight, FiArrowLeft } from "react-icons/fi";
 // FE-002-T02/T05 -- labelled fields with errors wired through aria-describedby.
 import { LabeledField } from '../a11y/LabeledField';
 import "./SignUp.css";
-import back from '../../icons/left-arrow.png';
+import "./Auth.css";
+import AuthLayout from "./AuthLayout";
 
 import OTPForm from "./OTPForm";
-import { FetchingLoader }from '../alertsEffects/FetchingLoader';
+import { FetchingLoader } from '../alertsEffects/FetchingLoader';
 import { signUpSuccessToast, signUpErrorToast } from '../alertsEffects/toastMessages';
 
 // Signup form with client-side validation, then hands off to OTPForm for verification.
 const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
     const [enteredUserInfo, setEnteredUserInfo] = useState({
-        fullName:"",
-        email:"",
-        password:""
-    })
+        fullName: "",
+        email: "",
+        password: ""
+    });
 
+    const [showPassword, setShowPassword] = useState(false);
     const [isFetching, setIsFetching] = useState(false);
     const [errors, setErrors] = useState({});
     const [showOTPForm, setShowOTPForm] = useState(false);
@@ -97,82 +100,125 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
                 email={enteredUserInfo.email}
                 onSuccess={() => setIsSignUp(false)}
                 setIsSpinnerLoad={setIsSpinnerLoad}
+                onBack={() => setShowOTPForm(false)}
             />
         );
     }
 
     return (
-        <div className="signup-card fade-from-right">
-            <button onClick={() => setIsSignUp(false)} >
-                <img src={back} alt="nav-back" />
-            </button>
+        <AuthLayout>
+            <div className="signup-card">
+                <button 
+                    type="button" 
+                    className="auth-back-btn" 
+                    onClick={() => setIsSignUp(false)}
+                    aria-label="Back to login"
+                    title="Back to login"
+                >
+                    <FiArrowLeft />
+                </button>
 
-            <header>
-                <div className="signup-header">
-                    <h1 className="signup-title">Sign Up</h1>
-                    <p className="signup-subtitle">Create your account securely</p>
-                </div>
-            </header>
+                <header className="login-header">
+                    <h2 className="login-title">Create Account</h2>
+                    <p className="login-subtitle">Join Balensia and take control of your finances.</p>
+                </header>
 
-            <main>
-                <div className="signup-form">
+                <main className="login-form">
                     <form onSubmit={handleSubmit}>
-                        
-                        <div className="field">
-                            <LabeledField
-                                label="Full Name"
-                                type="text"
-                                name="fullname"
-                                inputClassName={`signup-input ${errors.fullName ? "error" : ""}`}
-                                value={enteredUserInfo.fullName}
-                                onChange={handleChange('fullName')}
-                                autoComplete="name"
-                                error={errors.fullName}
-                                required
-                                />
-                        </div>
+                        <LabeledField
+                            label="Full Name"
+                            type="text"
+                            name="fullname"
+                            placeholder="Enter your full name"
+                            inputClassName={`login-input login-input-with-icon ${errors.fullName ? "error" : ""}`}
+                            value={enteredUserInfo.fullName}
+                            onChange={handleChange('fullName')}
+                            autoComplete="name"
+                            error={errors.fullName}
+                            required
+                            leftIcon={<FiUser className="login-field-icon" />}
+                        />
 
-                        <div className="field">
-                            <LabeledField
-                                label="Email"
-                                type="email"
-                                name="email"
-                                inputClassName={`signup-input ${errors.email ? "error" : ""}`}
-                                value={enteredUserInfo.email}
-                                onChange={handleChange('email')}
-                                autoComplete="email"
-                                error={errors.email}
-                                required
-                                />
-                        </div>
+                        <LabeledField
+                            label="Email ID"
+                            type="email"
+                            name="email"
+                            placeholder="Enter your email"
+                            inputClassName={`login-input login-input-with-icon ${errors.email ? "error" : ""}`}
+                            value={enteredUserInfo.email}
+                            onChange={handleChange('email')}
+                            autoComplete="email"
+                            error={errors.email}
+                            required
+                            leftIcon={<FiMail className="login-field-icon" />}
+                        />
 
-                        <div className="field">
-                            <LabeledField
-                                label="Password"
-                                type="password"
-                                name="password"
-                                inputClassName={`signup-input ${errors.password ? "error" : ""}`}
-                                value={enteredUserInfo.password}
-                                onChange={handleChange('password')}
-                                maxLength={72}
-                                autoComplete="new-password"
-                                error={errors.password}
-                                required
-                                />
-                        </div>
+                        <LabeledField
+                            label="Password"
+                            type={showPassword ? "text" : "password"}
+                            name="password"
+                            placeholder="Create a password"
+                            inputClassName={`login-input login-input-with-icon login-input-with-action ${errors.password ? "error" : ""}`}
+                            value={enteredUserInfo.password}
+                            onChange={handleChange('password')}
+                            maxLength={72}
+                            autoComplete="new-password"
+                            error={errors.password}
+                            required
+                            leftIcon={<FiLock className="login-field-icon" />}
+                            rightAction={
+                                <button
+                                    type="button"
+                                    className="login-password-toggle-btn"
+                                    onClick={() => setShowPassword((prev) => !prev)}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                    title={showPassword ? "Hide password" : "Show password"}
+                                >
+                                    {showPassword ? <FiEyeOff /> : <FiEye />}
+                                </button>
+                            }
+                        />
+
+                        {!errors.password && (
+                            <p className="signup-password-hint">
+                                Use at least 8 characters with a number and a symbol.
+                            </p>
+                        )}
 
                         <button
                             type="submit"
-                            className="forgot-pass-submit"
+                            className="login-submit"
                             disabled={isFetching}
-                            style={{marginTop: "14px"}}
+                            style={{ marginTop: errors.password ? "6px" : "2px" }}
                         >
-                            {isFetching ? <FetchingLoader /> :  "Sign Up"}
+                            {isFetching ? (
+                                <FetchingLoader />
+                            ) : (
+                                <>
+                                    <span>Sign Up</span>
+                                    <FiArrowRight className="login-submit-arrow" aria-hidden="true" />
+                                </>
+                            )}
                         </button>
                     </form>
-                </div>
-            </main>
-        </div>
+                </main>
+
+                <footer className="login-footer">
+                    <span className="login-divider-line" aria-hidden="true" />
+                    <div className="login-footer-content">
+                        <span>Already have an account?</span>
+                        <button 
+                            type="button"
+                            className="login-signup-btn" 
+                            onClick={() => setIsSignUp(false)}
+                        >
+                            Log In
+                        </button>
+                    </div>
+                    <span className="login-divider-line" aria-hidden="true" />
+                </footer>
+            </div>
+        </AuthLayout>
     );
 };
 

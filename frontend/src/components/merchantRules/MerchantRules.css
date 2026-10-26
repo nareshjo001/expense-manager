@@ -32,14 +32,14 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-card {
-    background: rgba(31, 41, 55, 0.85);
-    border: 1px solid rgba(244, 114, 182, 0.22);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+    background: #102036;
+    border: 1px solid #1A2C46;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .dark-theme .merchant-rules-card--editing {
-    border-color: rgba(244, 114, 182, 0.55);
-    box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.2), 0 14px 40px rgba(0, 0, 0, 0.4);
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2), 0 14px 40px rgba(0, 0, 0, 0.4);
 }
 
 /* ================= Header ================= */
@@ -64,8 +64,8 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-badge {
-    background: rgba(244, 114, 182, 0.15);
-    border-color: rgba(244, 114, 182, 0.25);
+    background: rgba(37, 99, 235, 0.2);
+    border-color: rgba(59, 130, 246, 0.35);
 }
 
 .merchant-rules-badge-icon {
@@ -74,7 +74,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-badge-icon {
-    color: #f472b6;
+    color: #60A5FA;
 }
 
 .merchant-rules-header-text {
@@ -93,7 +93,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-heading {
-    color: #f9a8d4;
+    color: #FFFFFF;
 }
 
 .merchant-rules-subheading {
@@ -136,7 +136,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-field label {
-    color: #cbd5e1;
+    color: #FFFFFF;
 }
 
 .merchant-rules-field input {
@@ -164,18 +164,18 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-field input {
-    background: rgba(17, 24, 39, 0.55);
-    border-color: rgba(244, 114, 182, 0.35);
-    color: #f8fafc;
+    background: #11223B;
+    border-color: #1A2C46;
+    color: #FFFFFF;
 }
 
 .dark-theme .merchant-rules-field input::placeholder {
-    color: #64748b;
+    color: #64748B;
 }
 
 .dark-theme .merchant-rules-field input:focus {
-    border-color: #f472b6;
-    box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.2);
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 /* Category select wrapper with chevron */
@@ -204,7 +204,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-select-arrow {
-    color: #f472b6;
+    color: #60A5FA;
 }
 
 /* ================= Actions & Buttons ================= */
@@ -276,12 +276,13 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-cancel-edit {
-    border-color: rgba(244, 114, 182, 0.4);
-    color: #f472b6;
+    border-color: #3B82F6;
+    color: #FFFFFF;
 }
 
 .dark-theme .merchant-rules-cancel-edit:hover {
-    background: rgba(244, 114, 182, 0.18);
+    background: #1A2748;
+    border-color: #60A5FA;
 }
 
 /* ================= Saved Rules Card ================= */
@@ -295,9 +296,9 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-saved-card {
-    background: rgba(31, 41, 55, 0.85);
-    border: 1px solid rgba(244, 114, 182, 0.22);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+    background: #102036;
+    border: 1px solid #1A2C46;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .merchant-rules-saved-header {
@@ -320,7 +321,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-saved-accent-bar {
-    background: #f472b6;
+    background: #3B82F6;
 }
 
 .merchant-rules-saved-title {
@@ -333,7 +334,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-saved-title {
-    color: #f8fafc;
+    color: #FFFFFF;
 }
 
 .merchant-rules-saved-subtitle {
@@ -383,6 +384,25 @@ body:has(.merchant-rules-page) .sia-entry-point {
     background: rgba(236, 72, 153, 0.65);
 }
 
+.dark-theme .merchant-rules-list--scrollable {
+    scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
+}
+
+.dark-theme .merchant-rules-list--scrollable::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 999px;
+}
+
+.dark-theme .merchant-rules-list--scrollable::-webkit-scrollbar-thumb {
+    background: rgba(96, 165, 250, 0.38);
+    border-radius: 999px;
+    transition: background-color 0.2s ease;
+}
+
+.dark-theme .merchant-rules-list--scrollable::-webkit-scrollbar-thumb:hover {
+    background: rgba(96, 165, 250, 0.65);
+}
+
 .merchant-rules-item {
     display: flex;
     justify-content: space-between;
@@ -403,9 +423,15 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-item {
-    background: rgba(26, 34, 46, 0.95);
-    border-color: rgba(244, 114, 182, 0.2);
+    background: #11223B;
+    border-color: #1A2C46;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.dark-theme .merchant-rules-item:hover {
+    background: #132642;
+    border-color: #223B5D;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
 .merchant-rules-item-left {
@@ -432,9 +458,9 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-category-icon-badge {
-    background: rgba(244, 114, 182, 0.15);
-    border-color: rgba(244, 114, 182, 0.25);
-    color: #f472b6;
+    background: rgba(37, 99, 235, 0.2);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #60A5FA;
 }
 
 .merchant-rules-item-text {
@@ -455,7 +481,7 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-item-merchant {
-    color: #f8fafc;
+    color: #FFFFFF;
 }
 
 .merchant-rules-item-category {
@@ -474,9 +500,9 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-item-category {
-    background: rgba(244, 114, 182, 0.15);
-    color: #f472b6;
-    border-color: rgba(244, 114, 182, 0.25);
+    background: rgba(37, 99, 235, 0.2);
+    color: #93C5FD;
+    border-color: rgba(59, 130, 246, 0.35);
 }
 
 .merchant-rules-item-actions {
@@ -522,15 +548,15 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-btn-edit {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.16);
-    color: #cbd5e1;
+    background: #102036;
+    border-color: #1A2C46;
+    color: #CBD5E1;
 }
 
 .dark-theme .merchant-rules-btn-edit:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: #f8fafc;
+    background: #132642;
+    border-color: #3B82F6;
+    color: #FFFFFF;
 }
 
 .merchant-rules-btn-delete {
@@ -547,15 +573,15 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-btn-delete {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: #F87171;
 }
 
 .dark-theme .merchant-rules-btn-delete:hover {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.45);
-    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.22);
+    border-color: rgba(248, 113, 113, 0.5);
+    color: #FCA5A5;
 }
 
 /* ================= Mobile Responsive ================= */
@@ -680,25 +706,47 @@ body:has(.merchant-rules-page) .sia-entry-point {
 }
 
 .dark-theme .merchant-rules-page button.primary-btn,
+.dark-theme .merchant-rules-page .merchant-rules-submit-btn,
+.dark-theme .merchant-rules-page .merchant-rules-card .submit-btn,
 .dark-theme .merchant-rules-page .merchant-rules-add-btn,
 .dark-theme .merchant-rules-page .merchant-rules-save-btn,
 .dark-theme .merchant-rules-page button[type="submit"] {
   background: #3B82F6 !important;
   color: #FFFFFF !important;
+  box-shadow: none !important;
 }
 
-.dark-theme .merchant-rules-page button.primary-btn:hover,
-.dark-theme .merchant-rules-page .merchant-rules-add-btn:hover,
-.dark-theme .merchant-rules-page .merchant-rules-save-btn:hover,
-.dark-theme .merchant-rules-page button[type="submit"]:hover {
+.dark-theme .merchant-rules-page button.primary-btn:hover:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-submit-btn:hover:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-card .submit-btn:hover:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-add-btn:hover:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-save-btn:hover:not(:disabled),
+.dark-theme .merchant-rules-page button[type="submit"]:hover:not(:disabled) {
   background: #60A5FA !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
-.dark-theme .merchant-rules-page button.primary-btn:active,
-.dark-theme .merchant-rules-page .merchant-rules-add-btn:active,
-.dark-theme .merchant-rules-page .merchant-rules-save-btn:active,
-.dark-theme .merchant-rules-page button[type="submit"]:active {
+.dark-theme .merchant-rules-page button.primary-btn:active:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-submit-btn:active:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-card .submit-btn:active:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-add-btn:active:not(:disabled),
+.dark-theme .merchant-rules-page .merchant-rules-save-btn:active:not(:disabled),
+.dark-theme .merchant-rules-page button[type="submit"]:active:not(:disabled) {
   background: #2563EB !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .merchant-rules-page button.primary-btn:disabled,
+.dark-theme .merchant-rules-page .merchant-rules-submit-btn:disabled,
+.dark-theme .merchant-rules-page .merchant-rules-card .submit-btn:disabled,
+.dark-theme .merchant-rules-page .merchant-rules-add-btn:disabled,
+.dark-theme .merchant-rules-page .merchant-rules-save-btn:disabled,
+.dark-theme .merchant-rules-page button[type="submit"]:disabled {
+  background: #1E293B !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
 }
 
 .dark-theme .merchant-rules-page button.secondary-btn,

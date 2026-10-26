@@ -184,6 +184,44 @@
   height: 0;
 }
 
+/* Sidebar Dark Theme Scrollbar */
+.dark-theme .app-sidebar,
+.dark-theme .sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
+}
+
+.dark-theme .app-sidebar::-webkit-scrollbar,
+.dark-theme .sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dark-theme .app-sidebar::-webkit-scrollbar-track,
+.dark-theme .sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.dark-theme .app-sidebar::-webkit-scrollbar-thumb,
+.dark-theme .sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.38);
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.dark-theme .app-sidebar::-webkit-scrollbar-thumb:hover,
+.dark-theme .sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.65);
+}
+
+.dark-theme .app-sidebar::-webkit-scrollbar-button,
+.dark-theme .sidebar-nav::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .app-shell.sidebar-collapsed .app-sidebar {
   width: 80px;
   padding: 20px 10px;
@@ -660,6 +698,7 @@
 }
 
 .app-shell.sidebar-collapsed .sidebar-logout {
+  display: none;
   position: relative;
   width: 44px;
   height: 44px;
@@ -667,7 +706,6 @@
   margin: 16px auto 0;
   border: none;
   border-radius: 12px;
-  display: flex;
   align-items: center;
   justify-content: center;
   background: #FDEEF5;
@@ -778,16 +816,27 @@
   border-radius: 999px;
   background: transparent;
   cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+}
+
+.topbar-theme-toggle:hover {
+  background-color: var(--topbar-hover-bg, rgba(0, 0, 0, 0.04));
+  transform: scale(1.04);
+}
+
+.topbar-theme-toggle:active {
+  transform: scale(0.96);
 }
 
 .topbar-theme-icon {
   font-size: 0.95rem;
   color: var(--sidebar-group-label);
-  transition: color 0.2s ease;
+  transition: color 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .topbar-theme-icon-active {
   color: var(--topbar-icon-color);
+  transform: rotate(360deg);
 }
 
 .topbar-icon-btn {
@@ -806,6 +855,13 @@
 .topbar-icon-btn:hover,
 .topbar-icon-btn-active {
   background: var(--topbar-icon-hover-bg);
+}
+
+.topbar-logout-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
 }
 
 /* ========== Mobile header ========== */

@@ -39,27 +39,27 @@ body:has(.upcoming-recurring) .sia-entry-point {
 }
 
 .dark-theme .upcoming-recurring {
-  --ur-title: #fdf2f8;
-  --ur-label: #f8fafc;
-  --ur-muted: #94a3b8;
-  --ur-accent: #f472b6;
-  --ur-accent-dark: #f472b6;
-  --ur-accent-soft: rgba(244, 114, 182, 0.15);
-  --ur-accent-border: rgba(244, 114, 182, 0.25);
-  --ur-card-bg: rgba(31, 41, 55, 0.85);
-  --ur-card-border: rgba(244, 114, 182, 0.22);
-  --ur-card-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-  --ur-item-bg: rgba(26, 34, 46, 0.95);
-  --ur-item-border: rgba(244, 114, 182, 0.2);
-  --ur-item-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --ur-item-hover-border: rgba(244, 114, 182, 0.4);
-  --ur-btn-bg: rgba(17, 24, 39, 0.6);
-  --ur-btn-border: rgba(244, 114, 182, 0.25);
-  --ur-btn-text: #cbd5e1;
-  --ur-btn-hover-bg: rgba(244, 114, 182, 0.18);
-  --ur-btn-hover-border: rgba(244, 114, 182, 0.6);
-  --ur-btn-hover-text: #f472b6;
-  --ur-month-label: #94a3b8;
+  --ur-title: #FFFFFF;
+  --ur-label: #FFFFFF;
+  --ur-muted: #94A3B8;
+  --ur-accent: #3B82F6;
+  --ur-accent-dark: #60A5FA;
+  --ur-accent-soft: rgba(37, 99, 235, 0.2);
+  --ur-accent-border: rgba(59, 130, 246, 0.35);
+  --ur-card-bg: #102036;
+  --ur-card-border: #1A2C46;
+  --ur-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --ur-item-bg: #11223B;
+  --ur-item-border: #1A2C46;
+  --ur-item-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  --ur-item-hover-border: #223B5D;
+  --ur-btn-bg: #102036;
+  --ur-btn-border: #1A2C46;
+  --ur-btn-text: #CBD5E1;
+  --ur-btn-hover-bg: #132642;
+  --ur-btn-hover-border: #3B82F6;
+  --ur-btn-hover-text: #FFFFFF;
+  --ur-month-label: #94A3B8;
 }
 
 /* ================= Header with Vertical Accent Line ================= */
@@ -99,6 +99,10 @@ body:has(.upcoming-recurring) .sia-entry-point {
 .upcoming-recurring__summary-total {
   color: var(--ur-accent-dark, #be185d);
   font-weight: 700;
+}
+
+.dark-theme .upcoming-recurring__summary-total {
+  color: #60A5FA;
 }
 
 /* ================= State Alerts & Notices ================= */
@@ -178,6 +182,25 @@ body:has(.upcoming-recurring) .sia-entry-point {
 
 .upcoming-recurring__list::-webkit-scrollbar-thumb:hover {
   background: var(--ur-accent, #db2777);
+}
+
+.dark-theme .upcoming-recurring__list {
+  scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
+}
+
+.dark-theme .upcoming-recurring__list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.dark-theme .upcoming-recurring__list::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.38);
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.dark-theme .upcoming-recurring__list::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.65);
 }
 
 /* ================= Item Card ================= */
@@ -293,6 +316,10 @@ body:has(.upcoming-recurring) .sia-entry-point {
   font-weight: 700;
   color: var(--ur-accent-dark, #be185d);
   font-variant-numeric: tabular-nums;
+}
+
+.dark-theme .upcoming-recurring__amount {
+  color: #FFFFFF;
 }
 
 /* Retry Button (Error state) */
@@ -476,32 +503,33 @@ body:has(.upcoming-recurring) .sia-entry-point {
 }
 
 .dark-theme .upcoming-recurring__modal {
-  background: rgba(31, 41, 55, 0.95);
-  border-color: rgba(244, 114, 182, 0.25);
+  background: #102036;
+  border-color: #1A2C46;
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.55);
 }
 
 .dark-theme .upcoming-recurring__modal-title {
-  color: #fdf2f8;
+  color: #FFFFFF;
 }
 
 .dark-theme .upcoming-recurring__modal-text {
-  color: #f8fafc;
+  color: #CBD5E1;
 }
 
 .dark-theme .upcoming-recurring__modal-subtext {
-  color: #94a3b8;
+  color: #94A3B8;
 }
 
 .dark-theme .upcoming-recurring__modal-cancel {
-  border-color: rgba(244, 114, 182, 0.25);
-  color: #cbd5e1;
+  background: transparent;
+  border: 1.5px solid #3B82F6;
+  color: #FFFFFF;
 }
 
 .dark-theme .upcoming-recurring__modal-cancel:hover:not(:disabled) {
-  background: rgba(244, 114, 182, 0.18);
-  border-color: rgba(244, 114, 182, 0.6);
-  color: #f472b6;
+  background: #1A2748;
+  border-color: #60A5FA;
+  color: #FFFFFF;
 }
 
 /* ================= Responsive Breakpoints ================= */
@@ -558,38 +586,91 @@ body:has(.upcoming-recurring) .sia-entry-point {
 
 .light-theme .upcoming-recurring-page button.primary-btn,
 .light-theme .upcoming-recurring-page button[type="submit"],
-.light-theme .upcoming-recurring-page .upcoming-action-btn {
+.light-theme .upcoming-recurring-page .upcoming-action-btn,
+.light-theme .upcoming-recurring__modal-confirm,
+:root:not(.dark-theme) .upcoming-recurring__modal-confirm {
   background: #F8AECB !important;
   color: #72143D !important;
+  box-shadow: 0 4px 12px rgba(248, 174, 203, 0.4) !important;
 }
 
 .light-theme .upcoming-recurring-page button.primary-btn:hover,
 .light-theme .upcoming-recurring-page button[type="submit"]:hover,
-.light-theme .upcoming-recurring-page .upcoming-action-btn:hover {
+.light-theme .upcoming-recurring-page .upcoming-action-btn:hover,
+.light-theme .upcoming-recurring__modal-confirm:hover:not(:disabled),
+:root:not(.dark-theme) .upcoming-recurring__modal-confirm:hover:not(:disabled) {
   background: #F48FBE !important;
+  box-shadow: 0 6px 18px rgba(244, 143, 190, 0.45) !important;
 }
 
 .light-theme .upcoming-recurring-page button.primary-btn:active,
 .light-theme .upcoming-recurring-page button[type="submit"]:active,
-.light-theme .upcoming-recurring-page .upcoming-action-btn:active {
+.light-theme .upcoming-recurring-page .upcoming-action-btn:active,
+.light-theme .upcoming-recurring__modal-confirm:active:not(:disabled),
+:root:not(.dark-theme) .upcoming-recurring__modal-confirm:active:not(:disabled) {
   background: #EE7FB0 !important;
+}
+
+.light-theme .upcoming-recurring__modal-cancel,
+:root:not(.dark-theme) .upcoming-recurring__modal-cancel {
+  background: transparent !important;
+  border: 1.5px solid #F8AECB !important;
+  color: #72143D !important;
+}
+
+.light-theme .upcoming-recurring__modal-cancel:hover:not(:disabled),
+:root:not(.dark-theme) .upcoming-recurring__modal-cancel:hover:not(:disabled) {
+  background: #FDEEF5 !important;
+  border-color: #F48FBE !important;
 }
 
 .dark-theme .upcoming-recurring-page button.primary-btn,
 .dark-theme .upcoming-recurring-page button[type="submit"],
-.dark-theme .upcoming-recurring-page .upcoming-action-btn {
+.dark-theme .upcoming-recurring-page .upcoming-action-btn,
+.dark-theme .upcoming-recurring__modal-confirm {
   background: #3B82F6 !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .upcoming-recurring-page button.primary-btn:hover:not(:disabled),
+.dark-theme .upcoming-recurring-page button[type="submit"]:hover:not(:disabled),
+.dark-theme .upcoming-recurring-page .upcoming-action-btn:hover:not(:disabled),
+.dark-theme .upcoming-recurring__modal-confirm:hover:not(:disabled) {
+  background: #60A5FA !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.dark-theme .upcoming-recurring-page button.primary-btn:active:not(:disabled),
+.dark-theme .upcoming-recurring-page button[type="submit"]:active:not(:disabled),
+.dark-theme .upcoming-recurring-page .upcoming-action-btn:active:not(:disabled),
+.dark-theme .upcoming-recurring__modal-confirm:active:not(:disabled) {
+  background: #2563EB !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .upcoming-recurring__modal-cancel {
+  background: transparent !important;
+  border: 1.5px solid #3B82F6 !important;
   color: #FFFFFF !important;
 }
 
-.dark-theme .upcoming-recurring-page button.primary-btn:hover,
-.dark-theme .upcoming-recurring-page button[type="submit"]:hover,
-.dark-theme .upcoming-recurring-page .upcoming-action-btn:hover {
-  background: #60A5FA !important;
+.dark-theme .upcoming-recurring__modal-cancel:hover:not(:disabled) {
+  background: #1A2748 !important;
+  border-color: #60A5FA !important;
 }
 
-.dark-theme .upcoming-recurring-page button.primary-btn:active,
-.dark-theme .upcoming-recurring-page button[type="submit"]:active,
-.dark-theme .upcoming-recurring-page .upcoming-action-btn:active {
-  background: #2563EB !important;
+.dark-theme .upcoming-recurring__modal-cancel:active:not(:disabled) {
+  background: #1E293B !important;
+  border-color: #2563EB !important;
+}
+
+.dark-theme .upcoming-recurring-page button.primary-btn:disabled,
+.dark-theme .upcoming-recurring-page button[type="submit"]:disabled,
+.dark-theme .upcoming-recurring-page .upcoming-action-btn:disabled {
+  background: #1E293B !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
 }
