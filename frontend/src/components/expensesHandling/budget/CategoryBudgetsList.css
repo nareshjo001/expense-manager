@@ -579,8 +579,14 @@
   }
 
   .dark-theme .category-budgets-panel--list {
-    --cbl-heading: #fdf2f8;
-    --cbl-muted: #d4a3be;
+    --cbl-heading: #FFFFFF;
+    --cbl-name: #FFFFFF;
+    --cbl-muted: #94A3B8;
+  }
+
+  .dark-theme .category-budgets-list-icon {
+    background: rgba(37, 99, 235, 0.25);
+    color: #60A5FA;
   }
 
   .category-budgets-list-header {

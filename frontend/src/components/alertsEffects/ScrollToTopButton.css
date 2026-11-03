@@ -47,7 +47,7 @@
   .scroll-top-btn {
     left: auto;
     right: 15px;
-    bottom: 60px;
+    bottom: calc(65px + env(safe-area-inset-bottom, 0px));
     transform: none;
     padding: 6px 10px;
     font-size: 0.9rem;

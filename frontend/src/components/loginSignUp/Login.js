@@ -78,7 +78,7 @@ const Login = ({ setIsLoggedIn, setIsSignUp, setIsSpinnerLoad }) => {
     <AuthLayout>
       <div className="login-card">
         <header className="login-header">
-          <h2 className="login-title">Welcome Back!</h2>
+          <h2 className="login-title">Welcome <span className="auth-title-accent">Back!</span></h2>
           <p className="login-subtitle">Log in to your Balensia account and take control of your finances.</p>
         </header>
 

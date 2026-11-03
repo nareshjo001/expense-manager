@@ -17,7 +17,7 @@ body:has(.recurring-page) .sia-entry-point {
 
 @media (max-width: 600px) {
     .recurring-page {
-        padding: 12px 14px calc(90px + env(safe-area-inset-bottom, 0px));
+        padding: 12px 14px 24px;
         gap: 18px;
     }
 }

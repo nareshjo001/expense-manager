@@ -119,7 +119,7 @@ const SignUp = ({ setIsSignUp, setIsSpinnerLoad }) => {
                 </button>
 
                 <header className="login-header">
-                    <h2 className="login-title">Create Account</h2>
+                    <h2 className="login-title">Create <span className="auth-title-accent">Account</span></h2>
                     <p className="login-subtitle">Join Balensia and take control of your finances.</p>
                 </header>
 

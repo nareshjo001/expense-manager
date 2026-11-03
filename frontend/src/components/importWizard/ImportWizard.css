@@ -280,6 +280,7 @@ body:has(.import-wizard-page) .sia-entry-point {
 }
 
 .import-choose-file-btn {
+    box-sizing: border-box;
     height: 44px;
     padding: 0 28px;
     border-radius: 12px;
@@ -768,7 +769,7 @@ body:has(.import-wizard-page) .sia-entry-point {
 /* ================= Responsive Layout (Mobile & Tablet) ================= */
 @media (max-width: 768px) {
     .import-wizard-page {
-        padding: 16px 14px 28px;
+        padding: 14px 14px 28px;
     }
 
     .import-wizard-card {
@@ -789,6 +790,12 @@ body:has(.import-wizard-page) .sia-entry-point {
         flex-wrap: nowrap;
         -webkit-overflow-scrolling: touch;
         padding-bottom: 6px;
+        scroll-behavior: smooth;
+        scrollbar-width: none;
+    }
+
+    .import-wizard-steps::-webkit-scrollbar {
+        display: none;
     }
 
     .import-step-pill {
@@ -810,8 +817,11 @@ body:has(.import-wizard-page) .sia-entry-point {
 
     .import-choose-file-btn {
         width: 100%;
-        height: 48px;
-        border-radius: 9999px;
+        max-width: 100%;
+        box-sizing: border-box;
+        height: 46px;
+        padding: 0 20px;
+        border-radius: 14px;
     }
 
     .import-mapping-grid {

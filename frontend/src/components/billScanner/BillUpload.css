@@ -425,11 +425,15 @@
   background: #EE7FB0;
 }
 
+.light-theme .bill-upload-btn:disabled,
+:root:not(.dark-theme) .bill-upload-btn:disabled,
 .light-theme .bill-upload-wrapper .bill-upload-scan-btn:disabled,
 .light-theme .bill-upload-wrapper button[type="submit"]:disabled,
 .light-theme .bill-upload-wrapper .bill-upload-action-btn:disabled {
   background: #FAD9E7;
   color: #C49EAF;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .dark-theme .bill-upload-btn,

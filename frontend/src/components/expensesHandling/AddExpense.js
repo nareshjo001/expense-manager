@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useExpenseSearchQuery } from '../../hooks/queries/useExpenseSearchQuery';
+import { linkReceipt } from '../../api/receiptsApi';
+import { receiptLinkSuccessToast } from '../alertsEffects/toastMessages';
+import { formatMoney } from '../../utils/money';
+import { HiOutlineExclamationCircle } from 'react-icons/hi2';
 import { HiOutlineArrowUpTray, HiOutlineCalendarDays, HiOutlineDocumentText, HiSparkles } from 'react-icons/hi2';
 import './AddExpense.css';
 
@@ -67,6 +72,64 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
     const [isBillUpload, setIsBillUpload] = useState(false);
     const [billData, setBillData] = useState(null);
     const [isQuickAdd, setIsQuickAdd] = useState(false);
+    const [dismissDuplicate, setDismissDuplicate] = useState(false);
+
+    const location = useLocation();
+
+    useEffect(() => {
+        if (location?.state?.receiptData) {
+            setBillData(location.state.receiptData);
+        }
+    }, [location?.state]);
+
+    const billAmount = typeof billData?.expenseAmount === 'number' ? billData.expenseAmount : (Number(billData?.expenseAmount) || null);
+    const billName = (billData?.expenseName || '').trim().toLowerCase();
+    const billDateStr = billData?.expenseDate ? billData.expenseDate.split('T')[0] : '';
+
+    const targetDate = billDateStr ? new Date(billDateStr) : new Date();
+    const validTarget = !Number.isNaN(targetDate.getTime()) ? targetDate : new Date();
+    const searchStart = new Date(validTarget.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const searchEnd = new Date(validTarget.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const duplicateCheckQuery = useExpenseSearchQuery(
+        searchStart,
+        searchEnd,
+        { limit: 30 },
+        Boolean(billData && !dismissDuplicate)
+    );
+    const recentExpenses = React.useMemo(() => duplicateCheckQuery.data?.data || [], [duplicateCheckQuery.data?.data]);
+
+    const duplicateCandidate = React.useMemo(() => {
+        if (!billData || dismissDuplicate || !recentExpenses || recentExpenses.length === 0) return null;
+        if (billAmount === null && !billName) return null;
+
+        return recentExpenses.find((exp) => {
+            const expAmount = typeof exp.expenseAmount === 'number' ? exp.expenseAmount : (Number(exp.expenseAmount) || null);
+            const expName = (exp.expenseName || '').trim().toLowerCase();
+            const expDateStr = exp.expenseDate ? exp.expenseDate.split('T')[0] : '';
+
+            const amountMatch = billAmount !== null && expAmount !== null && Math.abs(expAmount - billAmount) < 0.01;
+            const nameMatch = Boolean(billName && expName && (billName === expName || billName.includes(expName) || expName.includes(billName)));
+            const dateMatch = Boolean(billDateStr && expDateStr && billDateStr === expDateStr);
+
+            return (amountMatch && (nameMatch || dateMatch)) || (nameMatch && dateMatch);
+        });
+    }, [billData, dismissDuplicate, recentExpenses, billAmount, billName, billDateStr]);
+
+    const handleLinkReceiptToExisting = () => {
+        if (billData?.receiptId && duplicateCandidate?._id) {
+            linkReceipt(billData.receiptId, duplicateCandidate._id)
+                .then(() => {
+                    receiptLinkSuccessToast();
+                    navigate('/receipts');
+                })
+                .catch((err) => {
+                    expenseAddErrorToast({ message: err?.response?.data?.message || 'Failed to link receipt to existing expense.' });
+                });
+        } else {
+            setDismissDuplicate(true);
+        }
+    };
 
     const [mlLoading, setMlLoading] = useState(false);
     const [mlConfidence, setMlConfidence] = useState(null);
@@ -300,6 +363,10 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
                     setRuleSavePrompt({ merchantName: payload.expenseName, category: payload.expenseCategory });
                 }
 
+                if (billData?.receiptId && data?.data?._id) {
+                    linkReceipt(billData.receiptId, data.data._id).catch(() => {});
+                }
+
                 navigate('/');
 
                 const toastData = data?.derivedData?.recoveryPending
@@ -471,6 +538,37 @@ const AddExpense = ({ isEdit, setIsEdit }) => {
             <p className="add-expense-divider"><span>Or enter manually</span></p>
 
             <form className="add-expense" onSubmit={handleSubmit}>
+                {
+                    duplicateCandidate && !dismissDuplicate && (
+                        <div className="receipt-duplicate-detected-banner" role="alert">
+                            <div className="duplicate-detected-header">
+                                <HiOutlineExclamationCircle className="duplicate-detected-icon" aria-hidden="true" />
+                                <strong>Possible Duplicate Expense Detected</strong>
+                            </div>
+                            <p className="duplicate-detected-text">
+                                You already recorded an expense matching this receipt: <strong>{duplicateCandidate.expenseName}</strong> ({formatMoney(duplicateCandidate.expenseAmount)} on {duplicateCandidate.expenseDate?.split('T')[0]}).
+                            </p>
+                            <div className="duplicate-detected-actions">
+                                {billData?.receiptId && (
+                                    <button
+                                        type="button"
+                                        className="btn-link-duplicate"
+                                        onClick={handleLinkReceiptToExisting}
+                                    >
+                                        Link Receipt to Existing Expense
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    className="btn-dismiss-duplicate"
+                                    onClick={() => setDismissDuplicate(true)}
+                                >
+                                    Keep & Add as New
+                                </button>
+                            </div>
+                        </div>
+                    )
+                }
                 {
                     billData?.needsReview && (
                         <div className="receipt-review-banner" role="status">

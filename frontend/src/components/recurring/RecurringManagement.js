@@ -436,7 +436,7 @@ const RecurringManagement = () => {
                             disabled={pauseMutation.isPending}
                           >
                             <FaPause className="recurring-mgmt-btn-icon" aria-hidden="true" />
-                            Pause
+                            <span className="recurring-mgmt-btn-text">Pause</span>
                           </button>
                         )}
                         {definition.status === "paused" && (
@@ -447,7 +447,7 @@ const RecurringManagement = () => {
                             disabled={resumeMutation.isPending}
                           >
                             <FaPlay className="recurring-mgmt-btn-icon" aria-hidden="true" />
-                            Resume
+                            <span className="recurring-mgmt-btn-text">Resume</span>
                           </button>
                         )}
                         {definition.status !== "ended" && (
@@ -457,7 +457,7 @@ const RecurringManagement = () => {
                             onClick={() => setEditingId(definition.id)}
                           >
                             <FaEdit className="recurring-mgmt-btn-icon" aria-hidden="true" />
-                            Edit
+                            <span className="recurring-mgmt-btn-text">Edit</span>
                           </button>
                         )}
                         {definition.status !== "ended" && (
@@ -467,7 +467,7 @@ const RecurringManagement = () => {
                             onClick={() => setConfirmEndId(definition.id)}
                           >
                             <FaTrashAlt className="recurring-mgmt-btn-icon" aria-hidden="true" />
-                            End
+                            <span className="recurring-mgmt-btn-text">End</span>
                           </button>
                         )}
                       </div>

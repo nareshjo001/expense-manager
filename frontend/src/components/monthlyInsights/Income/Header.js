@@ -57,7 +57,7 @@ export default function Header({ period, setPeriod }) {
 
           <div className="income-header-title-wrap">
             <h1 className="monthly-insights-header-title">
-              Income Insights
+              Income
             </h1>
 
             <div className="income-header-subtitle-row">

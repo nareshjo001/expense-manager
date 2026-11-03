@@ -587,13 +587,14 @@ body:has(.merchant-rules-page) .sia-entry-point {
 /* ================= Mobile Responsive ================= */
 @media (max-width: 600px) {
     .merchant-rules-page {
-        padding: 12px 14px 24px;
+        padding: 14px 14px 28px;
     }
 
     .merchant-rules-card,
     .merchant-rules-saved-card {
         padding: 20px 18px 22px;
-        border-radius: 18px;
+        border-radius: 24px;
+        box-sizing: border-box;
     }
 
     .merchant-rules-header {
@@ -625,7 +626,8 @@ body:has(.merchant-rules-page) .sia-entry-point {
     }
 
     .merchant-rules-saved-subtitle {
-        font-size: 0.8rem;
+        margin: 6px 0 0 0;
+        font-size: 0.825rem;
     }
 
     .merchant-rules-fields-row {
@@ -646,27 +648,197 @@ body:has(.merchant-rules-page) .sia-entry-point {
         padding: 0 18px;
     }
 
+    /* Redesigned Mobile Rule Item (reference media_1793473453099_a4d3773a.png) */
     .merchant-rules-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 14px;
-        padding: 14px 16px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 22px;
+        background:
+          radial-gradient(ellipse at 95% 45%, rgba(254, 205, 226, 0.45) 0%, rgba(255, 241, 246, 0.25) 45%, transparent 70%),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 248, 251, 0.94) 100%);
+        border: 1.5px solid rgba(244, 114, 182, 0.32);
+        box-shadow: 0 4px 18px rgba(225, 29, 116, 0.04), 0 1px 4px rgba(0, 0, 0, 0.02);
+        box-sizing: border-box;
+    }
+
+    .dark-theme .merchant-rules-item {
+        background:
+          radial-gradient(ellipse at 95% 45%, rgba(59, 130, 246, 0.15) 0%, rgba(17, 34, 59, 0.25) 45%, transparent 70%),
+          linear-gradient(135deg, #11223B 0%, #0F1D33 100%);
+        border: 1.5px solid #1A2C46;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
     }
 
     .merchant-rules-item-left {
-        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .merchant-rules-category-icon-badge {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        border-radius: 14px;
+        background: #FCE7F3;
+        border: 1px solid rgba(244, 114, 182, 0.2);
+        color: #DB2777;
+        font-size: 20px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .dark-theme .merchant-rules-category-icon-badge {
+        background: rgba(59, 130, 246, 0.16);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #60A5FA;
+    }
+
+    .merchant-rules-item-text {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .merchant-rules-item-merchant {
+        font-size: 1.02rem;
+        font-weight: 750;
+        color: #0F172A;
+        letter-spacing: -0.015em;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .dark-theme .merchant-rules-item-merchant {
+        color: #F8FAFC;
+    }
+
+    .merchant-rules-item-category {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5px 10px;
+        border-radius: 9999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        background: #FCE7F3;
+        color: #BE185D;
+        border: none;
+        width: fit-content;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+    }
+
+    .dark-theme .merchant-rules-item-category {
+        background: rgba(59, 130, 246, 0.18);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #93C5FD;
     }
 
     .merchant-rules-item-actions {
-        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        width: auto;
         justify-content: flex-end;
     }
 
     .merchant-rules-btn-edit,
     .merchant-rules-btn-delete {
-        flex: 1;
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        padding: 0;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
         justify-content: center;
-        padding: 8px 12px;
+        flex: 0 0 38px;
+        box-sizing: border-box;
+        transition: all 0.2s ease;
+    }
+
+    .merchant-rules-btn-edit span,
+    .merchant-rules-btn-delete span {
+        display: none;
+    }
+
+    .merchant-rules-btn-icon {
+        font-size: 14px;
+    }
+
+    .merchant-rules-btn-edit {
+        background: #FFFFFF;
+        border: 1.5px solid #CBD5E1;
+        color: #334155;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .merchant-rules-btn-edit:hover,
+    .merchant-rules-btn-edit:active {
+        background: #F8FAFC;
+        border-color: #94A3B8;
+        color: #0F172A;
+    }
+
+    .dark-theme .merchant-rules-btn-edit {
+        background: #16263D;
+        border: 1.5px solid #283F60;
+        color: #94A3B8;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .dark-theme .merchant-rules-btn-edit:hover,
+    .dark-theme .merchant-rules-btn-edit:active {
+        background: #1A2F4B;
+        border-color: #3B82F6;
+        color: #FFFFFF;
+    }
+
+    .merchant-rules-btn-delete {
+        background: #FFF5F8;
+        border: 1.5px solid #F472B6;
+        color: #DB2777;
+        box-shadow: 0 1px 3px rgba(225, 29, 116, 0.06);
+    }
+
+    .merchant-rules-btn-delete:hover,
+    .merchant-rules-btn-delete:active {
+        background: #FCE7F3;
+        border-color: #EC4899;
+        color: #BE185D;
+    }
+
+    .dark-theme .merchant-rules-btn-delete {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1.5px solid rgba(248, 113, 113, 0.45);
+        color: #F87171;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .dark-theme .merchant-rules-btn-delete:hover,
+    .dark-theme .merchant-rules-btn-delete:active {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: #F87171;
+        color: #FCA5A5;
     }
 }
 

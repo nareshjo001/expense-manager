@@ -36,7 +36,7 @@ const Insights = () => {
             <span className="analysis-toggle-icon" aria-hidden="true">
               <FaChartPie size={15} />
             </span>
-            <span>Budget Insights</span>
+            <span>Budgets</span>
           </button>
 
           <button
@@ -49,7 +49,7 @@ const Insights = () => {
             <span className="analysis-toggle-icon" aria-hidden="true">
               <BarChartIcon />
             </span>
-            <span>Income Insights</span>
+            <span>Income</span>
           </button>
         </div>
       </div>

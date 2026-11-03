@@ -2277,6 +2277,12 @@
 }
 
 @media screen and (max-width: 600px) {
+  /* Guard: when the mobile settings drawer is open, hide the launcher */
+  body.mobile-settings-open .sia-entry-point,
+  body:has(.mobile-settings-panel) .sia-entry-point {
+    display: none !important;
+  }
+
   .sia-entry-point {
     /* Reserve space for both the fixed bottom navigation and its nearby
        Scroll-to-top control, without leaving a large pill over card content. */

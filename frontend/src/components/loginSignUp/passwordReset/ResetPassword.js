@@ -104,7 +104,7 @@ const ResetPassword = ({ onBack, email, resetToken, setIsSpinnerLoad }) => {
                 </button>
                 
                 <header className="login-header">
-                    <h2 className="login-title">Set New Password</h2>
+                    <h2 className="login-title">Set New <span className="auth-title-accent">Password</span></h2>
                     <p className="login-subtitle">
                         Your new password must be at least 8 characters long.
                     </p>

@@ -150,7 +150,7 @@
 /* Mobile Responsiveness */
 @media (max-width: 600px) {
   .analysis-toggle-container {
-    padding: 12px 14px 0;
+    padding: 14px 14px 0;
   }
 
   .analysis-toggle {

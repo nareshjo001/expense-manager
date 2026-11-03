@@ -687,12 +687,14 @@
 
   .ai-summary-controls-row {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 12px;
   }
 
   .ai-summary-generate-btn {
-    width: 100%;
+    width: auto;
+    max-width: 100%;
+    align-self: flex-start;
   }
 
   .ai-summary-panel {

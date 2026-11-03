@@ -44,6 +44,7 @@ jest.mock(
   "react-router-dom",
   () => ({
     useNavigate: () => mockNavigate,
+    useLocation: () => ({ state: null }),
   }),
   { virtual: true }
 );

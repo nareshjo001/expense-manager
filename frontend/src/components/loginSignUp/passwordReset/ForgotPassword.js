@@ -161,7 +161,7 @@ const ForgotPassword = ({ onBack, setIsSpinnerLoad }) => {
                 </button>
                 
                 <header className="login-header">
-                    <h2 className="login-title">Forgot Password ?</h2>
+                    <h2 className="login-title">Forgot <span className="auth-title-accent">Password ?</span></h2>
                     <p className="login-subtitle">
                         Enter your email address and we'll send you an OTP to reset your password.
                     </p>
