@@ -93,10 +93,7 @@ const generateReport = async (userId) => {
     currentMonthForecast,
   };
 
-  // ANL-001-T03: deterministic facts the frontend previously recalculated
-  // itself (ANL-001-T01 mapping, ANL-001-T02 contract). Each analyzer is
-  // pure and reuses an already-computed upstream report rather than
-  // requerying the database.
+  // Deterministic facts the frontend previously recalculated itself (ANL-001-T01 mapping, ANL-001-T02 contract).
   const weeklyChangeReport = weeklyChangeAnalyzer.analyze({
     currentWeekExpenses: analyticsContext.trendData.currentWeek,
     previousWeekExpenses: analyticsContext.trendData.previousWeek,
@@ -151,10 +148,7 @@ const generateReport = async (userId) => {
     budgetUtilization: budgetReport.utilization,
     budgetStatus: budgetReport.status,
 
-    // ANL-001-T02/T03: healthScore/riskLevel removed -- healthAnalyzer.analyze()
-    // has always returned `overall`/`risk`, never `healthScore`/`riskLevel`, so
-    // these two fields were undefined in every real response. financialHealth.overall
-    // and financialHealth.risk (below) are the real, populated values; read those.
+    // Analyze() has always returned `overall`/`risk`, never `healthScore`/`riskLevel`, so these two fields were undefined in every real response.
   };
 
   const assembled = assembleReport({
@@ -187,13 +181,7 @@ const generateReport = async (userId) => {
 
   });
 
-  // DAT-002-T04 -- top-level, typed sibling of the pre-existing
-  // metadata.version stamp (models/Report.js's new `schemaVersion` field).
-  // Added here rather than inside reportAssembler.js's own object literal
-  // so the assembler's existing allowlisted-params contract for the
-  // analyzer sections stays untouched; sourced from the same shared
-  // CURRENT_REPORT_VERSION constant as `metadata.version` above, so the
-  // two can never drift apart.
+  // Js's new `schemaVersion` field). version` above, so the two can never drift apart.
   return {
     ...assembled,
     schemaVersion: CURRENT_REPORT_VERSION,

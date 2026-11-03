@@ -20,7 +20,7 @@ export const SIA_ERROR_CODE = Object.freeze({
 
 const GENERIC_ERROR_MESSAGE = "SIA is temporarily unavailable. Please try again.";
 
-export const initialState = {
+const initialState = {
   activeSessionId: null,
   messages: [],
   input: "",
@@ -36,7 +36,7 @@ const nextMessageId = () => {
   return `m${messageCounter}`;
 };
 
-export function siaConversationReducer(state, action) {
+function siaConversationReducer(state, action) {
   switch (action.type) {
     case "SET_INPUT":
       return { ...state, input: action.input };
@@ -175,12 +175,12 @@ export function siaConversationReducer(state, action) {
 }
 
 // Extracts a safe, plain string from a rejected Axios error, never the raw
-export function getErrorMessage(error) {
+function getErrorMessage(error) {
   const message = error?.response?.data?.message;
   return typeof message === "string" && message.trim() !== "" ? message : GENERIC_ERROR_MESSAGE;
 }
 
-export function getErrorCode(error) {
+function getErrorCode(error) {
   const code = error?.response?.data?.code;
   return typeof code === "string" ? code : null;
 }

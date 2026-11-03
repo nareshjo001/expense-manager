@@ -1,8 +1,4 @@
-// ANL-001-T03 -- server-side ChartFindings packaging for ANL-001-T02,
-// replacing frontend/src/insights-engine (chartPatterns.js) line/bar/pie
-// "finding" synthesis. This does no new math -- it reshapes values already
-// computed by trendAnalyzer.js, budgetAnalyzer.js and categoryAnalyzer.js
-// into a per-chart-type shape the line/bar/pie chart components consume.
+// Js) line/bar/pie "finding" synthesis. js into a per-chart-type shape the line/bar/pie chart components consume.
 
 // Concentration indexes/ratios from categoryAnalyzer.js are 0-100 percentages;
 // chart consumers want a 0-1 ratio.

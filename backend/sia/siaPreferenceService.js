@@ -1,11 +1,6 @@
 "use strict";
 
-// SIA-001-T06 -- per-user SIA enable/disable. Same thin get/set-preference
-// shape as aiSummaryPreferenceService.js/notificationPreferenceService.js,
-// but an OPT-OUT control rather than opt-in: SIA is enabled by default, so
-// a user who never touches the toggle (the overwhelming majority) needs no
-// document at all -- getPreference()/isEnabledForUser() both treat "no
-// saved document" and "document with enabled !== false" identically.
+// Per-user SIA enable/disable. == false" identically.
 const SiaPreference = require("../models/SiaPreference");
 
 // The full view a settings screen needs -- always a complete {enabled}
@@ -15,11 +10,7 @@ async function getPreference(userId) {
   return { enabled: doc?.enabled !== false };
 }
 
-// The single boolean check the /sia/ask enforcement gate needs, without
-// unwrapping getPreference()'s fuller shape. Callers that hit a DB error
-// decide their own fail-open/fail-closed posture (see ask.js's
-// safeIsSiaEnabledForUser) -- this function itself never swallows errors,
-// so a caller that genuinely needs to know about a failure still can.
+// The single boolean check the /sia/ask enforcement gate needs, without unwrapping getPreference()'s fuller shape.
 async function isEnabledForUser(userId) {
   const preference = await getPreference(userId);
   return preference.enabled;

@@ -1,29 +1,6 @@
 "use strict";
 
-// DAT-004-T06 -- expired export sweep. cron/exportGeneration.js (a
-// separate job, not this one) is the ONLY thing that produces a "ready"
-// export file; this job is the ONLY thing that removes one. A "ready"
-// ExportRequest's expiresAt (readyAt + EXPORT_EXPIRY_HOURS, see
-// utils/exportTypes.js) is set once, at generation time, and never
-// touched again until this sweep either deletes the file and marks the
-// request "expired", or leaves it alone because it is not due yet.
-//
-// Modeled directly on cron/staleDeviceCleanup.js, right down to the
-// fail-open/idempotent posture: deleting a generated-export file is NOT
-// security/privacy-irreversible the way account deletion is
-// (PRV-001/accountDeletionJob.js) -- a user who still wants the data just
-// queues a new export. So a missed cycle during a lease-coordinator
-// outage just means an already-expired file lingers on disk one more day,
-// not a correctness problem, and this job opts into failOpen the same way
-// staleDeviceCleanup.js does.
-//
-// Runs once daily, not every 2 minutes like exportGeneration.js -- nobody
-// is actively waiting on an expiry sweep the way a user waits on their own
-// export finishing, and EXPORT_EXPIRY_HOURS is itself a 24-hour window, so
-// a daily cadence cannot let a "ready" file overstay by more than about a
-// day. Scheduled at 05:00, after accountDeletionJob.js's 03:00 sweep and
-// staleDeviceCleanup.js's 04:00 sweep, so these daily jobs stay staggered
-// rather than piling onto the same minute.
+// Expired export sweep. js (a separate job, not this one) is the ONLY thing that produces a "ready" export file; this job is the ONLY thing th.
 const cron = require("node-cron");
 const fs = require("fs/promises");
 const ExportRequest = require("../models/ExportRequest");
@@ -66,9 +43,7 @@ async function runExportCleanupJob(lease) {
 
       try {
         if (!request.filePath) {
-          // Nothing on disk to remove (shouldn't normally happen for a
-          // "ready" request, but a request with no filePath has nothing
-          // this job can delete) -- skip straight to marking it expired.
+          // Nothing on disk to remove (shouldn't normally happen for a "ready" request, but a request with no filePath has nothing this job can delete) -- skip straight to marking it expired.
           noFilePathCount += 1;
         } else {
           try {
@@ -76,17 +51,10 @@ async function runExportCleanupJob(lease) {
             deletedCount += 1;
           } catch (unlinkErr) {
             if (unlinkErr && unlinkErr.code === "ENOENT") {
-              // Idempotent: the file is already gone (a previous run
-              // deleted it and crashed before updating the doc, or it was
-              // removed out of band). That is success, not an error.
+              // Idempotent: the file is already gone (a previous run deleted it and crashed before updating the doc, or it was removed out of band).
               alreadyMissingCount += 1;
             } else {
-              // A genuine delete failure (e.g. a permission error) -- fail
-              // open for THIS item only: log it, leave the request as
-              // "ready" untouched, and move on to the rest of the batch.
-              // Marking it "expired" with filePath cleared here would
-              // orphan a file this job could never find again; leaving it
-              // "ready" lets tomorrow's sweep retry the same delete.
+              // G. a permission error) -- fail open for THIS item only: log it, leave the request as "ready" untouched, and move on to the rest of the batch.
               deleteFailedCount += 1;
               logEvent({
                 level: "error",
@@ -105,9 +73,7 @@ async function runExportCleanupJob(lease) {
           { $set: { status: EXPORT_STATUSES.EXPIRED, filePath: null } }
         );
       } catch (itemErr) {
-        // Defensive: an unexpected failure anywhere else in this item's
-        // handling (e.g. the updateOne itself) must not abort the sweep
-        // for the rest of the batch either.
+        // G. the updateOne itself) must not abort the sweep for the rest of the batch either.
         deleteFailedCount += 1;
         logEvent({
           level: "error",

@@ -21,7 +21,7 @@ const ERROR_STATES = new Set([
 ]);
 
 // Never communicated by color alone -- this exact text is what the
-export function announcementForState(state) {
+function announcementForState(state) {
   switch (state) {
     case SIA_RECORDER_STATE.REQUESTING_PERMISSION:
       return "Requesting microphone permission…";
@@ -54,7 +54,7 @@ export function announcementForState(state) {
   }
 }
 
-export function formatElapsedTime(totalSeconds) {
+function formatElapsedTime(totalSeconds) {
   const safeSeconds = Number.isFinite(totalSeconds) && totalSeconds > 0 ? Math.floor(totalSeconds) : 0;
   const minutes = Math.floor(safeSeconds / 60);
   const seconds = safeSeconds % 60;

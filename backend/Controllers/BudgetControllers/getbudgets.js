@@ -1,9 +1,7 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
 const { MONTH_ORDER } = require('../../Services/ChartServices/chartConstants');
 const syncRecoveryService = require('../../Services/syncRecoveryService');
-// DAT-002 -- stale-month labels must use the same canonical key the budgets
-// are stored under; toLocaleString('default') varies with the server's locale
-// data ("Sept" vs "Sep") and would never match.
+// Stale-month labels must use the same canonical key the budgets are stored under; toLocaleString('default') varies with the server's locale data ("Sept" vs "Sep") and would never match.
 const { getMonthKey } = require('../../utils/monthKeyNormalization');
 
 // Order budget records chronologically by month key.

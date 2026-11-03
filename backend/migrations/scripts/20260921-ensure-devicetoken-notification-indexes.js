@@ -1,15 +1,6 @@
 "use strict";
 
-// DAT-002-T03 -- explicitly (re-)creates the two userId indexes added in
-// this task to models/DeviceToken.js and models/Notification.js (gap 3.3,
-// docs/data/DAT-002-T01-schema-and-index-inventory.md: "DeviceToken.userId
-// and Notification.userId have no index at all"). Mirrors
-// 20260903-ensure-core-indexes.js's (DAT-003-T06) pattern exactly, for the
-// same reason that migration gives: createIndex() is idempotent, so this is
-// a no-op today (both indexes already exist via Mongoose's default
-// autoIndex behavior) and becomes the actual mechanism a deployment that
-// disables autoIndex would need. verify() confirms both indexes are
-// present afterward, per ADR-0006.
+// UserId have no index at all").
 const INDEX_SPECS = [
   {
     collection: "devicetokens",

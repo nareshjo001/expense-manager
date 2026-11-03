@@ -15,18 +15,7 @@ export const getExpensesByCategory = async (period, signal) => {
   return data;
 };
 
-// EXP-003-T03 -- `pagination` ({ limit, cursor }) is optional to PASS, but the
-// response is bounded either way: omitting `limit` no longer returns the full
-// range, it returns the server's default page (50) plus `hasMore` and
-// `nextCursor`. A caller that needs everything must page through the cursors.
-// Callers that ignore hasMore will silently show only the first page.
-// EXP-002-T05 -- `options` now also carries the four optional search
-// filters EXP-002-T01 defined (nameContains/category/minAmount/maxAmount/
-// isRecurring), on top of the existing pagination fields. Each one is only
-// added to the request when actually set -- omitted entirely means "no
-// filter" per the backend contract (EXP-002-T02/T04), not "filter for
-// empty/zero". minAmount/maxAmount/isRecurring use `!== undefined` rather
-// than truthiness so a real 0 or `false` is never dropped.
+// `pagination` ({ limit, cursor }) is optional to PASS, but the response is bounded either way: omitting `limit` no longer returns the full range, it returns the server's default page (50) plus `hasMore` and `nextCursor`.
 export const searchExpenses = async (startDate, endDate, signal, options) => {
   const { data } = await api.get("/expense/search", {
     params: {

@@ -28,7 +28,7 @@ function isTableSeparator(line, columnCount) {
 }
 
 // Browser speech synthesis reads Markdown table separators literally. Keep
-export function toSpeechText(text) {
+function toSpeechText(text) {
   if (typeof text !== "string") return "";
 
   const lines = text.replace(/\r\n?/g, "\n").split("\n");

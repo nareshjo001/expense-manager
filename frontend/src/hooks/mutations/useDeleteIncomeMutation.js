@@ -10,9 +10,7 @@ export const useDeleteIncomeMutation = () => {
     mutationFn: deleteIncome,
     // Invalidates income-derived data after a successful mutation.
     onSuccess: (_data, deletedIncomeId) => {
-      // EXP-003-T06 -- removes the deleted income record from every
-      // already-cached infinite (paged) income query immediately; see
-      // pagedCacheReconciliation.js for why this is deletion-only.
+      // Js for why this is deletion-only.
       removeIncomeFromCachedPages(queryClient, deletedIncomeId);
 
       queryClient.invalidateQueries({ queryKey: queryKeys.income.all });

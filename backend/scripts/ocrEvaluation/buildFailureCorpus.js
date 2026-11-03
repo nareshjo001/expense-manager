@@ -1,58 +1,6 @@
 "use strict";
 
-// OCR-006-T01 -- failure corpus + failure taxonomy.
-//
-// OCR-006 (P3, vision-model OCR fallback) may only be planned once there is
-// evidence of WHERE the current pipeline fails. "The receipt failed" is not
-// enough to decide whether a stronger recognizer (e.g. a vision model) is
-// worth its cost and privacy exposure: a failure where the correct value is
-// already sitting in Tesseract's raw text is an extractor problem that a
-// cheaper, deterministic fix can reach; only a failure where the recognizer
-// never produced the value at all is a candidate for a better recognizer.
-//
-// This script runs the same real pipeline as runEvaluation.js
-// (extractTextFromImage() -> parseReceipt() -> scoreEntry()), but also keeps
-// the RAW OCR text, which runEvaluation.js's latest.json does not store,
-// and classifies every failed field with the deterministic rules below.
-//
-// Nothing here talks to any network service: OCR is local Tesseract, and
-// the only output is local JSON under results/ (gitignored run output).
-//
-// Usage (from backend/):
-//   node scripts/ocrEvaluation/buildFailureCorpus.js           # real OCR run
-//   node scripts/ocrEvaluation/buildFailureCorpus.js --reuse   # reuse results/raw-ocr-baseline.json
-//
-// ---------------------------------------------------------------------------
-// Classification rule (documented in docs/ocr/OCR-006-T01-failure-corpus.md)
-// ---------------------------------------------------------------------------
-// For each failed field (a field is "failed" exactly when scoring.js says it
-// does not match -- this script never re-scores):
-//
-//   recognition -- the correct value does NOT appear anywhere in the raw OCR
-//                  text under the normalized matching rule for that field.
-//                  The recognizer never produced it; no extractor change
-//                  can recover it from this text.
-//   extraction  -- the correct value DOES appear in the raw OCR text, but the
-//                  extractor returned something else (or nothing).
-//   derived     -- reviewReasons only: those codes are computed from the
-//                  field results, not read off the receipt.
-//
-// A ground truth of null (the receipt genuinely has no amount/date) that
-// the extractor filled anyway is "extraction" -- a false positive, which
-// no recognizer change would fix.
-//
-// Recognition failures get a sub-category, "near-miss" when a token within
-// one digit edit of the correct value is present (e.g. 2028 for 2026, 10700
-// for 107000) and "absent" otherwise. This is a heuristic signal that the
-// recognizer saw the right region but misread a glyph -- the case where
-// traditional preprocessing has the best chance -- and is reported as
-// such, never as proof.
-//
-// "Present in raw text" is a necessary, not sufficient, condition for an
-// extractor to get the field right: an amount of 42 can appear on an
-// unrelated line. That is why extraction-side numbers derived from this
-// rule are an UPPER bound (a ceiling), and why amount evidence also records
-// whether the value sits on a line with a payable-total keyword.
+// Failure corpus + failure taxonomy.
 
 const fs = require("fs");
 const path = require("path");
@@ -65,15 +13,9 @@ const MANIFEST_PATH = path.join(CORPUS_DIR, "manifest.json");
 const RAW_CACHE_PATH = path.join(RESULTS_DIR, "raw-ocr-baseline.json");
 const FAILURE_CORPUS_PATH = path.join(RESULTS_DIR, "failure-corpus.json");
 
-// ---------------------------------------------------------------------------
-// Pure matching helpers
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Pure matching helpers ---------------------------------------------------------------------------.
 
-// Numeric tokens in OCR text. Commas are treated as thousands separators
-// (INR "1,947.00", IDR "107,000", Indian "1,00,000"); a token of the exact
-// shape "123,45" is ALSO offered with the comma read as a decimal point,
-// because OCR routinely confuses "." and ",". A token is never allowed to
-// start in the middle of a longer digit run.
+// Numeric tokens in OCR text. " and ",".
 const NUMERIC_TOKEN = /(?<![\d])\d[\d,]*(?:\.\d+)?/g;
 
 const findNumericTokens = (text) => {
@@ -90,9 +32,7 @@ const findNumericTokens = (text) => {
   return tokens;
 };
 
-// Keywords that mark a line as a payable-total line. Deliberately wider
-// than extractAmount()'s label set: this is evidence about what an
-// improved extractor COULD anchor on, not a description of today's one.
+// Keywords that mark a line as a payable-total line.
 const TOTAL_LINE_KEYWORDS = /(total|amount|amt|net|payable|cash|paid|bill|grand|rs\.?|inr|rp)/i;
 
 const lineAt = (text, index) => {
@@ -128,11 +68,7 @@ const findAmountInText = (text, expected) => {
   const matches = tokens.filter((t) => t.values.some((v) => Math.abs(v - expected) < 0.005));
   const labelled = matches.some((t) => TOTAL_LINE_KEYWORDS.test(lineAt(text, t.index)));
 
-  // Near miss: an integer part one digit edit (substitution, insertion or
-  // deletion) away from the expected one, where BOTH have 3+ integer digits
-  // -- for short numbers almost anything is one edit away (a "40" from a
-  // "23:40" timestamp is one deletion from 640), which would make the
-  // signal noise.
+  // Near miss: an integer part one digit edit (substitution, insertion or deletion) away from the expected one, where BOTH have 3+ integer digits -- for short numbers almost anything is one edit away (a "40" from a "23:40" timestamp is one deletion from 640), which would make the signal noise.
   const want = integerDigits(expected);
   const nearMisses =
     want.length >= 3
@@ -147,9 +83,7 @@ const findAmountInText = (text, expected) => {
   return { present: matches.length > 0, matches: matches.map((t) => t.raw), labelled, nearMisses };
 };
 
-// Date candidates in OCR text, day-first (the same Indian-convention
-// assumption scoring.js documents), plus ISO and worded forms. Separators
-// may be / - . with at most one space either side, never a line break.
+// Js documents), plus ISO and worded forms. Separators may be / - .
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const MONTH_RE = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?";
 const SEP = "[ \\t]?[-/.][ \\t]?";
@@ -176,9 +110,7 @@ const toIso = (year, month, day) => {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 };
 
-// Returns every date-shaped token with its components (valid or not --
-// near-miss detection needs the invalid ones too) and its ISO form when
-// the components form a real calendar date.
+// Returns every date-shaped token with its components (valid or not -- near-miss detection needs the invalid ones too) and its ISO form when the components form a real calendar date.
 const findDateCandidates = (text) => {
   const source = String(text ?? "");
   const out = [];
@@ -219,9 +151,7 @@ const findDateInText = (text, expectedIso) => {
   return { present: matches.length > 0, matches: [...new Set(matches.map((c) => c.raw))], nearMisses: [...new Set(nearMisses)] };
 };
 
-// Merchant: every word of 3+ characters in the normalized ground-truth name
-// must appear somewhere in the normalized raw text. Informational only,
-// like merchant scoring itself.
+// Merchant: every word of 3+ characters in the normalized ground-truth name must appear somewhere in the normalized raw text.
 const findMerchantInText = (text, expectedName) => {
   const hay = normalizeMerchant(String(text ?? "").replace(/\n/g, " "));
   const words = normalizeMerchant(expectedName).split(" ").filter((w) => w.length >= 3);
@@ -248,11 +178,7 @@ const classifyFieldFailure = (field, { expected, rawText }) => {
   else throw new Error(`classifyFieldFailure: unknown field ${field}`);
 
   if (evidence.present) {
-    // For amounts, record whether the value sits on a line that carries a
-    // payable-total keyword ("labelled-line") or only on some other line
-    // ("unlabelled-line"). The latter is still an extraction failure by the
-    // rule above, but one an improved extractor can only reach with
-    // weaker anchors (fuzzy labels, payment lines, arithmetic cross-checks).
+    // For amounts, record whether the value sits on a line that carries a payable-total keyword ("labelled-line") or only on some other line ("unlabelled-line").
     const subcategory = field === "amount" ? (evidence.labelled ? "labelled-line" : "unlabelled-line") : null;
     return { category: "extraction", subcategory, evidence };
   }
@@ -322,16 +248,11 @@ const summarizeTaxonomy = (records) => {
   return summary;
 };
 
-// ---------------------------------------------------------------------------
-// Orchestration (real OCR; not unit-tested -- same stance as runEvaluation.js)
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Orchestration (real OCR; not unit-tested -- same stance as runEvaluation.js) ---------------------------------------------------------------------------.
 
 const loadManifest = () => JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
 
-// Runs the real pipeline over every manifest entry and caches the full OCR
-// result (text + confidence + lines) so T02 and --reuse can re-parse
-// without another OCR pass. parseReceipt() is deterministic given the OCR
-// result, so a re-parse of the cache equals the original run.
+// Runs the real pipeline over every manifest entry and caches the full OCR result (text + confidence + lines) so T02 and --reuse can re-parse without another OCR pass.
 const runBaselineOcr = async (entries) => {
   // Required lazily so the pure helpers above can be imported (by tests,
   // by measureOcrCeiling.js) without loading tesseract.js.

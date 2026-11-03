@@ -54,9 +54,7 @@ const emitAuthAuditEvent = ({ event, outcome, req, email, reason }) => {
     reason,
     identityHash: fingerprint(normalizeEmail(email)),
     ipHash: fingerprint(req?.ip),
-    // req.requestId is the ID requestId.js validated or generated, so every
-    // audit event is correlatable -- including requests that sent no
-    // X-Request-ID, which the raw header alone left untagged.
+    // Js validated or generated, so every audit event is correlatable -- including requests that sent no X-Request-ID, which the raw header alone left untagged.
     requestId: req?.requestId || String(req?.get?.("X-Request-ID") || "").slice(0, 128) || undefined,
     occurredAt: new Date().toISOString(),
   };

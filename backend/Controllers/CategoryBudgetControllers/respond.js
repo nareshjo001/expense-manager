@@ -1,8 +1,6 @@
 "use strict";
 
-// BUD-001-T03 -- shared HTTP mapping for the category-budget controllers.
-// Every response, success or error, carries contractVersion (I16); errors
-// follow the existing { success: false, message, errorCode, field? } shape.
+// Shared HTTP mapping for the category-budget controllers.
 const { CONTRACT_VERSION, ERROR_CODES } = require("../../Services/BudgetServices/categoryBudgetContract");
 
 const REASON_MESSAGES = {

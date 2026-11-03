@@ -3,12 +3,6 @@ import { getLastWeekExpenses, getExpensesByCategory } from "../../api/expenseApi
 import { queryKeys } from "../../query/queryKeys";
 
 // Resolves the active filter mode into a stable cache key, query function, and enabled flag.
-// EXP-003-T05 -- the custom-date-range mode is deliberately absent here: it
-// moved to useInfiniteExpensesQuery, since GET /expense/search is the only
-// one of these three routes with cursor pagination to page against. A
-// filter of "custom" therefore always falls through to the disabled
-// default below -- ExpensesPage drives that mode from the infinite query
-// instead of this hook.
 const resolveExpenseMode = (filter, period) => {
   if (filter === "") {
     return {

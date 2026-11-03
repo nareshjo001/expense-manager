@@ -1,26 +1,4 @@
-"""
-ML-001-T02 -- deduplication and label-ambiguity analysis for the merged
-training dataset (usedDatasets/merged_expenses.csv).
-
-Reports two independent things:
-
-1. Exact-duplicate rows: identical (expenseName, expenseCategory) pairs,
-   byte-for-byte on the raw CSV values. These carry zero additional
-   training signal over a single copy and inflate the dataset's row
-   count without inflating its information content.
-2. Label ambiguity: after normalize_expense_name()'s grouping key (see
-   training/category_config.py -- deliberately case-preserving, since it
-   also backs production dedup/conflict-grouping keys, not just this
-   analysis), how many distinct normalized descriptions map to more than
-   one canonical category across the dataset. A description that
-   legitimately co-occurs with two categories (e.g. "Bus ticket" logged
-   as both Transport and Travel) is a real source of label noise no
-   amount of more data fixes by itself.
-
-Run from the ml-service/ directory: `python training/analyze_dataset_ambiguity.py`.
-See docs/ml/ML-001-T02-deduplication-and-label-ambiguity.md for the
-findings this script produced and what to do about them.
-"""
+"""Csv). Reports two independent things: 1."""
 import argparse
 import os
 import sys

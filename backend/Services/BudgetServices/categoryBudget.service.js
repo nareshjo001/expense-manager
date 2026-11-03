@@ -1,16 +1,6 @@
 "use strict";
 
-// BUD-001-T03 -- CRUD and total-budget reconciliation for category budgets.
-// Every rule enforced here is stated once in
-// docs/budgets/BUD-001-T01-category-budget-invariants.md; validation and
-// constants come from categoryBudgetContract.js (never re-declared here),
-// per-category spent from categoryBudgetSpend.js (I9), and the summary
-// shape from analytics/analyzers/categoryBudgetAnalyzer.js.
-//
-// Service functions return { ok: true, ... } or { ok: false, reason, field }
-// (same split as NotificationServices/notificationPreferenceService.js); the
-// controllers own the HTTP status mapping. Unexpected datastore errors are
-// thrown, never converted into a validation reason.
+// CRUD and total-budget reconciliation for category budgets. js.
 
 const { BudgetModel } = require("../../config/Schemas");
 const { CategoryBudgetModel } = require("../../models/CategoryBudget");
@@ -60,9 +50,7 @@ function sumAllocatedMinor(allocations) {
   }, 0);
 }
 
-// The month's total budget in integer paise, or null when no total is set
-// (I1/I7: a month may have category budgets without a total). The total
-// lives in the legacy BudgetModel under its "MMM YYYY" key.
+// The month's total budget in integer paise, or null when no total is set (I1/I7: a month may have category budgets without a total).
 async function getTotalBudgetMinor(userObjectId, month) {
   const doc = await BudgetModel.findOne({
     userId: userObjectId,
@@ -102,9 +90,7 @@ async function getSummary(userId, month, { now = new Date() } = {}) {
   });
 }
 
-// I8 compensation: undo only OUR write. Each rollback is conditional on the
-// document still holding the amount this request wrote, so a newer write by
-// another request is never clobbered.
+// I8 compensation: undo only OUR write.
 async function compensate({ key, created, previous, amountMinor }) {
   if (created) {
     await CategoryBudgetModel.deleteOne({ ...key, amountMinor });
@@ -161,9 +147,7 @@ async function upsertCategoryBudget(userId, input, { now = new Date() } = {}) {
     return reject(ERROR_CODES.TOO_MANY_CATEGORY_BUDGETS, "category", context);
   }
 
-  // I7 -- a write that does not increase the allocation never makes the sum
-  // exceed the total (it can only keep or reduce an existing over-allocation
-  // caused by a later total-budget edit), so only increases are checked.
+  // I7 -- a write that does not increase the allocation never makes the sum exceed the total (it can only keep or reduce an existing over-allocation caused by a later total-budget edit), so only increases are checked.
   const isIncrease = !current || amountMinor > current.amountMinor;
   if (totalBudgetMinor !== null && isIncrease) {
     const othersMinor = sumAllocatedMinor(existing.filter((doc) => doc.category !== category));
@@ -172,9 +156,7 @@ async function upsertCategoryBudget(userId, input, { now = new Date() } = {}) {
     }
   }
 
-  // I12 -- a single upsert keyed on (userId, month, category). The
-  // pre-image (returnDocument: "before") tells us atomically whether this
-  // request created the document and what to restore under I8.
+  // I12 -- a single upsert keyed on (userId, month, category).
   const $set = { amount, amountMinor };
   const amountChanged = !current || current.amountMinor !== amountMinor;
   if (amountChanged) $set.lastAlertLevel = ALERT_LEVELS.NONE; // I14

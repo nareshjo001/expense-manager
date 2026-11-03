@@ -1,30 +1,6 @@
 "use strict";
 
-// DAT-003-T06 -- the first real migration through this pipeline. Chosen
-// deliberately low-risk: explicitly (re-)creates indexes that
-// config/Schemas.js and models/RecurringExpense.js already declare via
-// schema.index() calls, which Mongoose's autoIndex option currently
-// creates automatically on every connection. createIndex() is
-// idempotent -- a no-op when the index already exists with the same
-// spec -- so this migration is safe against a database that already has
-// these indexes (today, via autoIndex), and is exactly the mechanism a
-// deployment that disables autoIndex (a common production practice,
-// since an implicit index build on every app startup is itself a real
-// production risk on a large collection) would need instead. verify()
-// confirms every index this migration asks for is actually present
-// afterward, per ADR-0006's "check the outcome, don't just trust up()"
-// requirement.
-// DAT-002-T06 correction (2026-09-21) -- "budget" and "recurringExpenses"
-// below were never the real MongoDB collection names; see
-// 20260903-backfill-money-minor-fields.js's identical correction comment
-// for the full explanation (Mongoose pluralizes/lowercases the
-// 'budget'/'recurringExpenses' model names config/Schemas.js and
-// models/RecurringExpense.js register, to "budgets"/"recurringexpenses"
-// respectively -- confirmed directly against the real mongoose package).
-// createIndex() against the wrong string silently created these two
-// indexes on an empty, never-otherwise-used collection instead of the
-// real one -- caught while investigating DAT-002-T06's orphan/duplicate
-// integrity checks.
+// The first real migration through this pipeline.
 const INDEX_SPECS = [
   {
     collection: "expenses",

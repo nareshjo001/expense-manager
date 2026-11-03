@@ -1,20 +1,6 @@
 "use strict";
 
-// OCR-005-T04 -- duplicate-candidate lookup and decision recording over
-// persisted Receipt documents. Same layering as
-// Services/ReceiptServices/receiptQueryService.js (thin service on top of
-// the Receipt model, `.code`-tagged thrown errors, ownership always
-// scoped to {_id, userId} together so "not yours" and "doesn't exist"
-// collapse to the identical NOT_FOUND outcome) -- this module owns only
-// the two new duplicate-detection endpoints (OCR-005-T05's frontend is the
-// consumer), not the read/list/link/delete surface receiptQueryService.js
-// already owns.
-//
-// The candidate contract itself (reason codes, duplicateStatus values,
-// isProbableDuplicateMatch's null-field-never-matches rule) is fixed by
-// utils/duplicateDetectionRules.js -- see that module's own header comment
-// for the full design rationale. This file only wires that contract to
-// Mongo queries.
+// Duplicate-candidate lookup and decision recording over persisted Receipt documents.
 const mongoose = require("mongoose");
 const Receipt = require("../../models/Receipt");
 const { toSafeShape } = require("./receiptQueryService");
@@ -39,18 +25,7 @@ function isValidObjectId(id) {
   return typeof id === "string" && mongoose.Types.ObjectId.isValid(id);
 }
 
-// Finds other receipts belonging to the SAME user that are duplicate
-// candidates for the target receipt, combining two independent signals
-// (see duplicateDetectionRules.js):
-//   - EXACT_FILE_MATCH: same contentHash.
-//   - PROBABLE_MERCHANT_DATE_AMOUNT: narrowed via a Mongo query on
-//     {normalizedMerchant, normalizedDate} (skipped entirely when the
-//     target's own signature has a null merchant or date, since
-//     isProbableDuplicateMatch would reject every candidate anyway), then
-//     the exact amount check is applied in application code to that
-//     narrowed set.
-// A receipt satisfying both signals is reported once, with
-// EXACT_FILE_MATCH as its reason code -- the stronger of the two signals.
+// Js): - EXACT_FILE_MATCH: same contentHash.
 async function findDuplicateCandidates({ userId, receiptId }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`findDuplicateCandidates: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);
@@ -107,18 +82,6 @@ async function findDuplicateCandidates({ userId, receiptId }) {
 }
 
 // Records the user's decision on a receipt's duplicate candidate(s).
-// `decision` must be one of DUPLICATE_STATUSES.CONFIRMED_NEW or
-// DUPLICATE_STATUSES.LINKED_EXISTING -- anything else is INVALID_DECISION.
-//
-// "linked_existing" requires duplicateOfReceiptId to resolve to ANOTHER
-// receipt owned by the same user (ownership-scoped lookup, mirroring how
-// linkReceiptToExpense in receiptQueryService.js validates its own
-// foreign id) -- reuses the same NOT_FOUND code rather than inventing a
-// second one, since an unresolvable duplicateOfReceiptId is exactly the
-// same kind of failure as an unresolvable receiptId.
-//
-// "confirmed_new" clears duplicateOfReceiptId back to null, so re-deciding
-// a receipt that was previously linked_existing cleanly resets it.
 async function recordDuplicateDecision({ userId, receiptId, decision, duplicateOfReceiptId }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`recordDuplicateDecision: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);

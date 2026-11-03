@@ -2,11 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { decideImportRow } from "../../api/importsApi";
 import { queryKeys } from "../../query/queryKeys";
 
-// IMP-001 -- accept/skip a single preview row. The response is already
-// the whole updated session, but this invalidates (rather than writing
-// the response straight into the query cache) to keep the same
-// fetch-after-mutate convention useRecordDuplicateDecisionMutation/
-// useLinkReceiptMutation already use for their own detail caches.
+// Accept/skip a single preview row.
 export const useDecideImportRowMutation = () => {
   const queryClient = useQueryClient();
 

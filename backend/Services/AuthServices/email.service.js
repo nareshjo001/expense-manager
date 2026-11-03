@@ -32,11 +32,7 @@ const sendOTPEmail = async (toEmail, otp, purpose = "verify") => {
 };
 
 
-// OBS-001-T06 -- best-effort operational alert email, sent to the
-// configured owner address (OBS_ALERT_OWNER_EMAIL) via the same
-// already-approved Brevo transactional client as sendOTPEmail. Callers
-// (backend/utils/alerts.js) already catch and log any rejection, so this
-// intentionally does not swallow errors itself.
+// Best-effort operational alert email, sent to the configured owner address (OBS_ALERT_OWNER_EMAIL) via the same already-approved Brevo transactional client as sendOTPEmail.
 const sendOperationalAlertEmail = async (toEmail, alert) => {
   const { alertType, metricValue, threshold, runbookUrl } = alert || {};
 

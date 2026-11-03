@@ -1,20 +1,8 @@
 "use strict";
 
-// OCR-003-T07 -- pure comparison/aggregation functions for the evaluation
-// harness (runEvaluation.js). Kept dependency-free of any OCR/Tesseract
-// call, mirroring receiptExtractors.js's split: the smallest testable unit
-// here is one comparison rule, not a whole evaluation run.
+// Js). js's split: the smallest testable unit here is one comparison rule, not a whole evaluation run.
 
-// Confidence-derived review reasons depend on Tesseract's actual
-// recognition quality (font rendering, anti-aliasing -- whatever the real
-// engine decides), which this harness cannot predict for a synthetically
-// rendered image. Per this task's own scope decision (see
-// corpus/README.md), that is not a gap to paper over: confidence/quality
-// regressions are exactly the dimension that needs REAL photographed
-// receipts (thermal fade, skew, crumpling), not synthetic ones. These three
-// codes are therefore excluded from every structural comparison below; they
-// still appear in a run's raw `extracted` output for a human to eyeball,
-// they are just never asserted on.
+// Confidence-derived review reasons depend on Tesseract's actual recognition quality (font rendering, anti-aliasing -- whatever the real engine decides), which this harness cannot predict for a synthetically rendered image.
 const CONFIDENCE_REVIEW_REASONS = new Set([
   "LOW_OVERALL_CONFIDENCE",
   "LOW_AMOUNT_CONFIDENCE",
@@ -24,15 +12,7 @@ const CONFIDENCE_REVIEW_REASONS = new Set([
 const stripConfidenceReasons = (reasons) =>
   (Array.isArray(reasons) ? reasons : []).filter((r) => !CONFIDENCE_REVIEW_REASONS.has(r));
 
-// --- merchant -----------------------------------------------------------
-//
-// extractMerchant() is positional (first two words of the whole document),
-// not semantic -- receiptExtractors.js says so plainly. Comparing it to a
-// human-curated "true merchant name" with strict equality would fail on
-// any receipt whose first two words aren't the whole name, which is the
-// common case, not an edge case. So this reports agreement via a loose,
-// case-insensitive containment check, and it is informational only: it is
-// never part of scoreEntry()'s pass/fail gate.
+// Js says so plainly. Comparing it to a human-curated "true merchant name" with strict equality would fail on any receipt whose first two word.
 const normalizeMerchant = (s) =>
   String(s ?? "")
     .toLowerCase()
@@ -57,27 +37,7 @@ const amountMatches = (extracted, truth) => {
   return Math.abs(a - b) < 0.005;
 };
 
-// --- date -------------------------------------------------------------
-//
-// extractDate() returns raw matched OCR text, not a parsed date -- there is
-// no downstream date parser in the OCR pipeline today (billController.js
-// forwards expenseDate untouched). This harness has to parse it itself to
-// compare against a ground-truth calendar date. The app is INR-denominated
-// (see utils/money.js), so ambiguous numeric d/m/y text is read day-first,
-// matching Indian date convention. That is a scoring assumption made here,
-// not a behavior of the pipeline itself, which is why it's spelled out
-// rather than left implicit.
-//
-// This used to try a list of date-fns format strings ("d/M/yyyy" before
-// "d/M/yy") and take the first one date-fns.isValid() accepted. That was
-// wrong: date-fns' parse() is not strict about a token's digit width --
-// parse("28/01/26", "d/M/yyyy", ...) happily returns a *valid* date for
-// the literal year 26 (0026 AD) instead of failing over to "d/M/yy",
-// which would have read it as 2026. Every real, correctly-OCR'd 2-digit
-// year in the first corpus/eval:ocr run (2026-09-25) was misdated this
-// way -- an evaluation-harness bug, not a pipeline one; see
-// corpus/README.md's run history. Parsing is done explicitly here
-// instead, so the year's digit count is never ambiguous.
+// Js forwards expenseDate untouched). This harness has to parse it itself to compare against a ground-truth calendar date.
 const MONTH_NAMES = [
   "january", "february", "march", "april", "may", "june",
   "july", "august", "september", "october", "november", "december",
@@ -88,9 +48,7 @@ MONTH_NAMES.forEach((name, i) => {
   MONTH_INDEX.set(name.slice(0, 3), i); // "sep", "jan", ...
 });
 
-// Builds an ISO date string and confirms day/month actually round-trip
-// (native Date silently rolls "31 Feb" over into March; comparing the
-// constructed date's own fields back against the inputs catches that).
+// Builds an ISO date string and confirms day/month actually round-trip (native Date silently rolls "31 Feb" over into March; comparing the constructed date's own fields back against the inputs catches that).
 const toIsoIfValid = (year, monthIndex, day) => {
   if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || !Number.isFinite(day)) return null;
   const date = new Date(Date.UTC(year, monthIndex, day));
@@ -108,11 +66,7 @@ const parseExtractedDate = (matchedText) => {
   const text = String(matchedText ?? "").trim();
   if (!text) return null;
 
-  // OCR-003-T08 -- extractDate() now also recognises an ISO-formatted
-  // (yyyy-mm-dd) date on the receipt itself (see receiptExtractors.js);
-  // this harness must be able to read that shape back too, or a correctly
-  // extracted ISO date would be mis-scored as a mismatch by the day-first
-  // numeric parsing below.
+  // Js); this harness must be able to read that shape back too, or a correctly extracted ISO date would be mis-scored as a mismatch by the day-first numeric parsing below.
   const iso = text.match(ISO_DATE);
   if (iso) {
     const year = Number(iso[1]);
@@ -157,10 +111,7 @@ const reviewReasonsMatch = (extractedReasons, expectedReasons) => {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 };
 
-// --- one corpus entry -------------------------------------------------
-//
-// `entry` is one corpus/manifest.json record; `parsed` is parseReceipt()'s
-// return value for that entry's image.
+// Json record; `parsed` is parseReceipt()'s return value for that entry's image.
 const scoreEntry = (entry, parsed) => {
   const groundTruth = entry.groundTruth || {};
   const merchantMatch = merchantMatches(parsed.expenseName, groundTruth.expenseName);
@@ -171,10 +122,7 @@ const scoreEntry = (entry, parsed) => {
       ? null // not asserted for this entry
       : reviewReasonsMatch(parsed.reviewReasons, groundTruth.expectReviewReasons);
 
-  // The pass/fail gate deliberately excludes merchant (informational only,
-  // see above). amount and date are the fields that put a number in
-  // someone's finances; reviewReasons is graded only when the fixture
-  // declares an expectation.
+  // The pass/fail gate deliberately excludes merchant (informational only, see above).
   const passed = amountMatch && dateMatch && reasonsMatch !== false;
 
   return {

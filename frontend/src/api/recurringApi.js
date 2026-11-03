@@ -21,20 +21,7 @@ export const getUpcomingRecurring = async (signal, { from, to } = {}) => {
   return data;
 };
 
-// Existing desired-state toggle. Included here so the upcoming view has one
-// place to import from; `isRecurring: false` ENDS a recurrence (it deletes
-// the definition), it does not pause it -- there is no pause until REC-002.
-export const setExpenseRecurring = async (expenseId, isRecurring) => {
-  const { data } = await api.patch("/api/recurring", { expenseId, isRecurring });
-  return data;
-};
-
-// REC-002-T02/T05 -- lifecycle management surface (list/detail/pause/resume/
-// end/edit) over recurring definitions. Every mutation is compare-and-set:
-// the caller must pass the definition's current `scheduleVersion` (from a
-// prior list/detail read), and a stale one comes back as a 409 with
-// errorCode SCHEDULE_VERSION_CONFLICT and the server's current definition in
-// `data` -- callers refetch rather than blindly retry with the same version.
+// T02/T05 -- lifecycle management surface (list/detail/pause/resume/ end/edit) over recurring definitions.
 
 export const listRecurringDefinitions = async (signal) => {
   const { data } = await api.get("/api/recurring", { signal });

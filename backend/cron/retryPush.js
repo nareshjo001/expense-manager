@@ -1,18 +1,7 @@
 const cron = require("node-cron");
 const Notification = require("../models/Notification");
 const { sendPush } = require("../Services/push.service");
-// REC-001 -- job-level lease so two instances never both re-send the same
-// failed push notification.
-//
-// REC-001-T04 (2026-09-09): this loop now HAS a per-item claim -- see
-// claimNotification() below. The previous comment here recorded that it did
-// not, which made the job-level lease the only thing standing between a
-// Redis outage and a user receiving the same push twice.
-//
-// REC-001-T03: this job fails CLOSED. A skipped cycle just means the
-// notifications stay queued for the next run fifteen minutes later; a
-// duplicated cycle means a user's phone buzzes twice for one event, which
-// cannot be undone.
+// Job-level lease so two instances never both re-send the same failed push notification.
 const { runWithLease } = require("../utils/jobLease");
 
 const JOB_NAME = "retryPush";
@@ -22,25 +11,7 @@ cron.schedule("*/15 * * * *", async () => {
   await runWithLease(JOB_NAME, LEASE_TTL_MS, runRetryPushJob);
 });
 
-// REC-001-T04 -- item-level claim. Atomically moves ONE notification out of
-// the "eligible for retry" set before it is sent, using a compare-and-swap on
-// the fields that define eligibility: the filter pins the exact retryCount
-// the reader saw, and the update increments it. Two workers racing the same
-// document therefore cannot both match -- the loser's filter no longer
-// matches the incremented count and findOneAndUpdate returns null.
-//
-// Deliberately built from EXISTING fields rather than adding claimedBy /
-// claimedAt. New schema fields would need a migration and a backfill under
-// DAT-003's rules, and they would encode a lease a crashed worker could hold
-// past its usefulness. Incrementing retryCount up front is self-healing
-// instead: a worker that dies after claiming has already pushed nextRetryAt
-// forward, so the item simply becomes eligible again on a later cycle and is
-// bounded by the same retryCount < 3 ceiling as everything else.
-//
-// The cost of this design, stated plainly: a send that fails for a transient
-// reason still consumes one of the three attempts, because the attempt is
-// counted before the outcome is known. That is the correct direction to err
-// -- counting after the fact is what allows a duplicate send.
+// Item-level claim. Atomically moves ONE notification out of the "eligible for retry" set before it is sent, using a compare-and-swap on the f.
 const RETRY_BACKOFF_MS = 5 * 60 * 1000;
 
 async function claimNotification(notif, now) {
@@ -78,9 +49,7 @@ async function runRetryPushJob(lease) {
     // Process each failed notification
     for (const notif of failedNotifications) {
 
-      // REC-001-T03 -- stop between items once this instance can no longer
-      // prove it holds the lease. Continuing would mean sending pushes
-      // alongside whichever instance took the lease over.
+      // Stop between items once this instance can no longer prove it holds the lease.
       if (lease && typeof lease.isHeld === "function" && !lease.isHeld()) {
         console.warn("Retry push cron: lease lost mid-run, stopping early.");
         break;
@@ -91,11 +60,7 @@ async function runRetryPushJob(lease) {
       const claimed = await claimNotification(notif, now);
       if (!claimed) continue;
 
-      // Attempt to resend push notification. NOT-003-T03/T04 -- pass the
-      // notification's own registered type through so the preference/
-      // quiet-hours gate applies on retry exactly as it does on the first
-      // send (a user who disabled a type, or whose quiet hours are still
-      // active, must not receive it just because this is attempt 2 of 3).
+      // Attempt to resend push notification.
       const result = await sendPush(
         notif.userId.toString(),
         notif.title,
@@ -114,15 +79,7 @@ async function runRetryPushJob(lease) {
           }
         );
       } else if (result.suppressed) {
-        // NOT-003-T03/T04 -- still gated (type disabled, or still inside
-        // quiet hours this cycle). Deliberately NOT re-armed for another
-        // retry here: retryCount was already advanced by the claim above,
-        // so this attempt is consumed either way, same as any other
-        // outcome -- but the row is moved to a terminal "suppressed" state
-        // rather than left as "failed" pushStatus with a stale
-        // nextRetryAt, so it stops being picked up as a delivery FAILURE
-        // (a suppression is not one) while still respecting the retry
-        // ceiling if it somehow keeps getting claimed.
+        // T03/T04 -- still gated (type disabled, or still inside quiet hours this cycle).
         await Notification.updateOne(
           { _id: notif._id },
           {
@@ -131,9 +88,7 @@ async function runRetryPushJob(lease) {
           }
         );
       }
-      // On an actual send failure nothing more is written: the claim
-      // already incremented retryCount and scheduled the next attempt, so
-      // the item ages out at the retryCount < 3 ceiling on its own.
+      // On an actual send failure nothing more is written: the claim already incremented retryCount and scheduled the next attempt, so the item ages out at the retryCount < 3 ceiling on its own.
     }
 
   } catch {

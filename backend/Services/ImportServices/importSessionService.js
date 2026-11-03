@@ -1,12 +1,6 @@
 "use strict";
 
-// IMP-001-T04 -- ImportSession preview lifecycle: parse headers, create a
-// preview session (map + validate every row, enrich with T05's
-// duplicate/category suggestions), and read/decide against it. Every
-// lookup here that takes a userId is ownership-scoped -- a session
-// belonging to another user is never returned, never distinguished from
-// "does not exist" (same discipline duplicateCandidateService.js's own
-// NOT_FOUND handling uses).
+// ImportSession preview lifecycle: parse headers, create a preview session (map + validate every row, enrich with T05's duplicate/category suggestions), and read/decide against it.
 const ImportSession = require("../../models/ImportSession");
 const { parseCsv, ERROR_CODES: CSV_ERROR_CODES } = require("../../utils/csvStreamParser");
 const {
@@ -46,9 +40,7 @@ function parseCsvOrThrow(fileBuffer) {
   try {
     return parseCsv(fileBuffer.toString("utf8"));
   } catch (err) {
-    // parseCsv's own errors are already {message, code}-shaped (see
-    // csvStreamParser.js) -- re-thrown as-is (a fresh Error carrying the
-    // same code) so callers never need to know parseCsv is what threw.
+    // Js) -- re-thrown as-is (a fresh Error carrying the same code) so callers never need to know parseCsv is what threw.
     throw makeError(err.message, err.code);
   }
 }
@@ -67,10 +59,7 @@ function assertRequiredMapping(columnMapping) {
   }
 }
 
-// T05's module may not exist yet, or may throw/return a bad shape --
-// preview creation must never fail because of it. Required inside the
-// function (not at module top-level) so every OTHER export here keeps
-// working even if T05's module is missing entirely.
+// T05's module may not exist yet, or may throw/return a bad shape -- preview creation must never fail because of it.
 async function safeEnrichRows({ userId, mappedRows }) {
   const fallback = () => mappedRows.map(() => ({ duplicateCandidateExpenseId: null, suggestedCategory: null }));
   try {
@@ -152,10 +141,7 @@ async function createImportSessionPreview({ userId, originalFilename, fileBuffer
     committedExpenseId: null,
   }));
 
-  // Model.create(doc) is equivalent to `new ImportSession(doc).save()`
-  // but mocks the same simple way Receipt.create already does elsewhere
-  // in this codebase (see receiptIngestService.js) -- no separate
-  // constructor + instance-method mock needed for this call site.
+  // Js) -- no separate constructor + instance-method mock needed for this call site.
   const sessionDoc = await ImportSession.create({
     userId,
     originalFilename: originalFilename || null,

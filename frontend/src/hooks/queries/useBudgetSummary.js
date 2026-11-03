@@ -13,11 +13,7 @@ export const useBudgetSummary = () => {
     ? "error"
     : "ready";
 
-  // DAT-002 -- the server stores budgets under a fixed English "MMM YYYY"
-  // key ("Sep 2026"). toLocaleString("default") follows the browser's locale
-  // and gives "Sept 2026" in en-IN/en-GB, which never matches -- so an
-  // Indian-locale browser showed no budget for September. date-fns' default
-  // locale is fixed en-US, the same form BudgetBar/SetBudget already use.
+  // The server stores budgets under a fixed English "MMM YYYY" key ("Sep 2026").
   const currentMonth = format(new Date(), "MMM yyyy");
 
   const currentBudget = monthlyBudgets.find((b) => b.month === currentMonth);

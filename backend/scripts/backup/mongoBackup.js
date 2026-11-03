@@ -1,30 +1,4 @@
-/* mongoBackup.js -- OPS-002-T03
- *
- * Encrypted, scope-limited MongoDB backup for the 7 collections
- * ADR-0002 classifies as authoritative (docs/decisions/ADR-0002-
- * authoritative-vs-disposable-stores.md), on the daily-cadence /
- * 35-rolling-backup working target ADR-0005 sets (docs/decisions/
- * ADR-0005-backup-rpo-rto.md).
- *
- * Flow: mongodump each authoritative collection (one invocation per
- * collection -- see buildMongodumpArgs below for why a loop was chosen
- * over --nsInclude) into a scratch dir, tar+gzip the dump, encrypt the
- * tarball (backend/scripts/backup/encryption.js), copy the encrypted
- * archive to the configured destination (backend/scripts/backup/
- * destination.js -- local filesystem only; see that file's header for
- * why no remote destination is wired up here), write a JSON manifest
- * sidecar recording per-collection document counts and the HMAC needed
- * to verify the archive before ever decrypting it, then prune old
- * backups per backend/scripts/backup/retention.js.
- *
- * Required env: MONGO_CONN, BACKUP_ENCRYPTION_KEY.
- * Optional env: BACKUP_DESTINATION_DIR, BACKUP_RETENTION_COUNT.
- * See docs/runbooks/OPS-002-backup-restore-operations.md for the full
- * list and how to run this manually.
- *
- * Usage: node backend/scripts/backup/mongoBackup.js
- * Exit code: 0 on success, 1 on any failure.
- */
+// Md). js. js.
 "use strict";
 
 const fs = require("fs");
@@ -40,19 +14,7 @@ const { newManifestId } = require("./manifest");
 const { planRetention, retentionCountFromEnv } = require("./retention");
 const { spawnProcess } = require("./processRunner");
 
-// mongodump's `--collection` flag accepts exactly one collection per
-// invocation. The alternative that avoids a loop, `--nsInclude` with a
-// glob, requires listing every included namespace anyway to stay scoped
-// to just the 7 authoritative collections (a bare `--nsInclude
-// "<db>.*"` would defeat ADR-0002's whole point and dump every
-// collection, including the explicitly-disposable ones) -- so the
-// argument count ends up the same either way. A loop of single-
-// collection invocations was chosen because it is simpler to reason
-// about and unit-test one collection's argv at a time (see
-// buildMongodumpArgs below), and because a single collection's dump
-// failing (e.g. a transient error partway through) is easy to log and
-// retry per-collection, and doesn't hide underneath a partially-applied
-// whole-database dump.
+// Mongodump's `--collection` flag accepts exactly one collection per invocation.
 function buildMongodumpArgs({ configPath, dbName, collection, outDir }) {
   return ["--config", configPath, "--db", dbName, "--collection", collection, "--out", outDir];
 }
@@ -66,11 +28,7 @@ async function dumpAllCollections({ mongoConn, dbName, dumpDir }) {
   });
 }
 
-// Counts documents directly via the MongoDB driver (not by parsing
-// mongodump's own stdout/stderr) so the manifest's expected counts are
-// an independent source of truth mongoRestore.js can verify against --
-// trusting mongodump's own log output would mean the backup and its own
-// verification share the same potential blind spot.
+// Js can verify against -- trusting mongodump's own log output would mean the backup and its own verification share the same potential blind spot.
 async function countAuthoritativeDocuments(mongoConn) {
   const client = new MongoClient(mongoConn);
   try {

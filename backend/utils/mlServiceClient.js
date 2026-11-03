@@ -14,10 +14,7 @@ function buildMlServiceUrl(path) {
   return `${base.replace(/\/+$/, "")}${path}`;
 }
 
-// Returns the header object to spread into an axios request config's
-// headers. `requestId` (OBS-001-T02) is optional and forwarded only when it
-// matches the same safe shape enforced by backend/Middlewares/requestId.js,
-// so the ML service can correlate its own logs with the originating request.
+// Returns the header object to spread into an axios request config's headers.
 function mlOperationsHeaders(requestId) {
   const headers = {};
 
@@ -34,18 +31,7 @@ function mlOperationsHeaders(requestId) {
   return headers;
 }
 
-// OBS-001-T05 -- ML service metrics.
-//
-// Wrapping the CALL rather than instrumenting each call site is deliberate:
-// there are three ML call sites today (predict-category, generate-description,
-// retrain-model) and a fourth added later would silently go unmeasured if
-// each had to remember. The ML service degrading -- slower predictions, more
-// timeouts after a retrain -- is invisible to HTTP request metrics, because
-// every one of these calls is wrapped in a try/catch that falls back
-// gracefully and still returns 200 to the user.
-//
-// Records only the endpoint path, outcome and duration. No expense text, no
-// prediction, no operations token.
+// ML service metrics. Wrapping the CALL rather than instrumenting each call site is deliberate: there are three ML call sites today (predict-c.
 const { recordOperation } = require("./metrics");
 
 async function callMlService(operation, request) {

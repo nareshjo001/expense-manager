@@ -1,9 +1,4 @@
-// SIA-001-T06 -- three thin, authenticated handlers over sia/siaPreferenceService.js
-// and sia/sessionService.js's deleteAllSessions: read the caller's own
-// SIA enable/disable state, change it, and delete the caller's own SIA
-// conversation history independent of full account deletion. Every
-// handler uses req.userId (set only by verifyToken, before these run) as
-// the sole identity -- matching sessions.js's own convention exactly.
+// Js's deleteAllSessions: read the caller's own SIA enable/disable state, change it, and delete the caller's own SIA conversation history independent of full account deletion.
 "use strict";
 
 const siaPreferenceService = require("../../sia/siaPreferenceService");
@@ -43,11 +38,7 @@ const updateSiaPreference = async (req, res) => {
   }
 };
 
-// Deletes only conversation history (SiaSession + SiaMessage) -- never the
-// enable/disable preference itself, and never touches any other data.
-// Fails closed, same as every session-store-dependent path in ask.js,
-// when the coordination store isn't reachable -- a partial delete across
-// two collections without a healthy store is worse than refusing outright.
+// Deletes only conversation history (SiaSession + SiaMessage) -- never the enable/disable preference itself, and never touches any other data.
 const deleteSiaHistory = async (req, res) => {
   try {
     if (!isSessionStoreAvailable()) {

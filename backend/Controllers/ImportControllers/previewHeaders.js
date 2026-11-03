@@ -1,10 +1,6 @@
 "use strict";
 
-// IMP-001-T03/T04 -- intended route: POST /api/imports/headers
-// (verifyToken, multipart upload, field name "file", multer memory
-// storage -- see Middlewares/importUpload.js). Lets the frontend show the
-// user's own CSV columns and a best-effort suggested mapping BEFORE any
-// ImportSession is created.
+// Js). Lets the frontend show the user's own CSV columns and a best-effort suggested mapping BEFORE any ImportSession is created.
 const {
   previewImportHeaders,
   ERROR_CODES,

@@ -1,41 +1,6 @@
 "use strict";
 
-// OCR-006-T02 -- measure the traditional (non-AI) OCR ceiling.
-//
-// Answers one question for the OCR-006 evidence gate: of the receipts the
-// current pipeline gets wrong, how many could a better NON-AI pipeline
-// plausibly fix, and how many are recognition failures that only a stronger
-// recognizer (e.g. a vision model) might fix?
-//
-// Three measurements, all on the committed corpus, all local:
-//   (a) current   -- the real pipeline's field accuracy (same numbers as
-//                    `npm run eval:ocr`, re-derived from the cached raw OCR
-//                    output buildFailureCorpus.js writes).
-//   (b) extraction ceiling -- accuracy if the extractor were perfect given
-//                    the SAME raw OCR text: a field counts if it already
-//                    matches OR its correct value is present in the raw
-//                    text (buildFailureCorpus.js's matching rules). An
-//                    UPPER bound: "present" does not mean an extractor
-//                    could have known which occurrence was the answer.
-//   (c) recognition-side ceiling -- the same images through cheap
-//                    traditional preprocessing (sharp: grayscale, contrast
-//                    normalisation, 2x upscale, CLAHE, Otsu binarisation)
-//                    crossed with Tesseract page-segmentation modes. Reports
-//                    both the best SINGLE fixed configuration (what could
-//                    actually ship -- though choosing it on these same 21
-//                    receipts makes it optimistic) and the per-field
-//                    best-of-all-configurations "oracle" (which needs the
-//                    answer to pick the variant, so it is an upper bound,
-//                    not a deployable pipeline).
-//
-// No image or text leaves the machine: OCR is local tesseract.js with the
-// language data already on disk; nothing is installed or downloaded.
-//
-// Usage (from backend/; the variant sweep is ~500 OCR passes, so it is
-// resumable -- each invocation works for at most --budget seconds, caches
-// progress in results/ocr-variants-cache.json, and writes the report once
-// every configuration is done):
-//   node scripts/ocrEvaluation/measureOcrCeiling.js [--budget=150] [--no-variants]
+// Measure the traditional (non-AI) OCR ceiling. g.
 
 const fs = require("fs");
 const path = require("path");
@@ -54,19 +19,13 @@ const {
 const VARIANT_CACHE_PATH = path.join(RESULTS_DIR, "ocr-variants-cache.json");
 const CEILING_PATH = path.join(RESULTS_DIR, "ocr-ceiling.json");
 
-// Tesseract page segmentation modes tried. tesseract.js initialises its
-// worker with PSM 6 (SINGLE_BLOCK), not Tesseract's CLI default of 3
-// (AUTO) -- so 6 is what the production pipeline (ocrService.js, which sets
-// no PSM) actually runs; the sweep's original/psm6 pass reproduces the
-// production text exactly, which the report checks.
+// Tesseract page segmentation modes tried.
 const PSM_MODES = ["3", "4", "6", "11"];
 const PRODUCTION_PSM = "6";
 const MAX_UPSCALED_SIDE = 3000;
 const PASS_TIMEOUT_MS = 30_000;
 
-// ---------------------------------------------------------------------------
-// Pure helpers
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Pure helpers ---------------------------------------------------------------------------.
 
 // Same normalisation as ocrService.normalizeLayout (not exported there):
 // collapse horizontal whitespace per line, drop blank lines, keep breaks.
@@ -158,22 +117,14 @@ const classifyRecovery = ({ baselinePresent, variantExtractedBy, variantPresentI
   return "not-recovered";
 };
 
-// ---------------------------------------------------------------------------
-// OCR + preprocessing (not unit-tested; real Tesseract + sharp)
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- OCR + preprocessing (not unit-tested; real Tesseract + sharp) ---------------------------------------------------------------------------.
 
 const upscaled = (sharp, buf, meta) =>
   sharp(buf)
     .grayscale()
     .resize(Math.round(meta.width * upscaleFactor(meta.width, meta.height)), null, { kernel: "lanczos3" });
 
-// `production-preprocess` is the preprocessing the real upload paths
-// (receiptIngestService.js, billController.js) apply before OCR --
-// imageProcessor.preprocessImage(): EXIF rotate, fit inside 1500px without
-// enlarging, grayscale, normalise, sharpen. runEvaluation.js (and so the
-// 15/21 baseline and T01's failure corpus) feeds Tesseract the ORIGINAL
-// image instead, so this variant is what shows the gap between the harness
-// and production.
+// PreprocessImage(): EXIF rotate, fit inside 1500px without enlarging, grayscale, normalise, sharpen.
 const VARIANTS = {
   original: async (buf) => buf,
   "production-preprocess": async (buf) =>
@@ -240,10 +191,7 @@ const runVariantSweep = async (entries, budgetMs) => {
           return false;
         }
         const image = await prepare(variant, entry);
-        // Same per-attempt budget production uses (ocrService's default
-        // OCR_TIMEOUT_MS): a configuration that needs longer than that on
-        // a receipt would time out for a real user too, so it is recorded
-        // as a timeout (empty text) rather than waited on.
+        // Same per-attempt budget production uses (ocrService's default OCR_TIMEOUT_MS): a configuration that needs longer than that on a receipt would time out for a real user too, so it is recorded as a timeout (empty text) rather than waited on.
         let timer;
         const timeout = new Promise((resolve) => {
           timer = setTimeout(() => resolve(null), PASS_TIMEOUT_MS);
@@ -274,9 +222,7 @@ const runVariantSweep = async (entries, budgetMs) => {
   return true;
 };
 
-// ---------------------------------------------------------------------------
-// Report
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Report ---------------------------------------------------------------------------.
 
 const argValue = (name, fallback) => {
   const arg = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -296,9 +242,7 @@ const rankConfigs = (configs) =>
     );
 
 const buildRecognitionCeiling = ({ entries, cache, baseById, baseEvals, currentScores, parseReceipt }) => {
-  // Sanity check: does the sweep's own original/psm6 pass (production's
-  // effective settings) reproduce the production pipeline's text? If not,
-  // variant numbers are not directly comparable to (a).
+  // Sanity check: does the sweep's own original/psm6 pass (production's effective settings) reproduce the production pipeline's text?
   const reproduced = entries.filter(
     (e) => cache.results[cacheKey("original", PRODUCTION_PSM, e.id)].text === baseById.get(e.id).text
   ).length;

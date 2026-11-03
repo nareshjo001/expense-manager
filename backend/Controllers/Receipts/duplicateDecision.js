@@ -1,10 +1,6 @@
 "use strict";
 
-// OCR-005-T04 -- POST /api/receipts/:id/duplicate-decision. Body:
-// { decision, duplicateOfReceiptId? }. Thin wrapper around
-// duplicateCandidateService.recordDuplicateDecision, which enforces
-// ownership on both the target receipt and (for "linked_existing")
-// duplicateOfReceiptId.
+// POST /api/receipts/:id/duplicate-decision. Body: { decision, duplicateOfReceiptId?
 const mongoose = require("mongoose");
 const {
   recordDuplicateDecision,
@@ -36,15 +32,7 @@ const recordDuplicateDecisionController = async (req, res) => {
       decision,
       duplicateOfReceiptId,
     });
-    // OCR-005-T06 -- fire-and-log observability event for override-rate
-    // measurement. matchedReasonCode is null here: this endpoint only
-    // receives {decision, duplicateOfReceiptId} in the request body, not
-    // which reasonCode the candidate list (a separate prior GET) showed
-    // for this particular choice, and re-deriving it would mean an extra
-    // findDuplicateCandidates() query on every decision plus guessing
-    // which of possibly-several shown candidates the user meant -- not
-    // worth an ugly refactor of this endpoint's contract for. See this
-    // task's report for the full reasoning.
+    // Fire-and-log observability event for override-rate measurement.
     emitDuplicateDecisionEvent({ req, receiptId: id, decision, matchedReasonCode: null });
     return res.status(200).json({ message: "Duplicate decision recorded", success: true, data });
   } catch (err) {

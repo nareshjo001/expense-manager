@@ -1,25 +1,6 @@
 "use strict";
 
-// REC-002-T01 -- backfills the lifecycle-state fields added to
-// models/RecurringExpense.js (status, recurrenceFrequency, scheduleVersion,
-// pausedAt, resumedAt, endedAt, endDate) onto every existing recurring
-// definition that predates them.
-//
-// Purely additive, and deliberately conservative about what "backfilled"
-// means: every existing definition was, before this migration, treated as
-// unconditionally active by cron/recurringJob.js and
-// Services/RecurringServices/upcomingProjection.js (see both files' own
-// REC-002 comments) -- so the only correct backfilled value for `status` is
-// 'active'. Nothing before this migration ever recorded pause/resume/end
-// activity, so those timestamp fields backfill to null (never happened) and
-// `endDate` backfills to null (no end was ever configured).
-//
-// The real collection name is "recurringexpenses", NOT "recurringExpenses"
-// -- see the DAT-002-T06 correction comment in
-// 20260903-backfill-money-minor-fields.js for why (Mongoose's default
-// pluralize/lowercase on mongoose.model('recurringExpenses', ...)). Copied
-// directly from that already-corrected constant rather than re-typed, so
-// this migration cannot reintroduce the same mistake.
+// Js (status, recurrenceFrequency, scheduleVersion, pausedAt, resumedAt, endedAt, endDate) onto every existing recurring definition that predates them.
 const COLLECTION = "recurringexpenses";
 
 const BATCH_SIZE = 500;
@@ -27,9 +8,7 @@ const BATCH_SIZE = 500;
 async function backfillLifecycleFields({ db, logger, dryRun }) {
   const coll = db.collection(COLLECTION);
 
-  // Any document missing `status` predates this migration -- and predating
-  // it means none of the other new fields exist on it either (they were all
-  // added together), so one filter covers the whole backfill.
+  // Any document missing `status` predates this migration -- and predating it means none of the other new fields exist on it either (they were all added together), so one filter covers the whole backfill.
   const cursor = coll.find(
     { status: { $exists: false } },
     { projection: { _id: 1 } }

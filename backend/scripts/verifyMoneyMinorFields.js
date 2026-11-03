@@ -1,25 +1,4 @@
-/* verifyMoneyMinorFields.js -- DAT-001-T05
- *
- * Dual-read verification for the rollout ADR-0003 (DAT-001) is midway
- * through: for every document that has BOTH a legacy money field and its
- * *Minor shadow field (backfilled by the
- * 20260903-backfill-money-minor-fields migration, DAT-001-T04), recomputes
- * the shadow value from the legacy value with the same toMinorUnits()
- * rule the application itself uses (DAT-001-T03), and reports any
- * disagreement.
- *
- * This is READ-ONLY -- it never writes to the database. It is the
- * evidence DAT-001-T06 needs before switching any API/frontend path over
- * to the *Minor fields, and the evidence DAT-001-T07 needs before the
- * legacy fields can ever be removed. A clean run (0 mismatches, 0
- * missing) is not itself sufficient to green-light T06/T07 on its own --
- * it should be run repeatedly across a real rollout window (new writes
- * keep landing the whole time), not just once.
- *
- * Usage: node backend/scripts/verifyMoneyMinorFields.js
- * Exit code: 0 if every checked document matched and none were missing
- * its shadow field; 1 otherwise (so this can gate a CI/deploy step).
- */
+// Js -- DAT-001-T05 Dual-read verification for the rollout ADR-0003 (DAT-001) is midway through: for every document that has BOTH a legacy money field and its *Minor shadow field (backfilled by the 20260903-backfill-money-minor-fields migration, DAT-001-T04), recomputes the shadow value from the legacy value with the same toMinorUnits() rule the application itself uses (DAT-001-T03), and reports any disagreement.
 "use strict";
 
 require("dotenv").config();
@@ -27,13 +6,7 @@ const mongoose = require("mongoose");
 const connectDB = require("../config/db");
 const { toMinorUnits } = require("../utils/money");
 
-// Real MongoDB collection names, not the Mongoose model names: the
-// 'budget' and 'recurringExpenses' models resolve to "budgets" and
-// "recurringexpenses" (Mongoose pluralizes/lowercases; no schema sets an
-// explicit `collection`). The literal model names previously used here
-// matched a nonexistent collection and silently processed zero documents
-// -- found by running the migrations against a restored copy of production
-// (DAT-003-T07). Same correction as 20260903-backfill-money-minor-fields.js.
+// Real MongoDB collection names, not the Mongoose model names: the 'budget' and 'recurringExpenses' models resolve to "budgets" and "recurringexpenses" (Mongoose pluralizes/lowercases; no schema sets an explicit `collection`).
 const FIELD_MAP = [
   { collection: "expenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
   { collection: "incomes", legacyField: "incomeAmount", minorField: "incomeAmountMinor" },
@@ -44,11 +17,7 @@ const FIELD_MAP = [
 
 const MISMATCH_SAMPLE_LIMIT = 20;
 
-// Compares every document that has both fields set, recomputing the
-// expected minor value from the legacy value rather than trusting
-// whatever the shadow field says. Also separately counts documents that
-// have the legacy value but no shadow field yet (the backfill migration
-// hasn't reached them, or a write path hasn't started dual-writing).
+// Compares every document that has both fields set, recomputing the expected minor value from the legacy value rather than trusting whatever the shadow field says.
 async function verifyCollectionField({ db, collection, legacyField, minorField }) {
   const coll = db.collection(collection);
   const cursor = coll.find(

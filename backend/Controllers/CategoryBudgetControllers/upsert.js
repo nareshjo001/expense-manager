@@ -1,8 +1,6 @@
 "use strict";
 
-// BUD-001-T03 -- PUT /api/category-budgets { month, category, amount }.
-// Create-or-update keyed on (userId, month, category) (I12). userId comes
-// only from the verified token; a body userId is never read (I13).
+// PUT /api/category-budgets { month, category, amount }. Create-or-update keyed on (userId, month, category) (I12).
 const { UserModel } = require("../../config/Schemas");
 const { upsertCategoryBudget } = require("../../Services/BudgetServices/categoryBudget.service");
 const { sendSuccess, sendRejection, sendUserMissing, sendServerError } = require("./respond");

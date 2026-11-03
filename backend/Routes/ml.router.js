@@ -32,16 +32,10 @@ router.post("/predict-category", verifyToken, async (req, res) => {
             });
         }
 
-        // CAT-001 -- a durable, user-saved rule for this exact merchant
-        // always wins: it skips the ML inference call entirely (avoiding
-        // its cost) and can never repeat a mistake the ML model made for
-        // this same merchant before, since it's applied deterministically.
+        // A durable, user-saved rule for this exact merchant always wins: it skips the ML inference call entirely (avoiding its cost) and can never repeat a mistake the ML model made for this same merchant before, since it's applied deterministically.
         const rule = await findRuleForMerchant(req.userId, expenseName);
         if (rule) {
-            // ML-003-T03 -- a saved rule is never uncertain: it's a durable,
-            // user-authored mapping, not a model guess, so it's never abstained.
-            // Present here (rather than left absent) so callers can rely on
-            // both fields always existing regardless of source.
+            // A saved rule is never uncertain: it's a durable, user-authored mapping, not a model guess, so it's never abstained.
             return res.status(200).json({
                 success: true,
                 predictedCategory: rule.category,

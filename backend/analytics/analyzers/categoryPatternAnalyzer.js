@@ -4,40 +4,19 @@ const { groupByCategoryHelper } = require("../../Services/HelperServices/getexpe
 // backend/utils/money.js, instead of an independently redefined helper.
 const { roundMoney: round2 } = require("../../utils/money");
 
-// ANL-001-T03 -- CategoryPatternSignal, per the ANL-001-T02 contract.
-//
-// This is a deliberate, documented backend-native REINTERPRETATION of the
-// legacy frontend rule (frontend/src/insights-engine/rules/categoryPatterns.js),
-// not a byte-for-byte port. The original frontend algorithm keys its
-// Habit/Spike classification off a 3-month rolling category history that
-// this backend analytics pipeline does not have readily available at this
-// call site (only the current month's categoryAnalyzer report -- which is
-// itself only a single-period-over-previous-period comparison -- and the
-// yearly categoryAnalyzer report are in scope for T03). The rules below
-// are therefore a fresh, contract-conformant definition built entirely
-// from what monthlyCategoryReport/yearlyCategoryReport/currentMonthExpenses
-// already expose, not an attempt to reproduce the old frontend math.
-// This is intentional per the ANL-001-T02 contract, not a bug.
+// CategoryPatternSignal, per the ANL-001-T02 contract. js), not a byte-for-byte port.
 
 const toSafeNumber = (value, fallback = 0) => {
-  // Number() throws (rather than returning NaN) for an object with no
-  // usable valueOf/toString -- e.g. Object.create(null) -- so this can't
-  // rely on Number.isFinite alone to catch every malformed shape.
+  // G. isFinite alone to catch every malformed shape.
   if (typeof value !== "number" && typeof value !== "string") return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
 
-// Rounds a plain 0-1 ratio (yearlyStability, yearlyConcentration) to 4
-// decimal places. Deliberately NOT roundMoney/round2 -- those round to
-// rupee-paise (2 decimal) precision, which is the wrong granularity for a
-// unitless 0-1 signal the contract specifies to 4 decimals.
+// Rounds a plain 0-1 ratio (yearlyStability, yearlyConcentration) to 4 decimal places.
 const round4 = (value) => Math.round(value * 10000) / 10000;
 
-// Classifies the monthly report's dominant category as a steady "Habit" or
-// a one-off "Spike": a >=50% month-over-month jump landing on the very
-// category that is currently dominant reads as a spike; a dominant
-// category with no such outsized jump reads as a recurring habit.
+// Classifies the monthly report's dominant category as a steady "Habit" or a one-off "Spike": a >=50% month-over-month jump landing on the very category that is currently dominant reads as a spike; a dominant category with no such outsized jump reads as a recurring habit.
 const classifyDominantCategory = (monthlyCategoryReport = {}, dominantCategory = null) => {
   if (!dominantCategory) return null;
 
@@ -51,20 +30,9 @@ const classifyDominantCategory = (monthlyCategoryReport = {}, dominantCategory =
   return isSpike ? "Spike" : "Habit";
 };
 
-// Groups the current month's expenses by category and flags categories
-// whose transactions skew heavily toward many small ("micro") purchases --
-// a transaction counts as micro when it's under 10% of its own category's
-// average transaction amount. Categories with fewer than 2 transactions
-// are skipped entirely (no meaningful average to compare against), and a
-// category is only reported when it has 3+ micro transactions.
+// Groups the current month's expenses by category and flags categories whose transactions skew heavily toward many small ("micro") purchases -- a transaction counts as micro when it's under 10% of its own category's average transaction amount.
 const detectMicroTransactions = (currentMonthExpenses = []) => {
-  // Malformed entries (null/undefined/non-object) can reach this analyzer
-  // directly -- unlike categoryAnalyzer's own totals, which only ever see
-  // currentMonthExpenses through this same helper, this is a second,
-  // independent call site, so it needs its own guard rather than assuming
-  // upstream already filtered. groupByCategoryHelper itself reads
-  // exp.expenseCategory unconditionally and is shared with other call
-  // sites, so the filter belongs here rather than in that shared helper.
+  // Malformed entries (null/undefined/non-object) can reach this analyzer directly -- unlike categoryAnalyzer's own totals, which only ever see currentMonthExpenses through this same helper, this is a second, independent call site, so it needs its own guard rather than assuming upstream already filtered.
   const safeExpenses = (Array.isArray(currentMonthExpenses) ? currentMonthExpenses : []).filter(
     (expense) => expense !== null && typeof expense === "object"
   );
@@ -91,9 +59,7 @@ const detectMicroTransactions = (currentMonthExpenses = []) => {
   }, []);
 };
 
-// Measures how stable the category mix has been year over year: the mean
-// absolute growth percentage across existing (non-new) categories, folded
-// into a 0-1 score where higher means more stable (less average swing).
+// Measures how stable the category mix has been year over year: the mean absolute growth percentage across existing (non-new) categories, folded into a 0-1 score where higher means more stable (less average swing).
 const calculateYearlyStability = (yearlyCategoryReport = {}) => {
   if (!yearlyCategoryReport?.hasData) return null;
 

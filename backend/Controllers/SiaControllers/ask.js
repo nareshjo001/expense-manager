@@ -66,14 +66,7 @@ async function safeLoadRecentTurns(sessionId, userId) {
   }
 }
 
-// SIA-001-T06 -- the enforcement point for a user's own SIA enable/disable
-// choice. Fails OPEN (returns true) on any lookup error -- this checks ONE
-// user's own opt-out choice, not deployment-level availability (isSiaReady()
-// already covers that, above, and always runs first); a transient DB hiccup
-// while reading it must not block /sia/ask for every user who never touched
-// the toggle, which is the overwhelming majority since this is opt-OUT, not
-// opt-in. Matches every other safe* helper in this file's own
-// fail-safely-rather-than-break-the-answer posture.
+// The enforcement point for a user's own SIA enable/disable choice.
 async function safeIsSiaEnabledForUser(userId) {
   try {
     return await siaPreferenceService.isEnabledForUser(userId);
@@ -750,10 +743,7 @@ const ask = async (req, res) => {
     return res.status(503).json(UNAVAILABLE_RESPONSE);
   }
 
-  // SIA-001-T06 -- a user who has explicitly turned SIA off never reaches
-  // validation, classification, context building, or a provider call.
-  // Scoped to this route only -- voice transcription and the monthly AI
-  // summary each have their own independent readiness/opt-in gates.
+  // A user who has explicitly turned SIA off never reaches validation, classification, context building, or a provider call.
   const siaEnabledForUser = await safeIsSiaEnabledForUser(req.userId);
   if (!siaEnabledForUser) {
     const { status, body } = responseFor(CATEGORY.SIA_DISABLED_BY_USER);
@@ -879,13 +869,7 @@ const ask = async (req, res) => {
     trimmedQuestion,
   });
 
-  // OPS-001-T06 -- a ~110-line legacy intent-specific block used to sit
-  // here, after the unconditional return above. It was unreachable, and
-  // it referenced an `intent` binding that does not exist in this scope,
-  // so it could only ever have thrown a ReferenceError had it run. The
-  // backend lint gate (no-unreachable + no-undef) surfaced it; removed
-  // rather than suppressed, since suppressing it would have preserved
-  // provably broken code. The live path is handleDirectAnswer above.
+  // A ~110-line legacy intent-specific block used to sit here, after the unconditional return above.
 };
 
 module.exports = {

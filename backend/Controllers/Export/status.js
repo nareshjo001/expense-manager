@@ -1,11 +1,6 @@
 "use strict";
 
-// DAT-004-T04 -- GET /api/export/:id/status. Thin wrapper around
-// exportRequestService.getExportRequestStatus, which scopes the lookup to
-// BOTH the request id AND req.userId -- so polling another user's id
-// here always 404s, the same "not found" the caller gets for an id that
-// does not exist at all (see that service function's own comment: it
-// deliberately never distinguishes the two).
+// GET /api/export/:id/status.
 const mongoose = require("mongoose");
 const { getExportRequestStatus, ERROR_CODES } = require("../../Services/ExportServices/exportRequestService");
 

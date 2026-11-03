@@ -1,61 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// DAT-001-T07 -- the removal itself.
-//
-// This is the last engineering piece of T07. Running it is not: that needs a
-// soak and a reconciliation this repository cannot produce (see the "what
-// still has to happen" note at the bottom of this comment).
-//
-// WHY THIS IS NOT A MIGRATION, DESPITE ADR-0006
-//
-// Every other schema change in this project is a file under
-// migrations/scripts/, applied automatically by migrations/run.js. This one
-// deliberately is not, and the reason is mechanical rather than stylistic:
-// run.js applies every pending migration, and a deploy pipeline calls it.
-// A destructive, irreversible operation sitting in that sequence would be
-// attempted on every deploy, and it would be attempted BY DEFAULT rather
-// than by decision.
-//
-// It would also break the pipeline it sits in. The gate below refuses until
-// its preconditions hold, refusal throws, and a throwing migration fails the
-// whole run -- so adding this as a migration would block DAT-003-T07's
-// staging apply, and every subsequent deploy's migration step, until the day
-// the soak finished. The correct sequencing for "apply automatically" and
-// "delete the only copy of every amount in the database" is not the same
-// sequencing, and pretending otherwise is how the second one happens by
-// accident.
-//
-// So: a separate, deliberately-invoked script. It still records itself in
-// the migration ledger when it succeeds, so the audit trail is in the same
-// place as everything else and a second run is a no-op rather than a
-// re-attempt.
-//
-// WHAT IT DOES
-//
-// Removes the legacy float money fields -- expenseAmount, incomeAmount,
-// budget, spent -- now that ADR-0003's integer `*Minor` fields are
-// authoritative. Per document, and only where that document's own minor
-// value exists and agrees with what the legacy value converts to. The gate
-// already proved that globally; this checks it again per document, because
-// the gate's reconciliation ran at a point in time and a write could have
-// landed since. A document that fails the per-document check is SKIPPED and
-// counted, never stripped.
-//
-// WHAT STILL HAS TO HAPPEN BEFORE THIS CAN RUN
-//
-// All of it is in migrations/legacyMoneyRemovalGate.js, which this calls
-// first and which refuses unless every condition holds. In practice:
-// backups running against the target environment, the backfill applied
-// there, dual-write on, a recorded soak of at least 14 days (31 is the real
-// bar -- recurringJob.js writes monthly), reconciliation clean across that
-// window, and an explicit LEGACY_MONEY_REMOVAL_CONFIRMED=true.
-//
-// Usage:
-//   node backend/scripts/removeLegacyMoneyFields.js --dry-run   # always do this first
-//   node backend/scripts/removeLegacyMoneyFields.js
-//
-// Exit code: 0 on success (or a clean dry run), 1 on refusal or failure.
+// The removal itself. This is the last engineering piece of T07.
 require("dotenv").config();
 const mongoose = require("mongoose");
 const connectDB = require("../config/db");
@@ -71,18 +17,7 @@ const ledger = require("../migrations/ledger");
 // migrations in the same audit trail and cannot be silently run twice.
 const OPERATION_ID = "20260910-remove-legacy-money-fields";
 
-// Identical to the backfill's map (DAT-001-T04) and the reconciliation
-// script's (DAT-001-T05). Kept as its own copy rather than imported from
-// either, because this file must remove exactly the fields those two
-// populated and verified -- if that set ever diverges, this file's copy is
-// the one a reviewer should be forced to look at.
-// Real MongoDB collection names, not the Mongoose model names: the
-// 'budget' and 'recurringExpenses' models resolve to "budgets" and
-// "recurringexpenses" (Mongoose pluralizes/lowercases; no schema sets an
-// explicit `collection`). The literal model names previously used here
-// matched a nonexistent collection and silently processed zero documents
-// -- found by running the migrations against a restored copy of production
-// (DAT-003-T07). Same correction as 20260903-backfill-money-minor-fields.js.
+// Identical to the backfill's map (DAT-001-T04) and the reconciliation script's (DAT-001-T05).
 const FIELD_MAP = [
   { collection: "expenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
   { collection: "incomes", legacyField: "incomeAmount", minorField: "incomeAmountMinor" },
@@ -94,11 +29,6 @@ const FIELD_MAP = [
 const BATCH_SIZE = 500;
 
 // Removes one legacy field from one collection.
-//
-// The filter deliberately requires the minor field to EXIST before a
-// document is even considered. A document with a legacy value and no minor
-// value is exactly the case that must not be touched, and excluding it in
-// the query rather than in a later branch means no code path can strip it.
 async function removeOne({ db, collection, legacyField, minorField, dryRun }) {
   const coll = db.collection(collection);
   const cursor = coll.find(
@@ -124,11 +54,7 @@ async function removeOne({ db, collection, legacyField, minorField, dryRun }) {
     const legacyValue = doc[legacyField];
     const storedMinor = doc[minorField];
 
-    // Re-verify per document. The gate's reconciliation was a point-in-time
-    // check; a write could have landed between it and this loop. Skipping a
-    // disagreement is always right here -- the legacy value is the one thing
-    // that could still resolve the disagreement, so removing it would
-    // destroy the evidence needed to fix it.
+    // Re-verify per document. The gate's reconciliation was a point-in-time check; a write could have landed between it and this loop.
     const expected =
       typeof legacyValue === "number" && Number.isFinite(legacyValue) ? toMinorUnits(legacyValue) : null;
 
@@ -149,10 +75,7 @@ async function removeOne({ db, collection, legacyField, minorField, dryRun }) {
   }
   await flush();
 
-  // Documents with a legacy value and NO minor value never entered the
-  // cursor. Counted separately so a non-zero value here is loud: it means
-  // the backfill did not reach them and the gate's clean reconciliation was
-  // measured against a different population than this operation sees.
+  // Documents with a legacy value and NO minor value never entered the cursor.
   const missingMinor = await coll.countDocuments({
     [legacyField]: { $exists: true },
     [minorField]: { $exists: false },
@@ -167,10 +90,7 @@ async function main() {
   await connectDB();
   const db = mongoose.connection.db;
 
-  // Refuses unless every precondition provably holds, listing all failures
-  // at once. A dry run is gated too: there is no reason to rehearse an
-  // operation that is not allowed to happen, and letting a dry run through
-  // would produce a reassuring report for a state that must not proceed.
+  // Refuses unless every precondition provably holds, listing all failures at once.
   let gate;
   try {
     gate = await assertLegacyMoneyRemovalSafe({ db });
@@ -210,10 +130,7 @@ async function main() {
 
   const unsafe = totals.skippedMismatch > 0 || totals.missingMinor > 0;
   if (unsafe) {
-    // Not recorded as applied, so a later run retries rather than believing
-    // the job is finished. The removal that DID happen is not rolled back --
-    // it cannot be -- but every document this could not verify still has its
-    // legacy value.
+    // Not recorded as applied, so a later run retries rather than believing the job is finished.
     logEvent({
       level: "error",
       scope: "dat-001-t07",

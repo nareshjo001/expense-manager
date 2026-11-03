@@ -1,39 +1,4 @@
-"""
-Thin CLI subprocess wrapper around model_validation.run_all_gates.
-
-Invoked by training/retrain_pipeline.py as its own separate subprocess
-(distinct from trainer.py's), specifically so the orchestrator (app.py's
-background_retrain, via retrain_pipeline.run_retraining) gets a natural
-heartbeat boundary "after training/bundle write" and another "after
-validation" -- rather than folding validation into trainer.py's own
-process, which would collapse those two heartbeat points into one.
-
-Contract:
-  Required args: --model-version, --dataset-hash, --row-counts-json,
-                  --result-path
-  Optional args: --previous-accuracy (float, omitted/absent means None --
-                  no baseline), --previous-categories-json (JSON array,
-                  omitted/absent means None), --max-regression (float,
-                  defaults to ML_MAX_ACCURACY_REGRESSION env var, itself
-                  defaulting to 0.05 -- NEVER hardcoded silently; see
-                  _resolve_max_regression below)
-
-  Writes a structured JSON result to --result-path:
-    {
-      "success": bool,          # true iff run_all_gates' overall_passed
-      "gates": [ ... 9 entries ... ],
-      "error": str or null      # only set on an unexpected exception,
-                                 # distinct from an ordinary gate failure
-    }
-
-  Exit code 0 whenever the result file was written successfully
-  (regardless of whether validation itself passed or failed) -- the
-  caller (retrain_pipeline.py) determines pass/fail by reading
-  result["success"], not by the process exit code. Exit code 1 only if
-  something went wrong before a result file could even be written (e.g.
-  bad arguments), so the caller can distinguish "validation ran and
-  failed" from "validation could not run at all".
-"""
+"""Run_all_gates. py's own process, which would collapse those two heartbeat points into one."""
 
 import os
 import sys
@@ -44,12 +9,7 @@ import model_validation
 
 
 def _resolve_max_regression(cli_value):
-    """
-    ML_MAX_ACCURACY_REGRESSION must be configurable, never hardcoded.
-    Precedence: explicit --max-regression CLI arg > ML_MAX_ACCURACY_REGRESSION
-    env var > a documented default of 0.05 (5 percentage points) used only
-    if neither is provided.
-    """
+    """ML_MAX_ACCURACY_REGRESSION must be configurable, never hardcoded."""
     if cli_value is not None:
         return float(cli_value)
 

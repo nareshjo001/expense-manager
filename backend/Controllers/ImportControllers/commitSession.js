@@ -1,12 +1,6 @@
 "use strict";
 
-// IMP-001-T06 -- POST /api/imports/sessions/:id/commit. Thin HTTP wrapper
-// around importCommitService.commitImportSession, which is
-// ownership-scoped to req.userId (set by the verifyToken middleware, same
-// convention Controllers/Receipts/duplicates.js already uses). All the
-// actual commit/idempotency/concurrency logic lives in the service; this
-// controller only maps its ERROR_CODES to HTTP status codes and shapes
-// the JSON envelope.
+// POST /api/imports/sessions/:id/commit. js already uses).
 const mongoose = require("mongoose");
 const {
   commitImportSession,

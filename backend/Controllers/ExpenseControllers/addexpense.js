@@ -35,9 +35,7 @@ const INVALID_WAS_ML_CORRECTED_RESPONSE = {
   errorCode: 'INVALID_WAS_ML_CORRECTED',
 };
 
-// ML-003-T05 -- same optional-boolean contract as wasMlCorrected above,
-// for the abstained flag AddExpense.js now sends alongside a submission
-// (ML-003-T04's suggestion banner). Absent entirely on a legacy client.
+// Js now sends alongside a submission (ML-003-T04's suggestion banner).
 const INVALID_ML_ABSTAINED_RESPONSE = {
   success: false,
   message: 'mlAbstained must be a boolean value.',
@@ -101,11 +99,7 @@ const deriveMlCorrection = (mlPredictedCategory, normalizedExpenseCategory) => {
   return { hasPrediction: true, corrected: predicted !== normalizedExpenseCategory };
 };
 
-// ML-003-T05 -- server-derived outcome label for a shown prediction, from
-// `abstained` x `corrected` (see the `outcome` field's own doc-comment in
-// backend/config/Schemas.js's MlFeedbackSchema for the full 2x2 rationale).
-// Only meaningful when a prediction actually existed -- callers must gate
-// on deriveMlCorrection's hasPrediction the same way `corrected` already is.
+// Js's MlFeedbackSchema for the full 2x2 rationale).
 const deriveMlOutcome = (abstained, corrected) => {
   if (abstained) {
     return corrected ? 'abstained' : 'viewed';
@@ -145,10 +139,7 @@ const addExpense = async (req, res) => {
     }
     const normalizedWasMlCorrected = wasMlCorrectedResult.value;
 
-    // ML-003-T05 -- normalize the optional `mlAbstained` boolean the same
-    // way, and default a legacy/absent value to false: a client that
-    // predates ML-003-T04 never abstains anything, so every prediction it
-    // sends was, by construction, committed.
+    // Normalize the optional `mlAbstained` boolean the same way, and default a legacy/absent value to false: a client that predates ML-003-T04 never abstains anything, so every prediction it sends was, by construction, committed.
     const mlAbstainedResult = normalizeOptionalBoolean(mlAbstained);
     if (!mlAbstainedResult.valid) {
       return res.status(400).json(INVALID_ML_ABSTAINED_RESPONSE);
@@ -211,9 +202,7 @@ const addExpense = async (req, res) => {
     );
 
     if (hasPrediction && mlConfidence !== undefined) {
-        // ML-003-T05 -- abstained is only meaningful for a real prediction;
-        // gate it on hasPrediction exactly like corrected already is, so a
-        // request with no prediction at all can never produce an outcome.
+        // Abstained is only meaningful for a real prediction; gate it on hasPrediction exactly like corrected already is, so a request with no prediction at all can never produce an outcome.
         const mlOutcome = deriveMlOutcome(normalizedMlAbstained, mlCorrected);
         const mlFeedback = new MlFeedbackModel({
             expenseName,
@@ -226,10 +215,6 @@ const addExpense = async (req, res) => {
             abstained: normalizedMlAbstained,
             outcome: mlOutcome,
             // "pending" only for a genuine, server-confirmed correction.
-            // Unchanged by ML-003-T05: an abstained-and-overridden
-            // ("abstained" outcome) prediction was already `corrected:
-            // true` under the existing comparison, so it already reaches
-            // "pending" without any change here.
             status: mlCorrected ? 'pending' : null,
             userId: user._id
         });
@@ -311,8 +296,6 @@ const addExpense = async (req, res) => {
     }
 
     // Send generic server error response.
-    // Name/code only -- a raw Mongo error can echo the submitted document's
-    // values (amount, name, description) back in its message.
     logEvent({ level: 'error', scope: 'expense', event: 'add_expense_failed', requestId: req.requestId, errorName: err && err.name, errorCode: err && err.code });
     res.status(500).json({ message: 'Internal Server Error', success: false });
   }

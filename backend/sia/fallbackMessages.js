@@ -1,30 +1,4 @@
-// SIA-001-T05 -- deterministic (never LLM-generated) fallback responses
-// for SIA's ask/answer path. Replaces a single flat "SIA is temporarily
-// unavailable." for every failure with a small, fixed, pre-written set of
-// safe categories selected purely by RULE (a stable LlmProviderError code
-// or an explicit internal reasonCode) -- never by provider name, raw
-// error message, stack trace, or any other internal detail.
-//
-// Deliberately preserves the SAME "never disclose why" posture
-// GET /sia/status already established for deployment-level readiness (see
-// SIA-001-T01's provider-disclosure audit: "available: false is
-// intentionally indistinguishable between all of its causes... never
-// returns the provider name, model name, credential presence or value,
-// missing environment-variable names, an internal reason code,
-// configuration details, or a stack trace"). Every STRUCTURAL/
-// configuration failure (no provider configured, an unimplemented
-// provider, no model configured, no API key configured, an invalid
-// structured-output request, a malformed structured-output response, a
-// snapshot-build failure, a session-store/idempotency infrastructure
-// error, or any unrecognized error) still collapses into the exact same
-// generic UNAVAILABLE category as before this task -- this module only
-// ADDS narrower categories for outcomes that are safe to distinguish
-// precisely because they reveal nothing about deployment configuration:
-// a transient provider hiccup (worth retrying shortly), the LLM's own
-// answer failing this app's grounding/leakage validation (worth
-// rephrasing), a too-large question (worth narrowing), and (SIA-001-T06)
-// the user's own opt-out choice (worth pointing at Settings, since it's
-// their own account state, not a system secret).
+// Deterministic (never LLM-generated) fallback responses for SIA's ask/answer path.
 "use strict";
 
 const CATEGORY = Object.freeze({
@@ -76,12 +50,7 @@ const RESPONSES = Object.freeze({
   },
 });
 
-// Provider-health-signal codes (see providerCircuitBreaker.js's own
-// identical list) -- a real attempt was made and the PROVIDER itself
-// misbehaved, so retrying shortly is genuinely reasonable advice.
-// PROVIDER_CIRCUIT_OPEN is included too: from the user's point of view
-// it is the exact same "try again shortly" situation, whether this
-// specific request tripped the breaker or a previous one already did.
+// Js's own identical list) -- a real attempt was made and the PROVIDER itself misbehaved, so retrying shortly is genuinely reasonable advice.
 const RETRY_SHORTLY_CODES = new Set([
   "PROVIDER_TIMEOUT",
   "PROVIDER_HTTP_ERROR",
@@ -92,14 +61,7 @@ const RETRY_SHORTLY_CODES = new Set([
   "PROVIDER_CIRCUIT_OPEN",
 ]);
 
-// Classifies a thrown error (an LlmProviderError, or any other error --
-// never assumes the shape) into one of the safe categories above. Any
-// code this module doesn't explicitly recognize -- including every
-// structural/configuration LlmProviderError code, and a non-LlmProviderError
-// entirely -- falls back to UNAVAILABLE, so a NEW LlmProviderError code
-// added to llmService.js in the future is safe-by-default here too: it
-// must be explicitly added to RETRY_SHORTLY_CODES (or given its own
-// category) to become anything more specific than the generic message.
+// Classifies a thrown error (an LlmProviderError, or any other error -- never assumes the shape) into one of the safe categories above.
 function classifyProviderError(error) {
   const code = error && error.code;
   if (code === "CONTEXT_BUDGET_EXCEEDED") return CATEGORY.QUESTION_TOO_COMPLEX;

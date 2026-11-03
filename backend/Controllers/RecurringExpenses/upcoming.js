@@ -1,12 +1,6 @@
 "use strict";
 
-// REC-003-T02 -- GET /api/recurring/upcoming, with date bounds.
-//
-// "With date bounds" is load-bearing, and for the same reason EXP-003 exists:
-// an unbounded projection endpoint is an endpoint a client can ask to
-// forecast a hundred years. The window is validated and capped here rather
-// than trusted, and a caller that supplies nothing gets a sensible default
-// window rather than everything.
+// GET /api/recurring/upcoming, with date bounds.
 const { RecurringExpenseModel } = require("../../models/RecurringExpense");
 const { projectUpcoming, MAX_PROJECTION_DAYS } = require("../../Services/RecurringServices/upcomingProjection");
 // DAT-001-T06 -- responses carry minor units additively.
@@ -33,10 +27,7 @@ const getUpcoming = async (req, res) => {
     let from;
     let to;
     try {
-      // Default window starts now, not at the beginning of the month: the
-      // question this endpoint answers is "what is coming", and an occurrence
-      // that already happened is not coming. Overdue ones are still included
-      // because they have NOT happened -- see the projection service.
+      // Default window starts now, not at the beginning of the month: the question this endpoint answers is "what is coming", and an occurrence that already happened is not coming.
       from = parseDateParam(req.query.from, new Date(now.getTime() - MS_PER_DAY));
       to = parseDateParam(req.query.to, new Date(now.getTime() + DEFAULT_WINDOW_DAYS * MS_PER_DAY));
     } catch (validationErr) {
@@ -49,9 +40,7 @@ const getUpcoming = async (req, res) => {
 
     const windowDays = Math.ceil((to - from) / MS_PER_DAY);
     if (windowDays > MAX_PROJECTION_DAYS) {
-      // Refused rather than silently truncated. A client that asked for two
-      // years and received three months without being told would render a
-      // total labelled "next 2 years" that is nothing of the kind.
+      // Refused rather than silently truncated.
       return res.status(400).json({
         message: `Requested window of ${windowDays} days exceeds the maximum of ${MAX_PROJECTION_DAYS}`,
         success: false,
@@ -59,21 +48,12 @@ const getUpcoming = async (req, res) => {
       });
     }
 
-    // User-scoped. Another user's definitions must never reach this
-    // projection -- the same rule every read path in this codebase follows.
-    // REC-002-T03 -- status: 'active' only. A paused definition produces no
-    // occurrences until resumed, and an ended one produces none ever again --
-    // projecting either would show occurrences the job will never create. A
-    // paused/ended definition manages its own visibility instead, through
-    // the recurring-management surface (REC-002-T05), not this projection.
+    // User-scoped. Another user's definitions must never reach this projection -- the same rule every read path in this codebase follows.
     const definitions = await RecurringExpenseModel.find({ userId: req.userId, status: 'active' }).lean();
 
     const { occurrences, summary } = projectUpcoming(definitions, { from, to, now });
 
-    // Derive minor units at read time for any definition whose shadow field
-    // is absent (MONEY_MINOR_DUAL_WRITE_ENABLED defaults false) -- same
-    // decision as utils/moneyView.js, and the reason the projection's
-    // totalMinor can be trusted.
+    // Js, and the reason the projection's totalMinor can be trusted.
     const withMinor = occurrences.map((o) => ({
       ...o,
       expenseAmountMinor:

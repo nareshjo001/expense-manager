@@ -17,16 +17,7 @@ import { useGenerateAiMonthlySummaryMutation } from "../../hooks/mutations/useGe
 import { expenseAddSuccessToast, expenseAddErrorToast } from "../alertsEffects/toastMessages";
 import "./AiMonthlySummary.css";
 
-// AI-001-T06 -- renders the opt-in monthly AI summary alongside its source
-// facts. Two backend paths feed this component's "alongside prose"
-// requirement differently (see sia/monthlySummaryService.js's
-// generateMonthlySummary): the deterministic template returns per-section
-// { id, text, citedFactIds }, so each sentence can show its own facts
-// right next to it; the LLM-authored path returns sections: null (no
-// per-sentence mapping is produced for LLM prose), so that case renders
-// one narrative block with a single facts list underneath. Both paths
-// always return the same flat, deduped `citedFacts` array this component
-// falls back to either way.
+// Renders the opt-in monthly AI summary alongside its source facts.
 
 
 

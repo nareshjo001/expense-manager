@@ -1,9 +1,6 @@
 "use strict";
 
-// IMP-001-T04 -- intended route: GET /api/imports/sessions/:id
-// (verifyToken). Ownership-scoped -- a session belonging to another user
-// 404s exactly the same as a nonexistent one (see
-// getImportSessionSafeShape's own contract).
+// Intended route: GET /api/imports/sessions/:id (verifyToken).
 const mongoose = require("mongoose");
 const { getImportSessionSafeShape } = require("../../Services/ImportServices/importSessionService");
 

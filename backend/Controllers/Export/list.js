@@ -1,10 +1,6 @@
 "use strict";
 
-// DAT-004-T04 -- GET /api/export. Lists the authenticated user's own
-// export requests, newest first. Thin wrapper around
-// exportRequestService.listExportRequests -- that service already scopes
-// the query to req.userId and strips filePath/downloadToken from each row
-// (see its own toSafeShape comment).
+// GET /api/export. Lists the authenticated user's own export requests, newest first.
 const { listExportRequests } = require("../../Services/ExportServices/exportRequestService");
 
 const listExports = async (req, res) => {

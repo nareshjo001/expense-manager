@@ -1,43 +1,18 @@
 const mongoose = require("mongoose");
 
-// AI-001-T05 -- one preferences+usage document per user, same
-// unique-on-userId, single-document shape NOT-003's NotificationPreference
-// already uses (see its own comment for why: the whole thing is always
-// read/written together from one settings screen, so there's no access
-// pattern that benefits from splitting it).
-//
-// `optedIn` gates the feature entirely per this feature's outcome
-// statement ("Offer an OPT-IN narrative..." --
-// workflow/features/P2/AI-001-optional-monthly-ai-summary.md, section 5):
-// no summary is ever generated for a user until they explicitly turn this
-// on. `regenerationPeriod`/`regenerationCount` track the rolling monthly
-// cap aiSummaryPreferenceService.js enforces -- deliberately NOT an
-// express-rate-limit sliding window (that's a separate, additional
-// defense-in-depth HTTP-level limiter on the route itself, see
-// utils/rateLimiter.js's aiSummaryLimiter): a business-rule "N per
-// calendar month" cap needs to survive across requests/restarts, which
-// only a persisted counter does.
+// One preferences+usage document per user, same unique-on-userId, single-document shape NOT-003's NotificationPreference already uses (see its own comment for why: the whole thing is always read/written together from one settings screen, so there's no access pattern that benefits from splitting it).
 const aiSummaryPreferenceSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "users",
     required: true,
-    // Uniqueness comes from the explicit schema.index() below. Declaring
-    // `unique: true` here as well defined the same index twice, which made
-    // Mongoose print a plain-text duplicate-index warning on every start
-    // (found by scripts/verifyObservability.js, OBS-001-T07).
+    // Index() below. js, OBS-001-T07).
   },
   optedIn: {
     type: Boolean,
     default: false,
   },
-  // "YYYY-MM" in the app's configured time zone (see periodResolver.js's
-  // getZonedYMD) -- the period regenerationCount is counting against.
-  // A stored period that doesn't match the CURRENT period means the
-  // counter is stale and must be treated as 0 (aiSummaryPreferenceService.
-  // js's recordRegeneration() does this reset itself; it is never done via
-  // a migration/cron, so a user who never regenerates in a given month
-  // never needs a write at all).
+  // Js's getZonedYMD) -- the period regenerationCount is counting against.
   regenerationPeriod: {
     type: String,
     default: null,

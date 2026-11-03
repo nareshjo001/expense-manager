@@ -2,12 +2,7 @@ import React from 'react';
 import '../landingPage/LandingPage.css';
 import { useModalA11y } from '../hooks/useModalA11y';
 
-// CAT-001-T05 -- shown after a user submits an expense whose predicted
-// category they corrected; offers to save the correction as a durable
-// merchant rule so future expenses from this merchant skip ML entirely.
-// Shares DeleteAlert's modal-overlay/modal styling for visual consistency,
-// and (FE-a11y) the same useModalA11y dialog behavior: focus-in on open,
-// Tab trap, Escape-to-cancel, focus restored on close.
+// Shown after a user submits an expense whose predicted category they corrected; offers to save the correction as a durable merchant rule so future expenses from this merchant skip ML entirely.
 const SaveRuleAlert = ({ merchantName, category, isSaving, onConfirm, onCancel }) => {
     const dialogRef = React.useRef(null);
     useModalA11y(dialogRef, onCancel, !isSaving);

@@ -1,8 +1,6 @@
 "use strict";
 
-// BUD-001-T01/I9 -- the one place per-category spent is computed. Never
-// persisted; used by both the summary (T03/T04) and the alert evaluation
-// (T06) so they can never disagree about what "spent" means.
+// T01/I9 -- the one place per-category spent is computed.
 
 const mongoose = require("mongoose");
 const { ExpenseModel } = require("../../config/Schemas");
@@ -16,13 +14,6 @@ function toObjectId(userId) {
 }
 
 // Returns { byCategory: Map<normalizedCategory, spentMinor>, totalSpentMinor }.
-//
-// Grouped by the RAW stored expenseCategory in MongoDB, then re-grouped in
-// JS through normalizeCategoryForGrouping, so legacy documents written
-// before CAT-001's write-time normalization (e.g. "food" next to "Food")
-// still land in the same bucket, and invalid/missing categories land in the
-// explicit "Uncategorized" bucket rather than being dropped. $match is on
-// {userId, expenseDate}, served by the existing expense indexes.
 async function aggregateSpentByCategory(userId, month) {
   const { monthStart, monthEnd } = monthToRange(month);
 

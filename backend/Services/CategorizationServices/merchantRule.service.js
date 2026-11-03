@@ -1,10 +1,6 @@
 "use strict";
 
-// CAT-001 -- CRUD and precedence service for user-scoped merchant category
-// rules. Every query is scoped by a verified `userId` (never a client-
-// supplied one); a lookup miss returns null rather than throwing, since
-// "no rule for this merchant" is the normal, expected case on every
-// prediction.
+// CRUD and precedence service for user-scoped merchant category rules.
 const MerchantCategoryRule = require("../../models/MerchantCategoryRule");
 const { normalizeMerchantKey } = require("../../utils/merchantNormalization");
 const { normalizeCategory } = require("../../utils/categoryNormalization");
@@ -19,19 +15,13 @@ class MerchantRuleValidationError extends Error {
 }
 
 // Looks up a user's rule for a raw (unnormalized) merchant/expense name.
-// Returns null for "no rule" AND for "the name doesn't normalize to a
-// usable key" -- a lookup never throws, since predict-category calls this
-// on every keystroke-driven request and a rule miss must never block the
-// existing ML fallback path.
 async function findRuleForMerchant(userId, rawMerchantName) {
   const merchantKey = normalizeMerchantKey(rawMerchantName);
   if (!merchantKey) return null;
   return MerchantCategoryRule.findOne({ userId, merchantKey }).lean();
 }
 
-// Creates or updates the single rule for this user+merchant. Upserts by the
-// unique {userId, merchantKey} index, so saving a rule for an already-ruled
-// merchant replaces its category rather than creating a duplicate.
+// Creates or updates the single rule for this user+merchant.
 async function upsertRule(userId, rawMerchantName, rawCategory) {
   const merchantKey = normalizeMerchantKey(rawMerchantName);
   if (!merchantKey) {
@@ -55,9 +45,7 @@ async function listRules(userId) {
   return MerchantCategoryRule.find({ userId }).sort({ updatedAt: -1 }).lean();
 }
 
-// Deletes one rule. Ownership is enforced IN the query (userId is part of
-// the filter, not checked after the fact) so a request for another user's
-// ruleId matches nothing rather than ever touching their document.
+// Deletes one rule. Ownership is enforced IN the query (userId is part of the filter, not checked after the fact) so a request for another use.
 async function deleteRule(userId, ruleId) {
   const result = await MerchantCategoryRule.findOneAndDelete({ _id: ruleId, userId });
   return Boolean(result);

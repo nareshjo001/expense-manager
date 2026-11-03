@@ -1,12 +1,6 @@
 const { ExpenseModel, BudgetModel } = require('../../config/Schemas');
 const { getMonthRange } = require('../HelperServices/datecal.service');
-// DAT-002-T02 -- the "MMM YYYY" Budget.month key's canonical definition now
-// lives in utils/monthKeyNormalization.js (shared with setbudget.js/
-// updatebudget.js/sia/financialQueryService.js/config/Schemas.js's schema
-// validator), instead of being defined independently in this file. getMonthKey
-// and getMonthAnchorFromKey below keep their existing names/signatures --
-// this module's established public API, already imported by
-// Services/syncRecoveryService.js -- as thin wrappers over the shared util.
+// Js's schema validator), instead of being defined independently in this file.
 const { getMonthKey, parseMonthKey } = require('../../utils/monthKeyNormalization');
 // Phase C.2 -- the fenceRevision guard is now enforced entirely inside the
 
@@ -16,9 +10,7 @@ const getMonthAnchor = (date) => {
     return monthStart;
 };
 
-// Phase C.3 -- the exact inverse of getMonthKey/recalculateBudget's own
-// construction, now delegating to the shared parseMonthKey so this and the
-// schema validator can never drift apart.
+// The exact inverse of getMonthKey/recalculateBudget's own construction, now delegating to the shared parseMonthKey so this and the schema validator can never drift apart.
 const getMonthAnchorFromKey = (monthKey) => {
     const parsed = parseMonthKey(monthKey);
     if (!parsed) return null;

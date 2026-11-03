@@ -1,31 +1,4 @@
-"""
-ML-001-T04 -- majority, keyword, and linear-model baselines.
-
-These exist to answer one question T05/T07 need an honest answer to:
-is the RandomForestClassifier trainer.py trains actually earning its
-complexity, or would a much simpler (and much cheaper to run/debug)
-model do about as well? A candidate model's accuracy/macro-F1 only
-means something in comparison to what a trivial baseline already
-achieves -- reporting 82% accuracy sounds good until a majority-class
-baseline also gets 70% because one category dominates the dataset.
-
-All three share a minimal fit/predict interface so
-training/metrics.py (T05) can evaluate them the same way it evaluates
-the real model, on the same held-out split.
-
-- MajorityBaseline: always predicts the single most frequent training
-  class. The floor every other model must clear.
-- KeywordBaseline: a transparent, inspectable rule -- for each word seen
-  often enough and skewed enough toward one class in training, predicts
-  that class when the word appears in the input text; falls back to the
-  majority class otherwise. Answers "how far do you get with literal
-  keyword matching, no ML at all."
-- LinearBaseline: scikit-learn LogisticRegression over the SAME TF-IDF
-  features trainer.py's RandomForestClassifier trains on, so the
-  comparison to the real model isolates "does a much simpler model class
-  do almost as well on the same features," not "do different features
-  help."
-"""
+"""Majority, keyword, and linear-model baselines."""
 
 from collections import Counter, defaultdict
 
@@ -41,9 +14,7 @@ class MajorityBaseline:
         if len(y) == 0:
             raise ValueError("MajorityBaseline.fit: cannot fit on an empty y")
         counts = Counter(y)
-        # Counter.most_common ties break by first-seen insertion order --
-        # deterministic given a fixed y, which is what matters here (not
-        # matching any particular tie-break convention).
+        # Most_common ties break by first-seen insertion order -- deterministic given a fixed y, which is what matters here (not matching any particular tie-break convention).
         self.majority_class_ = counts.most_common(1)[0][0]
         return self
 
@@ -53,14 +24,7 @@ class MajorityBaseline:
 
 
 class KeywordBaseline:
-    """
-    A transparent rule-based baseline: for each whitespace-separated
-    token seen at least `min_count` times in training text and
-    associated with one class at least `min_precision` of the time it
-    appears, that token predicts that class. An input predicts by
-    majority vote among its tokens' known classes; ties and inputs with
-    no known token fall back to the majority class.
-    """
+    """A transparent rule-based baseline: for each whitespace-separated token seen at least `min_count` times in training text and associated with one class at least `min_precision` of the time it appears, that token predicts that class."""
 
     def fit(self, texts, y, min_count=5, min_precision=0.7):
         texts = list(texts)

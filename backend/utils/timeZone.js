@@ -1,22 +1,9 @@
 "use strict";
 
-// NOT-003-T04 -- shared IANA-time-zone helpers.
-//
-// resolveTimeZone below is a straight extraction of
-// Services/RecurringServices/upcomingProjection.js's own function of the
-// same name -- that file's header already flagged this exact move as "the
-// right follow-up" once a second feature needed the same validation (REC-003
-// only needed it for calendar-date presentation; NOT-003-T04 needs it again
-// for quiet-hours evaluation). upcomingProjection.js now delegates to this
-// module instead of duplicating the logic; its own `resolveTimeZone` export
-// is preserved (re-exported, same reference) so nothing that already
-// imports it from there breaks.
+// Shared IANA-time-zone helpers.
 const siaConfig = require("../sia/config");
 
-// Throws a RangeError for an unrecognized IANA zone, which is the only
-// reliable way to validate one. A bad zone falls back rather than failing
-// the caller: a projection or a quiet-hours check with the wrong offset is
-// recoverable, a 500 is not.
+// Throws a RangeError for an unrecognized IANA zone, which is the only reliable way to validate one.
 function resolveTimeZone(candidate) {
   const fallback = siaConfig.appTimeZone || "Asia/Kolkata";
   if (typeof candidate !== "string" || candidate.trim() === "") return fallback;
@@ -29,11 +16,7 @@ function resolveTimeZone(candidate) {
   }
 }
 
-// Current local time-of-day in `timeZone`, as "HH:mm" (24h, zero-padded,
-// 00-23). hourCycle: "h23" is passed explicitly -- some ICU builds render
-// midnight as "24:00" under the default hour cycle for a 24h locale, which
-// would silently break the "start === end -> no window" and
-// minutes-since-midnight comparisons below.
+// Current local time-of-day in `timeZone`, as "HH:mm" (24h, zero-padded, 00-23).
 function currentTimeInZone(date, timeZone) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone,
@@ -55,15 +38,7 @@ function toMinutesSinceMidnight(hhmm) {
   return hours * 60 + minutes;
 }
 
-// Whether `date` falls inside the [start, end) quiet-hours window, evaluated
-// in `timeZone`. The window may wrap past midnight (e.g. 22:00 -> 07:00),
-// which is the common case for "quiet hours" -- so this is NOT a simple
-// start < end comparison; see the branch below.
-//
-// start === end is treated as "no window" (always false) rather than "24
-// hours of quiet" -- an admin/user typo that sets both fields identically
-// should not accidentally silence every notification type with no way to
-// tell why nothing is arriving.
+// Whether `date` falls inside the [start, end) quiet-hours window, evaluated in `timeZone`.
 function isWithinQuietHours(date, { start, end, timeZone } = {}) {
   const startMin = toMinutesSinceMidnight(start);
   const endMin = toMinutesSinceMidnight(end);

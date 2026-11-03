@@ -1,52 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// DAT-002-T07 -- "verify query plans on representative data".
-//
-// GENUINE BLOCKER, DOCUMENTED RATHER THAN FAKED: this task fundamentally
-// requires a live MongoDB with representative data volumes -- there is no
-// way to prove an index is actually chosen by the query planner, or that
-// a scan is efficient (low docsExamined/nReturned ratio), without a real
-// `.explain()` call against a real collection. This environment has no
-// live or in-memory MongoDB reachable (confirmed: `mongosh`/`mongod` are
-// both absent, `mongodb-memory-server` is not a dependency, and every
-// other DAT-002/DAT-003 migration this session hit the identical wall --
-// see workflow/features/P1/DAT-002-database-schema-quality-and-
-// integrity.md's T01/T02/T03/T05/T06 update sections). CI's `mongo:7`
-// service containers (.github/workflows/ci.yml) DO give this a place to
-// actually run, once invoked from a CI/staging job -- this script is
-// written and tested so that invocation is the only thing still needed.
-//
-// WHAT THIS SCRIPT DOES
-//
-// For each entry in QUERY_SPECS, runs `.find(filter).explain
-// ("executionStats")` against the real collection and reports: which
-// stage MongoDB's query planner chose (IXSCAN/COLLSCAN/etc, read from
-// winningPlan's stage tree, not assumed from the top-level shape --
-// different Mongo server versions nest the index name at different
-// depths), which index name it used (if any), totalDocsExamined vs
-// nReturned (a large ratio here means an index exists but isn't
-// selective -- still worth flagging even when the stage is IXSCAN), and
-// executionTimeMillis. A COLLSCAN on a query this list expects to be
-// indexed is reported as a failure (non-zero exit code), matching how
-// migrations/scripts/20260903-ensure-core-indexes.js (DAT-003-T06)
-// already asserts index *creation* succeeded -- this is that same
-// discipline applied to index *usage*.
-//
-// QUERY_SPECS below mirrors the real index inventory this session
-// already built and verified: docs/data/DAT-002-T01-schema-and-index-
-// inventory.md's index table, migrations/scripts/20260903-ensure-core-
-// indexes.js and 20260921-ensure-devicetoken-notification-indexes.js
-// (DAT-002-T03)'s INDEX_SPECS, and the real call sites the DAT-002-T03
-// update section cites for the DeviceToken/Notification/RefreshSession
-// queries. Collection names are the corrected ones (DAT-002-T06):
-// "budgets"/"recurringexpenses", not "budget"/"recurringExpenses".
-//
-// Usage:
-//   node backend/scripts/verifyQueryPlans.js
-// Exit code: 0 if every query used a non-COLLSCAN plan; 1 otherwise (or
-// if any query throws), so this can gate a CI/staging step the same way
-// scripts/verifyMoneyMinorFields.js gates DAT-001-T06/T07.
+// "verify query plans on representative data". explain()` call against a real collection.
 require("dotenv").config({ quiet: true });
 const mongoose = require("mongoose");
 const connectDB = require("../config/db");
@@ -116,10 +71,7 @@ const QUERY_SPECS = [
   },
 ];
 
-// Placeholder values in QUERY_SPECS are swapped for real values sampled
-// from the collection itself when it has any documents, so the plan and
-// executionStats reflect a real owner's data rather than a filter that
-// can match nothing. Only placeholders are replaced; literal values stay.
+// Placeholder values in QUERY_SPECS are swapped for real values sampled from the collection itself when it has any documents, so the plan and executionStats reflect a real owner's data rather than a filter that can match nothing.
 const PLACEHOLDER_PREFIX = "REPRESENTATIVE_";
 
 async function representativeFilter(coll, filter) {
@@ -139,18 +91,13 @@ async function representativeFilter(coll, filter) {
   return { filter: next, sampled: true };
 }
 
-// Walks winningPlan's nested `inputStage` chain (its shape/depth varies
-// by server version and by whether a FETCH/PROJECTION stage wraps the
-// scan) and returns the first IXSCAN/COLLSCAN/etc stage found, plus the
-// index name when the stage is IXSCAN. Never assumes a fixed depth.
+// Walks winningPlan's nested `inputStage` chain (its shape/depth varies by server version and by whether a FETCH/PROJECTION stage wraps the scan) and returns the first IXSCAN/COLLSCAN/etc stage found, plus the index name when the stage is IXSCAN.
 const INDEX_STAGES = new Set(["IXSCAN", "EXPRESS_IXSCAN", "COUNT_SCAN", "DISTINCT_SCAN"]);
 
 function findScanStage(plan) {
   let stage = plan;
   while (stage) {
-    // EXPRESS_IXSCAN is MongoDB 8's fast path for equality on a unique
-    // index; EOF is what the planner reports for a collection that does
-    // not exist (so there is no index to use either).
+    // EXPRESS_IXSCAN is MongoDB 8's fast path for equality on a unique index; EOF is what the planner reports for a collection that does not exist (so there is no index to use either).
     if (INDEX_STAGES.has(stage.stage) || stage.stage === "COLLSCAN" || stage.stage === "EOF") {
       return { stage: stage.stage, indexName: stage.indexName || null };
     }
@@ -165,9 +112,7 @@ async function verifyOne({ db, label, collection, filter, expectedIndexName }) {
   const explanation = await coll.find(effectiveFilter).explain("executionStats");
 
   const winningPlan = explanation && explanation.queryPlanner && explanation.queryPlanner.winningPlan;
-  // MongoDB 7+ (slot-based engine) nests the classic plan tree one level
-  // down, under winningPlan.queryPlan; older servers put it directly on
-  // winningPlan. Read whichever is present.
+  // QueryPlan; older servers put it directly on winningPlan. Read whichever is present.
   const planTree = winningPlan && winningPlan.queryPlan ? winningPlan.queryPlan : winningPlan;
   const executionStats = explanation && explanation.executionStats;
 

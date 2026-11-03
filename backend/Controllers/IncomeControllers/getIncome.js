@@ -22,12 +22,7 @@ const getIncome = async (req, res) => {
       });
     }
 
-    // EXP-003-T03 -- `limit` always resolves to a bounded value; omitting it
-    // yields DEFAULT_LIMIT rather than the user's entire income history. The
-    // unbounded IncomeModel.find(filter) fallback that used to live below is
-    // gone, and with it the last way a client could ask this route for an
-    // unknown number of documents. A cursor no longer needs an explicit
-    // limit beside it, since the default page size now makes it unambiguous.
+    // `limit` always resolves to a bounded value; omitting it yields DEFAULT_LIMIT rather than the user's entire income history.
     let limit;
     let cursor;
     try {

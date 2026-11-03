@@ -1,29 +1,4 @@
-/* verifyBackupRestore.js -- OPS-002-T07
- *
- * Recurring restore verification: runs mongoRestore.js's isolated
- * restore (OPS-002-T05) against the most recent backup, into the same
- * fail-closed non-production target, and checks the restored document
- * counts per authoritative collection against mongoBackup.js's manifest
- * (OPS-002-T03) for drift beyond "it restored without throwing."
- *
- * On any failure -- no backup found, the restore itself throwing, or a
- * document-count mismatch -- fires an alert through the EXISTING
- * alerting mechanism (backend/utils/alerts.js's dispatchAlerts, built by
- * OBS-001-T06) rather than inventing a new alerting path. See
- * docs/runbooks/OBS-001-alerts.md for the new
- * backup_restore_verification_failed alert type this file raises, and
- * docs/runbooks/OPS-002-backup-restore-operations.md for how this
- * script is scheduled.
- *
- * Required env: same as mongoRestore.js (RESTORE_TARGET_MONGO_CONN,
- * BACKUP_ENCRYPTION_KEY). Point RESTORE_TARGET_MONGO_CONN at a genuinely
- * disposable/scratch database for this job -- it is restored into and
- * left however the restore leaves it.
- *
- * Usage: node backend/scripts/backup/verifyBackupRestore.js
- * Exit code: 0 if verification passed; 1 otherwise (including "no
- * backup exists yet").
- */
+// Js's dispatchAlerts, built by OBS-001-T06) rather than inventing a new alerting path.
 "use strict";
 
 const { logEvent } = require("../../utils/logger");
@@ -31,9 +6,7 @@ const { dispatchAlerts, RUNBOOK_URL } = require("../../utils/alerts");
 const { findManifest, restoreBackup } = require("./mongoRestore");
 
 const ALERT_TYPE = "backup_restore_verification_failed";
-// Matches backend/utils/alerts.js's own DEFAULT_OWNER value. Not
-// imported because alerts.js doesn't export it -- duplicated here
-// deliberately rather than reaching into that module's internals.
+// Js's own DEFAULT_OWNER value. js doesn't export it -- duplicated here deliberately rather than reaching into that module's internals.
 const ALERT_OWNER = "on-call maintainer";
 
 async function raiseVerificationAlert(metricValue) {

@@ -1,19 +1,6 @@
 import { useEffect, useRef } from "react";
 
-// Shared accessibility behavior for overlay-style confirmation/edit dialogs
-// (DeleteAlert, SaveRuleAlert, IncomeModal, the budget-edit and custom-date
-// -range overlays, etc). These were plain divs with no dialog semantics at
-// all: a screen reader announced them as ordinary page content, Tab could
-// leave the dialog into the (still-focused, still-interactive) page behind
-// it, and there was no way to dismiss one with Escape. This hook is the
-// fix, applied uniformly instead of copy-pasted into each modal:
-//   - moves focus into the dialog when it opens
-//   - traps Tab/Shift+Tab focus within the dialog while it's open
-//   - closes on Escape
-//   - restores focus to whatever triggered the dialog when it closes
-// `active` lets a component that already computes an isOpen-like flag pass
-// it straight through instead of conditionally rendering around the hook
-// call (hooks can't be called conditionally).
+// Shared accessibility behavior for overlay-style confirmation/edit dialogs (DeleteAlert, SaveRuleAlert, IncomeModal, the budget-edit and custom-date -range overlays, etc).
 export function useModalA11y(dialogRef, onClose, active = true) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;

@@ -2,12 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { commitImportSession } from "../../api/importsApi";
 import { queryKeys } from "../../query/queryKeys";
 
-// IMP-001 -- commits an import session's accepted rows into real
-// expenses. Invalidates both this session's detail (status/committedAt/
-// committedCount/skippedCount/each row's committedExpenseId all just
-// changed) and the sessions list (status changed there too), same
-// detail+list invalidation shape useLinkReceiptMutation's sibling
-// mutations use.
+// Commits an import session's accepted rows into real expenses.
 export const useCommitImportSessionMutation = () => {
   const queryClient = useQueryClient();
 

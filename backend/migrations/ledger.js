@@ -1,12 +1,6 @@
 "use strict";
 
-// DAT-003-T02 -- read/write access to the durable record of which
-// migrations have already run (backend/models/MigrationLedger.js), plus
-// a ledger-aware planPending() that filters runner.js's on-disk
-// migration list down to the ones NOT yet recorded as applied. This is
-// what makes it safe to eventually execute a migration's up() (still
-// deferred to a later task) -- without it, every restart would replan
-// every migration as pending, regardless of what already ran.
+// Js's on-disk migration list down to the ones NOT yet recorded as applied.
 const MigrationLedger = require("../models/MigrationLedger");
 const runner = require("./runner");
 
@@ -23,11 +17,7 @@ async function getAppliedIds() {
   return new Set(docs.map((d) => d.migrationId));
 }
 
-// Records a migration as applied. Relies on the schema's unique index on
-// migrationId to reject a duplicate record rather than silently
-// overwriting one -- recording the same id twice is always a bug (a
-// re-run that should have been skipped, or two migrations colliding on
-// id) and must surface loudly, not merge quietly.
+// Records a migration as applied.
 async function recordApplied({ id, description, durationMs }) {
   return MigrationLedger.create({
     migrationId: id,

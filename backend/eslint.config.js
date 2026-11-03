@@ -1,23 +1,4 @@
-// OPS-001-T06 -- static analysis gate for the backend.
-//
-// Deliberately a CORRECTNESS gate, not a style gate. Every rule set to
-// "error" below can only fire on code that is genuinely wrong or dead:
-// an undefined identifier, an unreachable branch, a promise executor
-// that swallows a return, a duplicate object key silently discarding a
-// value. Those are the failures a lint step is worth gating a pull
-// request on.
-//
-// Stylistic and taste-level rules stay at "warn" (visible in the report,
-// non-blocking) rather than "off": this codebase predates any linter, so
-// promoting them to errors would mean rewriting ~200 files in the same
-// change that introduces the linter -- a large, untestable diff with real
-// regression risk and no correctness benefit. They can be tightened
-// incrementally afterwards, file by file, which is the point of leaving
-// them visible.
-//
-// Run with `npm run lint`. CI runs `npm run lint:ci`, which additionally
-// fails on any warning count above the frozen baseline (see
-// scripts/lintBaseline.js) so the warning list can only shrink.
+// Static analysis gate for the backend. Deliberately a CORRECTNESS gate, not a style gate.
 
 const globals = require("globals");
 
@@ -74,20 +55,10 @@ module.exports = [
 
       // --- rules kept visible but non-blocking, with reasons ---
 
-      // Every hit in this repo is `new Promise((resolve) => setTimeout(resolve, ms))`,
-      // the standard sleep idiom, where the arrow incidentally returns the
-      // timer id. The rule exists to catch `new Promise((resolve) =>
-      // doAsync().then(resolve))`, where a rejection is silently dropped --
-      // a real bug this codebase does not have. Left as a warning so a
-      // genuine instance of the dangerous shape still shows up in the report.
+      // Every hit in this repo is `new Promise((resolve) => setTimeout(resolve, ms))`, the standard sleep idiom, where the arrow incidentally returns the timer id.
       "no-promise-executor-return": "warn",
 
-      // High false-positive rate on two shapes this codebase uses correctly:
-      // `req.userId = decoded._id` in Express middleware (one request, one
-      // handler chain, no interleaving) and `process.exitCode = 1` in a CLI.
-      // The rule cannot see that neither is concurrently reachable. Kept
-      // visible rather than off, since a true interleaved-update bug would
-      // still be worth reading.
+      // ExitCode = 1` in a CLI. The rule cannot see that neither is concurrently reachable.
       "require-atomic-updates": "warn",
 
       // --- hygiene: reported, does not block ---

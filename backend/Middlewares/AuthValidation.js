@@ -96,11 +96,7 @@ const editIncomeValidation = (req, res, next) => {
 };
 
 
-// PRV-001-T03 -- account-deletion request validation. Just a required,
-// non-empty password string; the controller itself re-verifies it against
-// the stored hash (this middleware only rejects an obviously-malformed
-// request before that DB round trip, same division of labor
-// expenseValidation/addIncomeValidation already use).
+// Account-deletion request validation.
 const requestDeletionValidation = (req, res, next) => {
     const schema = Joi.object({
         password: Joi.string().min(1).required(),
@@ -122,18 +118,7 @@ const requestDeletionValidation = (req, res, next) => {
 };
 
 
-// EXP-002-T02 -- GET /expense/search query validation (route boundary, per
-// this feature's own "Technical design" section: "Put validation at the
-// route boundary"). Validates the four new optional filters EXP-002-T01
-// defined (nameContains/category/minAmount+maxAmount/isRecurring) AND
-// closes T01's flagged gap: the existing startDate/endDate pair had no
-// ordering check and no maximum span, so a client could request an
-// unbounded multi-year range. getbycustom.js's own defensive
-// required/valid-date checks are left in place, not removed -- this
-// middleware adds strictness for the real HTTP route without weakening the
-// controller's own behaviour when called directly (existing tests in
-// tests/getByCustom.pagination.test.js call the controller directly,
-// bypassing Express middleware entirely, and are unaffected by this file).
+// GET /expense/search query validation (route boundary, per this feature's own "Technical design" section: "Put validation at the route boundary").
 const expenseSearchValidation = (req, res, next) => {
     const schema = Joi.object({
         startDate: Joi.date().required(),
@@ -176,9 +161,7 @@ const expenseSearchValidation = (req, res, next) => {
         });
     }
 
-    // Joi's `convert` coerces query-string values into real Date/Number/
-    // Boolean instances -- the controller reads req.query as Joi validated
-    // it, not the raw strings, so it never re-parses what already passed.
+    // Query as Joi validated it, not the raw strings, so it never re-parses what already passed.
     req.query = { ...req.query, ...value };
     next();
 };

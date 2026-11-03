@@ -1,9 +1,6 @@
 "use strict";
 
-// BUD-001-T01 -- the single, pure (no I/O) home of every rule in
-// docs/budgets/BUD-001-T01-category-budget-invariants.md that more than one
-// module needs. The service (T03), analyzer (T04), alert service (T06) and
-// tests (T07) all import from here instead of re-declaring constants.
+// Md that more than one module needs.
 
 const { getMonthRange } = require("../HelperServices/datecal.service");
 const { parseAmountInput, toMinorUnits, toRupees } = require("../../utils/money");
@@ -105,14 +102,6 @@ function parseBudgetAmount(raw) {
     return { ok: false, reason: ERROR_CODES.INVALID_AMOUNT };
   }
   // More than 2 decimal places is rejected rather than silently rounded.
-  // Not an absolute float tolerance on value * 100: above ~2^27 rupees the
-  // float spacing of value * 100 exceeds any fixed tolerance, and valid
-  // 2-dp amounts were rejected (found by the BUD-001-T07 boundary tests).
-  //  - string input: count decimals on the text itself (trailing zeros
-  //    don't count -- "1500.500" is 2 dp). The UI always sends strings.
-  //  - number input: allow only float representation noise, i.e. a
-  //    tolerance proportional to the value's own precision (a few ULPs), so
-  //    0.1 + 0.2 is 2 dp but 279733020.841 is not.
   if (typeof raw === "string") {
     const decimals = (raw.replace(/,/g, "").trim().split(".")[1] || "").replace(/0+$/, "");
     if (decimals.length > 2) {
@@ -155,14 +144,7 @@ function alertLevelFor(utilization) {
   return alertLevelForStatus(statusFor(utilization));
 }
 
-// I10/I14 -- the AUTHORITATIVE status for a stored allocation. Classifies
-// the exact ratio with integer cross-multiplication (spent * 100 <= max *
-// amount) instead of the 2-dp rounded utilization: spend 1 paisa over a
-// large allocation rounds to exactly 100.00% and statusFor(100) is
-// "Critical", but remaining is negative and it IS "Overspent" (found by
-// the BUD-001-T07 boundary tests). utilizationPercent stays the display
-// value only. Both operands are integer paise well inside safe-integer
-// range, so the comparison is exact.
+// I10/I14 -- the AUTHORITATIVE status for a stored allocation.
 function statusForMinor(spentMinor, amountMinor) {
   if (!Number.isFinite(spentMinor) || !Number.isFinite(amountMinor) || amountMinor <= 0) return null;
   return STATUS_THRESHOLDS.find((tier) => spentMinor * 100 <= tier.max * amountMinor).status;

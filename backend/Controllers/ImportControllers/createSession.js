@@ -1,11 +1,6 @@
 "use strict";
 
-// IMP-001-T04 -- intended route: POST /api/imports/sessions
-// (verifyToken, multipart upload: file field "file" + a "columnMapping"
-// field carrying a JSON-stringified object -- see
-// Middlewares/importUpload.js). Parses/validates every row, enriches
-// with T05's duplicate/category suggestions, and persists the preview
-// ImportSession.
+// Js). Parses/validates every row, enriches with T05's duplicate/category suggestions, and persists the preview ImportSession.
 const {
   createImportSessionPreview,
   ERROR_CODES,

@@ -1,8 +1,6 @@
 const { UserModel, BudgetModel } = require('../../config/Schemas');
 const { getMonthRange } = require('../../Services/HelperServices/datecal.service');
-// DAT-002-T02 -- canonical "MMM YYYY" builder, shared with
-// updatebudget.js/budget.service.js/sia/financialQueryService.js, instead
-// of this file's own inline toLocaleString call.
+// Js, instead of this file's own inline toLocaleString call.
 const { getMonthKey } = require('../../Services/BudgetServices/budget.service');
 const syncRecoveryService = require('../../Services/syncRecoveryService');
 const { clearUserExpenseCache } = require('../../utils/expenseCache');

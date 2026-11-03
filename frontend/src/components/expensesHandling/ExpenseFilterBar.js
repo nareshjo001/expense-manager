@@ -1,22 +1,7 @@
 import React from 'react';
 import './ExpenseFilterBar.css';
 
-// EXP-002-T05 -- optional filter bar + active-filter chips for the custom-
-// date-range search (GET /expense/search, validated by EXP-002-T02 and
-// executed by EXP-002-T04's expenseSearchService). Purely additive: the
-// mandatory startDate/endDate range stays owned by ExpensesPage's existing
-// custom-range modal; this only exposes the four OPTIONAL filters
-// EXP-002-T01's contract defined on top of that range --
-// nameContains/category/minAmount/maxAmount/isRecurring, all AND-combined,
-// every one of them genuinely optional (empty string here means "omit the
-// param entirely", not "filter for empty/zero" -- matches the backend
-// contract exactly, including isRecurring's third "Any" state being
-// distinct from an explicit "false").
-//
-// `filters` is always the five-key string-valued shape ExpensesPage owns
-// (see its `emptySearchFilters`); this component never parses/types them --
-// that conversion (trim, Number(), boolean) happens once in ExpensesPage
-// right before the API call, so this stays a plain controlled form.
+// Optional filter bar + active-filter chips for the custom- date-range search (GET /expense/search, validated by EXP-002-T02 and executed by EXP-002-T04's expenseSearchService).
 
 const RECURRING_OPTIONS = [
   { value: '', label: 'Any' },

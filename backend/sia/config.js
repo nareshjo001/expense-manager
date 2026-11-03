@@ -42,14 +42,7 @@ function normalizeTimeoutMs(rawValue) {
   return parsed;
 }
 
-// SIA-001-T02 -- output-token budget. Bounds each provider's own
-// generation-length parameter so a single answer can't run away in cost
-// or latency -- see llmService.js's askOpenAi/askGemini/askGroq, which
-// each map this to their own provider-specific field name
-// (max_output_tokens / max_tokens / max_completion_tokens respectively;
-// the three providers do NOT share one field name). Same validation shape
-// as normalizeTimeoutMs -- only a finite, strictly positive integer token
-// count is accepted, anything else falls back to the safe default.
+// Output-token budget. js's askOpenAi/askGemini/askGroq, which each map this to their own provider-specific field name (max_output_tokens / ma.
 const DEFAULT_LLM_MAX_OUTPUT_TOKENS = 1024;
 
 function normalizeMaxOutputTokens(rawValue) {
@@ -63,14 +56,7 @@ function normalizeMaxOutputTokens(rawValue) {
   return parsed;
 }
 
-// SIA-001-T02 -- context budget. Caps the combined character length of
-// systemPrompt + serialized history + serialized context + question that
-// llmService.js's askLlm() will send to ANY provider -- enforced once at
-// that shared boundary, before any adapter/request is built. This is a
-// broader, request-level ceiling, deliberately not a replacement for
-// financialSnapshotService.js's own narrower snapshot-only cap (16,000
-// chars for the analytics snapshot alone); this one covers the full
-// outbound payload across every askLlm() caller.
+// Context budget. js's askLlm() will send to ANY provider -- enforced once at that shared boundary, before any adapter/request is built.
 const DEFAULT_LLM_MAX_CONTEXT_CHARS = 60000;
 
 function normalizeMaxContextChars(rawValue) {
@@ -84,14 +70,7 @@ function normalizeMaxContextChars(rawValue) {
   return parsed;
 }
 
-// SIA-001-T04 -- provider circuit breaker. After this many CONSECUTIVE
-// provider-health-signal failures (timeout/HTTP-error/network-error/
-// malformed/empty/incomplete response -- see providerCircuitBreaker.js's
-// own HEALTH_SIGNAL_CODES; a static config/input problem like a missing
-// model or CONTEXT_BUDGET_EXCEEDED never counts, since those fail
-// identically every time and a cooldown would never fix them), the
-// breaker opens and short-circuits further calls without hitting the
-// network. Same validation shape as normalizeTimeoutMs.
+// Provider circuit breaker.
 const DEFAULT_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5;
 
 function normalizeCircuitBreakerFailureThreshold(rawValue) {
@@ -120,15 +99,7 @@ function normalizeCircuitBreakerCooldownMs(rawValue) {
   return parsed;
 }
 
-// SIA-001-T03 -- usage/cost tracking. Per-model pricing is deliberately
-// NOT hardcoded here: config.model is fully operator-configured (any
-// provider, any model string via SIA_LLM_PROVIDER/SIA_LLM_MODEL), so a
-// baked-in price table would silently misprice the moment someone
-// changes it, and provider pricing itself drifts over time regardless.
-// Instead the operator sets their own current per-million-token rate for
-// whichever model they've configured. Unset (the default) means cost is
-// honestly reported as unknown, never guessed at $0 -- the same
-// "missing, never fabricated" discipline DAT-001's *Minor fields use.
+// Usage/cost tracking. model is fully operator-configured (any provider, any model string via SIA_LLM_PROVIDER/SIA_LLM_MODEL), so a baked-in p.
 function normalizePricePerMillionUsd(rawValue) {
   if (typeof rawValue !== "string" || rawValue.trim() === "") {
     return null;

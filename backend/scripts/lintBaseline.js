@@ -49,9 +49,7 @@ async function runEslint() {
   if (output.trim()) {
     console.log(output);
   }
-  // Keep only the plain-data fields the baseline check needs; the raw
-  // results carry non-serialisable extras that JSON.parse round-tripping
-  // would drop anyway.
+  // Parse round-tripping would drop anyway.
   return results.map((result) => ({
     filePath: result.filePath,
     errorCount: result.errorCount,
@@ -139,10 +137,7 @@ async function main() {
   return 0;
 }
 
-// main() returns an exit code rather than assigning process.exitCode from
-// inside an async function: that keeps the single point of process mutation
-// synchronous, and avoids the require-atomic-updates false positive this
-// repo's lint config documents.
+// ExitCode from inside an async function: that keeps the single point of process mutation synchronous, and avoids the require-atomic-updates false positive this repo's lint config documents.
 main()
   .catch((err) => {
     console.error("lintBaseline: unexpected failure:", err && err.message);
