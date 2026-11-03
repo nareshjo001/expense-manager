@@ -68,6 +68,9 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
     billUploadMutation.mutate({ file: selectedFile, signal: abortControllerRef.current.signal }, {
       onSuccess: (result) => {
         result.parsedReceipt.expenseDate = formatDateForInput(result.parsedReceipt.expenseDate);
+        if (result.receiptId) {
+          result.parsedReceipt.receiptId = result.receiptId;
+        }
         if (result.parsedReceipt.needsReview) {
           receiptNeedsReviewToast();
         }
@@ -168,7 +171,7 @@ const BillUpload = ({ setIsBillUpload, setBillData }) => {
           type="button"
           className="bill-upload-btn"
           onClick={handleUpload}
-          disabled={billUploadMutation.isPending}
+          disabled={!selectedFile || billUploadMutation.isPending}
         >
           {billUploadMutation.isPending ? "Uploading..." : "Upload Bill"}
         </button>

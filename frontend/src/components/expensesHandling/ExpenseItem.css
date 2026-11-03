@@ -360,7 +360,7 @@
   }
 
   .expenses-page-container {
-    padding-bottom: 70px;
+    padding: 14px 14px 24px 14px;
   }
 
   .expenses-page-container .header .big-screen {
@@ -400,7 +400,105 @@
   }
 
   .custom-range-modal {
-    width: 75%;
+    width: calc(100% - 32px);
+    max-width: 380px;
+    box-sizing: border-box;
+    padding: 24px 18px 22px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+
+  .custom-range-modal p {
+    margin: 0 0 16px 0;
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: var(--text-color, #1F2937);
+    line-height: 1.35;
+  }
+
+  .custom-modal-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0;
+  }
+
+  .custom-modal-inputs input[type="date"] {
+    flex: 1 1 130px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-size: 0.85rem;
+    padding: 9px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    text-align: center;
+  }
+
+  .custom-modal-inputs input[type="date"]:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+  }
+
+  .dark-theme .custom-range-modal {
+    background: #1e293b;
+    color: #f1f5f9;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+  }
+
+  .dark-theme .custom-range-modal p {
+    color: #f1f5f9;
+  }
+
+  .dark-theme .custom-modal-inputs input[type="date"] {
+    background: #11223B;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #f1f5f9;
+  }
+
+  .dark-theme .custom-modal-inputs input[type="date"]:first-child {
+    background: #1E293B;
+    border: 1px solid #1A2C46;
+    color: #f1f5f9;
+  }
+
+  .dark-theme .custom-modal-inputs input[type="date"]:last-child {
+    background: #2563EB;
+    border: 1px solid #3B82F6;
+    color: #FFFFFF;
+  }
+
+  .dark-theme .custom-modal-inputs input[type="date"]:first-child:hover {
+    background: #334155;
+  }
+
+  .dark-theme .custom-modal-inputs input[type="date"]:last-child:hover {
+    background: #1D4ED8;
+  }
+
+  @media screen and (max-width: 360px) {
+    .custom-range-modal {
+      width: calc(100% - 24px);
+      padding: 20px 14px 18px;
+    }
+
+    .custom-modal-inputs {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .custom-modal-inputs input[type="date"] {
+      flex: 1 1 auto;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
   }
 
 }

@@ -217,9 +217,8 @@
   background: var(--ri-card-bg, #ffffff);
   border: 1px solid var(--ri-card-border, rgba(244, 114, 182, 0.25));
   border-radius: 22px;
-  padding: 32px;
+  padding: 24px;
   box-shadow: var(--ri-card-shadow, 0 10px 30px rgba(225, 29, 116, 0.05));
-  min-height: 400px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -232,6 +231,7 @@
   align-items: center;
   justify-content: center;
   padding: 64px 20px;
+  min-height: 320px;
   text-align: center;
   margin: auto;
 }
@@ -349,11 +349,46 @@
 /* ================= Populated Receipt List Cards ================= */
 .receipt-inbox-list {
   list-style: none;
-  padding: 0;
+  padding: 4px 6px 6px 4px;
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* Exactly 4 items visible initially (~88px item + 14px gap * 3 + padding = ~406px), remaining scrollable */
+  max-height: 406px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 114, 182, 0.45) transparent;
+}
+
+.receipt-inbox-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.receipt-inbox-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.receipt-inbox-list::-webkit-scrollbar-thumb {
+  background: rgba(244, 114, 182, 0.4);
+  border-radius: 9999px;
+}
+
+.receipt-inbox-list::-webkit-scrollbar-thumb:hover {
+  background: var(--ri-accent, #db2777);
+}
+
+.dark-theme .receipt-inbox-list {
+  scrollbar-color: rgba(96, 165, 250, 0.38) transparent;
+}
+
+.dark-theme .receipt-inbox-list::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.38);
+}
+
+.dark-theme .receipt-inbox-list::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
 }
 
 .receipt-inbox-item {
@@ -626,6 +661,11 @@
 }
 
 @media (max-width: 520px) {
+  .receipt-inbox-list {
+    max-height: 350px;
+    gap: 12px;
+  }
+
   .receipt-filter-group {
     flex-direction: column;
     align-items: stretch;

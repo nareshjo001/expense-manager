@@ -23,6 +23,17 @@ import {
   receiptDuplicateDecisionErrorToast,
 } from "../alertsEffects/toastMessages";
 
+jest.mock(
+  "react-router-dom",
+  () => ({
+    useNavigate: () => jest.fn(),
+  }),
+  { virtual: true }
+);
+jest.mock("../../hooks/queries/useExpenseSearchQuery", () => ({
+  useExpenseSearchQuery: () => ({ data: { data: [] }, isLoading: false }),
+}));
+
 jest.mock("../../hooks/queries/useReceiptDetailQuery", () => ({
   useReceiptDetailQuery: jest.fn(),
 }));

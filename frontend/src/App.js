@@ -11,6 +11,9 @@ import {
   expenseAddErrorToast
 } from './imports/Imports';
 import './App.css';
+import { HiOutlineBell, HiOutlineEye, HiInformationCircle } from 'react-icons/hi2';
+import { FaShieldAlt } from 'react-icons/fa';
+
 
 import { BrowserRouter } from 'react-router-dom';
 
@@ -141,24 +144,42 @@ function App() {
       {showNotificationPrompt && (
         <div className="notification-modal">
           <div className="notification-content">
+            <div className="notification-icon-badge" aria-hidden="true">
+              <HiOutlineBell className="notification-bell-icon" />
+              <span className="notification-shield-badge">
+                <FaShieldAlt className="notification-shield-icon" />
+              </span>
+            </div>
+
             <h3>Notification Privacy</h3>
-            <p>Get reminders when recurring expenses are created.</p>
-            <label>
+            <p className="notification-subtitle">Get reminders when recurring expenses are created.</p>
+
+            <label className="notification-preview-row">
               <input
                 type="checkbox"
+                className="notification-checkbox"
                 checked={showDetailedPreviews}
                 onChange={(event) => setShowDetailedPreviews(event.target.checked)}
               />
-              Show expense names in notification previews
+              <span className="notification-preview-text">
+                Show expense names in notification previews
+              </span>
+              <span className="notification-eye-tile" aria-hidden="true">
+                <HiOutlineEye />
+              </span>
             </label>
-            <p>Leave this off to keep lock-screen notifications private.</p>
+
+            <div className="notification-hint-row">
+              <HiInformationCircle className="notification-hint-icon" aria-hidden="true" />
+              <p className="notification-hint-text">Leave this off to keep lock-screen notifications private.</p>
+            </div>
 
             <div className="notification-buttons">
-              <button onClick={handleEnable} >
+              <button type="button" className="notification-btn-continue" onClick={handleEnable}>
                 Continue
               </button>
 
-              <button onClick={handleLater}>
+              <button type="button" className="notification-btn-later" onClick={handleLater}>
                 Maybe Later
               </button>
             </div>

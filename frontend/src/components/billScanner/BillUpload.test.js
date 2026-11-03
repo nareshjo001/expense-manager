@@ -25,6 +25,18 @@ describe("BillUpload", () => {
     render(<BillUpload setIsBillUpload={jest.fn()} setBillData={jest.fn()} {...props} />);
   const fileInput = () => screen.getByLabelText("Select a receipt image");
 
+  it("disables the upload button when no file is selected", () => {
+    renderBillUpload();
+    expect(screen.getByRole("button", { name: "Upload Bill" })).toBeDisabled();
+  });
+
+  it("enables the upload button when a valid file is selected", () => {
+    renderBillUpload();
+    const file = new File(["receipt"], "receipt.jpg", { type: "image/jpeg" });
+    fireEvent.change(fileInput(), { target: { files: [file] } });
+    expect(screen.getByRole("button", { name: "Upload Bill" })).toBeEnabled();
+  });
+
   it("rejects an unsupported or oversized file before upload", () => {
     renderBillUpload();
     const file = new File(["receipt"], "receipt.pdf", { type: "application/pdf" });

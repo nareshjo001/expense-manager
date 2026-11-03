@@ -160,7 +160,7 @@ const OTPForm = ({ email, onSuccess, setIsSpinnerLoad, onBack }) => {
                 )}
 
                 <header className="login-header">
-                    <h2 className="login-title">Verify OTP</h2>
+                    <h2 className="login-title">Verify <span className="auth-title-accent">OTP</span></h2>
                     <p className="login-subtitle">
                         Enter the 6-digit code sent to <strong className="otp-email-highlight">{email}</strong>
                     </p>

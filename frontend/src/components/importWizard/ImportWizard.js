@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FaFileAlt, FaChevronDown } from "react-icons/fa";
 import "./ImportWizard.css";
@@ -70,6 +70,34 @@ const ImportWizard = () => {
   const [committedSession, setCommittedSession] = useState(null);
 
   const fileInputRef = useRef(null);
+  const stepsContainerRef = useRef(null);
+
+  useEffect(() => {
+    const container = stepsContainerRef.current;
+    if (!container) return;
+
+    const frameId = requestAnimationFrame(() => {
+      const activeItem = container.querySelector("li.active");
+      if (!activeItem) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+      const currentScrollLeft = container.scrollLeft;
+      const offsetWithinContainer = itemRect.left - containerRect.left + currentScrollLeft;
+      const targetScrollLeft = offsetWithinContainer - (container.clientWidth / 2) + (itemRect.width / 2);
+
+      if (typeof container.scrollTo === "function") {
+        container.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: "smooth",
+        });
+      } else {
+        container.scrollLeft = Math.max(0, targetScrollLeft);
+      }
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [step]);
 
   const headersMutation = useImportHeadersMutation();
   const createSessionMutation = useCreateImportSessionMutation();
@@ -220,7 +248,7 @@ const ImportWizard = () => {
             <h2 className="import-wizard-heading">Import Expenses from CSV</h2>
           </div>
 
-          <ol className="import-wizard-steps" aria-label="Import steps">
+          <ol ref={stepsContainerRef} className="import-wizard-steps" aria-label="Import steps">
             <li className={step === "upload" ? "active" : ""}>
               <span className="import-step-pill">1. Upload</span>
             </li>

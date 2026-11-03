@@ -133,19 +133,29 @@ describe("LandingPage confirmDeleteHandler -- committed delete UX", () => {
     useDeleteExpenseMutation.mockReturnValue({ mutate: mockDeleteMutate });
   });
 
-  it("renders the interaction-blocking chart overlay only for the mobile chart picker", () => {
+  it("renders the interaction-blocking settings overlay and allows choosing chart options", () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
 
     try {
       const { container } = renderLandingPage();
-      fireEvent.click(container.querySelector(".mobile-chart-btn"));
+      fireEvent.click(container.querySelector(".mobile-bottom-nav-btn"));
 
-      expect(container.querySelector(".mobile-chart-overlay")).toBeInTheDocument();
-      expect(container.querySelector(".mobile-dropdown-modal")).toBeInTheDocument();
+      expect(container.querySelector(".settings-overlay")).toBeInTheDocument();
+      expect(container.querySelector(".mobile-settings-panel")).toBeInTheDocument();
 
-      fireEvent.click(container.querySelector(".mobile-chart-overlay"));
-      expect(container.querySelector(".mobile-chart-overlay")).not.toBeInTheDocument();
+      // Find the Charts accordion toggle
+      const chartsToggle = container.querySelector(".mobile-menu-dropdown-toggle");
+      expect(chartsToggle).toBeInTheDocument();
+
+      expect(screen.queryByText("Trend Flow")).not.toBeInTheDocument();
+      fireEvent.click(chartsToggle);
+      expect(screen.getByText("Trend Flow")).toBeInTheDocument();
+      expect(screen.getByText("Bars View")).toBeInTheDocument();
+      expect(screen.getByText("Pie Scope")).toBeInTheDocument();
+
+      fireEvent.click(container.querySelector(".settings-overlay"));
+      expect(container.querySelector(".settings-overlay")).not.toBeInTheDocument();
     } finally {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
     }

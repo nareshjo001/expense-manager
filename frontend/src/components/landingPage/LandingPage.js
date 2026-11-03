@@ -21,7 +21,7 @@ import appLogoPink from '../../icons/Logo Pink.png';
 import appLogoDark from '../../icons/Logo Dark.png';
 
 import { signUpSuccessToast } from '../alertsEffects/toastMessages';
-import { FaWallet, FaPlusCircle, FaChartBar, FaChartPie, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaWindowClose, FaBars, FaTags, FaSyncAlt, FaBell, FaReceipt, FaRobot, FaAngleDoubleLeft, FaAngleDoubleRight, FaExchangeAlt } from "react-icons/fa";
+import { FaWallet, FaPlusCircle, FaChartBar, FaChartPie, FaSearchDollar, FaSignOutAlt, FaMoon, FaSun, FaTags, FaSyncAlt, FaBell, FaReceipt, FaRobot, FaAngleDoubleLeft, FaAngleDoubleRight, FaExchangeAlt, FaCog, FaChevronRight, FaTimes } from "react-icons/fa";
 import { useDeleteExpenseMutation } from '../../hooks/mutations/useDeleteExpenseMutation';
 import { queryClient } from '../../query/queryClient';
 import { getAccessToken, logoutSession } from '../../api/sessionClient';
@@ -110,6 +110,13 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
     // "Charts" has no single route of its own (it fans out to /chart/line,
     // /chart/bar, /chart/pie), so its active state covers any chart route.
     const isChartsActive = location.pathname.startsWith('/chart');
+    const [isChartsMenuOpen, setIsChartsMenuOpen] = useState(isChartsActive);
+
+    useEffect(() => {
+        if (isChartsActive) {
+            setIsChartsMenuOpen(true);
+        }
+    }, [isChartsActive]);
 
     // REC-003-T05 -- the upcoming-recurring view's "Edit" action opens the
     // underlying historical expense (see UpcomingRecurring.js's own header
@@ -135,6 +142,17 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    useEffect(() => {
+        if (isSettingsOpen) {
+            document.body.classList.add('mobile-settings-open');
+        } else {
+            document.body.classList.remove('mobile-settings-open');
+        }
+        return () => {
+            document.body.classList.remove('mobile-settings-open');
+        };
+    }, [isSettingsOpen]);
 
     const onDelete = (id) => {
         setConfirmDeleteId(id);
@@ -180,7 +198,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
             <Link
                 to="/chart/line"
                 className="dropdown-item"
-                onClick={() => setShowMobileDropdown(false)}
+                onClick={() => { setShowMobileDropdown(false); setIsSettingsOpen(false); }}
                 onMouseEnter={loadTrendChartPage}
                 onFocus={loadTrendChartPage}
                 onTouchStart={loadTrendChartPage}
@@ -192,7 +210,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
             <Link
                 to="/chart/bar"
                 className="dropdown-item"
-                onClick={() => setShowMobileDropdown(false)}
+                onClick={() => { setShowMobileDropdown(false); setIsSettingsOpen(false); }}
                 onMouseEnter={loadBarChartPage}
                 onFocus={loadBarChartPage}
                 onTouchStart={loadBarChartPage}
@@ -204,7 +222,7 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
             <Link
                 to="/chart/pie"
                 className="dropdown-item"
-                onClick={() => setShowMobileDropdown(false)}
+                onClick={() => { setShowMobileDropdown(false); setIsSettingsOpen(false); }}
                 onMouseEnter={loadPieChartPage}
                 onFocus={loadPieChartPage}
                 onTouchStart={loadPieChartPage}
@@ -228,33 +246,270 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
     };
 
     const renderMobileSettings = () => (
-        <div className="mobile-settings-panel">
-
+        <aside
+            className="mobile-settings-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Settings and Menu"
+        >
             <div className="mobile-settings-header">
-                <span>Settings</span>
+                <div className="mobile-settings-heading-group">
+                    <span className="mobile-settings-accent-bar" aria-hidden="true" />
+                    <h2 className="mobile-settings-heading">Settings & Menu</h2>
+                </div>
 
                 <button
-                className="mobile-settings-close-btn"
-                onClick={() => setIsSettingsOpen(false)}
+                    type="button"
+                    className="mobile-settings-close-btn"
+                    onClick={() => setIsSettingsOpen(false)}
+                    aria-label="Close menu"
+                    title="Close menu"
                 >
-                <FaWindowClose />
+                    <FaTimes aria-hidden="true" />
                 </button>
             </div>
 
             <div className="mobile-settings-body">
+                <nav className="mobile-menu-nav" aria-label="Mobile navigation">
+                    <div className="mobile-menu-section">
+                        <span className="mobile-menu-group-label">INSIGHTS</span>
 
-                <button className="toggle-button" onClick={toggleTheme}>
-                {theme === "light-theme" ? <FaMoon /> : <FaSun />}
-                {theme === "light-theme" ? "Dark Mode" : "Light Mode"}
-                </button>
+                        <div className="mobile-menu-group">
+                            <button
+                                type="button"
+                                className={`mobile-menu-item mobile-menu-dropdown-toggle ${isChartsActive ? 'active-menu-item' : ''}`}
+                                onClick={() => setIsChartsMenuOpen((prev) => !prev)}
+                                aria-expanded={isChartsMenuOpen}
+                                aria-label="Toggle Charts options"
+                            >
+                                <div className="mobile-menu-item-content">
+                                    <div className="mobile-menu-icon-box">
+                                        <FaChartBar className="mobile-menu-item-icon" />
+                                    </div>
+                                    <div className="mobile-menu-item-texts">
+                                        <span className="mobile-menu-item-title">Charts</span>
+                                        <span className="mobile-menu-item-desc">Visualize your spending</span>
+                                    </div>
+                                </div>
+                                <span className={`mobile-menu-chevron ${isChartsMenuOpen ? 'open' : ''}`} aria-hidden="true">
+                                    <FaChevronRight />
+                                </span>
+                            </button>
 
-                <button className="logout-button" onClick={handleLogout}>
-                <FaSignOutAlt />
-                Logout
-                </button>
+                            {isChartsMenuOpen && (
+                                <div className="mobile-menu-subitems" role="region" aria-label="Chart options">
+                                    <Link
+                                        to="/chart/line"
+                                        className={`mobile-menu-subitem ${isRouteActive('/chart/line') ? 'active-subitem' : ''}`}
+                                        onClick={() => setIsSettingsOpen(false)}
+                                        onTouchStart={loadTrendChartPage}
+                                        onMouseEnter={loadTrendChartPage}
+                                    >
+                                        <div className="mobile-subitem-content">
+                                            <img className="icon-button" src={icons.trendChart} alt="" aria-hidden="true" />
+                                            <span>Trend Flow</span>
+                                        </div>
+                                    </Link>
 
+                                    <Link
+                                        to="/chart/bar"
+                                        className={`mobile-menu-subitem ${isRouteActive('/chart/bar') ? 'active-subitem' : ''}`}
+                                        onClick={() => setIsSettingsOpen(false)}
+                                        onTouchStart={loadBarChartPage}
+                                        onMouseEnter={loadBarChartPage}
+                                    >
+                                        <div className="mobile-subitem-content">
+                                            <img className="icon-button" src={icons.barChart} alt="" aria-hidden="true" />
+                                            <span>Bars View</span>
+                                        </div>
+                                    </Link>
+
+                                    <Link
+                                        to="/chart/pie"
+                                        className={`mobile-menu-subitem ${isRouteActive('/chart/pie') ? 'active-subitem' : ''}`}
+                                        onClick={() => setIsSettingsOpen(false)}
+                                        onTouchStart={loadPieChartPage}
+                                        onMouseEnter={loadPieChartPage}
+                                    >
+                                        <div className="mobile-subitem-content">
+                                            <img className="icon-button" src={icons.pieChart} alt="" aria-hidden="true" />
+                                            <span>Pie Scope</span>
+                                        </div>
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+
+                        <Link
+                            to="/analysis"
+                            className={`mobile-menu-item ${isRouteActive('/analysis') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                            onTouchStart={loadInsights}
+                            onMouseEnter={loadInsights}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaSearchDollar className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">Analysis</span>
+                                    <span className="mobile-menu-item-desc">Get spending insights</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+                    </div>
+
+                    <div className="mobile-menu-section">
+                        <span className="mobile-menu-group-label">MANAGEMENT</span>
+
+                        <Link
+                            to="/rules"
+                            className={`mobile-menu-item ${isRouteActive('/rules') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaTags className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">Rules</span>
+                                    <span className="mobile-menu-item-desc">Manage merchant rules</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+
+                        <Link
+                            to="/recurring"
+                            className={`mobile-menu-item ${isRouteActive('/recurring') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaSyncAlt className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">Recurring</span>
+                                    <span className="mobile-menu-item-desc">Manage recurring expenses</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+
+                        <Link
+                            to="/data-transfer"
+                            className={`mobile-menu-item ${isRouteActive('/data-transfer') || isRouteActive('/import') || isRouteActive('/export') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaExchangeAlt className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">Data Transfer</span>
+                                    <span className="mobile-menu-item-desc">Import or export your data</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+
+                        <Link
+                            to="/receipts"
+                            className={`mobile-menu-item ${isRouteActive('/receipts') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaReceipt className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">Receipts</span>
+                                    <span className="mobile-menu-item-desc">View and manage receipts</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+                    </div>
+
+                    <div className="mobile-menu-section">
+                        <span className="mobile-menu-group-label">PREFERENCES</span>
+
+                        <Link
+                            to="/notification-preferences"
+                            className={`mobile-menu-item ${isRouteActive('/notification-preferences') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaBell className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">Notifications</span>
+                                    <span className="mobile-menu-item-desc">Expense reminders and alerts</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+
+                        <Link
+                            to="/sia-settings"
+                            className={`mobile-menu-item ${isRouteActive('/sia-settings') ? 'active-menu-item' : ''}`}
+                            onClick={() => setIsSettingsOpen(false)}
+                        >
+                            <div className="mobile-menu-item-content">
+                                <div className="mobile-menu-icon-box">
+                                    <FaRobot className="mobile-menu-item-icon" />
+                                </div>
+                                <div className="mobile-menu-item-texts">
+                                    <span className="mobile-menu-item-title">SIA Settings</span>
+                                    <span className="mobile-menu-item-desc">AI assistant preferences</span>
+                                </div>
+                            </div>
+                            <span className="mobile-menu-chevron" aria-hidden="true">
+                                <FaChevronRight />
+                            </span>
+                        </Link>
+                    </div>
+                </nav>
+
+                <div className="mobile-menu-footer">
+                    <button
+                        type="button"
+                        className="mobile-menu-logout-btn"
+                        onClick={() => {
+                            setIsSettingsOpen(false);
+                            handleLogout();
+                        }}
+                    >
+                        <div className="mobile-menu-logout-left">
+                            <div className="mobile-menu-logout-icon-box">
+                                <FaSignOutAlt className="mobile-menu-item-icon" />
+                            </div>
+                            <div className="mobile-menu-item-texts">
+                                <span className="mobile-menu-item-title">Logout</span>
+                                <span className="mobile-menu-item-desc">Sign out of your account</span>
+                            </div>
+                        </div>
+                        <span className="mobile-menu-chevron" aria-hidden="true">
+                            <FaChevronRight />
+                        </span>
+                    </button>
+                </div>
             </div>
-        </div>
+        </aside>
     );
 
     return (
@@ -500,10 +755,13 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                     </div>
 
                                     <button
-                                        className="mobile-settings"
-                                        onClick={() => setIsSettingsOpen(true)}
+                                        type="button"
+                                        className="mobile-header-theme-toggle"
+                                        onClick={toggleTheme}
+                                        aria-label={theme === 'light-theme' ? 'Switch to dark mode' : 'Switch to light mode'}
+                                        title={theme === 'light-theme' ? 'Dark Mode' : 'Light Mode'}
                                     >
-                                        <FaBars />
+                                        {theme === 'light-theme' ? <FaMoon aria-hidden="true" /> : <FaSun aria-hidden="true" />}
                                     </button>
                                 </div>
                             </header>
@@ -536,8 +794,8 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                         </div>
                     </div>
 
-                    {isMobile &&
-                        <nav className="mobile-bottom-nav">
+                    {isMobile && (
+                        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
                             <Link to="/" className={location.pathname === "/" ? "active-nav" : ""}>
                                 <FaWallet />
                                 <span>Expenses</span>
@@ -553,66 +811,24 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                                 <span>Add</span>
                             </Link>
 
-                            <span
-                                className="mobile-chart-btn"
-                                role="button"
-                                tabIndex={0}
-                                aria-haspopup="true"
-                                aria-expanded={showMobileDropdown}
-                                onClick={() => setShowMobileDropdown(prev => !prev)}
-                                onKeyDown={onKeyActivate(() => setShowMobileDropdown(prev => !prev))}
-                                onTouchStart={prefetchCharts}
+                            <button
+                                type="button"
+                                className={`mobile-bottom-nav-btn ${isSettingsOpen || (!['/', '/budgets', '/add'].includes(location.pathname)) ? "active-nav" : ""}`}
+                                onClick={() => setIsSettingsOpen(true)}
+                                aria-label="Settings and Menu"
+                                aria-expanded={isSettingsOpen}
                             >
-                                <FaChartBar />
-                                <span>Charts</span>
-                            </span>
-
-                            <Link
-                                to="/analysis"
-                                className={location.pathname === "/analysis" ? "active-nav" : ""}
-                                onTouchStart={loadInsights}
-                            >
-                                <FaSearchDollar />
-                                <span>Analysis</span>
-                            </Link>
-
-                            <Link to="/rules" className={location.pathname === "/rules" ? "active-nav" : ""}>
-                                <FaTags />
-                                <span>Rules</span>
-                            </Link>
-
-                            <Link to="/recurring" className={location.pathname === "/recurring" ? "active-nav" : ""}>
-                                <FaSyncAlt />
-                                <span>Recurring</span>
-                            </Link>
-
-                            <Link to="/notification-preferences" className={location.pathname === "/notification-preferences" ? "active-nav" : ""}>
-                                <FaBell />
-                                <span>Notifications</span>
-                            </Link>
-
-                            <Link to="/sia-settings" className={location.pathname === "/sia-settings" ? "active-nav" : ""}>
-                                <FaRobot />
-                                <span>SIA Settings</span>
-                            </Link>
-
-                            <Link to="/receipts" className={location.pathname === "/receipts" ? "active-nav" : ""}>
-                                <FaReceipt />
-                                <span>Receipts</span>
-                            </Link>
-
-                            <Link to="/data-transfer" className={["/data-transfer", "/export", "/import"].includes(location.pathname) ? "active-nav" : ""}>
-                                <FaExchangeAlt />
-                                <span>Data Transfer</span>
-                            </Link>
+                                <FaCog />
+                                <span>Settings</span>
+                            </button>
                         </nav>
-                    }
+                    )}
 
                     {isMobile && showMobileDropdown && (
                         <>
                             <div
                                 className="dropdown-overlay mobile-chart-overlay"
-                                onClick={() => setShowMobileDropdown(false)}
+                                onClick={() => { setShowMobileDropdown(false); setIsSettingsOpen(false); }}
                             />
 
                             <div className={`dropdown-menu ${showMobileDropdown ? "mobile-dropdown-modal" : ""}`}>
@@ -621,15 +837,16 @@ const LandingPage = ({ setIsSpinnerLoad, setIsLogout, setIsLoggedIn }) => {
                         </>
                     )}
 
-                    {isSettingsOpen &&
+                    {isSettingsOpen && (
                         <>
                             <div
-                                className="dropdown-overlay"
+                                className="dropdown-overlay settings-overlay"
                                 onClick={() => setIsSettingsOpen(false)}
+                                aria-hidden="true"
                             />
                             {renderMobileSettings()}
                         </>
-                    }
+                    )}
             </div>
 
             {confirmDeleteId && (

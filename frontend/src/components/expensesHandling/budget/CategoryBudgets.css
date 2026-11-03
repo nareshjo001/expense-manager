@@ -1396,7 +1396,7 @@
 
 @media (max-width: 600px) {
   .budgets-page-container {
-    padding: 0 0 24px 0;
+    padding: 14px 14px 24px 14px;
   }
 
   .budgets-top-bar-card {
@@ -2023,7 +2023,7 @@
     display: inline;
   }
 
-  /* 6. Dark Theme Mobile Overrides */
+  /* 6. Dark Theme Mobile Overrides (matching PC view blue/slate palette) */
   .dark-theme .category-budgets {
     background: transparent;
     border: none;
@@ -2035,90 +2035,122 @@
   .dark-theme .category-budgets-panel-title,
   .dark-theme .category-budgets-form-title,
   .dark-theme .category-budgets-field label,
-  .dark-theme .category-budgets-currency-symbol {
-    color: #fdf2f8;
+  .dark-theme .category-budgets-currency-symbol,
+  .dark-theme .category-budgets-stat-value,
+  .dark-theme .category-budgets-unbudgeted-name,
+  .dark-theme .category-budget-name {
+    color: #FFFFFF;
   }
 
   .dark-theme .category-budgets-rollover-subtitle,
   .dark-theme .category-budgets-empty-subtitle,
   .dark-theme .category-budgets-panel-subtitle,
-  .dark-theme .category-budgets-form-subtitle {
-    color: #d4a3be;
+  .dark-theme .category-budgets-form-subtitle,
+  .dark-theme .category-budgets-stat-label {
+    color: #94A3B8;
   }
 
   .dark-theme .category-budgets-month-control {
-    background: rgba(36, 20, 32, 0.95);
-    border-color: rgba(120, 42, 85, 0.5);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    background: #11223B;
+    border-color: #1A2C46;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
 
-  .dark-theme .category-budgets-month-display,
+  .dark-theme .category-budgets-month-control:hover {
+    border-color: #3B82F6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  }
+
+  .dark-theme .category-budgets-month-display {
+    color: #FFFFFF;
+  }
+
   .dark-theme .category-budgets-month-icon,
   .dark-theme .category-budgets-month-chevron {
-    color: #f472b6;
+    color: #94A3B8;
   }
 
   .dark-theme .category-budgets-summary-card,
   .dark-theme .category-budgets-panel,
   .dark-theme .category-budgets-form-card {
-    background: rgba(36, 20, 32, 0.95);
-    border-color: rgba(120, 42, 85, 0.5);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    background: #102036;
+    border-color: #1A2C46;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   }
 
-  .dark-theme .category-budgets-stat-label {
-    color: #9ca3af;
+  .dark-theme .category-budgets-summary-card--total .category-budgets-stat-icon-wrap,
+  .dark-theme .category-budgets-stat-icon-wrap--pink {
+    background: rgba(37, 99, 235, 0.25);
+    color: #60A5FA;
   }
 
-  .dark-theme .category-budgets-stat-value {
-    color: #fdf2f8;
+  .dark-theme .category-budgets-panel-icon-wrap,
+  .dark-theme .category-budgets-list-icon {
+    background: rgba(37, 99, 235, 0.25);
+    color: #60A5FA;
   }
 
-  .dark-theme .category-budgets-unbudgeted-name {
-    color: #fdf2f8;
+  .dark-theme .category-budgets-form-badge {
+    background: #2563EB;
+    color: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
   }
 
   .dark-theme .category-budgets-unbudgeted-amount {
-    color: #f472b6;
+    color: #60A5FA;
   }
 
   .dark-theme .category-budgets-unbudgeted-item {
-    border-bottom-color: rgba(120, 42, 85, 0.35);
+    background: #11223B;
+    border-bottom-color: #1A2C46;
   }
 
   .dark-theme .category-budgets-unbudgeted-list::-webkit-scrollbar-track,
   .dark-theme .category-budgets-list::-webkit-scrollbar-track {
-    background: rgba(120, 42, 85, 0.25) !important;
+    background: #0B182B !important;
   }
 
   .dark-theme .category-budgets-unbudgeted-list::-webkit-scrollbar-thumb,
   .dark-theme .category-budgets-list::-webkit-scrollbar-thumb {
-    background: rgba(244, 114, 182, 0.45) !important;
+    background: #1A2C46 !important;
   }
 
   .dark-theme .category-budgets-unbudgeted-list::-webkit-scrollbar-button:single-button:vertical:decrement,
-  .dark-theme .category-budgets-list::-webkit-scrollbar-button:single-button:vertical:decrement {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='6' height='5' viewBox='0 0 6 5'><polygon points='3,0 6,5 0,5' fill='%23f472b6'/></svg>") !important;
-  }
-
+  .dark-theme .category-budgets-list::-webkit-scrollbar-button:single-button:vertical:decrement,
   .dark-theme .category-budgets-unbudgeted-list::-webkit-scrollbar-button:single-button:vertical:increment,
   .dark-theme .category-budgets-list::-webkit-scrollbar-button:single-button:vertical:increment {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='6' height='5' viewBox='0 0 6 5'><polygon points='3,5 6,0 0,0' fill='%23f472b6'/></svg>") !important;
+    display: none !important;
   }
 
   .dark-theme .category-budgets-input-wrapper input {
-    background: #2b1425;
-    border-color: #6b264d;
-    color: #fdf2f8;
+    background: #11223B;
+    border-color: #1A2C46;
+    color: #FFFFFF;
+  }
+
+  .dark-theme .category-budgets-input-wrapper input:focus-visible {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
   }
 
   .dark-theme .category-budgets-field-chevron {
-    color: #f472b6;
+    color: #94A3B8;
   }
 
   .dark-theme .category-budget-button-plus {
-    background: #ffffff;
-    color: #be185d;
+    background: #3B82F6;
+    color: #FFFFFF;
+  }
+
+  .dark-theme .category-budget-button--submit {
+    background: #3B82F6 !important;
+    color: #FFFFFF !important;
+  }
+
+  .dark-theme .category-budget-button--cancel {
+    border: 1.5px solid #3B82F6 !important;
+    color: #FFFFFF !important;
+    background: transparent !important;
   }
 }
 

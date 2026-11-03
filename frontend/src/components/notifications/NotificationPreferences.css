@@ -511,7 +511,7 @@ body:has(.notification-prefs-page) .scroll-top-btn {
 /* ================= Mobile Responsive ================= */
 @media (max-width: 600px) {
     .notification-prefs-page {
-        padding: 12px 14px calc(90px + env(safe-area-inset-bottom, 0px));
+        padding: 12px 14px 24px;
     }
 
     /* Transparent outer containers for decoupling into individual cards */
@@ -875,6 +875,25 @@ body:has(.notification-prefs-page) .scroll-top-btn {
         accent-color: #be185d;
         flex-shrink: 0;
         cursor: pointer;
+    }
+
+    .dark-theme .notification-prefs-checkbox,
+    .dark-theme .notification-prefs-quiet-checkbox {
+        accent-color: #3b82f6 !important;
+    }
+
+    .dark-theme .notification-prefs-save {
+        background: #3B82F6 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3) !important;
+    }
+
+    .dark-theme .notification-prefs-save:hover:not(:disabled) {
+        background: #60A5FA !important;
+    }
+
+    .dark-theme .notification-prefs-save:active:not(:disabled) {
+        background: #2563EB !important;
     }
 
     /* Save Changes Button on Mobile */

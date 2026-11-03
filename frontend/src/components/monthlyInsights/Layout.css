@@ -84,8 +84,13 @@
   .budget-analysis-parent-container,
   .income-analysis-parent-container,
   .income-insights-parent-container {
-    padding: 16px 14px;
-    border-radius: 20px;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
     gap: 16px;
   }
 }

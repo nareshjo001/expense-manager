@@ -293,6 +293,7 @@ const MerchantRules = () => {
                                             type="button"
                                             className="merchant-rules-btn-edit"
                                             onClick={() => startEdit(rule)}
+                                            aria-label="Edit"
                                         >
                                             <FaEdit className="merchant-rules-btn-icon" aria-hidden="true" />
                                             <span>Edit</span>
@@ -301,6 +302,7 @@ const MerchantRules = () => {
                                             type="button"
                                             className="merchant-rules-btn-delete"
                                             onClick={() => setConfirmDeleteId(rule._id)}
+                                            aria-label="Delete"
                                         >
                                             <FaTrashAlt className="merchant-rules-btn-icon" aria-hidden="true" />
                                             <span>Delete</span>

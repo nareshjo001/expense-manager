@@ -583,6 +583,18 @@ body:has(.sia-prefs-page) .sia-entry-point {
         border: 1.5px solid #f472b6;
     }
 
+    .dark-theme .sia-prefs-delete-history {
+        background: #11223b !important;
+        border: 1.5px solid rgba(239, 68, 68, 0.4) !important;
+        color: #f87171 !important;
+    }
+
+    .dark-theme .sia-prefs-delete-history:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.18) !important;
+        border-color: #ef4444 !important;
+        color: #fca5a5 !important;
+    }
+
     .sia-prefs-delete-icon {
         font-size: 17px;
     }

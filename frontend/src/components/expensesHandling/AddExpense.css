@@ -1529,3 +1529,86 @@
 .dark-theme .field-confidence.low {
   color: #FBBF24;
 }
+
+/* ================= Receipt Duplicate Detection Banner ================= */
+.receipt-duplicate-detected-banner {
+  background: #FEF3C7;
+  border: 1.5px solid #FDE68A;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #92400E;
+  box-sizing: border-box;
+}
+
+.dark-theme .receipt-duplicate-detected-banner {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1.5px solid rgba(245, 158, 11, 0.35);
+  color: #FDE047;
+}
+
+.duplicate-detected-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.duplicate-detected-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.duplicate-detected-text {
+  font-size: 13.5px;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.duplicate-detected-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.btn-link-duplicate {
+  all: unset;
+  box-sizing: border-box;
+  background: #D97706;
+  color: #FFFFFF;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-link-duplicate:hover {
+  background: #B45309;
+  transform: translateY(-1px);
+}
+
+.btn-dismiss-duplicate {
+  all: unset;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1.5px solid rgba(146, 64, 14, 0.35);
+  color: inherit;
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-dismiss-duplicate:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

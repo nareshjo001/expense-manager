@@ -4,15 +4,15 @@ import Insights from "./Insights";
 jest.mock("./MonthlyInsightPage", () => () => <div data-testid="monthly-insight-page-view" />);
 jest.mock("./Income/IncomeInsights", () => () => <div data-testid="income-insights-view" />);
 
-describe("Insights -- Analysis mode toggle (Budget Insights / Income Insights)", () => {
-  it("starts on Budget Insights and renders the budget insights view", () => {
+describe("Insights -- Analysis mode toggle (Budgets / Income)", () => {
+  it("starts on Budgets and renders the budget insights view", () => {
     render(<Insights />);
 
     expect(screen.getByTestId("monthly-insight-page-view")).toBeInTheDocument();
     expect(screen.queryByTestId("income-insights-view")).toBeNull();
 
-    const budgetBtn = screen.getByRole("tab", { name: /budget insights/i });
-    const incomeBtn = screen.getByRole("tab", { name: /income insights/i });
+    const budgetBtn = screen.getByRole("tab", { name: /budgets/i });
+    const incomeBtn = screen.getByRole("tab", { name: /income/i });
 
     expect(budgetBtn).toHaveClass("active");
     expect(budgetBtn).toHaveAttribute("aria-selected", "true");
@@ -20,10 +20,10 @@ describe("Insights -- Analysis mode toggle (Budget Insights / Income Insights)",
     expect(incomeBtn).toHaveAttribute("aria-selected", "false");
   });
 
-  it("switches to Income Insights when clicked, moving the slider", () => {
+  it("switches to Income when clicked, moving the slider", () => {
     const { container } = render(<Insights />);
     const slider = container.querySelector(".analysis-toggle-slider");
-    const incomeBtn = screen.getByRole("tab", { name: /income insights/i });
+    const incomeBtn = screen.getByRole("tab", { name: /income/i });
 
     fireEvent.click(incomeBtn);
 
@@ -33,8 +33,8 @@ describe("Insights -- Analysis mode toggle (Budget Insights / Income Insights)",
     expect(incomeBtn).toHaveAttribute("aria-selected", "true");
     expect(slider).toHaveClass("right");
 
-    // Click back to Budget Insights
-    const budgetBtn = screen.getByRole("tab", { name: /budget insights/i });
+    // Click back to Budgets
+    const budgetBtn = screen.getByRole("tab", { name: /budgets/i });
     fireEvent.click(budgetBtn);
 
     expect(screen.getByTestId("monthly-insight-page-view")).toBeInTheDocument();

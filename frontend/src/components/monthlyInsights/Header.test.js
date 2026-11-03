@@ -48,12 +48,18 @@ describe("monthlyInsights/Header -- compact budget summary", () => {
     expect(screen.getByText(/15% higher than last month/i)).toBeInTheDocument();
   });
 
-  it("opens the budget editor from the header edit button", () => {
+  it("opens the budget editor from the header edit button with Update button and body class", () => {
     render(<Header summary={{ comparePastMonth: 12, totalSpent: 1200 }} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit budget" }));
 
     expect(screen.getByRole("heading", { name: "Edit Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update Budget" })).not.toBeInTheDocument();
+    expect(document.body.classList.contains("edit-budget-open")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.body.classList.contains("edit-budget-open")).toBe(false);
   });
 });
 

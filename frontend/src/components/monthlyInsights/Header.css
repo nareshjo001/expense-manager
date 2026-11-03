@@ -114,6 +114,16 @@
   transform: scale(1.1);
 }
 
+/* Hide SIA launcher and scroll-to-top button while Edit Budget modal is open */
+body.edit-budget-open .sia-entry-point,
+body.edit-budget-open .sia-root,
+body.edit-budget-open .scroll-top-btn,
+body:has(.edit-budget-overlay) .sia-entry-point,
+body:has(.edit-budget-overlay) .sia-root,
+body:has(.edit-budget-overlay) .scroll-top-btn {
+  display: none !important;
+}
+
 /* BUDGET EDIT */
 .edit-budget-overlay {
   position: fixed;
@@ -625,6 +635,7 @@
 
 /* Top-Right Total Income Card */
 .income-total-card {
+  box-sizing: border-box !important;
   position: relative;
   background: var(--iih-card-bg) !important;
   border: 1px solid var(--iih-card-border) !important;
@@ -890,10 +901,15 @@
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 768px) {
   .income-insights-header {
-    padding: 18px 16px !important;
-    border-radius: 20px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
   }
 
   .income-insights-header .monthly-insights-header {
@@ -901,6 +917,9 @@
     align-items: stretch !important;
     gap: 16px !important;
     margin-bottom: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .income-insights-header .monthly-insights-header-left {
@@ -928,7 +947,10 @@
 
   .income-insights-header .income-total-card {
     width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding: 12px 18px !important;
   }
 
   .income-insights-cards-grid {
@@ -940,6 +962,17 @@
     min-height: auto !important;
     padding: 12px 14px !important;
   }
+}
+
+.budget-insights-header,
+.budget-insights-header *,
+.budget-insights-header *::before,
+.budget-insights-header *::after,
+.income-insights-header,
+.income-insights-header *,
+.income-insights-header *::before,
+.income-insights-header *::after {
+  box-sizing: border-box;
 }
 
 /* ==========================================================================
@@ -1060,6 +1093,7 @@
 
 /* Top-Right Total Budget Card */
 .budget-insights-header .monthly-insights-header-budget {
+  box-sizing: border-box !important;
   position: relative;
   background: var(--bih-card-bg) !important;
   border: 1px solid var(--bih-card-border) !important;
@@ -1357,8 +1391,13 @@
 
 @media (max-width: 768px) {
   .budget-insights-header {
-    padding: 18px 16px !important;
-    border-radius: 20px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
   }
 
   .budget-insights-header .monthly-insights-header {
@@ -1366,6 +1405,9 @@
     align-items: stretch !important;
     gap: 16px !important;
     margin-bottom: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .budget-insights-header .monthly-insights-header-left {
@@ -1389,23 +1431,20 @@
 
   .budget-insights-header .monthly-insights-header-budget {
     width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .budget-insights-header .monthly-insights-body-cards {
-    grid-template-columns: 1fr !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
     gap: 10px !important;
   }
 
   .budget-insights-header .monthly-insights-card {
     min-height: auto !important;
-    padding: 12px 14px !important;
-  }
-}
-
-@media (min-width: 520px) and (max-width: 768px) {
-  .budget-insights-header .monthly-insights-body-cards {
-    grid-template-columns: repeat(2, 1fr) !important;
+    padding: 10px 12px !important;
   }
 }
 

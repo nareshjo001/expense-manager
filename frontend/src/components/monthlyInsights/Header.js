@@ -33,6 +33,17 @@ export default function Header({ summary }) {
   useModalA11y(editBudgetDialogRef, () => setEditBudget(false), editBudget);
 
   useEffect(() => {
+    if (editBudget) {
+      document.body.classList.add("edit-budget-open");
+    } else {
+      document.body.classList.remove("edit-budget-open");
+    }
+    return () => {
+      document.body.classList.remove("edit-budget-open");
+    };
+  }, [editBudget]);
+
+  useEffect(() => {
     if (summary) {
       const t = setTimeout(() => setAnimate(true), 50);
       return () => clearTimeout(t);
@@ -81,7 +92,7 @@ export default function Header({ summary }) {
               </div>
               <div className="budget-header-title-wrap">
                 <h1 className="monthly-insights-header-title">
-                    Budget Insights
+                    Budgets
                 </h1>
 
                 <p className="monthly-insights-header-description">
@@ -350,7 +361,7 @@ export default function Header({ summary }) {
                   type="submit"
                   className="save-btn"
                 >
-                  {updateBudgetMutation.isPending ? <FetchingLoader /> : "Update Budget"}
+                  {updateBudgetMutation.isPending ? <FetchingLoader /> : "Update"}
                 </button>
               </div>
             </form>

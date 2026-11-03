@@ -1,30 +1,28 @@
 /* ==========================================================================
-   SignUp Styles - matching Auth.css specifications
+   SignUp Styles - deferring to Auth.css theme specifications
    ========================================================================== */
 @import "./Auth.css";
 
 .signup-card {
-    padding: 22px 26px 18px !important;
-    border-radius: 24px !important;
+    padding: 24px 28px 20px !important;
+    border-radius: 28px !important;
 }
 
 .signup-card .login-header {
     text-align: center;
-    margin-top: -6px;
-    margin-bottom: 12px;
+    margin-top: -4px;
+    margin-bottom: 14px;
 }
 
 .signup-card .login-title {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
-    color: #0f172a;
-    margin: 0 0 3px;
+    margin: 0 0 4px;
     letter-spacing: -0.3px;
 }
 
 .signup-card .login-subtitle {
-    font-size: 12.5px;
-    color: #64748b;
+    font-size: 13px;
     margin: 0;
     line-height: 1.35;
 }
@@ -34,70 +32,39 @@
 }
 
 .signup-card .labeled-field {
-    margin-bottom: 9px !important;
-    gap: 3px;
-}
-
-.signup-card .labeled-field-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 2px;
+    margin-bottom: 10px !important;
+    gap: 4px;
 }
 
 .signup-card .login-input {
-    height: 40px;
-    font-size: 13.5px;
-    border-radius: 11px;
-}
-
-.signup-card .login-field-icon {
-    color: #2563eb;
-    font-size: 17px;
-}
-
-.signup-card .auth-back-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50% !important;
-    background: #eef5ff;
-    border: 1px solid #dbeafe;
-    color: #2563eb;
-    font-size: 16px;
-    margin-bottom: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-
-.signup-card .auth-back-btn:hover {
-    background: #dbeafe;
-    color: #1d4ed8;
-    transform: translateX(-2px);
+    height: 45px;
+    font-size: 14px;
 }
 
 .signup-password-hint {
-    font-size: 11px;
-    color: #64748b;
-    margin: -3px 0 11px;
+    font-size: 11.5px;
+    color: #64748B;
+    margin: -2px 0 12px;
     text-align: left;
     line-height: 1.35;
 }
 
+.dark-theme .signup-password-hint {
+    color: #94A3B8;
+}
+
 .signup-card .login-submit {
-    height: 44px;
-    border-radius: 11px !important;
-    font-size: 15px !important;
-    margin-top: 2px;
+    height: 46px;
+    margin-top: 4px;
 }
 
 .signup-card .login-footer {
-    margin-top: 14px;
+    margin-top: 16px;
 }
 
 @media (max-width: 480px) {
     .signup-card {
-        padding: 18px 18px 16px !important;
+        padding: 20px 18px 18px !important;
+        border-radius: 24px !important;
     }
 }
