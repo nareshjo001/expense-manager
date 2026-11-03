@@ -13,7 +13,7 @@ import {
 
 import { useIsMobile } from '../../hooks/useIsMobile';
 
-export const lightThemeColorsTrend = {
+const lightThemeColorsTrend = {
   gridColor: 'rgba(157, 23, 77, 0.15)',
   axisColor: '#9d174d',
   lineColors: [
@@ -25,7 +25,7 @@ export const lightThemeColorsTrend = {
   ],
 };
 
-export const darkThemeColorsTrend = {
+const darkThemeColorsTrend = {
   gridColor: 'rgba(255, 255, 255, 0.1)',
   axisColor: '#cbd5e1',
   lineColors: [

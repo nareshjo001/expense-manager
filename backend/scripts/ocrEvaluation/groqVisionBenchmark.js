@@ -1,56 +1,6 @@
 "use strict";
 
-// OCR-006-T04 -- offline structured-output benchmark against a real
-// vision-model provider, run against the SAME corpus T02 measured the
-// traditional (Tesseract) OCR ceiling against (corpus/manifest.json,
-// backend/scripts/ocrEvaluation/corpus/images).
-//
-// Supports two providers, both zero-cost, both verified live against this
-// corpus:
-//
-//   groq   -- kept for the file name/history, but NOT currently usable:
-//             both of Groq's vision-capable models were retired
-//             (meta-llama/llama-4-scout-17b-16e-instruct, deprecated
-//             2026-07-17; meta-llama/llama-4-maverick-17b-128e-instruct,
-//             deprecated 2026-03-09), replaced by openai/gpt-oss-120b,
-//             which is text-only. Confirmed live via GET
-//             /openai/v1/models against a real key: no image-capable
-//             model is offered to any account any more. Left in this file
-//             (provider config + tests) so the OCR-006-T03 privacy
-//             reasoning about Groq's Services Agreement stays attached to
-//             working code if Groq ever reintroduces a vision model.
-//   ollama -- runs entirely on the maintainer's own machine via Ollama's
-//             OpenAI-compatible endpoint (http://localhost:11434, no key,
-//             no network egress, no third party ever sees a receipt
-//             image). This is what OCR-006-T04's actual numbers are
-//             from. Default model: qwen3-vl:4b (`ollama pull qwen3-vl:4b`,
-//             ~3.3GB, general-purpose vision+instruction-following, runs
-//             on modest/CPU-only hardware). glm-ocr is a smaller
-//             OCR-specialist alternative if a receipt's total/date still
-//             isn't legible to qwen3-vl:4b, but specialist OCR models are
-//             tuned for raw transcription and may not reliably follow the
-//             structured-JSON instruction below -- try qwen3-vl first.
-//
-// Deliberately does NOT reuse scoring.js's scoreEntry(): that function's
-// pass/fail gate also asserts reviewReasons against Tesseract-specific
-// confidence-derived codes (LOW_AMOUNT_CONFIDENCE, NO_AMOUNT_FOUND, ...)
-// that describe how the OCR+regex pipeline reasons about a receipt, not
-// how a vision model does. Asserting those here would score a vision
-// model against a taxonomy that was never meant to describe it. Amount
-// and date matching (the two fields that put a number in someone's
-// finances) ARE reused as-is from scoring.js for a fair, identical
-// comparison against T02's numbers.
-//
-// Usage:
-//   ollama pull qwen3-vl:4b   # once
-//   node scripts/ocrEvaluation/groqVisionBenchmark.js --provider=ollama
-//   node scripts/ocrEvaluation/groqVisionBenchmark.js --provider=ollama --limit=3
-//
-// The ollama provider needs nothing but a running local `ollama serve`;
-// the groq provider (if Groq ever ships a vision model again) needs
-// GROQ_API_KEY and real internet access -- run it from an ordinary
-// terminal, not this repo's device-bridge/cloud sandbox, both of which
-// sit behind an egress allowlist that does not include api.groq.com.
+// Json, backend/scripts/ocrEvaluation/corpus/images).
 
 const fs = require("fs");
 const path = require("path");
@@ -65,11 +15,7 @@ const RESULTS_DIR = path.join(__dirname, "results");
 
 const DEFAULT_TIMEOUT_MS = 30000;
 
-// PROVIDERS -- everything that differs between a hosted API and a local
-// Ollama server. `needsKey: false` means no Authorization header is
-// required at all (Ollama ignores whatever is sent); `delayMs` is the
-// per-request pacing needed to stay under a free-tier rate limit (0 for a
-// local server, since there is no rate limit to respect).
+// PROVIDERS -- everything that differs between a hosted API and a local Ollama server.
 const PROVIDERS = {
   groq: {
     url: "https://api.groq.com/openai/v1/chat/completions",
@@ -85,22 +31,7 @@ const PROVIDERS = {
     needsKey: false,
     apiKeyEnvVar: null,
     delayMs: 0,
-    // CPU-only inference for a 4B vision model, plus a cold model-load on the
-    // very first request, routinely takes well over 30s per receipt -- that
-    // was the actual cause of every request timing out on first real run
-    // (2026-09-27, confirmed: server was up, model was pulled, requests were
-    // reaching Ollama, they just hadn't finished within the old default).
-    // 180s still wasn't enough: qwen3-vl:4b is a "thinking" model (visible
-    // chain-of-thought before its final answer, confirmed via `ollama run`
-    // directly -- that one-off request succeeded and got the right answer,
-    // just slowly), and this endpoint is non-streaming (stream defaults to
-    // false), so the whole thinking transcript has to finish generating
-    // before any HTTP response comes back at all. reasoning_effort: "none"
-    // below turns thinking off for the OpenAI-compatible endpoint (the
-    // native think:true/false flag doesn't apply here -- reasoning_effort
-    // is Ollama's own documented replacement for it on this endpoint), which
-    // should make each request fast again; 600s stays as a generous backstop
-    // in case a future model swap brings thinking back.
+    // CPU-only inference for a 4B vision model, plus a cold model-load on the very first request, routinely takes well over 30s per receipt -- that was the actual cause of every request timing out on first real run (2026-09-27, confirmed: server was up, model was pulled, requests were reaching Ollama, they just hadn't finished within the old default).
     timeoutMs: 600000,
     extraBody: { reasoning_effort: "none" },
   },
@@ -138,9 +69,7 @@ const PROMPT = [
   "Do not guess a value you cannot actually read on the image; return null instead.",
 ].join("\n");
 
-// Strips a ```json ... ``` (or bare ```) fence if the model added one anyway,
-// and takes the first {...} block found, so a stray leading/trailing
-// sentence doesn't break JSON.parse.
+// Strips a ```json ... parse.
 const extractJsonFromContent = (content) => {
   const text = String(content ?? "").trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -160,23 +89,7 @@ const sleep = (ms) =>
     setTimeout(resolve, ms);
   });
 
-// Node's global fetch() is built on undici, and undici's default Agent
-// applies its OWN headersTimeout/bodyTimeout (300000ms) to every request --
-// independent of any AbortSignal a caller passes in. That is the actual
-// cause of the "fetch failed" failures seen on the first full 21-entry
-// ollama run (2026-09-27): several receipts took longer than 5 minutes of
-// CPU-only inference to produce a response, well within this script's own
-// 600000ms timeoutMs budget, but undici's internal 300s timer killed the
-// connection first and surfaced only a bare "fetch failed" with no useful
-// detail (a well-documented Node/undici default, not a bug in Ollama or in
-// this script). Overriding that requires either a custom undici Agent/
-// dispatcher (undici is not an installed dependency here, and is not a
-// requireable Node built-in on the Node version this was verified against --
-// `require("undici")` and `require("node:undici")` both fail) or bypassing
-// fetch entirely. This does the latter: a minimal http(s)-based stand-in
-// with the same (ok, status, text()) shape callVisionApi already expects,
-// with NO built-in timeout of its own -- the only thing that can end a slow
-// request is the AbortController/timeoutMs this script already manages.
+// Node's global fetch() is built on undici, and undici's default Agent applies its OWN headersTimeout/bodyTimeout (300000ms) to every request -- independent of any AbortSignal a caller passes in.
 const nodeFetch = (url, { method, headers, body, signal } = {}) =>
   new Promise((resolve, reject) => {
     const { hostname, port, pathname, search, protocol } = new URL(url);

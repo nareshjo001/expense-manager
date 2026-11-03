@@ -2,9 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { saveCategoryBudget } from "../../api/categoryBudgetApi";
 import { queryKeys } from "../../query/queryKeys";
 
-// Writes the summary a successful PUT/DELETE returns into that month's
-// cache entry, in the same { success, contractVersion, data } envelope the
-// GET returns. Falls back to invalidating if the response has no summary.
+// Writes the summary a successful PUT/DELETE returns into that month's cache entry, in the same { success, contractVersion, data } envelope the GET returns.
 const applySummary = (queryClient, response, fallbackMonth) => {
   const summary = response?.data?.summary;
   if (response?.success && summary?.month) {
@@ -20,9 +18,7 @@ const applySummary = (queryClient, response, fallbackMonth) => {
   });
 };
 
-// BUD-001-T05 -- create/edit a category budget (a single upsert, I12).
-// The response carries the recomputed month summary, which is written
-// straight into that month's cache entry instead of refetching.
+// Create/edit a category budget (a single upsert, I12).
 export const useSaveCategoryBudgetMutation = () => {
   const queryClient = useQueryClient();
 

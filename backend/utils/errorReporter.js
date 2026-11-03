@@ -1,30 +1,4 @@
-// OBS-001-T04 -- vendor-agnostic error-aggregation integration point, with
-// environment tagging. This module is the stable interface the rest of the
-// codebase calls (`reportError`); which third-party vendor (if any) actually
-// receives the report is a pluggable "transport" selected by a single env
-// var (`ERROR_AGGREGATION_PROVIDER`).
-//
-// Status: code-feasible work is done. The vendor DECISION itself (Sentry vs.
-// Datadog vs. Rollbar vs. none) is explicitly NOT made here -- that needs a
-// human owner and real account/DSN, neither of which this session has. See
-// docs/runbooks/OBS-001-T04-error-aggregation-setup.md for exactly what an
-// owner needs to do to turn this on for real.
-//
-// Safety model (mirrors backend/utils/logger.js and sia/safeLogger.js):
-// `reportError(error, context)`'s `context` is destructured into an explicit
-// allowlist of named, primitive-typed fields -- there is no spread of
-// caller-supplied data anywhere in this file. A caller cannot smuggle a raw
-// request body, financial amount, or other PII into a report just by
-// passing a bigger `context` object; only the fields named in
-// `buildSafeContext` below are ever read, matching the same fields
-// OBS-001-T01/T03 already treat as safe to log (backend/Middlewares/
-// error.middleware.js's existing logEvent call uses this exact field set).
-//
-// Never-throws guarantee: error reporting exists to report errors FROM the
-// app, so a broken/misconfigured transport (network failure, bad SDK state,
-// vendor outage) must never itself crash the app or the request that
-// triggered it. Every external call in this file is wrapped so reportError
-// can never throw.
+// Vendor-agnostic error-aggregation integration point, with environment tagging.
 "use strict";
 
 const { logEvent, safeString, safeRequestId } = require("./logger");
@@ -35,17 +9,13 @@ const MAX_MESSAGE_LENGTH = 500;
 const NOOP_PROVIDER = "none";
 const SENTRY_PROVIDER = "sentry";
 
-// --- environment tagging ---------------------------------------------------
-// Reuses the app's existing NODE_ENV convention (see config/httpSecurity.js,
-// Services/AuthServices/session.service.js) rather than inventing a new one.
+// Js) rather than inventing a new one.
 function resolveEnvironmentTag() {
   const raw = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.trim().toLowerCase() : "";
   return raw !== "" ? raw : "development";
 }
 
-// --- redaction-safe context / error shaping ---------------------------------
-// Explicit allowlist destructure -- see file header. Anything not named here
-// is silently dropped, never forwarded to a transport.
+// --- redaction-safe context / error shaping --------------------------------- Explicit allowlist destructure -- see file header.
 function buildSafeContext(context) {
   const { requestId, route, path, method, statusCode, errorCode, scope, event } = context || {};
   return {
@@ -60,9 +30,7 @@ function buildSafeContext(context) {
   };
 }
 
-// Only ever forwards an error's name/message (truncated) -- never `.stack`
-// (file paths/internals) and never any custom enumerable property a caller
-// might have attached to an Error (e.g. `err.body`, `err.details`).
+// G. details`). details`).
 function normalizeError(error) {
   if (error instanceof Error) {
     return {
@@ -76,11 +44,7 @@ function normalizeError(error) {
   };
 }
 
-// --- NoopTransport -----------------------------------------------------------
-// Default transport. Sends nothing anywhere; emits a structured debug-level
-// log line instead, so "a report would have been sent here" is observable
-// (e.g. in local dev, or in an environment that hasn't opted into a vendor)
-// without ever making a network call.
+// --- NoopTransport ----------------------------------------------------------- Default transport.
 function createNoopTransport() {
   return {
     name: NOOP_PROVIDER,
@@ -98,16 +62,7 @@ function createNoopTransport() {
   };
 }
 
-// --- SentryTransport (reference implementation) ------------------------------
-// Reference vendor implementation, written against Sentry's stable, well-
-// documented Node SDK shape (Sentry.init / Sentry.captureException --
-// https://docs.sentry.io/platforms/node/). Deliberately NOT wired to an
-// installed SDK by this task: `@sentry/node` is not added as a project
-// dependency here (see docs/runbooks/OBS-001-T04-error-aggregation-setup.md
-// for why, and the exact activation steps). The require below is reached
-// only when ERROR_AGGREGATION_PROVIDER=sentry is explicitly set, is wrapped
-// in try/catch, and never runs at all otherwise -- so an app that never
-// configures Sentry never touches the Sentry SDK, installed or not.
+// Io/platforms/node/). md for why, and the exact activation steps).
 let sentrySdkSingleton = null; // memoized: Sentry.init() runs at most once per process
 
 function createSentryTransport() {
@@ -131,13 +86,7 @@ function createSentryTransport() {
     Sentry.init({
       dsn,
       environment: resolveEnvironmentTag(),
-      // OBS-001-T01/T03 financial-data redaction policy backstop: this
-      // transport is only ever called with the pre-redacted, allowlisted
-      // safeError/safeContext this file builds -- never a raw Error's
-      // custom properties, a request body, or an amount/PII field. These
-      // two settings are a second, independent layer of protection in case
-      // a future caller/SDK default would otherwise widen what leaves the
-      // process (e.g. Sentry's own request-body capture).
+      // T01/T03 financial-data redaction policy backstop: this transport is only ever called with the pre-redacted, allowlisted safeError/safeContext this file builds -- never a raw Error's custom properties, a request body, or an amount/PII field.
       sendDefaultPii: false,
       beforeSend(sentryEvent) {
         if (sentryEvent && sentryEvent.request) {
@@ -184,10 +133,7 @@ function currentProviderKey() {
   return raw;
 }
 
-// Lazy, memoized transport resolution -- mirrors config/firebaseAdmin.js's
-// guarded-singleton pattern for an optional capability. Re-resolves if the
-// configured provider value changes at runtime (tests toggle process.env
-// directly rather than restarting the process).
+// Js's guarded-singleton pattern for an optional capability. env directly rather than restarting the process).
 function getTransport() {
   const providerKey = currentProviderKey();
   if (cachedTransport && cachedProviderKey === providerKey) {
@@ -216,10 +162,7 @@ function getTransport() {
   return cachedTransport;
 }
 
-// --- public entry point -------------------------------------------------------
-// Never throws. Returns a small result object (mainly useful for tests);
-// production callers can ignore the return value, same convention as
-// backend/utils/alerts.js's evaluateAndDispatchAlerts.
+// --- public entry point ------------------------------------------------------- Never throws.
 function reportError(error, context) {
   let transport;
   try {

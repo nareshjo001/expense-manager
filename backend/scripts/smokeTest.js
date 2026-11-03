@@ -1,48 +1,11 @@
 #!/usr/bin/env node
 "use strict";
 
-// TST-001-T07 -- deployment smoke test.
-//
-// OPS-004's runbook has a smoke-test section a human works through by hand:
-// curl six endpoints, read the JSON, decide whether each field means what it
-// should. That is fine once. It is not fine as the thing standing between a
-// bad deploy and your users, because it is slow, it is skippable, and under
-// pressure people skip the steps that have never failed before -- which are
-// exactly the steps that catch the deploy where something moved.
-//
-// This is that section, executable. One command, a pass/fail per check, and
-// a non-zero exit code so a deploy pipeline can gate on it.
-//
-// READ-ONLY, ON PURPOSE. Every request here is a GET against an endpoint
-// that either needs no authentication or is expected to REFUSE the request.
-// Nothing is created, updated or deleted, no account is touched, and no
-// credentials are needed. That is what makes it safe to point at production
-// immediately after a deploy -- which is when you most want to run it and
-// least want to think about whether it is safe.
-//
-// REQUIRED vs INFORMATIONAL is the distinction that makes the output
-// trustworthy. A required check failing means this deployment is broken and
-// the exit code says so. An informational one reports a real fact that is
-// not, by itself, grounds to roll back -- Redis being down degrades caching
-// and job coordination but the app serves correctly without it (ADR-0002),
-// and the ML service being down disables category prediction and nothing
-// else. Marking those as failures would train people to ignore a red run,
-// which is worse than not having the check.
-//
-// Usage:
-//   node scripts/smokeTest.js https://balenisa-backend.onrender.com
-//   node scripts/smokeTest.js --expect-role=web https://...
-//   SMOKE_BASE_URL=https://... node scripts/smokeTest.js
-//
-// Exit code: 0 if every REQUIRED check passed, 1 otherwise.
+// Deployment smoke test. OPS-004's runbook has a smoke-test section a human works through by hand: curl six endpoints, read the JSON, decide w.
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-// ---------------------------------------------------------------------------
-// Tiny HTTP helper. Uses the global fetch (Node 18+; CI and the deploy target
-// both run 20). No dependency, because a smoke test that cannot run until you
-// have installed something is one more thing to go wrong at the worst moment.
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Tiny HTTP helper.
 
 async function get(baseUrl, path, { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const url = new URL(path, baseUrl).toString();
@@ -65,12 +28,7 @@ async function get(baseUrl, path, { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS
   return { status: response.status, headers: response.headers, text, json };
 }
 
-// ---------------------------------------------------------------------------
-// Checks.
-//
-// Each returns { ok, detail }. `detail` is written to be read during an
-// incident: it says what was actually observed, not just "failed".
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Checks.
 
 function buildChecks({ expectRole }) {
   return [
@@ -194,9 +152,7 @@ function buildChecks({ expectRole }) {
       why: "The frontend and existing monitoring read this endpoint. Its 503-when-ML-is-down behaviour is intentional and preserved; what must not change is the shape.",
       async run(base) {
         const res = await get(base, "/ping");
-        // 503 here means the ML service is down. That is /ping's documented
-        // meaning, and it is why nothing automated should be pointed at it --
-        // but it is NOT a smoke-test failure.
+        // 503 here means the ML service is down.
         if (![200, 503].includes(res.status)) {
           return { ok: false, detail: `expected 200 or 503, got ${res.status}` };
         }
@@ -270,12 +226,7 @@ function buildChecks({ expectRole }) {
       required: true,
       why: "The header is attacker-controlled and ends up in log lines. A value carrying spaces, quotes or angle brackets can corrupt a parsed log stream; requestId.js only reuses a caller's value when it matches [A-Za-z0-9._-]{1,128}, and this proves that guard is live in the deployed build.",
       async run(base) {
-        // Deliberately NOT a CRLF payload. Node's HTTP client refuses to
-        // transmit header values containing CR or LF, so a CRLF probe never
-        // reaches the server and the check would pass without testing
-        // anything. This value is hostile in the way that matters -- it fails
-        // requestId.js's pattern -- and is transmittable, so the server is
-        // genuinely the thing being tested.
+        // Deliberately NOT a CRLF payload.
         const hostile = 'smoke "injected" id <with> spaces';
         const res = await get(base, "/health/live", { headers: { "X-Request-ID": hostile } });
 
@@ -346,9 +297,7 @@ function buildChecks({ expectRole }) {
   ];
 }
 
-// ---------------------------------------------------------------------------
-// Runner.
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Runner.
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -374,9 +323,7 @@ async function runSmokeTest({ baseUrl, expectRole = null } = {}) {
     try {
       result = await check.run(baseUrl);
     } catch (err) {
-      // A thrown check is a failed check, never a crashed run -- the other
-      // checks still carry information, and an operator should get the whole
-      // picture in one pass rather than one failure at a time.
+      // A thrown check is a failed check, never a crashed run -- the other checks still carry information, and an operator should get the whole picture in one pass rather than one failure at a time.
       result = {
         ok: false,
         detail: `request failed: ${err && err.message}`,

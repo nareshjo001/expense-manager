@@ -176,18 +176,7 @@ async function deleteSession(sessionId, userId) {
   return true;
 }
 
-// SIA-001-T06 -- bulk deletion for "delete my SIA history", a user-
-// initiated action independent of full account deletion (PRV-001's
-// accountDeletionTierBSteps.js already covers that separate path via its
-// own deleteSiaSessionsStep/deleteSiaMessagesStep, run only as part of the
-// account-deletion cascade). Deliberately scoped to SiaSession + SiaMessage
-// ONLY -- never SiaRequest: that model is a short-lived (24h TTL)
-// idempotency/coordination record (idempotencyService.js), not conversation
-// content, and clearing it here would risk breaking an in-flight keyed
-// request's own replay guarantee for no user-visible benefit. Every user
-// of this app can only ever own their own sessions/messages (both
-// documents carry `user`), so this is scoped by construction, the same as
-// every other function in this file.
+// Js already covers that separate path via its own deleteSiaSessionsStep/deleteSiaMessagesStep, run only as part of the account-deletion cascade).
 async function deleteAllSessions(userId) {
   const sessionResult = await SiaSession.deleteMany({ user: userId });
   const messageResult = await SiaMessage.deleteMany({ user: userId });

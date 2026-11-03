@@ -1,10 +1,6 @@
 "use strict";
 
-// OPS-002-T03 -- the JSON sidecar manifest each backup run writes,
-// mirroring ml-service/training/model_bundle.py's active.json manifest
-// pattern: atomic temp-file-then-rename write, one small JSON document
-// per artifact, so a reader can never observe a partially-written
-// manifest mid-write.
+// Json manifest pattern: atomic temp-file-then-rename write, one small JSON document per artifact, so a reader can never observe a partially-written manifest mid-write.
 const fs = require("fs");
 const path = require("path");
 
@@ -14,10 +10,7 @@ function manifestFileName(backupId) {
   return `${backupId}${MANIFEST_SUFFIX}`;
 }
 
-// Atomically writes `manifest` to `<dir>/<backupId>.manifest.json`. Same
-// approach as model_bundle.py's write_manifest: write to a private temp
-// file in the SAME directory, flush+fsync, then rename over the final
-// path (fs.renameSync is atomic on POSIX and Windows within one volume).
+// Json`. renameSync is atomic on POSIX and Windows within one volume).
 function writeManifestSync(dir, manifest) {
   if (!manifest || typeof manifest.backupId !== "string" || manifest.backupId === "") {
     throw new Error("writeManifestSync requires manifest.backupId to be a non-empty string.");
@@ -43,10 +36,7 @@ function readManifestSync(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
-// Lists every manifest in `dir`, parsed, sorted newest-first by
-// `createdAt`. Skips any file that fails to parse (corrupt/partial
-// manifest) rather than throwing -- a single bad file must never take
-// down retention or freshness checks for every other valid backup.
+// Lists every manifest in `dir`, parsed, sorted newest-first by `createdAt`.
 function listManifestsSync(dir) {
   if (!fs.existsSync(dir)) return [];
   const files = fs
@@ -72,9 +62,7 @@ function listManifestsSync(dir) {
   return manifests;
 }
 
-// Deterministic, sortable, filesystem-safe backup id derived from the
-// current time -- ISO-8601 with `:`/`.` replaced (both are awkward or
-// invalid in filenames on some filesystems, notably Windows).
+// ` replaced (both are awkward or invalid in filenames on some filesystems, notably Windows).
 function newManifestId(now = new Date()) {
   return now.toISOString().replace(/[:.]/g, "-");
 }

@@ -1,24 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// DAT-003-T04 -- CLI entry point for the migration driver.
-//
-// Usage:
-//   node backend/migrations/run.js [--dry-run] [--batch=N] [--allow-no-backup-check]
-//
-// --dry-run                 Compute and log what would change; no writes,
-//                            no lock, no ledger record (driver.js).
-// --batch=N                 Apply at most N pending migrations this run,
-//                            leaving the rest for the next invocation.
-// --allow-no-backup-check   Bypasses the environment safety gate's backup
-//                            check (environmentGate.js). Only for an
-//                            isolated/ephemeral database (CI, local dev)
-//                            with nothing to lose -- never pass this
-//                            against a real deployment target.
-//
-// Exits non-zero on any migration failure or on the safety gate refusing
-// to run, so CI/deploy scripts can gate on this command's exit code
-// directly.
+// CLI entry point for the migration driver. js).
 const connectDB = require("../config/db");
 const { connectRedis } = require("../config/redis");
 const { runMigrations } = require("./driver");
@@ -43,46 +26,14 @@ async function main() {
   const { dryRun, batchSize, allowNoBackupCheck } = parseArgs(process.argv.slice(2));
 
   await connectDB();
-  // migrations/lock.js's acquireMigrationLock() (via utils/jobLease.js)
-  // runs commands directly against config/redis.js's shared redisClient
-  // singleton -- it does not lazily connect that client itself, the same
-  // way server.js's own startup connects both databases before anything
-  // that needs them runs. Without this, that shared client is
-  // constructed but never connected here, and any command against it
-  // throws node-redis's "The client is closed", surfacing as
-  // "Could not acquire the migration lock: Redis is unreachable (The
-  // client is closed)" -- not an actual Redis outage or a wrong
-  // connection URL, just this CLI never having connected it. A dry run
-  // never acquires the lock (driver.js skips it entirely for dry runs),
-  // but connecting here unconditionally is cheap and keeps this
-  // entrypoint's startup sequence identical regardless of mode, matching
-  // server.js's own pattern.
-  // OPS-004-T04 changed connectRedis() so it no longer throws -- the SERVER
-  // must degrade through a Redis outage rather than exit. A migration must
-  // do the opposite. The migration lock (migrations/lock.js, via
-  // utils/jobLease.js) is what stops two deploys applying the same migration
-  // to the same database concurrently, and unlike a cache miss there is no
-  // fallback for that. So this entry point re-imposes fail-closed for
-  // itself, explicitly, rather than inheriting it from a rejection that no
-  // longer happens.
-  //
-  // Without this the run would still fail -- lock acquisition against an
-  // unconnected client throws "The client is closed" -- but it would fail
-  // several frames later with a message that reads like a bug in the lock
-  // rather than a missing dependency.
+  // Js's own startup connects both databases before anything that needs them runs.
   const redis = await connectRedis();
 
   let result;
   try {
-    // Raised as a pre-flight refusal so it takes the same path, and prints
-    // the same "Migration run refused" prefix, as the environment gate --
-    // both are "this run must not start", and they should not read like two
-    // different kinds of event to whoever is looking at the output.
+    // Raised as a pre-flight refusal so it takes the same path, and prints the same "Migration run refused" prefix, as the environment gate -- both are "this run must not start", and they should not read like two different kinds of event to whoever is looking at the output.
     if (!redis.connected && !dryRun) {
-      // `redis.error` is absent when the connection TIMED OUT rather than
-      // failed -- which is the common case, since connect() against an
-      // absent Redis never settles at all. Reporting "undefined" there would
-      // send someone looking for an error that does not exist.
+      // Error` is absent when the connection TIMED OUT rather than failed -- which is the common case, since connect() against an absent Redis never settles at all.
       const cause = redis.timedOut
         ? `no response within the startup timeout`
         : `${(redis.error && (redis.error.message || redis.error.code)) || "unknown error"}`;
@@ -114,8 +65,6 @@ main()
     process.exitCode = 1;
   })
   .finally(() => {
-    // Close the process explicitly -- an open mongoose connection (and
-    // now an open Redis connection too) would otherwise keep this CLI
-    // invocation hanging after main() resolves.
+    // Close the process explicitly -- an open mongoose connection (and now an open Redis connection too) would otherwise keep this CLI invocation hanging after main() resolves.
     process.exit(process.exitCode || 0);
   });

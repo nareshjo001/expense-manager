@@ -1,43 +1,6 @@
 "use strict";
 
-// DAT-002 -- rewrites non-canonical Budget.month keys to the canonical
-// "MMM YYYY" form (utils/monthKeyNormalization.js).
-//
-// Why this exists: DAT-002-T05 shipped the month-key check as report-only.
-// Its first run against a restored copy of production found one budget
-// stored as "Sept 2026" -- the current month. Before DAT-002 every writer
-// built the key with toLocaleString('default', { month: 'short' }), whose
-// output depends on the server's ICU locale data ("Sep" in en-US, "Sept" in
-// en-GB/en-IN). DAT-002-T02 moves every writer and reader to one fixed
-// English table, so after deploy the app looks for "Sep 2026" and would not
-// see the existing "Sept 2026" document at all: the user's current-month
-// budget would read as unset, and the next write would create a second
-// document for the same month. (Before DAT-002 the mismatch already existed
-// in two readers that used 'en-US' explicitly -- budgetAnalyzer.js and the
-// pie-chart comparison -- which is why this is a fix, not a formality.)
-//
-// This must run before the DAT-002 code serves traffic.
-//
-// What it changes, and what it refuses to:
-//   - A key is rewritten only when it parses unambiguously: a month name or
-//     abbreviation (English, any case, optional trailing "."), whitespace,
-//     a four-digit year. "Sept 2026", "sep 2026", "September 2026" all
-//     become "Sep 2026".
-//   - If the same user already has a document under the canonical key, the
-//     two cannot both exist (unique { userId, month } index):
-//       * when both carry the same budget amount, the non-canonical one is a
-//         pure duplicate and is deleted. Its `spent` is derived data that
-//         recalculateBudget recomputes from expenses, so nothing the user
-//         entered is lost. This is the production case: "Sept 2026" and
-//         "Sep 2026" for the same user, both budget 4000, the canonical one
-//         holding the correct spent (2891, matching September's expenses)
-//         and the duplicate a stale 0;
-//       * when the amounts differ, choosing which budget wins is a product
-//         decision, so both are left untouched and reported as a conflict.
-//         verify() then fails, which stops the migration run until someone
-//         resolves it.
-//   - Anything unparseable is left untouched and reported.
-// Idempotent: a canonical key is never touched, so a re-run is a no-op.
+// Js). Why this exists: DAT-002-T05 shipped the month-key check as report-only.
 const { parseMonthKey, buildMonthKeyFromParts } = require("../../utils/monthKeyNormalization");
 
 const COLLECTION = "budgets";

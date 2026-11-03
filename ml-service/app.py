@@ -25,10 +25,7 @@ from observability import log_event, sanitize_reason
 
 app = FastAPI()
 
-# OBS-001-T02 -- request/correlation ID propagation. Reuses a caller-supplied
-# X-Request-ID (forwarded by backend/utils/mlServiceClient.js) only if it
-# matches the same safe shape enforced on the Node side; otherwise a value
-# from an untrusted caller could smuggle unsafe content into these logs.
+# Request/correlation ID propagation.
 REQUEST_ID_HEADER = "X-Request-ID"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 
@@ -76,21 +73,7 @@ class ApprovalDecisionRequest(BaseModel):
 
 @app.on_event("startup")
 def validate_configuration_on_startup():
-    """
-    Phase G item 10: centralized startup configuration validation.
-    Registered FIRST (FastAPI runs startup handlers in registration order)
-    so a fatal configuration problem (an unwritable ML_MODEL_ROOT, or a
-    MONGO_CONN that isn't even a syntactically valid Mongo URI) is caught
-    before predictor initialization or any Mongo-backed reconciliation
-    attempts to run against it.
-
-    Only raises for the two conditions config.py itself classifies as
-    fatal (see its own docstring for why exactly these two, and no
-    others) -- everything else (missing MONGO_CONN entirely, missing
-    ML_OPERATIONS_TOKEN, an out-of-range retention/interval/threshold
-    value) is logged as a warning and left to each consuming module's own
-    existing, already-safe fallback-to-default behavior from Phases B-F.
-    """
+    """Phase G item 10: centralized startup configuration validation."""
     result = ml_config.run_and_log_startup_validation()
     if result["errors"]:
         raise ml_config.ConfigurationError(
@@ -100,20 +83,7 @@ def validate_configuration_on_startup():
 
 @app.on_event("startup")
 def initialize_predictor_on_startup():
-    """
-    Phase E: registered BEFORE the reconciliation handler below (FastAPI
-    runs startup handlers in registration order), so this process has a
-    usable RuntimeSnapshot before any activation-related reconciliation
-    logic (which itself may need to preload/swap a candidate) ever runs.
-
-    Deliberately allowed to propagate ActivationError -- per the Phase E
-    spec, startup must fail if, and only if, NEITHER a manifest-referenced
-    model NOR the legacy fixed artifacts can be loaded at all (i.e. this
-    process would otherwise start with nothing to serve predictions with).
-    predictor_manager.initialize() itself already prefers the legacy
-    fallback over failing whenever the manifest is unusable but the legacy
-    artifacts are fine -- see its own docstring.
-    """
+    """Registered BEFORE the reconciliation handler below (FastAPI runs startup handlers in registration order), so this process has a usable RuntimeSnapshot before any activation-related reconciliation logic (which itself may need to preload/swap a candidate) ever runs."""
     predictor_manager.initialize()
 
 
@@ -123,15 +93,7 @@ _last_reconciliation_summary = None
 
 @app.on_event("startup")
 def ensure_indexes_on_startup():
-    """
-    Phase F: idempotent MongoDB index creation for the query patterns the
-    new operational status API relies on (status+createdAt, modelVersion
-    -- see db.training_run_repository.ensure_indexes). Registered before
-    the reconciliation handler purely so indexes exist before
-    reconciliation's own queries run, though neither actually depends on
-    the other's success -- both are independently best-effort and never
-    block startup.
-    """
+    """Ensure_indexes). Registered before the reconciliation handler purely so indexes exist before reconciliation's own queries run, though neithe."""
     try:
         runs.ensure_indexes()
     except Exception as exc:
@@ -140,21 +102,7 @@ def ensure_indexes_on_startup():
 
 @app.on_event("startup")
 def reconcile_training_runs_on_startup():
-    """
-    Startup reconciliation. Phase F extends this to RETURN (and log, as a
-    single summarized event) a structured count breakdown instead of only
-    printing ad hoc messages at each individual step -- see the module-level
-    `_last_reconciliation_summary` and the "run_reconciliation" log event
-    below.
-
-    Still composed of the same three independent, best-effort sweeps as
-    before (Phase B.1's orphaned-run sweep, Phase C's feedback-reservation
-    sweep, Phase E's activation-aware sweep), in the same order, with the
-    same "a failure in one sweep must never block startup or the other
-    sweeps" guarantee. Each sweep's own try/except is unchanged in spirit;
-    what changes is that failures are also collected into a structured
-    `errors` list, not just printed.
-    """
+    """Startup reconciliation. Phase F extends this to RETURN (and log, as a single summarized event) a structured count breakdown instead of only."""
     global _last_reconciliation_summary
 
     summary = {
@@ -234,47 +182,14 @@ def _manifest_matches_run(manifest, run):
 
 
 def _bundle_valid_for_manifest(manifest):
-    """
-    Cheap, read-only check of whether a manifest's referenced bundle is
-    complete and internally consistent enough to be worth attempting a
-    real preload -- NOT a substitute for predictor_manager's own full
-    runtime validation (feature/encoder compatibility, smoke prediction),
-    which is what actually decides whether the candidate can be trusted;
-    this is just a fast pre-filter to avoid attempting a load for an
-    obviously-incomplete bundle.
-    """
+    """Cheap, read-only check of whether a manifest's referenced bundle is complete and internally consistent enough to be worth attempting a real preload -- NOT a substitute for predictor_manager's own full runtime validation (feature/encoder compatibility, smoke prediction), which is what actually decides whether the candidate can be trusted; this is just a fast pre-filter to avoid attempting a load for an obviously-incomplete bundle."""
     if manifest is None:
         return False
     return model_bundle.is_bundle_complete(manifest["modelVersion"])
 
 
 def _reconcile_activating_run(run, manifest):
-    """
-    Phase E startup reconciliation for a run found stuck in "activating"
-    (i.e. the process that started activating it crashed or was killed
-    before recording a terminal activation outcome).
-
-    Per the Phase E spec:
-      - if the CURRENT manifest points to this exact run, and its bundle is
-        valid -> the publish step must have already succeeded before the
-        crash. Initialize this process's own runtime from it (so this
-        process is actually serving what the manifest claims is active),
-        mark the run "activated", and finalize its reserved feedback.
-      - otherwise (no manifest, or it points to a different run) -> this
-        run's activation never completed publication; it is resolved as
-        "failed_activation" and its reservations are released to "pending"
-        (manifest and runtime are both left completely alone -- there is
-        nothing of this run's to roll back on the manifest side, since it
-        never got that far).
-
-    Phase F: returns a structured outcome dict instead of only printing,
-    so the caller (_reconcile_activation_state) can fold this into the
-    overall structured reconciliation summary:
-
-        {"outcome": "activated"|"failed_activation"|"left_as_is",
-         "feedbackFinalized": int, "feedbackReturnedToPending": int,
-         "error": str or None}
-    """
+    """E. the process that started activating it crashed or was killed before recording a terminal activation outcome)."""
     run_id = run["runId"]
 
     if _manifest_matches_run(manifest, run) and _bundle_valid_for_manifest(manifest):
@@ -335,37 +250,7 @@ def _reconcile_activating_run(run, manifest):
 
 
 def _reconcile_activation_state():
-    """
-    Phase E startup reconciliation, covering three cases the pre-existing
-    Phase B.1/C/D sweeps know nothing about (they are entirely unaware of
-    the manifest file):
-
-      1. A run stuck in "activating" after a crash -- see
-         _reconcile_activating_run above.
-      2. A run already "activated" but with feedback still "reserved"
-         (the process crashed between mark_activated and
-         finalize_trained_for_run, or finalize_trained_for_run itself
-         failed and left a bookkeeping warning) -- finalized here.
-      3. The manifest points to a run that is still sitting in a
-         PRE-activation status (e.g. "evaluating", or the legacy
-         "completed") -- meaning publication+local activation apparently
-         already happened (the manifest says so) but this run's own status
-         was never advanced, most likely because the process crashed
-         before even reaching mark_activating. Reconciled the same way as
-         case 1's happy path, after independently re-verifying the bundle.
-
-    Every decision here is driven by re-reading the manifest and
-    re-verifying bundle completeness -- never by trusting a MongoDB status
-    field alone, per the Phase E spec's explicit instruction.
-
-    Phase F: bounded (this only ever scans runs currently in "activating"
-    or "activated" status -- via find_runs_by_status, itself a targeted
-    query, never a full collection scan) and returns a structured summary:
-
-        {"activatingRunsRecovered": int, "activatingRunsFailed": int,
-         "feedbackFinalizedToTrained": int, "feedbackReturnedToPending": int,
-         "errors": [str, ...]}
-    """
+    """1/C/D sweeps know nothing about (they are entirely unaware of the manifest file): 1."""
     result = {
         "activatingRunsRecovered": 0,
         "activatingRunsFailed": 0,
@@ -448,14 +333,7 @@ def health():
 
 
 def _require_operations_token(x_ml_operations_token):
-    """
-    Shared guard for the three operational endpoints (Phase F item 7,
-    shared-secret policy). Fails closed: if ML_OPERATIONS_TOKEN is not
-    configured at all, this ALWAYS raises 503 -- there is no
-    "operational endpoints are open when no token is set" fallback.
-    Otherwise, a missing or incorrect token raises 401. The token itself
-    is never included in any exception detail or log call.
-    """
+    """Shared guard for the three operational endpoints (Phase F item 7, shared-secret policy)."""
     if not status_api.operations_token_configured():
         raise HTTPException(
             status_code=503,
@@ -470,23 +348,13 @@ def _require_operations_token(x_ml_operations_token):
 
 @app.get("/health/live")
 def health_live():
-    """
-    Phase F liveness probe: "is this process able to serve HTTP at all".
-    Never touches MongoDB, never touches the predictor manager, never
-    triggers a reload -- see status_api.build_liveness's own docstring.
-    """
+    """Phase F liveness probe: "is this process able to serve HTTP at all"."""
     return status_api.build_liveness()
 
 
 @app.get("/health/ready")
 def health_ready():
-    """
-    Phase F readiness probe: "can this process currently serve valid
-    predictions". Returns a non-2xx status when NOT ready (a load
-    balancer / orchestrator is expected to stop routing traffic here in
-    that case) -- see status_api.build_readiness's own docstring for
-    exactly what is checked and why it stays cheap.
-    """
+    """Phase F readiness probe: "can this process currently serve valid predictions"."""
     ready, body = status_api.build_readiness(predictor_manager)
     if not ready:
         return JSONResponse(status_code=503, content=body)
@@ -495,24 +363,14 @@ def health_ready():
 
 @app.get("/ml-status")
 def ml_status(x_ml_operations_token: Optional[str] = Header(None)):
-    """
-    Phase F: sanitized live-model status snapshot -- see
-    status_api.build_ml_status for the exact contract. Protected by the
-    shared-secret operations token (see _require_operations_token).
-    """
+    """Build_ml_status for the exact contract. Protected by the shared-secret operations token (see _require_operations_token)."""
     _require_operations_token(x_ml_operations_token)
     return status_api.build_ml_status(predictor_manager)
 
 
 @app.get("/training-runs/{run_id}")
 def training_run_detail(run_id: str, x_ml_operations_token: Optional[str] = Header(None)):
-    """
-    Phase F: sanitized single-run detail view. Returns 404 (not a raw
-    MongoDB "not found", and not a 400) for both "run_id is not a valid
-    ObjectId" and "no such run exists" -- deliberately not distinguishing
-    the two to an external caller, since neither case should leak
-    anything about MongoDB's own id format validation.
-    """
+    """Sanitized single-run detail view."""
     _require_operations_token(x_ml_operations_token)
     detail = status_api.get_run_detail(run_id)
     if detail is None:
@@ -527,13 +385,7 @@ def training_run_list(
     before: Optional[str] = None,
     x_ml_operations_token: Optional[str] = Header(None),
 ):
-    """
-    Phase F: bounded, sorted, sanitized run listing -- see
-    status_api.list_runs_response / db.training_run_repository.list_runs
-    for the exact bounds (limit clamped to [1, 100], default 20) and
-    cursor semantics. An unrecognized `status` filter or malformed
-    `before` cursor is rejected with 400, never silently ignored.
-    """
+    """List_runs for the exact bounds (limit clamped to [1, 100], default 20) and cursor semantics."""
     _require_operations_token(x_ml_operations_token)
     try:
         return status_api.list_runs_response(limit=limit, status=status, before=before)
@@ -546,20 +398,7 @@ def predict(
     data: PredictionRequest,
     x_ml_operations_token: Optional[str] = Header(None),
 ):
-    """
-    Remediation Workstream C -- this endpoint previously had NO
-    authentication at all, unlike /ml-status and /training-runs* (which have
-    always required the shared-secret operations token). Reuses the exact
-    same fail-closed guard (_require_operations_token /
-    status_api.check_operations_token) rather than introducing a second,
-    redundant secret -- there is no evidence a separate privilege tier is
-    needed between "can read operational status" and "can request a
-    prediction/trigger retraining"; both are backend-only, service-to-service
-    calls today (see Routes/ml.router.js, Controllers/ExpenseControllers/
-    addexpense.js, cron/feedbackCollector.js on the Node side). The token
-    check runs BEFORE any prediction work, so a rejected caller never
-    triggers the actual inference.
-    """
+    """Remediation Workstream C -- this endpoint previously had NO authentication at all, unlike /ml-status and /training-runs* (which have always required the shared-secret operations token)."""
     _require_operations_token(x_ml_operations_token)
     return predict_category(
         data.expenseName
@@ -571,11 +410,7 @@ def generate_description_api(
     data: DescriptionRequest,
     x_ml_operations_token: Optional[str] = Header(None),
 ):
-    """
-    Remediation Workstream C -- same fail-closed operations-token guard as
-    /predict-category above; see that endpoint's doc comment for the full
-    rationale. Checked before any description-generation work runs.
-    """
+    """Remediation Workstream C -- same fail-closed operations-token guard as /predict-category above; see that endpoint's doc comment for the full rationale."""
     _require_operations_token(x_ml_operations_token)
     return generate_description_response(
         expense_name=data.expenseName,
@@ -583,11 +418,7 @@ def generate_description_api(
         amount=data.expenseAmount
     )
 def _heartbeat(run_id):
-    """
-    Best-effort heartbeat update passed into run_retraining() as its stage
-    callback. A heartbeat write failure must never abort an in-progress
-    training run, so any error here is swallowed.
-    """
+    """Best-effort heartbeat update passed into run_retraining() as its stage callback."""
     try:
         runs.update_heartbeat(run_id)
     except Exception:
@@ -595,12 +426,7 @@ def _heartbeat(run_id):
 
 
 def _attach_pipeline_bookkeeping(run_id, result):
-    """
-    Best-effort persistence of Phase C dataset/reservation bookkeeping onto
-    the run record. Never allowed to affect the run's own success/failure
-    outcome -- if this write itself fails, it is logged and swallowed; the
-    run's actual terminal status is decided independently by the caller.
-    """
+    """Best-effort persistence of Phase C dataset/reservation bookkeeping onto the run record."""
     reserved_ids = result.get("reservedFeedbackIds") or []
     if reserved_ids:
         try:
@@ -617,34 +443,7 @@ def _attach_pipeline_bookkeeping(run_id, result):
 
 
 def _fetch_baseline(run_id):
-    """
-    Phase E: baseline source changed from "the latest completed/validated
-    run" (Phase D) to "the run that is actually PUBLISHED/ACTIVATED right
-    now" (per the Phase E spec's item 15 -- the regression baseline must
-    represent current LIVE behavior, not merely the latest experiment,
-    which could be a candidate that was never activated, or that lost a
-    race to a different run's activation).
-
-    Source of truth: training/models/active.json's own `runId`, looked up
-    against `mltrainingruns` for its metrics/encoderClasses. Deliberately
-    does NOT fall back to get_latest_completed_run() -- that would
-    silently reintroduce exactly the "unrelated latest candidate" problem
-    this change exists to close.
-
-    Fallback behavior (all of these return (None, None), which callers
-    already treat as "skip gates 7 and 9, no baseline invented" -- the same
-    contract as before):
-      - no manifest exists yet (still on the legacy bootstrap model, which
-        has no known metrics) -> previousAccuracy: None
-      - manifest exists but is corrupt/unreadable -> logged, treated as no
-        baseline (never crashes retraining over a manifest problem)
-      - manifest exists and is valid, but references a run id with no
-        matching document in mltrainingruns -> logged clearly, baseline
-        skipped for this run only (never silently substitutes some other
-        run)
-
-    Returns (previous_accuracy: float or None, previous_categories: list or None).
-    """
+    """Baseline source changed from "the latest completed/validated run" (Phase D) to "the run that is actually PUBLISHED/ACTIVATED right now" (per the Phase E spec's item 15 -- the regression baseline must represent current LIVE behavior, not merely the latest experiment, which could be a candidate that was never activated, or that lost a race to a different run's activation)."""
     try:
         manifest = model_bundle.read_manifest()
     except model_bundle.ManifestError as exc:
@@ -681,21 +480,7 @@ def _fetch_baseline(run_id):
 
 
 def _on_stage_complete(run_id, stage_name):
-    """
-    Phase D: stage_callback passed into run_retraining(). The only stage
-    transition that needs a persisted status change here is "training"
-    finishing -- that is the exact moment a candidate bundle exists but has
-    not yet been validated, i.e. the run should now read "evaluating"
-    rather than "running". The other three stages ("reservation",
-    "snapshot", "validation") intentionally do not change status here:
-    "reservation"/"snapshot" are still part of "running", and "validation"
-    finishing is immediately followed by this function's caller deciding
-    the run's actual terminal status (completed / failed_validation), so
-    no separate status write is needed for it.
-
-    Best-effort: a failure to write this transitional status must never
-    abort an in-progress training run.
-    """
+    """Stage_callback passed into run_retraining(). e."""
     if stage_name != "training":
         return
     try:
@@ -705,19 +490,7 @@ def _on_stage_complete(run_id, stage_name):
 
 
 def _rollback_reserved_feedback(run_id, reason):
-    """
-    Best-effort failure cleanup for feedback reservation (Phase C item 12):
-    returns this run's "reserved" feedback back to "pending" so it can be
-    retried by a future run. Never touches other runs' reservations,
-    "trained" records, or "needs_review" records -- see
-    db.feedback_repository.release_reserved_for_run for the exact filter.
-
-    If this itself fails, it is logged clearly; reservation reconciliation
-    (db.feedback_repository.reconcile_reserved_feedback, run at the next
-    service startup or the next retrain's reservation stage) is the
-    backstop that will recover this run's feedback once the run record is
-    confirmed terminal (which it always is by the time this is called).
-    """
+    """Best-effort failure cleanup for feedback reservation (Phase C item 12): returns this run's "reserved" feedback back to "pending" so it can be retried by a future run."""
     try:
         released = feedback.release_reserved_for_run(run_id, reason)
         if released:
@@ -730,28 +503,7 @@ def _rollback_reserved_feedback(run_id, reason):
 
 
 def _rollback_manifest(previous_manifest):
-    """
-    Phase E activation-failure cleanup for the manifest file itself,
-    called ONLY after write_manifest has already successfully published a
-    new manifest and a LATER step (local snapshot swap, or the post-swap
-    smoke test) then failed.
-
-    - If a previous, valid manifest existed before this activation attempt
-      started, it is re-published verbatim via another atomic
-      write_manifest call -- restoring the exact previous pointer (same
-      modelVersion/runId/generation/etc. it had before).
-    - If no previous manifest existed (this was the very first activation
-      attempt ever), there is nothing valid to restore -- the newly
-      published manifest is instead removed via model_bundle.remove_manifest,
-      returning the service to its pre-Phase-E "no manifest -> legacy
-      model" state.
-
-    Never touches any bundle directory's contents; never deletes the
-    REJECTED candidate bundle (only the manifest FILE is touched here).
-
-    Returns a small structured dict recording what happened, so the caller
-    can attach it to the run's `activation` metadata for auditability.
-    """
+    """Phase E activation-failure cleanup for the manifest file itself, called ONLY after write_manifest has already successfully published a new manifest and a LATER step (local snapshot swap, or the post-swap smoke test) then failed."""
     if previous_manifest is not None:
         try:
             model_bundle.write_manifest(previous_manifest)
@@ -774,54 +526,7 @@ def _rollback_manifest(previous_manifest):
 
 
 def _attempt_activation(run_id, model_version, artifact_path, dataset_hash):
-    """
-    Phase E activation workflow -- called only after Phase D's validation
-    has already succeeded for `run_id` (i.e. a publishable candidate
-    exists). Implements the ordering the Phase E spec identifies as
-    safest, and explains why:
-
-        1. Load and validate the candidate into a local, not-yet-live
-           snapshot (predictor_manager.preload_candidate). Nothing durable
-           has happened yet -- if this fails, NOTHING external has
-           changed: the manifest is untouched, this process's runtime is
-           untouched. This is deliberately the FIRST step, before the
-           manifest is ever touched, so that the manifest can never end up
-           pointing at something this very process just proved it cannot
-           load.
-        2. Publish the manifest atomically (model_bundle.write_manifest).
-           From this instant on, OTHER processes/workers that check the
-           manifest could start trying to reload this candidate too (see
-           predictor_manager.get_snapshot's lazy multi-worker check) --
-           which is fine, because step 1 already proved at least THIS
-           process can load it; other processes get their own independent
-           preload+validate attempt via the same code path.
-        3. Swap this process's own local snapshot to the (already
-           validated) candidate.
-        4. Run a post-swap smoke prediction as a final end-to-end
-           confirmation using the now-live snapshot.
-        5. Persist activation success onto the run record.
-        6. Finalize this run's reserved feedback to "trained" -- ONLY now,
-           after every previous step has actually succeeded.
-
-    The required safety property ("the manifest must never point to a
-    bundle the publishing process could not itself load and smoke-test")
-    holds because step 1 always happens before step 2. The one residual
-    risk window is between steps 2 and 4 (manifest published, but this
-    process hasn't yet swapped/smoke-tested) -- if step 3 or 4 fails in
-    that window, the rollback below restores the previous manifest AND the
-    previous local snapshot before this function returns, so no window is
-    ever left where the manifest points somewhere this process's own
-    runtime disagrees with.
-
-    Returns a structured dict:
-        {"success": True,  "activation": {...}}
-        {"success": False, "activation": {...}, "reason": "..."}
-
-    Never raises -- every failure path inside this function is caught and
-    turned into a structured failure result, since the caller
-    (background_retrain) needs to reach its own mark_failed_activation /
-    feedback-rollback logic regardless of exactly where activation failed.
-    """
+    """E. a publishable candidate exists)."""
     try:
         previous_manifest = model_bundle.read_manifest()
     except model_bundle.ManifestError as exc:
@@ -908,69 +613,7 @@ def _attempt_activation(run_id, model_version, artifact_path, dataset_hash):
 
 
 def background_retrain(run_id):
-    """
-    Runs in a background thread, only ever started by the request that
-    successfully owns the MongoDB-backed lock for `run_id`.
-
-    Persists queued -> running -> (completed | failed) on the run record,
-    and ALWAYS releases the lock in a finally block. release_lock() itself
-    is owner-checked (filtered on runId), so this can never release a lock
-    that has since been reassigned to a newer run (e.g. after this run was
-    judged stale and reclaimed).
-
-    Phase E feedback policy (supersedes Phase C/D): reserved feedback is
-    advanced to "trained" ONLY after a full, successful activation (see
-    _attempt_activation) -- validation passing alone is no longer enough,
-    because Phase D's "completed" only ever meant "publishable", never
-    "live". On ANY failure at or before activation (training, validation,
-    or activation itself), reserved feedback is rolled back to "pending"
-    via _rollback_reserved_feedback. Once activation has fully succeeded,
-    a LATER failure to finalize feedback (a MongoDB write error, say) is
-    treated as a bookkeeping warning only -- it must never roll back an
-    already-live model, and must never return that feedback to "pending"
-    (the live model already includes it) -- see mark_bookkeeping_warning
-    and this module's startup reconciliation.
-
-    Status flow as of Phase E: "running" -> (after the training stage
-    produces a candidate bundle) "evaluating" -> "failed_validation" (gates
-    rejected the candidate) or "failed" (training itself broke, never
-    reached "evaluating") or, on validation success, straight into
-    "activating" -> "activated" (full activation succeeded) or
-    "failed_activation" (activation itself failed at any of its steps).
-    persist_model_candidate() is called once, whenever run_retraining
-    returns model/metrics/validation data at all (even on a validation
-    failure, since a rejected candidate's data is still worth recording for
-    inspection) -- but never on a bare training-stage failure, where no
-    candidate ever existed.
-
-    ML-001-T06 manual promotion gate (default OFF -- see
-    config.is_manual_approval_required): when enabled, a validation
-    success no longer flows straight into "activating" here. It instead
-    stops at "awaiting_approval" and this function returns -- releasing
-    the training lock in its own `finally` below exactly as every other
-    terminal outcome does, but without ever calling _attempt_activation.
-    A human then resolves it via `POST /training-runs/{run_id}/approve`
-    (which calls the SAME _attempt_activation this function would have
-    called, with the same success/failure handling) or
-    `POST /training-runs/{run_id}/reject` (terminal "rejected", candidate
-    bundle left untouched on disk). When the flag is unset/false, this
-    entire paragraph is inapplicable -- the flow above is exactly what
-    runs, unchanged.
-
-    Lock-release ordering (Phase E item 17): the lock is released in the
-    outer `finally` below ONLY after this entire try block -- training,
-    validation, AND the full activation workflow (manifest publication,
-    local swap, smoke test, feedback finalization attempt) -- has reached
-    its terminal outcome. This is deliberate: releasing the lock any
-    earlier (e.g. right after validation) would let a second retrain start
-    before this run's activation-or-rollback has finished, risking two
-    runs racing to publish the manifest.
-
-    Note on this threading model: this is still a single background Thread
-    inside one process. The MongoDB-backed lock is what makes this safe
-    across *multiple* processes/workers/replicas -- the thread itself
-    remains a single-process, at-most-one-concurrent-training mechanism.
-    """
+    """Runs in a background thread, only ever started by the request that successfully owns the MongoDB-backed lock for `run_id`."""
     start_ts = time.monotonic()
     try:
         runs.mark_running(run_id)
@@ -1020,12 +663,7 @@ def background_retrain(run_id):
 
         if result.get("success"):
             if ml_config.is_manual_approval_required():
-                # ML-001-T06 manual promotion gate: pause here instead of activating
-                # automatically. modelVersion/artifactPath/datasetHash are already on
-                # the run document (persist_model_candidate + attach_dataset_metadata,
-                # both above) -- nothing else needs to be recorded to resume later via
-                # /training-runs/{run_id}/approve, which calls the exact same
-                # _attempt_activation this branch would otherwise call directly.
+                # T06 manual promotion gate: pause here instead of activating automatically.
                 runs.mark_awaiting_approval(run_id)
                 log_event(
                     "awaiting_manual_approval", runId=run_id,
@@ -1113,17 +751,7 @@ def background_retrain(run_id):
 
 
 def _fail_and_release(run_id, reason):
-    """
-    Best-effort terminal cleanup for a run that must not be left "queued" or
-    holding the lock, used on failure paths that occur BEFORE the background
-    thread exists to do this itself in its own finally block (i.e. the two
-    failure windows this hardening pass closes: a claim/reclaim exception,
-    and a thread-construction/start failure).
-
-    release_lock() is owner-checked and a safe no-op if this run never
-    actually held the lock, so it is always safe to call unconditionally
-    here regardless of exactly how far the caller got before failing.
-    """
+    """E. the two failure windows this hardening pass closes: a claim/reclaim exception, and a thread-construction/start failure)."""
     try:
         runs.fail_unstarted_run(run_id, reason)
     except Exception:
@@ -1135,14 +763,7 @@ def _fail_and_release(run_id, reason):
 
 
 def _cleanup_unclaimed(run_id):
-    """
-    Best-effort cleanup for an attempt that lost a genuine claim race
-    (peek_active_run() reported the lock as free, but a concurrent request
-    won the atomic claim first). Per Phase B.1 policy this is not a failure
-    of the system, so the bookkeeping document is removed rather than kept
-    as a misleading "failed" record. If the delete itself fails, falls back
-    to marking the run failed so it is, at minimum, never left "queued".
-    """
+    """Best-effort cleanup for an attempt that lost a genuine claim race (peek_active_run() reported the lock as free, but a concurrent request won the atomic claim first)."""
     try:
         runs.abandon_unclaimed_run(run_id)
     except Exception:
@@ -1165,16 +786,7 @@ def retrain_model(
     payload: Optional[RetrainTriggerRequest] = None,
     x_ml_operations_token: Optional[str] = Header(None),
 ):
-    """
-    Remediation Workstream C -- this is the most consequential of the three
-    previously-unauthenticated endpoints (it starts a real background
-    retraining run, and had NO authentication at all before this fix). Same
-    fail-closed shared-secret guard as /predict-category and
-    /generate-description; see _require_operations_token's own doc comment.
-    Checked FIRST, before the active-run fast path, the persistent run
-    record, or the lock claim -- a rejected caller creates no TrainingRun
-    document and starts no background thread.
-    """
+    """Remediation Workstream C -- this is the most consequential of the three previously-unauthenticated endpoints (it starts a real background retraining run, and had NO authentication at all before this fix)."""
     _require_operations_token(x_ml_operations_token)
 
     requested_source = payload.source if payload else None
@@ -1270,36 +882,7 @@ def retrain_model(
 
 @app.post("/training-runs/{run_id}/approve")
 def approve_training_run(run_id: str, x_ml_operations_token: Optional[str] = Header(None)):
-    """
-    ML-001-T06 manual promotion gate -- the human-facing counterpart to
-    background_retrain's automatic activation path, usable only when
-    config.is_manual_approval_required() left a run sitting at
-    "awaiting_approval" instead of activating it automatically.
-
-    Deliberately reuses _attempt_activation -- the exact same function
-    the automatic path calls -- rather than reimplementing any part of
-    the preload/publish-manifest/swap/smoke-test workflow, so an approved
-    run goes through precisely the same safety ordering (see
-    _attempt_activation's own docstring) as an automatic activation would
-    have. On success, this applies the exact same follow-up steps
-    background_retrain applies after a successful _attempt_activation
-    call (mark_activated, finalize reserved feedback to "trained",
-    best-effort post-activation cleanup) so an approved run reaches the
-    same end state. On failure, this applies the exact same follow-up
-    background_retrain applies after a failed _attempt_activation call
-    (mark_failed_activation, roll reserved feedback back to "pending").
-
-    Returns 404 if run_id does not resolve to any run (same
-    "never distinguish malformed vs. absent" policy as
-    training_run_detail). Returns 409 if the run exists but is not
-    currently "awaiting_approval" -- e.g. it was already approved,
-    rejected, or never had manual approval enabled for it -- since
-    calling this twice, or on the wrong run, is a state conflict, not a
-    malformed request. Returns 422 if _attempt_activation itself reports
-    failure (a legitimate, already-logged operational outcome -- the
-    request itself was well-formed and correctly authorized; the
-    candidate just could not be safely promoted).
-    """
+    """Is_manual_approval_required() left a run sitting at "awaiting_approval" instead of activating it automatically."""
     _require_operations_token(x_ml_operations_token)
 
     run_doc = runs.get_run(run_id)
@@ -1387,19 +970,7 @@ def reject_training_run(
     payload: Optional[ApprovalDecisionRequest] = None,
     x_ml_operations_token: Optional[str] = Header(None),
 ):
-    """
-    ML-001-T06 manual promotion gate -- records that a human explicitly
-    declined to promote a candidate sitting at "awaiting_approval".
-    Terminal ("rejected"); never touches the manifest, never touches the
-    candidate bundle on disk (it is left exactly as write_bundle left it,
-    for later inspection or, if the decision is reversed, promotion via
-    training/rollback_model.py's operator CLI -- see that module and
-    RUNBOOK.md).
-
-    Same 404/409 conventions as approve_training_run above: 404 for a
-    run_id that resolves to nothing, 409 for a run that exists but is not
-    currently "awaiting_approval".
-    """
+    """T06 manual promotion gate -- records that a human explicitly declined to promote a candidate sitting at "awaiting_approval"."""
     _require_operations_token(x_ml_operations_token)
 
     run_doc = runs.get_run(run_id)

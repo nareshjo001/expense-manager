@@ -2,19 +2,11 @@ import React, { forwardRef, Suspense, useContext, useEffect, useImperativeHandle
 import { HiSparkles } from "react-icons/hi2";
 import { ThemeContext } from "../contexts/ThemeContext";
 
-// FE-003-T04 -- SiaPanel (conversation UI, session list, voice recording
-// controls) is lazy-loaded: it's only needed once a user actually opens
-// "Ask SIA", so it shouldn't ship in the main bundle for every session.
-// SiaPanel.css is imported HERE (eagerly), not in SiaPanel.js, because it
-// also styles .sia-root/.sia-entry-point -- the always-rendered launcher
-// button below -- which must stay styled even before the panel chunk loads.
+// SiaPanel (conversation UI, session list, voice recording controls) is lazy-loaded: it's only needed once a user actually opens "Ask SIA", so it shouldn't ship in the main bundle for every session.
 import "./SiaPanel.css";
 import { useSiaConversation, PANEL_MODE } from "./useSiaConversation";
 import { useSiaStatusQuery, isSiaAvailableResponse } from "../../hooks/queries/useSiaStatusQuery";
-// FE-003-T06 -- a standalone loader so it can also be called early, on
-// hover/focus of the launcher button below, giving the chunk a head start
-// before the user actually clicks (webpack's import() cache makes the
-// later, real load a no-op if it already resolved).
+// A standalone loader so it can also be called early, on hover/focus of the launcher button below, giving the chunk a head start before the user actually clicks (webpack's import() cache makes the later, real load a no-op if it already resolved).
 const loadSiaPanel = () => import(/* webpackChunkName: "sia" */ "./SiaPanel");
 const SiaPanel = React.lazy(loadSiaPanel);
 
@@ -116,11 +108,7 @@ const SiaEntryPoint = forwardRef(({ onOpen, hideLauncher = false }, ref) => {
             // The launcher itself is never hidden by backend unavailability
             isAvailable={isSiaAvailable}
             isCheckingAvailability={isCheckingAvailability}
-            // FE-001-T08 -- previously SiaPanel had no way to tell a genuine
-            // status-query failure apart from a clean "available: false"
-            // response; both collapsed into the same "unavailable" copy.
-            // Fail-closed behavior (blockedByAvailability) is unchanged --
-            // this only lets the panel pick more accurate wording.
+            // Previously SiaPanel had no way to tell a genuine status-query failure apart from a clean "available: false" response; both collapsed into the same "unavailable" copy.
             isAvailabilityError={statusQuery.isError}
             onRetryAvailability={statusQuery.refetch}
             focusRequestVersion={focusRequestVersion}

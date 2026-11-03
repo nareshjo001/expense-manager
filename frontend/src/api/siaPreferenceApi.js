@@ -1,9 +1,6 @@
 import api from "./axios";
 
-// SIA-001-T06 -- thin wrapper over the new per-user SIA enable/disable and
-// "delete my SIA history" routes, through the shared axios instance (auth
-// refresh / 401/429 handling stays centralized there), same convention as
-// aiSummaryApi.js / notificationPreferencesApi.js.
+// Js.
 
 export const getSiaPreference = async (signal) => {
   const { data } = await api.get("/sia/preferences", { signal });

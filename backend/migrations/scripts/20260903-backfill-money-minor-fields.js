@@ -1,40 +1,9 @@
 "use strict";
 
-// DAT-001-T04 -- backfills the *Minor integer-paise shadow fields
-// (ADR-0003) from the existing float money fields, for every document
-// that doesn't have its *Minor field yet. Purely additive: never reads
-// or writes the legacy field's value, and every legacy field keeps
-// working exactly as before. Uses the same toMinorUnits() rounding rule
-// (ADR-0003, DAT-001-T03) the application itself uses, so a backfilled
-// document and a freshly-written one always agree bit-for-bit -- that
-// agreement is exactly what DAT-001-T05's dual-read verification checks
-// for.
-//
-// Idempotent and safe to re-run: each pass only looks at documents
-// still missing their *Minor field, so a partial run (or DAT-003's
-// batch/resume driver splitting this across invocations) just picks up
-// where it left off, same as any other migration in this pipeline.
+// Backfills the *Minor integer-paise shadow fields (ADR-0003) from the existing float money fields, for every document that doesn't have its *Minor field yet.
 const { toMinorUnits } = require("../../utils/money");
 
-// DAT-002-T06 correction (2026-09-21) -- "budget" and "recurringExpenses"
-// below were never the real MongoDB collection names. config/Schemas.js
-// registers the budget model as mongoose.model('budget', budgetSchema)
-// and models/RecurringExpense.js registers
-// mongoose.model('recurringExpenses', RecurringExpenseSchema); Mongoose
-// pluralizes/lowercases both of those to derive the actual collection
-// name whenever no explicit `collection` schema option overrides it (this
-// codebase sets none) -- confirmed directly against the real mongoose
-// package, not assumed: 'budget' -> "budgets", 'recurringExpenses' ->
-// "recurringexpenses". Every application read/write already goes through
-// the Model (BudgetModel, RecurringExpenseModel), which always resolves
-// the correct real name automatically -- only this migration's direct,
-// string-keyed db.collection(...) calls bypassed that and silently
-// targeted a nonexistent collection, matching zero real documents on
-// every run without ever raising an error. Caught while investigating
-// DAT-002-T06's orphan/duplicate integrity checks, well after this
-// migration's own DAT-001-T04 tests were written and passing -- those
-// tests use a fake db keyed by the same (until now, wrong) literal
-// strings, so they never could have caught this themselves.
+// T06 correction (2026-09-21) -- "budget" and "recurringExpenses" below were never the real MongoDB collection names.
 const FIELD_MAP = [
   { collection: "expenses", legacyField: "expenseAmount", minorField: "expenseAmountMinor" },
   { collection: "incomes", legacyField: "incomeAmount", minorField: "incomeAmountMinor" },
@@ -70,9 +39,7 @@ async function backfillOne({ db, collection, legacyField, minorField, logger, dr
   for await (const doc of cursor) {
     const legacyValue = doc[legacyField];
     if (typeof legacyValue !== "number" || !Number.isFinite(legacyValue)) {
-      // A non-numeric/NaN legacy value is a pre-existing data problem
-      // this migration doesn't try to fix -- log it and move on rather
-      // than crashing the whole backfill over one bad document.
+      // A non-numeric/NaN legacy value is a pre-existing data problem this migration doesn't try to fix -- log it and move on rather than crashing the whole backfill over one bad document.
       skippedCount += 1;
       logger.warn({
         event: "skip_non_numeric_legacy_value",

@@ -1,31 +1,6 @@
 "use strict";
 
-// DAT-002-T05 -- read-only reconnaissance for the two data-quality gaps
-// DAT-002-T02 deliberately left unbackfilled (see that task's "Stated
-// limitation" in workflow/features/P1/DAT-002-database-schema-quality-
-// and-integrity.md): a User.email document written before T02's schema-
-// level `lowercase: true, trim: true` setter may still be stored in a
-// non-canonical case/whitespace form, and a Budget.month document written
-// before T02's validator may not parse as the canonical "MMM YYYY" key
-// (utils/monthKeyNormalization.js's parseMonthKey).
-//
-// This migration never writes anything -- up() and verify() both only
-// scan and log. That is deliberate, not a placeholder for a future
-// mutating pass: users.email has a `unique: true` index on the *raw
-// stored string* (config/Schemas.js), so two existing documents whose
-// values only differ by case/whitespace ("Foo@x.com" and "foo@x.com ")
-// can coexist today but would collide the instant anything tried to
-// rewrite them to the same normalized value. Actually normalizing
-// existing rows is only safe once this report has been read and any
-// reported collisions have been manually resolved (merge/delete/rename
-// one of the colliding accounts) -- that resolution is a product/data
-// decision this migration does not make for anyone. budgets/budget has
-// no comparable collision risk: it already has a `unique: true` compound
-// index on { userId, month } (config/Schemas.js), and DAT-002-T02
-// confirmed "MMM YYYY" is the real persisted format everywhere in this
-// codebase, not a format this migration is changing -- so its malformed-
-// value list below is a plain backfill-candidate list, not a collision
-// report.
+// Js's parseMonthKey). This migration never writes anything -- up() and verify() both only scan and log.
 const { parseMonthKey } = require("../../utils/monthKeyNormalization");
 
 const PROGRESS_LOG_EVERY = 500;
@@ -85,12 +60,7 @@ async function scanEmailGaps({ db, logger }) {
 }
 
 async function scanBudgetMonthGaps({ db, logger }) {
-  // DAT-002-T06 correction -- the real collection is "budgets" (Mongoose
-  // pluralizes the "budget" model name registered in config/Schemas.js;
-  // confirmed directly against the actual mongoose package, not assumed).
-  // "budget" (singular) would silently match nothing against a real
-  // connection -- caught while investigating T06's orphan checks, fixed
-  // here before this script was ever run for real.
+  // Js; confirmed directly against the actual mongoose package, not assumed).
   const coll = db.collection("budgets");
   const cursor = coll.find({}, { projection: { month: 1, userId: 1 } });
 
@@ -124,10 +94,7 @@ async function scanBudgetMonthGaps({ db, logger }) {
 }
 
 module.exports = {
-  // DAT-002-T06 -- exported (alongside the migration shape below) so the
-  // orphan/duplicate integrity-check migration can reuse this exact
-  // collision-detection logic for `users.email` instead of redefining it
-  // a second time.
+  // Email` instead of redefining it a second time.
   scanEmailGaps,
   scanBudgetMonthGaps,
 
@@ -143,13 +110,7 @@ module.exports = {
   },
 
   async verify({ mongoose, logger }) {
-    // This migration never writes, so there is no prior mutation to
-    // check for completeness the way other migrations' verify() does.
-    // "Verify" here means: re-running the same read-only scan completes
-    // without throwing and reports the same shape of result -- unlike a
-    // mutating migration, running this one twice must be safe and must
-    // produce identical counts, since nothing it does changes the data
-    // it's reading.
+    // This migration never writes, so there is no prior mutation to check for completeness the way other migrations' verify() does.
     const db = mongoose.connection.db;
     const email = await scanEmailGaps({ db, logger });
     const budgetMonth = await scanBudgetMonthGaps({ db, logger });

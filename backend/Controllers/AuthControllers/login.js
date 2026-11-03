@@ -11,10 +11,7 @@ const {
 const login = async (req, res) => {
     try {
         const { email: rawEmail, password } = req.body;
-        // DAT-002-T02 -- normalize before the query, not just for the audit
-        // hash. UserModel.email is now stored lowercase+trimmed (schema
-        // setter, config/Schemas.js); querying with the same normalization
-        // is what makes a case-varying login actually match that record.
+        // Normalize before the query, not just for the audit hash.
         const email = normalizeEmail(rawEmail);
         const user = await UserModel.findOne({ email });
         const comparePasswordSafely = passwordService.comparePasswordOrDummy || passwordService.comparePassword;

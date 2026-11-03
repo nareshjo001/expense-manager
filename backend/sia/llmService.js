@@ -96,14 +96,7 @@ function parseStructuredOutput(answer, provider) {
   }
 }
 
-// SIA-001-T03 -- normalizes a provider's raw usage block into a fixed,
-// provider-neutral shape. OpenAI's Responses API names these
-// input_tokens/output_tokens; Gemini's and Groq's OpenAI-compatible Chat
-// Completions endpoints both name them prompt_tokens/completion_tokens --
-// each adapter passes its own field names in below rather than this
-// guessing across providers. Missing/malformed usage is null fields,
-// never a throw: a token count is an observation of what happened, not a
-// correctness dependency of the answer itself.
+// Normalizes a provider's raw usage block into a fixed, provider-neutral shape.
 function normalizeUsage(usage, { promptField, completionField, totalField }) {
   if (!usage || typeof usage !== "object") {
     return { promptTokens: null, completionTokens: null, totalTokens: null };
@@ -275,11 +268,7 @@ async function askOpenAi({ systemPrompt, context, question, history, structuredO
       },
     ],
     store: false,
-    // SIA-001-T02 -- output-token budget. The Responses API's field is
-    // max_output_tokens specifically (Chat Completions' max_tokens is NOT
-    // a valid Responses API parameter). Omitted entirely rather than sent
-    // as undefined/invalid when config.maxOutputTokens isn't a usable
-    // positive integer.
+    // Output-token budget. The Responses API's field is max_output_tokens specifically (Chat Completions' max_tokens is NOT a valid Responses API.
     ...(Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0
       ? { max_output_tokens: config.maxOutputTokens }
       : {}),
@@ -378,11 +367,7 @@ async function askGemini({ systemPrompt, context, question, history, structuredO
         content: buildUserInputContent(context, question),
       },
     ],
-    // SIA-001-T02 -- output-token budget. Gemini's OpenAI-compatible
-    // endpoint accepts max_tokens, but the compat layer SILENTLY IGNORES
-    // any field it doesn't recognize rather than erroring -- so this must
-    // be exactly "max_tokens", not "max_completion_tokens" or
-    // "max_output_tokens", or the cap would be silently dropped.
+    // Output-token budget. Gemini's OpenAI-compatible endpoint accepts max_tokens, but the compat layer SILENTLY IGNORES any field it doesn't reco.
     ...(Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0
       ? { max_tokens: config.maxOutputTokens }
       : {}),
@@ -474,9 +459,7 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
         content: buildUserInputContent(context, question),
       },
     ],
-    // SIA-001-T02 -- output-token budget. Groq's current recommended
-    // field is max_completion_tokens (max_tokens is deprecated there in
-    // favor of it, though still accepted) -- use the recommended name.
+    // Output-token budget. Groq's current recommended field is max_completion_tokens (max_tokens is deprecated there in favor of it, though still.
     ...(Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0
       ? { max_completion_tokens: config.maxOutputTokens }
       : {}),
@@ -538,16 +521,7 @@ async function askGroq({ systemPrompt, context, question, history, structuredOut
   });
 }
 
-// SIA-001-T02 -- context budget. Computes the combined character length
-// of everything askLlm() is about to send to a provider: systemPrompt +
-// serialized history (via buildHistoryMessages(), the same "user"/
-// "assistant" framing every adapter actually sends -- not a raw guess at
-// history's shape) + serialized context + question. This lets
-// config.maxContextChars be enforced ONCE, in askLlm() itself, before any
-// adapter/request is built, instead of duplicating the check three times.
-// An unserializable context isn't this function's concern -- it's treated
-// as 0-length here, and the adapter's own buildUserInputContent() call
-// (JSON.stringify) will surface that real failure downstream as usual.
+// Context budget. Computes the combined character length of everything askLlm() is about to send to a provider: systemPrompt + serialized hist.
 function computeOutboundContentLength({ systemPrompt, context, question, history }) {
   const systemPromptLength = typeof systemPrompt === "string" ? systemPrompt.length : 0;
   const questionLength = typeof question === "string" ? question.length : 0;
@@ -567,10 +541,7 @@ function computeOutboundContentLength({ systemPrompt, context, question, history
   return systemPromptLength + contextLength + questionLength + historyLength;
 }
 
-// SIA-001-T03 -- null unless BOTH per-million rates are configured AND
-// both token counts are known; a partial input never produces a partial
-// (silently wrong) estimate -- see config.js's normalizePricePerMillionUsd
-// for why pricing itself is operator-configured rather than hardcoded.
+// Js's normalizePricePerMillionUsd for why pricing itself is operator-configured rather than hardcoded.
 function estimateCostUsd({ promptTokens, completionTokens } = {}) {
   const { inputPricePerMillionUsd, outputPricePerMillionUsd } = config;
   if (
@@ -586,15 +557,7 @@ function estimateCostUsd({ promptTokens, completionTokens } = {}) {
 
 // Request shape is the stable public interface callers depend on. systemPrompt/context/question are never read, logged, transformed, or included in any error before the provider-configuration check -- unsupported/unconfigured providers fail before any request could be built or sent.
 async function askLlm({ systemPrompt, context, question, history, structuredOutput } = {}) {
-  // OBS-001-T05 -- SIA provider metrics. askLlm is the single function every
-  // adapter passes through, so one wrapper here covers openai/gemini/groq
-  // and any future adapter without each having to instrument itself.
-  //
-  // Only the PROVIDER NAME, the outcome and the duration are recorded --
-  // never the question, context, answer or any provider payload. That is the
-  // same discipline safeLogger.js enforces for SIA logging, and it is why
-  // this records through metrics.recordOperation (fixed primitive fields)
-  // rather than anything that accepts arbitrary metadata.
+  // SIA provider metrics. askLlm is the single function every adapter passes through, so one wrapper here covers openai/gemini/groq and any futu.
   const metricsStartedAt = Date.now();
   const provider = config.provider;
 
@@ -628,14 +591,7 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
     );
   }
 
-  // SIA-001-T02 -- context budget, enforced once here for every provider.
-  // Fails CLOSED: an oversized request is rejected outright, never
-  // silently truncated. Truncating financial context could make SIA
-  // answer as if it saw the full picture when it didn't -- silently
-  // hiding data from the model would violate this feature's core trust
-  // principle just as much as hiding it from the user would. No adapter
-  // is ever reached once this fires, so no request (partial or
-  // otherwise) is sent to any provider.
+  // Context budget, enforced once here for every provider. Fails CLOSED: an oversized request is rejected outright, never silently truncated.
   if (Number.isFinite(config.maxContextChars) && config.maxContextChars > 0) {
     const outboundContentLength = computeOutboundContentLength({ systemPrompt, context, question, history });
     if (outboundContentLength > config.maxContextChars) {
@@ -647,13 +603,7 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
     }
   }
 
-  // SIA-001-T04 -- circuit breaker, the second half of "one safe retry and
-  // circuit-breaker behavior" (the retry half already existed in
-  // directAnswerService.js's askWithTransientRetry() before this task).
-  // Checked once here, after every static/input check above has already
-  // passed, so an open breaker fails FAST -- no network attempt at all --
-  // rather than waiting out another timeout against a provider already
-  // known to be unhealthy.
+  // Js's askWithTransientRetry() before this task).
   if (providerCircuitBreaker.isCircuitOpen(normalizedProvider)) {
     recordProvider("failure");
     throw new LlmProviderError(
@@ -666,9 +616,7 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
     const answer = await adapter({ systemPrompt, context, question, history, structuredOutput });
     recordProvider("success");
     providerCircuitBreaker.recordOutcome(normalizedProvider, { success: true });
-    // SIA-001-T03 -- usage/cost. Only recorded on success: a failed call
-    // has no meaningful usage, and a rejected request is not billed the
-    // way a completed one is.
+    // Usage/cost. Only recorded on success: a failed call has no meaningful usage, and a rejected request is not billed the way a completed one is.
     recordSiaUsage({
       provider: normalizedProvider,
       promptTokens: answer.usage.promptTokens,
@@ -677,9 +625,7 @@ async function askLlm({ systemPrompt, context, question, history, structuredOutp
     });
     return answer;
   } catch (err) {
-    // Rethrown untouched -- this only classifies the attempt so a provider
-    // that starts degrading shows up as a rising failure count rather than
-    // only as individual log lines nobody is aggregating.
+    // Rethrown untouched -- this only classifies the attempt so a provider that starts degrading shows up as a rising failure count rather than only as individual log lines nobody is aggregating.
     recordProvider("failure");
     providerCircuitBreaker.recordOutcome(normalizedProvider, {
       success: false,

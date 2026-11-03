@@ -1,59 +1,14 @@
 "use strict";
 
-// DAT-001-T07 -- the interlock that must pass before the legacy float money
-// fields can be removed.
-//
-// T07 is a ONE-WAY DOOR. Removing `expenseAmount`, `incomeAmount`, `budget`
-// and `spent` deletes the only representation of every amount this
-// application has ever recorded, unless the `*Minor` integer fields are
-// provably complete and correct first. There is no forward-fix for having
-// dropped them early; ADR-0006's up/verify/forward-fix convention has
-// nothing to offer once the source values are gone.
-//
-// Until now the only thing standing between that and a mistake was a
-// sentence in docs/data/DAT-001-T06-cutover-runbook.md: "Do not remove
-// expenseAmount, incomeAmount, budget, or spent before both are true." That
-// is a good sentence. It is not a control. This codebase already treats
-// irreversible operations differently -- migrations/environmentGate.js
-// refuses to run without MIGRATIONS_ENV_CONFIRMED, mongoRestore.js refuses
-// to restore into production, utils/jobLease.js fails closed when it cannot
-// prove exclusivity -- and the destructive one had the weakest guard of the
-// three.
-//
-// So this module answers one question, fail-closed, in code: is it provably
-// safe to remove the legacy money fields right now? Every check reports
-// together rather than short-circuiting, because someone preparing this
-// cutover should see the whole list once instead of discovering it one
-// refusal at a time.
-//
-// WHAT THIS IS NOT: it is not the removal, and passing it does not mean T07
-// is done. The removal migration still has to be written and run against
-// real data after a real soak. This is the precondition, which is the part
-// that can be built without production access.
+// The interlock that must pass before the legacy float money fields can be removed.
 const { isRecentBackupAvailable } = require("../scripts/backup/checkRecentBackup");
 const { verifyAll, summarize } = require("../scripts/verifyMoneyMinorFields");
 const ledger = require("./ledger");
 
-// DAT-001-T04's backfill. Without it, documents written before the *Minor
-// fields existed have no integer value at all -- so removing the legacy
-// field erases them outright rather than merely changing representation.
+// T04's backfill. Without it, documents written before the *Minor fields existed have no integer value at all -- so removing the legacy field.
 const BACKFILL_MIGRATION_ID = "20260903-backfill-money-minor-fields";
 
 // How long dual-write must have been running before removal is allowed.
-//
-// verifyMoneyMinorFields.js's own header is explicit that a single clean run
-// is NOT sufficient: "it should be run repeatedly across a real rollout
-// window (new writes keep landing the whole time), not just once." A clean
-// reconciliation proves the documents that exist agree; it cannot prove that
-// every WRITE PATH populates the shadow field, because a path nobody
-// exercised during the check looks identical to one that works.
-//
-// Fourteen days is chosen to span at least one full cycle of this app's
-// slowest money-writing path: recurringJob.js fires monthly, so a window
-// shorter than a month cannot have observed it at all. Two weeks does not
-// fix that -- it is a floor, not a proof -- which is why the returned
-// warnings say so rather than letting a passing gate imply the monthly path
-// was covered.
 const MIN_SOAK_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -65,10 +20,6 @@ function parseSoakStart(env) {
 }
 
 // Evaluates every precondition. Returns { safe, blockers, warnings, evidence }.
-//
-// `db` is injected rather than reached for via mongoose, so this can be
-// exercised against a test double without a live connection -- the same
-// reason verifyMoneyMinorFields.verifyAll takes one.
 async function checkLegacyMoneyRemovalPreconditions({
   db,
   env = process.env,
@@ -78,11 +29,7 @@ async function checkLegacyMoneyRemovalPreconditions({
   const warnings = [];
   const evidence = {};
 
-  // 1. Dual-write must be ON, or new writes are landing with no integer
-  //    value even while the backfill has covered every old document.
-  //    Removing the legacy field then loses data written from this moment
-  //    forward rather than historically -- which is worse, because it looks
-  //    fine in a reconciliation run against yesterday's data.
+  // 1. Dual-write must be ON, or new writes are landing with no integer value even while the backfill has covered every old document.
   const dualWriteEnabled = env.MONEY_MINOR_DUAL_WRITE_ENABLED === "true";
   evidence.dualWriteEnabled = dualWriteEnabled;
   if (!dualWriteEnabled) {
@@ -93,9 +40,7 @@ async function checkLegacyMoneyRemovalPreconditions({
     );
   }
 
-  // 2. The backfill must be recorded as applied, in THIS environment's
-  //    ledger. Not "the migration file exists" -- it existing in the repo
-  //    says nothing about whether it ever ran here.
+  // 2. The backfill must be recorded as applied, in THIS environment's ledger.
   let backfillApplied = false;
   let ledgerUnreadable = false;
   try {
@@ -110,11 +55,7 @@ async function checkLegacyMoneyRemovalPreconditions({
     );
   }
   evidence.backfillApplied = backfillApplied;
-  // Guarded by an explicit flag rather than by inspecting the blocker
-  // strings: matching on message text to decide control flow breaks the
-  // moment someone rewords a message, and the failure would be a
-  // DUPLICATE blocker on a path that is already refusing -- harmless here,
-  // but the same pattern silently drops a blocker if the polarity flips.
+  // Guarded by an explicit flag rather than by inspecting the blocker strings: matching on message text to decide control flow breaks the moment someone rewords a message, and the failure would be a DUPLICATE blocker on a path that is already refusing -- harmless here, but the same pattern silently drops a blocker if the polarity flips.
   if (!backfillApplied && !ledgerUnreadable) {
     blockers.push(
       `The backfill migration ${BACKFILL_MIGRATION_ID} is not recorded as applied in this ` +
@@ -150,10 +91,7 @@ async function checkLegacyMoneyRemovalPreconditions({
     );
   }
 
-  // 4. A recent verified backup must exist. This is the condition ADR-0003
-  //    and the T06 cutover runbook both name, and it is the only thing that
-  //    makes the one-way door survivable if the reconciliation was wrong
-  //    about something.
+  // 4. A recent verified backup must exist.
   let recentBackup = false;
   try {
     recentBackup = await isRecentBackupAvailable({ env, now });
@@ -197,9 +135,7 @@ async function checkLegacyMoneyRemovalPreconditions({
     }
   }
 
-  // 6. An explicit affirmative signal. Every other check can pass on a
-  //    system where nobody intended to do this today; the same reasoning as
-  //    MIGRATIONS_ENV_CONFIRMED in environmentGate.js.
+  // 6. An explicit affirmative signal.
   const confirmed = env.LEGACY_MONEY_REMOVAL_CONFIRMED === "true";
   evidence.confirmed = confirmed;
   if (!confirmed) {
@@ -233,11 +169,6 @@ async function assertLegacyMoneyRemovalSafe(options = {}) {
 }
 
 // CLI: report where this environment stands, without changing anything.
-//
-// Read-only and non-destructive on purpose -- the point is to be able to ask
-// "how far off are we?" during the soak, repeatedly, without any risk. Exit
-// code 0 means every precondition passes; 1 means it does not, so this can
-// gate a deploy step the same way verifyMoneyMinorFields.js does.
 if (require.main === module) {
   require("dotenv").config();
   const mongoose = require("mongoose");

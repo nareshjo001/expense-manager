@@ -1,18 +1,9 @@
 // Generalized structured logger for OBS-001 (Production observability).
-// Same safety model as sia/safeLogger.js: every field is validated/allowlisted
-// before it reaches a log line, so a caller can never smuggle raw errors,
-// tokens, financial payloads or unbounded strings into stdout. This module
-// intentionally has no third-party APM/log-shipping dependency -- it emits
-// one JSON line per call to stdout/stderr, which is the integration point
-// for whatever log aggregator the eventual hosting platform provides.
 "use strict";
 
 const MAX_SAFE_STRING_LENGTH = 500;
 const MAX_ROUTE_LENGTH = 200;
-// Structured values (metrics_snapshot's jobs/operations, a migration
-// report's examples) are serialized to JSON text. Before this they went
-// through String(), so every one of them was logged as "[object Object]"
-// -- found by the DAT-002-T07 staging run. Capped like any other string.
+// Structured values (metrics_snapshot's jobs/operations, a migration report's examples) are serialized to JSON text.
 const MAX_STRUCTURED_LENGTH = 2000;
 
 function safeStructured(value) {
@@ -46,9 +37,7 @@ function safeRequestId(value) {
   return text;
 }
 
-// Emits one structured JSON log line. `fields` is an explicit object, not a
-// spread of arbitrary caller data -- callers list exactly the safe fields
-// they mean to log; nothing is auto-included from `err`/`req`/`res`.
+// Emits one structured JSON log line.
 function logEvent({ level = "info", scope, event, requestId, ...fields } = {}) {
   try {
     const record = {

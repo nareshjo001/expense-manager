@@ -1,9 +1,7 @@
 const admin = require("firebase-admin");
 const { logEvent } = require("../utils/logger");
 
-// One structured line per reason. `reason` is always one of the fixed
-// strings below -- never the raw value or the SDK error (see the notes
-// at each call site for why).
+// One structured line per reason.
 const logUnavailable = (reason) =>
   logEvent({ level: "warn", scope: "push", event: "firebase_unavailable", reason, impact: "push notifications disabled" });
 

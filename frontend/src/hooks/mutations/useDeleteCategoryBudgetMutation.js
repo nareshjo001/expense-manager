@@ -2,9 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteCategoryBudget } from "../../api/categoryBudgetApi";
 import { queryKeys } from "../../query/queryKeys";
 
-// Writes the summary a successful PUT/DELETE returns into that month's
-// cache entry, in the same { success, contractVersion, data } envelope the
-// GET returns. Falls back to invalidating if the response has no summary.
+// Writes the summary a successful PUT/DELETE returns into that month's cache entry, in the same { success, contractVersion, data } envelope the GET returns.
 const applySummary = (queryClient, response, fallbackMonth) => {
   const summary = response?.data?.summary;
   if (response?.success && summary?.month) {

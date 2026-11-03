@@ -13,10 +13,7 @@ import './Layout.css';
 export default function MonthlyInsightPage () {
   const { data: report, isLoading, isError, refetch } = useReport();
 
-  // FE-001 -- loading, request-failure (with retry) and a genuinely empty
-  // report are three different situations; the previous code showed the
-  // same "Failed to load report." text for an error AND for a brand-new
-  // account with no data yet.
+  // " text for an error AND for a brand-new account with no data yet.
   const isEmpty = !isLoading && !isError && !report;
 
   return (

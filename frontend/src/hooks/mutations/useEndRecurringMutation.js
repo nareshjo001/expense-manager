@@ -2,10 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRecurringDefinition, endRecurringDefinition } from "../../api/recurringApi";
 import { queryKeys } from "../../query/queryKeys";
 
-// REC-002-T05/REC-003-T05 -- ends a recurring definition (terminal -- see
-// RecurringExpense.js's own comment on 'ended'). See
-// usePauseRecurringMutation.js's header for why this re-fetches
-// scheduleVersion immediately before mutating.
+// Js's own comment on 'ended'). js's header for why this re-fetches scheduleVersion immediately before mutating.
 export const useEndRecurringMutation = () => {
   const queryClient = useQueryClient();
 

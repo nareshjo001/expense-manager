@@ -5,8 +5,6 @@ import { FiSun, FiMoon } from 'react-icons/fi';
 import appLogoPink from '../../icons/Logo Pink.png';
 import appLogoDark from '../../icons/Logo Dark.png';
 
-export const AuthHeroColumn = () => null;
-
 const AuthLayout = ({ children }) => {
   const themeContext = useContext(ThemeContext);
   const theme = themeContext?.theme || 'light-theme';

@@ -1,23 +1,6 @@
 "use strict";
 
-// OCR-004-T04 -- read/list/detail/link/delete orchestration over persisted
-// Receipt documents. This module owns none of the ingest-time creation of
-// a Receipt (Services/ReceiptServices/receiptIngestService.js, built by a
-// parallel task) and none of the GridFS bytes themselves
-// (Services/ReceiptServices/receiptStorageAdapter.js is the only module
-// allowed to touch GridFS directly) -- it is the thin layer in between
-// that enforces per-user ownership on every read/mutation and shapes
-// Receipt documents into a client-safe response, mirroring
-// Services/ExportServices/exportRequestService.js's own split (DAT-004).
-//
-// Error convention: every validation/not-found failure is a thrown Error
-// with a `.code` string (see ERROR_CODES below). Controllers/Receipts/*.js
-// map `.code` to an HTTP status; nothing in this file talks HTTP.
-//
-// Ownership convention: every read/mutation filters on BOTH `_id` AND
-// `userId` in the same query, so "not yours" and "doesn't exist" collapse
-// to the identical NOT_FOUND outcome -- same posture as
-// exportRequestService.js's getExportRequestStatus/resolveDownload.
+// Read/list/detail/link/delete orchestration over persisted Receipt documents.
 const mongoose = require("mongoose");
 const Receipt = require("../../models/Receipt");
 const { ExpenseModel } = require("../../config/Schemas");
@@ -41,12 +24,7 @@ function isValidObjectId(id) {
   return typeof id === "string" && mongoose.Types.ObjectId.isValid(id);
 }
 
-// Shapes one Receipt document for a client response. Deliberately omits
-// storageKey (server-side-only GridFS file id, see models/Receipt.js's own
-// comment) -- imageUrl is the only way a client ever gets at the bytes,
-// resolved server-side by Controllers/Receipts/image.js the same way
-// exportRequestService.js's downloadUrl never exposes ExportRequest's
-// filePath.
+// Shapes one Receipt document for a client response. js's downloadUrl never exposes ExportRequest's filePath.
 function toSafeShape(doc) {
   return {
     id: String(doc._id),
@@ -61,23 +39,13 @@ function toSafeShape(doc) {
     linkedExpenseId: doc.linkedExpenseId ? String(doc.linkedExpenseId) : null,
     linkedAt: doc.linkedAt,
     imageUrl: `/api/receipts/${String(doc._id)}/image`,
-    // OCR-005 -- whether/how the user has already resolved this receipt's
-    // duplicate candidates (see utils/duplicateDetectionRules.js's
-    // DUPLICATE_STATUSES). "unreviewed" is the default for the vast
-    // majority of receipts that never had a candidate to begin with, not
-    // a signal that a candidate is pending.
+    // Js's DUPLICATE_STATUSES).
     duplicateStatus: doc.duplicateStatus || "unreviewed",
     duplicateOfReceiptId: doc.duplicateOfReceiptId ? String(doc.duplicateOfReceiptId) : null,
   };
 }
 
-// Returns the requesting user's own receipts, newest first, each in the
-// client-safe shape. Optional filters:
-//   - reviewStatus: one of RECEIPT_REVIEW_STATUS_VALUES, else a validation
-//     error -- never silently ignored, matching exportRequestService's
-//     "validate before querying" posture for domain/format.
-//   - linked: true -> only linkedExpenseId != null, false -> only
-//     linkedExpenseId == null, undefined -> no filter at all.
+// Returns the requesting user's own receipts, newest first, each in the client-safe shape.
 async function listReceipts({ userId, reviewStatus, linked }) {
   const filter = { userId };
 
@@ -114,10 +82,7 @@ async function getReceiptDetail({ userId, receiptId }) {
   return toSafeShape(doc);
 }
 
-// Ownership-scoped resolve of the pointer a controller needs to stream the
-// image bytes through the storage adapter. Never returns anything else
-// from the document -- callers get exactly storageKey/mimeType, nothing
-// client-shaped, since this is consumed server-side only.
+// Ownership-scoped resolve of the pointer a controller needs to stream the image bytes through the storage adapter.
 async function getReceiptImageRef({ userId, receiptId }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`getReceiptImageRef: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);
@@ -129,16 +94,7 @@ async function getReceiptImageRef({ userId, receiptId }) {
   return { storageKey: doc.storageKey, mimeType: doc.mimeType };
 }
 
-// Links a receipt to an expense. Ownership-scoped on BOTH the receipt
-// (userId) and the target expense (ExpenseModel.findOne({_id, userId}))
-// so a user can never link their receipt to someone else's expense, nor
-// link someone else's receipt to their own expense.
-//
-// Re-linking to the SAME expense it is already linked to is a harmless
-// no-op (idempotent). Linking to a DIFFERENT expense while already linked
-// is rejected -- an explicit unlink is required first rather than silently
-// moving the link, so a caller never loses track of which expense a
-// receipt used to back without an explicit step.
+// Links a receipt to an expense.
 async function linkReceiptToExpense({ userId, receiptId, expenseId }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`linkReceiptToExpense: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);
@@ -192,11 +148,7 @@ async function unlinkReceiptFromExpense({ userId, receiptId }) {
   return toSafeShape(receipt.toObject());
 }
 
-// Only expenseName/expenseAmount/expenseDate (the three checks below) are
-// ever merged onto extractedFields. Everything else in extractedFields
-// (overallConfidence, fieldConfidence, reviewReasons, amountCandidates) is
-// OCR's own record of what it originally produced and must never be
-// overwritten by a user correction.
+// Only expenseName/expenseAmount/expenseDate (the three checks below) are ever merged onto extractedFields.
 function validateCorrections(corrections) {
   const merged = {};
 
@@ -224,20 +176,14 @@ function validateCorrections(corrections) {
         ERROR_CODES.INVALID_CORRECTION
       );
     }
-    // Stored as given (parseReceipt() itself stores expenseDate as the
-    // matched raw string, see Services/BillServices/receiptExtractors.js's
-    // extractDate -- a correction keeps that same representation rather
-    // than silently reformatting it).
+    // Js's extractDate -- a correction keeps that same representation rather than silently reformatting it).
     merged.expenseDate = date;
   }
 
   return merged;
 }
 
-// Marks a receipt reviewed. `corrections` is an optional partial
-// {expenseName, expenseAmount, expenseDate} a user typed in while
-// reviewing a low-confidence receipt -- when provided, only those three
-// keys are merged onto extractedFields (see validateCorrections above).
+// Marks a receipt reviewed.
 async function markReceiptReviewed({ userId, receiptId, corrections }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`markReceiptReviewed: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);
@@ -252,10 +198,7 @@ async function markReceiptReviewed({ userId, receiptId, corrections }) {
     const validated = validateCorrections(corrections);
     if (Object.keys(validated).length > 0) {
       receipt.extractedFields = { ...(receipt.extractedFields || {}), ...validated };
-      // extractedFields is Schema.Types.Mixed -- Mongoose does not
-      // auto-detect an in-place object replacement like this one, so the
-      // change is explicitly flagged for save() the way Mixed fields
-      // always require (see Mongoose's own Mixed-type caveat).
+      // Mixed -- Mongoose does not auto-detect an in-place object replacement like this one, so the change is explicitly flagged for save() the way Mixed fields always require (see Mongoose's own Mixed-type caveat).
       receipt.markModified("extractedFields");
     }
   }
@@ -266,25 +209,7 @@ async function markReceiptReviewed({ userId, receiptId, corrections }) {
   return toSafeShape(receipt.toObject());
 }
 
-// Ownership-scoped delete. Deletes the GridFS object FIRST (via the
-// storage adapter's own deleteReceiptObject, which is documented as
-// idempotent -- "already gone" is not an error there) and only removes the
-// Mongo document once that succeeds. If deleteReceiptObject throws for any
-// other reason, that error propagates here and the Mongo document is left
-// intact -- an orphaned-but-still-referenced blob can be retried, a
-// dangling storageKey pointing at nothing cannot.
-//
-// A linked receipt CAN still be explicitly deleted here -- this is a
-// user-initiated delete of their own data, not the automatic
-// unlinked-only retention sweep utils/receiptLifecycle.js's
-// isEligibleForRetentionSweep() governs (that sweep never touches linked
-// receipts; this explicit delete applies regardless of link state).
-//
-// receiptStorageAdapter is required lazily, inside the function body
-// rather than at module load time, so that Controllers/Receipts/index.js
-// (and therefore Routes/api.routes.js) can still load cleanly even before
-// that module exists on disk -- see this file's own header note and the
-// OCR-004-T04 build report for why.
+// Ownership-scoped delete. Deletes the GridFS object FIRST (via the storage adapter's own deleteReceiptObject, which is documented as idempote.
 async function deleteReceipt({ userId, receiptId }) {
   if (!isValidObjectId(receiptId)) {
     throw makeError(`deleteReceipt: invalid receiptId "${receiptId}".`, ERROR_CODES.NOT_FOUND);

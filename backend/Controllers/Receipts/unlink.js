@@ -1,8 +1,6 @@
 "use strict";
 
-// OCR-004-T04 -- POST /api/receipts/:id/unlink. Thin wrapper around
-// receiptQueryService.unlinkReceiptFromExpense, which is idempotent --
-// unlinking an already-unlinked receipt still 200s.
+// POST /api/receipts/:id/unlink. unlinkReceiptFromExpense, which is idempotent -- unlinking an already-unlinked receipt still 200s.
 const mongoose = require("mongoose");
 const { unlinkReceiptFromExpense, ERROR_CODES } = require("../../Services/ReceiptServices/receiptQueryService");
 

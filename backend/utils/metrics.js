@@ -1,20 +1,4 @@
-// OBS-001-T05 -- lightweight in-process metrics. Deliberately no new HTTP
-// endpoint and no external time-series dependency: a periodic structured
-// "metrics_snapshot" log line is the integration point for whatever log
-// aggregator the eventual hosting platform provides.
-//
-// 2026-09-09: this recorded HTTP requests only, while OBS-001's own outcome
-// names job, OCR, SIA-provider and ML metrics too. Those are the four places
-// where this system fails QUIETLY -- a cron that stops running, OCR that
-// starts timing out, an LLM provider degrading, an ML endpoint slowing down.
-// None of them touch an HTTP status code a user sees, so request metrics
-// alone cannot detect any of them, and the alerting built in T06 had nothing
-// to fire on.
-//
-// Everything is aggregated in-process and flushed on the same snapshot, so
-// adding a dimension costs one map and no new transport. Durations are
-// summed rather than histogrammed: the goal here is trend detection cheap
-// enough to leave on, not percentile accuracy.
+// Lightweight in-process metrics.
 "use strict";
 
 const { logEvent } = require("./logger");
@@ -58,15 +42,7 @@ function recordRequest({ route, statusCode, latencyMs }) {
   state.routeCounts.set(safeRoute, (state.routeCounts.get(safeRoute) || 0) + 1);
 }
 
-// OBS-001-T05 -- records one scheduled-job run.
-//
-// `outcome` is one of "success" | "failure" | "skipped". Skipped is tracked
-// SEPARATELY rather than folded into either bucket: a job that skips because
-// another instance holds the lease is healthy, and counting that as a
-// failure would make a correctly-behaving multi-instance deployment look
-// broken. But a job that skips EVERY run is not healthy either -- it means
-// no instance is winning the lease, or the lease is never released -- and
-// that is invisible unless skips are counted.
+// Records one scheduled-job run. `outcome` is one of "success" | "failure" | "skipped".
 function recordJob({ jobName, outcome, durationMs } = {}) {
   const name = typeof jobName === "string" && jobName.trim() !== "" ? jobName.trim() : "unknown";
   const entry = state.jobs.get(name) || { runs: 0, failures: 0, skipped: 0, totalMs: 0 };
@@ -84,13 +60,7 @@ function recordJob({ jobName, outcome, durationMs } = {}) {
   state.jobs.set(name, entry);
 }
 
-// OBS-001-T05 -- records one unit of non-HTTP work: an OCR pass, an LLM
-// provider call, an ML service call. One generic recorder rather than three
-// bespoke ones, because these dimensions differ only in their label and
-// adding a fourth should not require touching this file.
-//
-// Never throws: metrics are an observation of the work, and a bug in
-// counting must not be able to fail the work itself.
+// Records one unit of non-HTTP work: an OCR pass, an LLM provider call, an ML service call.
 function recordOperation({ scope, operation, outcome, durationMs } = {}) {
   try {
     const safeScope = typeof scope === "string" && scope.trim() !== "" ? scope.trim() : "unknown";
@@ -110,12 +80,7 @@ function recordOperation({ scope, operation, outcome, durationMs } = {}) {
   }
 }
 
-// SIA-001-T03 -- records one successful LLM call's token usage and, only
-// when the operator has configured a per-million-token price (sia/config.js
-// inputPricePerMillionUsd/outputPricePerMillionUsd), its estimated cost.
-// Only the provider name, token counts and a derived dollar figure are ever
-// recorded -- never a question, context, answer or provider payload, same
-// discipline as recordOperation above. Never throws.
+// Js inputPricePerMillionUsd/outputPricePerMillionUsd), its estimated cost.
 function recordSiaUsage({ provider, promptTokens, completionTokens, estimatedCostUsd } = {}) {
   try {
     const safeProvider = typeof provider === "string" && provider.trim() ? provider.trim() : "unknown";
@@ -124,9 +89,7 @@ function recordSiaUsage({ provider, promptTokens, completionTokens, estimatedCos
       promptTokens: 0,
       completionTokens: 0,
       estimatedCostUsd: 0,
-      // Tracks whether ANY call this window had a known cost -- an
-      // aggregate of $0 across calls with no pricing configured would
-      // read as a real, verified zero rather than "unknown".
+      // Tracks whether ANY call this window had a known cost -- an aggregate of $0 across calls with no pricing configured would read as a real, verified zero rather than "unknown".
       costKnown: false,
     };
 
@@ -148,16 +111,12 @@ function recordSiaUsage({ provider, promptTokens, completionTokens, estimatedCos
   }
 }
 
-// Emits one aggregate "metrics_snapshot" event and resets the window --
-// avoids high-cardinality per-request logging while still surfacing
-// latency/error-rate trends, per the OBS-001 observability requirements.
+// Emits one aggregate "metrics_snapshot" event and resets the window -- avoids high-cardinality per-request logging while still surfacing latency/error-rate trends, per the OBS-001 observability requirements.
 function snapshotAndReset() {
   const { requestCount, errorCount, totalLatencyMs, routeCounts } = state;
   const avgLatencyMs = requestCount > 0 ? Math.round(totalLatencyMs / requestCount) : 0;
 
-  // Job and operation detail is emitted as compact per-name summaries rather
-  // than as one line per run: per-run logging is what makes observability
-  // expensive enough that someone eventually turns it off.
+  // Job and operation detail is emitted as compact per-name summaries rather than as one line per run: per-run logging is what makes observability expensive enough that someone eventually turns it off.
   const jobs = {};
   for (const [name, e] of state.jobs.entries()) {
     jobs[name] = {
@@ -202,20 +161,13 @@ function snapshotAndReset() {
     siaUsage,
   });
 
-  // OBS-001-T06 -- fire-and-forget: detectAlerts + the log half of
-  // dispatchAlerts run synchronously (see alerts.js), so an alert's own
-  // log line is already emitted by the time this call returns. Only the
-  // best-effort owner email, when configured, continues past this point;
-  // its own failures are caught and logged inside alerts.js, so this
-  // .catch is just a backstop against an unhandled rejection.
+  // Js), so an alert's own log line is already emitted by the time this call returns.
   evaluateAndDispatchAlerts({ requestCount, errorCount, avgLatencyMs }).catch(() => {});
 
   state = createInitialState();
 }
 
-// Starts the periodic snapshot timer. Guarded against double-start so
-// repeated `require`s (tests, or an app restart within the same process)
-// never accumulate multiple timers.
+// Starts the periodic snapshot timer.
 function startMetricsReporting(intervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS) {
   if (snapshotTimer) return snapshotTimer;
   snapshotTimer = setInterval(snapshotAndReset, intervalMs);

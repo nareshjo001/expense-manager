@@ -1,27 +1,6 @@
 "use strict";
 
-// BUD-001-T06 -- optional category budget alerts (invariant I14 in
-// docs/budgets/BUD-001-T01-category-budget-invariants.md).
-//
-// Called by syncRecoveryService.synchronizeAfterMutation() after EVERY
-// expense (and total-budget) mutation, for every user -- so the common case
-// ("this user has no category budgets for that month") must cost exactly
-// one indexed, lean find() and nothing else: no spend aggregation, no
-// notification work.
-//
-// At-most-once per level per allocation: the level is claimed with a single
-// conditional updateOne on the allocation document BEFORE any notification
-// is created, so of two concurrent mutations that both see a crossing, only
-// the one whose update actually modified the document notifies. The claim
-// is also conditioned on the amountMinor the level was computed against, so
-// an amount change racing this evaluation (which resets lastAlertLevel to 0
-// in the upsert service) can never be overwritten by a level computed
-// against the old amount.
-//
-// This function never lowers lastAlertLevel (spend dropping back below a
-// threshold does not re-arm an alert; only an amount change does) and never
-// throws: every failure is logged and returned in `errors`, so an alert can
-// never change the outcome of the expense write that triggered it.
+// Md). synchronizeAfterMutation() after EVERY expense (and total-budget) mutation, for every user -- so the common case ("this user has no cat.
 
 const mongoose = require("mongoose");
 const { CategoryBudgetModel } = require("../../models/CategoryBudget");
@@ -110,10 +89,7 @@ function pushStatusUpdate(pushResult) {
   };
 }
 
-// Required lazily: push.service pulls in firebase-admin, which this module
-// only needs on the rare threshold-crossing path -- never on the per-mutation
-// hot path that every expense write (and every test exercising
-// syncRecoveryService.synchronizeAfterMutation) goes through.
+// SynchronizeAfterMutation) goes through.
 function loadNotifier() {
   const Notification = require("../../models/Notification");
   const { sendPush } = require("../push.service");
@@ -213,20 +189,14 @@ async function evaluateCategoryBudgetAlerts({ userId, dates = [], now = new Date
 
     const today = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
     const thisMonth = currentMonth(today);
-    // I14 scope: the CURRENT month only. A future month has no spend to act
-    // on, and a past month is closed -- a historical import (which passes
-    // many past dates) would otherwise fire alerts about months the user
-    // can no longer do anything about.
+    // I14 scope: the CURRENT month only.
     const months = distinctMonths(dates).filter((month) => month === thisMonth);
     if (months.length === 0) {
       summary.skipped = "no_eligible_months";
       return summary;
     }
 
-    // With the connection down, Mongoose would BUFFER these queries (up to
-    // bufferTimeoutMS) on the expense-write path. Skipping is safe: nothing
-    // is claimed, so the next mutation re-evaluates from lastAlertLevel and
-    // sends any alert missed here.
+    // With the connection down, Mongoose would BUFFER these queries (up to bufferTimeoutMS) on the expense-write path.
     if (!mongoose.connection || mongoose.connection.readyState !== MONGOOSE_CONNECTED) {
       summary.skipped = "db_unavailable";
       log("skipped", { level: "warn", userId, reason: summary.skipped });

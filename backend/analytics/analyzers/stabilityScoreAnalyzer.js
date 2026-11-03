@@ -1,9 +1,4 @@
-// ANL-001-T03 -- server-side port of ANL-001-T02's StabilityScore, moved
-// out of frontend/src/components/monthlyInsights/OverallInsight.js::buildStability
-// so the analytics report carries the same stability tiering the UI used
-// to compute client-side. Consumes spendingAnalyzer.js's
-// calculateSpendingStability() output (report.spending.stability) --
-// { coefficientOfVariation: number|null, weeklyTotals: number[], reason: string|null }.
+// Js::buildStability so the analytics report carries the same stability tiering the UI used to compute client-side.
 
 // Score/tier thresholds mirror the frontend implementation exactly --
 // see OverallInsight.js::buildStability for the formula this replaces.

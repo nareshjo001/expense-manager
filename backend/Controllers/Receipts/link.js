@@ -1,17 +1,12 @@
 "use strict";
 
-// OCR-004-T04 -- POST /api/receipts/:id/link. Body: { expenseId }. Thin
-// wrapper around receiptQueryService.linkReceiptToExpense, which enforces
-// ownership on BOTH the receipt and the target expense (see that
-// function's own comment).
+// POST /api/receipts/:id/link. Body: { expenseId }.
 const mongoose = require("mongoose");
 const { linkReceiptToExpense, ERROR_CODES } = require("../../Services/ReceiptServices/receiptQueryService");
 
 const NOT_FOUND_RESPONSE = { message: "Receipt not found", success: false };
 
-// Maps a thrown service error's `.code` to a response message. Only the
-// two error codes linkReceiptToExpense can throw besides NOT_FOUND (which
-// is handled separately, as a 404) are listed here.
+// Code` to a response message.
 const ERROR_MESSAGES = {
   [ERROR_CODES.EXPENSE_NOT_FOUND]: "expenseId does not refer to one of your expenses",
   [ERROR_CODES.ALREADY_LINKED_TO_ANOTHER_EXPENSE]:

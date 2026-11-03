@@ -1,18 +1,6 @@
 "use strict";
 
-// BUD-001-T03 -- explicitly (re-)creates the unique index
-// models/CategoryBudget.js declares via schema.index(), following
-// 20260903-ensure-core-indexes.js (DAT-003 convention): createIndex() is
-// idempotent, so this is safe against a database where Mongoose's
-// autoIndex already built it, and it is what a deployment with autoIndex
-// disabled needs so that invariant I2 (one allocation per
-// userId/month/category, docs/budgets/BUD-001-T01-category-budget-
-// invariants.md) is actually enforced by the database. verify() confirms
-// the index is present afterward (ADR-0006).
-//
-// Mongoose's default collection name for the "CategoryBudget" model is
-// "categorybudgets" (lowercased, pluralized); the model declares no
-// explicit collection override.
+// Md) is actually enforced by the database. verify() confirms the index is present afterward (ADR-0006).
 const INDEX_SPECS = [
   {
     collection: "categorybudgets",

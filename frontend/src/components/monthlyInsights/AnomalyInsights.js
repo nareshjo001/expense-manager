@@ -11,9 +11,7 @@ import {
   FaGraduationCap,
   FaWallet,
 } from "react-icons/fa";
-// DAT-001-T06 -- whole rupees, explicit en-IN grouping, but no longer a
-// private copy: the shared formatter guarantees this rounds identically to
-// every other money display in the app.
+// Whole rupees, explicit en-IN grouping, but no longer a private copy: the shared formatter guarantees this rounds identically to every other money display in the app.
 import { formatMoneyApprox as formatMoney } from "../../utils/money";
 import "./AnomalyInsights.css";
 

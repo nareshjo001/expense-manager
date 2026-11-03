@@ -1,50 +1,15 @@
 "use strict";
 
-// AI-001-T02 -- template-only baseline monthly summary. Per the feature's
-// outcome statement (workflow/features/P2/AI-001-optional-monthly-ai-summary.md,
-// section 5): "Offer an opt-in narrative generated only from versioned
-// deterministic report facts, with citations, no invented calculations and
-// a non-LLM template fallback." This module IS that non-LLM fallback --
-// it must work standalone, with no provider call, before AI-001-T03 adds
-// an LLM-authored variant. AI-001-T03/T04 should validate any LLM-authored
-// narrative's citations against the exact same monthlySummaryFacts.js
-// catalog this module reads, so the two paths can never disagree about
-// what counts as a real, citable fact.
-//
-// Every sentence below is built from a `getFact()` call -- never a raw
-// report property read -- so a sentence is only ever emitted when its
-// underlying analyzer actually has data (hasData/hasBudget/reasonCode),
-// exactly like every analyzer's own convention of skipping absent data
-// rather than fabricating it.
+// Template-only baseline monthly summary.
 
 const { getFact } = require("../analytics/monthlySummaryFacts");
-// AI-001-T03/T04 -- the optional LLM-authored path and its numeric-claim
-// validator. generateMonthlySummary() below is the single public entry
-// point later tasks (T05's opt-in/rate-limited route) should call: it
-// always has the deterministic template ready, attempts the LLM path only
-// when the caller allows it, and falls back to the template on ANY
-// failure -- provider unavailable, provider error, malformed structured
-// output, or a validation failure -- so a caller never needs its own
-// fallback logic.
+// T03/T04 -- the optional LLM-authored path and its numeric-claim validator.
 const { generateLlmMonthlySummary } = require("./monthlySummaryLlmService");
 const { validateMonthlySummaryAnswer } = require("./monthlySummaryValidator");
-// AI-001-T07 -- grounding/latency instrumentation for this feature's own
-// generate path, separate from (additive to) llmService.js's existing
-// generic "sia_provider" operation metrics (OBS-001-T05), which record
-// every SIA LLM call -- chat included -- under the provider's own name and
-// cannot distinguish a monthly-summary call from a chat call. The
-// "ai_summary" scope below exists so this feature's health (grounding
-// pass rate, latency, regeneration volume) can be read off the periodic
-// metrics_snapshot log independently of chat-path SIA traffic. Only
-// fixed, non-content primitive fields are ever passed to recordOperation
-// -- never the narrative, facts, or report -- matching the same
-// discipline llmService.js's own instrumentation follows.
+// Js's existing generic "sia_provider" operation metrics (OBS-001-T05), which record every SIA LLM call -- chat included -- under the provider's own name and cannot distinguish a monthly-summary call from a chat call.
 const { recordOperation } = require("../utils/metrics");
 
-// Collects every citedFactId a section actually used and resolves them
-// once, in call order, for the caller's citedFacts array -- so a fact
-// referenced twice (rare, but possible if two sections cite the same
-// metric) only appears once.
+// Collects every citedFactId a section actually used and resolves them once, in call order, for the caller's citedFacts array -- so a fact referenced twice (rare, but possible if two sections cite the same metric) only appears once.
 const buildCitedFacts = (report, factIds) => {
   const seen = new Set();
   const citedFacts = [];
@@ -60,10 +25,7 @@ const buildCitedFacts = (report, factIds) => {
 
 const round1 = (value) => Math.round(value * 10) / 10;
 
-// -- Section builders -------------------------------------------------
-// Each returns { id, text, citedFactIds } or null when its required facts
-// aren't eligible. Order here is the order sentences appear in the joined
-// narrative.
+// -- Section builders ------------------------------------------------- Each returns { id, text, citedFactIds } or null when its required facts aren't eligible.
 
 const buildOpeningSection = (report) => {
   const totalSpent = getFact(report, "summary.totalSpent");
@@ -265,22 +227,7 @@ const resolvePeriodLabel = (report) => {
   return monthName ? `${monthName} ${period.year}` : null;
 };
 
-// Builds the deterministic, non-LLM baseline monthly summary from an
-// already-generated, current report (backend/Services/reportService.js's
-// getReport()/refreshReport() output -- this function does not fetch or
-// regenerate a report itself; callers own that).
-//
-// Returns:
-//   {
-//     hasData: boolean,
-//     isFallback: true,            // always true for this template-only path
-//     contractVersion: number,     // report.metadata.version this narrative was built from
-//     periodLabel: string|null,    // e.g. "September 2026"
-//     generatedAt: string,         // ISO timestamp of narrative generation (not report generation)
-//     narrative: string,           // the joined, human-readable summary
-//     sections: [{ id, text, citedFactIds }],  // per-sentence breakdown, for AI-001-T06's source-alongside-prose rendering
-//     citedFacts: [{ factId, label, unit, value, contractVersion }],  // deduped, resolved
-//   }
+// Js's getReport()/refreshReport() output -- this function does not fetch or regenerate a report itself; callers own that).
 const buildMonthlySummary = (report) => {
   const generatedAt = new Date().toISOString();
   const contractVersion = typeof report?.metadata?.version === "number" ? report.metadata.version : null;
@@ -318,22 +265,7 @@ const buildMonthlySummary = (report) => {
   };
 };
 
-// AI-001-T03/T04 -- the single public entry point callers (AI-001-T05's
-// opt-in/rate-limited route) should use. Always builds the deterministic
-// template first (cheap, synchronous, always correct) so there is a
-// guaranteed result even before any LLM attempt. When `allowLlm` is true,
-// attempts the LLM path and, ONLY if it both succeeds AND passes
-// AI-001-T04's numeric-claim validator, returns that instead -- any
-// failure at any step (provider unavailable/error, malformed output,
-// failed validation) silently returns the template result unchanged, so a
-// caller never has to implement its own fallback branching. `isFallback`
-// on the returned object is the caller's single source of truth for which
-// path was actually used.
-// AI-001-T07 -- the actual orchestration, unwrapped. Split out from the
-// exported generateMonthlySummary() below purely so that function can
-// time and record the WHOLE call (including buildMonthlySummary()'s own
-// synchronous work) in one place, at every return path, without repeating
-// the same recordOperation call at each early return.
+// T03/T04 -- the single public entry point callers (AI-001-T05's opt-in/rate-limited route) should use.
 async function generateMonthlySummaryInner(report, { allowLlm = false } = {}) {
   const templateResult = buildMonthlySummary(report);
 
@@ -342,12 +274,7 @@ async function generateMonthlySummaryInner(report, { allowLlm = false } = {}) {
   }
 
   const llmResult = await generateLlmMonthlySummary(report);
-  // Grounding signal #1: did the provider even return a usable,
-  // schema-valid structured response? A failure here (unavailable, no
-  // eligible facts, provider error, malformed output) is recorded
-  // separately from a grounding-VALIDATION failure below, because they
-  // point at different things going wrong (the provider/integration vs.
-  // the content it produced).
+  // Grounding signal #1: did the provider even return a usable, schema-valid structured response?
   recordOperation({
     scope: "ai_summary",
     operation: "llm_call",
@@ -363,11 +290,7 @@ async function generateMonthlySummaryInner(report, { allowLlm = false } = {}) {
     citedFactIds: llmResult.citedFactIds,
     report,
   });
-  // Grounding signal #2: of the responses the provider actually returned,
-  // how many pass AI-001-T04's numeric-claim/citation check? This is the
-  // feature's core grounding metric -- a falling pass rate here means the
-  // provider is citing unknown facts or stating unsupported numbers, even
-  // though the call itself "succeeded" above.
+  // Grounding signal #2: of the responses the provider actually returned, how many pass AI-001-T04's numeric-claim/citation check?
   recordOperation({
     scope: "ai_summary",
     operation: "grounding_validation",
@@ -403,19 +326,11 @@ async function generateMonthlySummary(report, opts = {}) {
   const startedAt = Date.now();
   try {
     const result = await generateMonthlySummaryInner(report, opts);
-    // Overall wall-clock latency for this call, whichever path it took
-    // (template-only calls are cheap/synchronous; LLM calls include the
-    // provider round trip above). This is the number a "how fast is the
-    // monthly summary endpoint" dashboard should read.
+    // Overall wall-clock latency for this call, whichever path it took (template-only calls are cheap/synchronous; LLM calls include the provider round trip above).
     recordOperation({ scope: "ai_summary", operation: "generate", outcome: "success", durationMs: Date.now() - startedAt });
     return result;
   } catch (err) {
-    // generateMonthlySummaryInner() is not expected to throw (every
-    // failure inside it is normalized to a template fallback), but this
-    // catch exists so an unexpected bug here is itself visible as a
-    // metrics failure rather than only an unhandled rejection -- and it
-    // re-throws, since swallowing an unexpected error would hide it from
-    // the caller too.
+    // GenerateMonthlySummaryInner() is not expected to throw (every failure inside it is normalized to a template fallback), but this catch exists so an unexpected bug here is itself visible as a metrics failure rather than only an unhandled rejection -- and it re-throws, since swallowing an unexpected error would hide it from the caller too.
     recordOperation({ scope: "ai_summary", operation: "generate", outcome: "failure", durationMs: Date.now() - startedAt });
     throw err;
   }

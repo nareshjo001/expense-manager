@@ -1,12 +1,6 @@
 "use strict";
 
-// OCR-004-T04 -- GET /api/receipts/:id. Thin wrapper around
-// receiptQueryService.getReceiptDetail, which scopes the lookup to BOTH
-// the receipt id AND req.userId -- so fetching another user's receipt
-// here always 404s, the same generic "not found" a nonexistent id gets
-// (see that service function's own comment: it deliberately never
-// distinguishes the two). Mirrors Controllers/Export/status.js's own
-// malformed-id short-circuit.
+// GET /api/receipts/:id. userId -- so fetching another user's receipt here always 404s, the same generic "not found" a nonexistent id gets (se.
 const mongoose = require("mongoose");
 const { getReceiptDetail, ERROR_CODES } = require("../../Services/ReceiptServices/receiptQueryService");
 

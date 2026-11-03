@@ -1,46 +1,6 @@
 "use strict";
 
-// OPS-002-T03 -- OpenSSL-based encryption/decryption for backup
-// archives.
-//
-// DESIGN NOTE -- deviates from the literal `openssl enc -aes-256-gcm`
-// suggested in the task spec, and this deviation was confirmed by a
-// real, live test on this dev host, not assumed: `openssl enc` (the CLI
-// subcommand this module shells out to) does NOT support AEAD ciphers
-// at all -- `openssl enc -aes-256-gcm ...` fails immediately with
-// "enc: AEAD ciphers not supported" (openssl 3.0.2 here; this is a
-// long-standing, version-independent limitation of the `enc` subcommand
-// specifically -- it has no on-disk slot for an authentication tag --
-// not something newer/older openssl fixes). Run `openssl enc -ciphers`
-// or see the `enc` man page's cipher list to confirm the same on any
-// other host.
-//
-// This module instead builds a real authenticated-encryption
-// construction out of primitives `openssl enc` DOES support, so the
-// actual security property the task asked for (confidentiality +
-// tamper-evidence) is still delivered:
-//   1. Confidentiality: `openssl enc -aes-256-cbc -pbkdf2` (still the
-//      OpenSSL CLI, per the task's instruction to shell out to it).
-//   2. Integrity/authentication: encrypt-then-MAC -- an HMAC-SHA256 over
-//      the ciphertext, keyed by a value independently derived from the
-//      same passphrase via PBKDF2 with a distinct, hardcoded salt
-//      string (domain separation from whatever internal salt `openssl
-//      enc -salt` picks for the cipher key). Computed with Node's
-//      built-in `crypto` module -- not a new dependency, and it avoids
-//      the argv-exposure problem entirely (openssl's `dgst -hmac` CLI
-//      option takes its key as a plain CLI argument, which `ps aux`
-//      would leak; Node's crypto computes the MAC in-process instead).
-//      The MAC is verified BEFORE any decryption is attempted, so a
-//      corrupted or tampered archive is rejected outright rather than
-//      fed to openssl.
-//
-// The passphrase (BACKUP_ENCRYPTION_KEY) is NEVER passed as a CLI
-// argument to openssl (`ps aux` would leak it) and NEVER logged -- it
-// is piped to openssl's stdin via `-pass stdin`. This module never
-// invents, stores, defaults, or reads the key from anywhere other than
-// the argument its caller passes in -- same "vendor/credential is the
-// owner's responsibility" pattern as backend/utils/errorReporter.js
-// (SENTRY_DSN) and ml-service's config validation.
+// OpenSSL-based encryption/decryption for backup archives.
 const crypto = require("crypto");
 const fs = require("fs");
 const { spawnProcess } = require("./processRunner");
@@ -74,9 +34,7 @@ function deriveHmacKey(key) {
   return crypto.pbkdf2Sync(key, HMAC_KEY_SALT, PBKDF2_ITERATIONS, 32, "sha256");
 }
 
-// Streaming HMAC over a file -- never loads the whole archive into
-// memory, so this scales to a dump much larger than this app's current
-// data volume without a correctness or memory-pressure surprise later.
+// Streaming HMAC over a file -- never loads the whole archive into memory, so this scales to a dump much larger than this app's current data volume without a correctness or memory-pressure surprise later.
 function computeHmacHex(filePath, key) {
   return new Promise((resolve, reject) => {
     const hmac = crypto.createHmac(HMAC_ALGORITHM, deriveHmacKey(key));
@@ -129,10 +87,7 @@ function buildDecryptArgs({ inputPath, outputPath }) {
   ];
 }
 
-// Encrypts inputPath -> outputPath, then computes an HMAC over the
-// resulting ciphertext. Returns { hmacAlgorithm, hmacHex } for the
-// caller to persist in the backup manifest -- this module deliberately
-// does not write the manifest itself (see manifest.js).
+// Encrypts inputPath -> outputPath, then computes an HMAC over the resulting ciphertext.
 async function encryptFile(inputPath, outputPath, key) {
   assertValidKey(key);
   await spawnProcess("openssl", buildEncryptArgs({ inputPath, outputPath }), { stdin: key });
@@ -140,12 +95,7 @@ async function encryptFile(inputPath, outputPath, key) {
   return { hmacAlgorithm: HMAC_ALGORITHM, hmacHex };
 }
 
-// Verifies the ciphertext's HMAC (when `expectedHmacHex` is supplied)
-// BEFORE attempting decryption, then decrypts inputPath -> outputPath.
-// Throws IntegrityError (never attempting decryption) on a mismatch --
-// a caller that omits expectedHmacHex explicitly opts out of that check
-// (e.g. a manifest from before this field existed); every current
-// caller in this codebase always supplies it.
+// Verifies the ciphertext's HMAC (when `expectedHmacHex` is supplied) BEFORE attempting decryption, then decrypts inputPath -> outputPath.
 async function decryptFile(inputPath, outputPath, key, { expectedHmacHex } = {}) {
   assertValidKey(key);
   if (expectedHmacHex) {

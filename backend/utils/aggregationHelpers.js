@@ -1,16 +1,6 @@
 "use strict";
 
-// Shared request-scoped aggregation primitive, extracted under ADR-0008
-// (docs/decisions/ADR-0008-financial-derived-data-boundary.md, ARC-001-T05/
-// T06) to remove the "sum an array of {expenseAmount}/{incomeAmount}
-// records" duplication that ADR-0008's T05/T06 section names across
-// Controllers/IncomeControllers/insightsCard.js, insightsHeader.js and
-// Services/ChartServices/chart.service.js.
-//
-// This is a pure, request-scoped helper only: nothing here is persisted or
-// cached, so none of ADR-0008's invalidation/revision-fencing contracts
-// apply to it -- see ADR-0008's T02 classification ("recomputable, never
-// persisted, no staleness risk by construction").
+// Js. This is a pure, request-scoped helper only: nothing here is persisted or cached, so none of ADR-0008's invalidation/revision-fencing con.
 
 /**
  * Sums a numeric field across an array of records. Each value is coerced

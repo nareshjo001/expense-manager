@@ -30,10 +30,7 @@ const resolvePieChartMode = (show, viewBy) => {
 export const usePieChartQuery = (show, viewBy) => {
   const { filters, queryFn, enabled } = resolvePieChartMode(show, viewBy);
 
-  // FE-001-T05 -- keeps the previously loaded chart visible while a
-  // filter change refetches a NEW query key, instead of clearing to a
-  // loading state; isPlaceholderData (exposed via the spread below) lets
-  // the page show a subtle "still refreshing" indicator over it.
+  // Keeps the previously loaded chart visible while a filter change refetches a NEW query key, instead of clearing to a loading state; isPlaceholderData (exposed via the spread below) lets the page show a subtle "still refreshing" indicator over it.
   const query = useQuery({
     queryKey: queryKeys.charts.pie(filters),
     queryFn,

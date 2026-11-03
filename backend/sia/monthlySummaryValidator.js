@@ -1,20 +1,6 @@
 "use strict";
 
-// AI-001-T04 -- validates every numeric claim an LLM-authored monthly
-// summary (AI-001-T03's generateLlmMonthlySummary()) makes, before it is
-// ever shown to a user. Per AI-001-T01's decision: this is a NEW call site
-// wired to the new stable dotted-path fact-ID scheme
-// (analytics/monthlySummaryFacts.js), never SIA's ephemeral per-request
-// factSet.js/responseValidator.validateCitedAnswer() -- that mechanism is
-// unreachable dead code today (see AI-001-T01's audit) and, even if it
-// weren't, keys its facts by disposable "fact-N" sequence numbers this
-// module's stable IDs are not compatible with. What IS reused is the exact
-// TYPE of check responseValidator.js already performs (leaked-identifier /
-// raw-field / JSON-fragment / advice / certainty / fraud-language
-// guardrails, currency-claim cross-referencing) -- its own exported regexes
-// below, not a reimplementation of them, so the two validators can never
-// silently drift apart on what counts as "leaked" or "unsupported
-// certainty language".
+// Validates every numeric claim an LLM-authored monthly summary (AI-001-T03's generateLlmMonthlySummary()) makes, before it is ever shown to a user.
 
 const { getFact } = require("../analytics/monthlySummaryFacts");
 const {
@@ -30,10 +16,7 @@ const {
 
 const round2 = (value) => Math.round(value * 100) / 100;
 
-// Percentage claims use their own extraction (monthly-summary narratives
-// are the only SIA-adjacent surface that cites PERCENT-unit facts by
-// value, so this pattern is scoped here rather than added to
-// responseValidator.js's own currency-only extractor).
+// Js's own currency-only extractor).
 const PERCENT_CLAIM_PATTERN = /(-?\d+(?:\.\d{1,2})?)\s?%/g;
 
 function extractPercentClaims(text) {
@@ -48,14 +31,7 @@ function extractPercentClaims(text) {
   return claims;
 }
 
-/**
- * Validates an LLM-authored { narrative, citedFactIds } monthly-summary
- * answer against the report it claims to be grounded in. Returns
- * { valid: true } or { valid: false, reasonCode }. Never throws -- a
- * malformed input fails closed (invalid), matching every other SIA
- * validator's convention, so a caller can always safely fall back to the
- * template baseline on any non-true result.
- */
+// Validates an LLM-authored { narrative, citedFactIds } monthly-summary answer against the report it claims to be grounded in.
 function validateMonthlySummaryAnswer({ narrative, citedFactIds, report }) {
   if (typeof narrative !== "string" || narrative.trim() === "") {
     return { valid: false, reasonCode: "EMPTY_OR_MALFORMED_ANSWER" };
@@ -84,10 +60,7 @@ function validateMonthlySummaryAnswer({ narrative, citedFactIds, report }) {
     return { valid: false, reasonCode: "UNSUPPORTED_CERTAINTY_LANGUAGE" };
   }
 
-  // Every cited fact ID must be a REAL, currently-eligible fact against
-  // THIS report -- getFact() returns null for anything unknown, ineligible,
-  // or unresolvable, so this can never be satisfied by a fabricated ID or
-  // one that was eligible on some other report.
+  // Every cited fact ID must be a REAL, currently-eligible fact against THIS report -- getFact() returns null for anything unknown, ineligible, or unresolvable, so this can never be satisfied by a fabricated ID or one that was eligible on some other report.
   const citedIds = Array.isArray(citedFactIds) ? citedFactIds : [];
   const resolvedFacts = [];
   for (const factId of citedIds) {
@@ -101,9 +74,7 @@ function validateMonthlySummaryAnswer({ narrative, citedFactIds, report }) {
     resolvedFacts.push(fact);
   }
 
-  // Every currency-marked figure in the narrative must equal a cited
-  // fact's value (unit "currency") -- an LLM cannot pass validation by
-  // citing unrelated facts while still writing an invented number.
+  // Every currency-marked figure in the narrative must equal a cited fact's value (unit "currency") -- an LLM cannot pass validation by citing unrelated facts while still writing an invented number.
   const citedCurrencyValues = new Set(
     resolvedFacts.filter((f) => f.unit === "currency" && typeof f.value === "number").map((f) => round2(f.value))
   );

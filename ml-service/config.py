@@ -1,48 +1,4 @@
-"""
-Centralized startup configuration validation (Phase G item 10).
-
-This module does NOT replace the existing per-module environment reads
-(db/mongo.py's MONGO_CONN/MONGO_DB_NAME, training/model_cleanup.py's
-retention env vars, inference/predictor_manager.py's manifest-check
-interval, app.py's timeout/regression env vars) -- those already have their
-own documented, deliberate "read fresh on every call, fall back to a safe
-default on a bad value" semantics from Phases B-F, and rewriting all of
-them to route through a single accessor would be exactly the kind of large,
-cross-cutting rewrite Phase G's own scope explicitly excludes.
-
-Instead, this module adds ONE additional, early, best-effort validation
-pass -- called once from app.py's startup handlers -- that inspects the
-same environment variables and reports (via a structured summary, logged as
-a single `config_validated` event) which ones are missing, malformed, or
-out of a sane range, BEFORE the service is under any real traffic.
-
-Two severities, per the Phase G real-environment acceptance policy:
-  - ERRORS: (a) configuration that would leave the service structurally
-    unable to do its job (a MONGO_CONN that is not even syntactically a
-    Mongo URI; an ML_MODEL_ROOT that cannot be created or is not
-    writable), AND (b) any numeric/threshold operational setting that was
-    EXPLICITLY SUPPLIED (the env var is present) but is malformed or
-    outside its valid range. An operator who set
-    ML_MODEL_RETENTION_COUNT=-5 made a mistake, not a choice to "use the
-    default" -- silently substituting the default in that case would hide
-    a real misconfiguration behind seemingly-normal behavior. Startup
-    FAILS for all of these.
-  - WARNINGS: reserved for settings that are simply ABSENT (not set at
-    all), where falling back to the documented default is the correct,
-    intended behavior, not a masked error (e.g. no MONGO_CONN at all, no
-    ML_OPERATIONS_TOKEN at all).
-
-  Concretely: "absent -> use the documented default" and "explicitly
-  supplied but invalid -> fatal startup error" are the only two outcomes
-  for every numeric operational setting below (regression threshold,
-  manifest-check interval, retention counts, retention days, feedback
-  duplicate cap, and the two timeout/threshold seconds settings) -- there
-  is no third "invalid value silently replaced with a default" path
-  anymore for a setting the operator actually touched.
-
-Never logs MONGO_CONN or ML_OPERATIONS_TOKEN values themselves, only
-whether each is present/well-formed -- see `_describe_secret`.
-"""
+"""Centralized startup configuration validation (Phase G item 10)."""
 
 import os
 import re
@@ -58,10 +14,7 @@ def _is_valid_mongo_uri(value):
 
 
 def _describe_secret(value):
-    """Never returns the actual value -- only whether it is set, and (for a
-    non-empty value) its length, which is enough for an operator to sanity-
-    check "did my deploy pipeline actually inject this" without ever
-    printing the secret itself."""
+    """Never returns the actual value -- only whether it is set, and (for a non-empty value) its length, which is enough for an operator to sanity- check "did my deploy pipeline actually inject this" without ever printing the secret itself."""
     if not value:
         return "unset"
     return f"set (length={len(value)})"
@@ -82,13 +35,7 @@ def _parse_float(value, default):
 
 
 def _parse_bool(value, default):
-    """
-    Same "absent -> default, present -> parse-or-report-invalid" contract
-    as _parse_int/_parse_float above, for the one boolean operational
-    setting this file validates (ML_REQUIRE_MANUAL_APPROVAL). Accepts the
-    usual case-insensitive spellings; anything else is reported as invalid
-    rather than silently coerced to a guess.
-    """
+    """Same "absent -> default, present -> parse-or-report-invalid" contract as _parse_int/_parse_float above, for the one boolean operational setting this file validates (ML_REQUIRE_MANUAL_APPROVAL)."""
     if value is None:
         return default, True
     normalized = value.strip().lower()
@@ -100,16 +47,7 @@ def _parse_bool(value, default):
 
 
 def validate_startup_config():
-    """
-    Reads the current environment (not cached -- called once at startup,
-    same as every other startup handler in app.py) and returns:
-
-        {"errors": [str, ...], "warnings": [str, ...], "summary": {...}}
-
-    Never raises itself -- app.py's startup handler decides whether a
-    non-empty `errors` list should abort startup (see its own docstring
-    for exactly which two conditions are treated as fatal).
-    """
+    """Py's startup handler decides whether a non-empty `errors` list should abort startup (see its own docstring for exactly which two conditions are treated as fatal)."""
     errors = []
     warnings = []
     summary = {}
@@ -209,10 +147,7 @@ def validate_startup_config():
     _check_nonnegative_int("ML_REJECTED_MODEL_RETENTION_COUNT", 3)
     _check_nonnegative_int("ML_MODEL_RETENTION_DAYS", 7)
     _check_nonnegative_int("ML_FEEDBACK_DUPLICATE_CAP", 3)
-    # ML-001-T06 -- manual promotion gate. Absent -> default False (off),
-    # i.e. today's fully-automatic activation behavior, unchanged. Explicitly
-    # set but unrecognized -> fatal startup error, same policy as every other
-    # setting above.
+    # Manual promotion gate. e.
     _check_bool("ML_REQUIRE_MANUAL_APPROVAL", False)
 
     raw_regression = os.getenv("ML_MAX_ACCURACY_REGRESSION")
@@ -233,13 +168,7 @@ def validate_startup_config():
 
 
 def run_and_log_startup_validation():
-    """
-    Convenience entry point for app.py's startup handler: runs
-    validate_startup_config(), logs exactly one `config_validated` event
-    with the counts (never the raw secret values -- see `summary`'s use of
-    `_describe_secret`), and returns the same structured result so the
-    caller can decide whether to raise on `errors`.
-    """
+    """Py's startup handler: runs validate_startup_config(), logs exactly one `config_validated` event with the counts (never the raw secret values -- see `summary`'s use of `_describe_secret`), and returns the same structured result so the caller can decide whether to raise on `errors`."""
     result = validate_startup_config()
     log_event(
         "config_validated",
@@ -257,34 +186,11 @@ def run_and_log_startup_validation():
 
 
 def is_manual_approval_required():
-    """
-    ML-001-T06 manual promotion gate. Reads ML_REQUIRE_MANUAL_APPROVAL
-    fresh on every call -- same "read fresh on every call, fall back to a
-    safe default on a bad value" semantics this file's own module
-    docstring describes for every other per-module env read in this
-    project (e.g. inference/predictor_manager.py's
-    ML_MANIFEST_CHECK_INTERVAL_SECONDS) -- rather than caching it at
-    import time, so flipping it in the deployment environment takes
-    effect on the next call without requiring a fresh import.
-
-    Defaults to False (off) whenever the variable is unset OR set to an
-    unrecognized value: app.py's background_retrain must never be left
-    unable to decide which branch to take. (validate_startup_config
-    above is what turns an explicitly-set-but-unrecognized value into a
-    loud startup error -- this function's own job is only ever "what
-    should background_retrain do right now", never "was this configured
-    correctly", so it degrades to the same off/automatic default a
-    genuinely-unset variable would produce.)
-
-    False (the default) means today's fully-automatic activation
-    behavior, unchanged -- see app.py's background_retrain.
-    """
+    """T06 manual promotion gate. g."""
     raw = os.getenv("ML_REQUIRE_MANUAL_APPROVAL")
     value, parsed = _parse_bool(raw, False)
     return value if parsed else False
 
 
 class ConfigurationError(RuntimeError):
-    """Raised by app.py's startup handler when validate_startup_config()
-    reports one or more fatal errors -- never raised by this module
-    itself, so importing config.py can never have a side effect."""
+    """Py can never have a side effect."""

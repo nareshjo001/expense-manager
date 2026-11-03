@@ -52,10 +52,7 @@ const SetBudget = () => {
     });
   };
 
-  // FE-001-T08 -- previously plain text with no ARIA role and no way to
-  // recover from a failed fetch short of reloading the page. role="status"/
-  // role="alert" let assistive tech announce the transition, and Retry
-  // re-issues the same budgets query rather than leaving the user stuck.
+  // Previously plain text with no ARIA role and no way to recover from a failed fetch short of reloading the page.
   if (budgetStatus === "loading") {
     return (
       <div className="set-budget">

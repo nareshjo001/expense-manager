@@ -1,21 +1,6 @@
 "use strict";
 
-// AI-001-T05 -- POST /sia/monthly-summary/generate. The route AI-001-T02's
-// deliverable deliberately deferred ("wiring a user-facing endpoint before
-// T05's opt-in gate exists would let it run for users who haven't enabled
-// it"): this is that gate, now that it exists. Every request must pass
-// BOTH checks before any report is read or any LLM is called:
-//   1. aiSummaryPreferenceService.recordRegeneration() -- opted-in AND
-//      within this month's regeneration cap. A rejected attempt (403/429)
-//      never touches reportService or the LLM path, and never consumes a
-//      regeneration credit (see recordRegeneration's own contract).
-//   2. utils/rateLimiter.js's aiSummaryLimiter, applied at the route level
-//      in Routes/sia.routes.js -- a separate, short-window defense-in-depth
-//      layer against burst abuse, independent of this monthly business cap.
-// generateMonthlySummary({ allowLlm: true }) itself already guarantees a
-// safe result either way (LLM-authored when available and valid, the
-// deterministic template otherwise) -- this controller never needs its own
-// fallback branching.
+// POST /sia/monthly-summary/generate.
 const reportService = require("../../Services/reportService");
 const { recordRegeneration } = require("../../sia/aiSummaryPreferenceService");
 const { generateMonthlySummary } = require("../../sia/monthlySummaryService");

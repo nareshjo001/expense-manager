@@ -1,10 +1,6 @@
 "use strict";
 
-// DAT-003-T04 -- the actual migration execution driver: dry-run and
-// batch/resume support, built on runner.js (T01, discovery), lock.js and
-// ledger.js (T02), and the up()/verify()/forward-fix contract ADR-0006
-// (T03) fixes. This is the first place anything actually calls a
-// migration's up().
+// Js (T02), and the up()/verify()/forward-fix contract ADR-0006 (T03) fixes.
 const mongoose = require("mongoose");
 const runner = require("./runner");
 const ledger = require("./ledger");
@@ -12,25 +8,7 @@ const { withMigrationLock } = require("./lock");
 const { assertSafeToRunMigrations } = require("./environmentGate");
 const { logEvent } = require("../utils/logger");
 
-// Runs pending migrations (per the ledger) in order, honoring an
-// optional dry-run mode and an optional batch size limit.
-//
-// "Resume" is implicit rather than a separate flag/state: a partial or
-// failed run simply stops, and the ledger accurately reflects exactly
-// what succeeded -- the next invocation's planPending() picks up right
-// where it left off. There is nothing else to resume from.
-//
-// Stops at the first failing migration rather than skipping ahead to the
-// next one. Per ADR-0006, a migration whose up() or verify() throws is
-// not recorded as applied; running a later migration while an earlier
-// one is in an unknown state would violate each migration's
-// single-logical-change assumption and could compound the failure.
-//
-// Returns:
-//   { dryRun, applied: [{id, durationMs}], remaining: [id, ...], failed: {id, error} | null }
-// `remaining` always lists every pending id that was not successfully
-// applied this run, in order -- whether because of the batch-size limit
-// or because a failure stopped the run early (the failed id is first).
+// Runs pending migrations (per the ledger) in order, honoring an optional dry-run mode and an optional batch size limit.
 async function runMigrations({
   dir = runner.MIGRATIONS_DIR,
   dryRun = false,
@@ -38,9 +16,7 @@ async function runMigrations({
   lockTtlMs,
   allowNoBackupCheck = false,
 } = {}) {
-  // DAT-003-T05 -- the environment safety gate runs before anything real
-  // happens. Dry runs skip it too: a dry run makes no writes, so there is
-  // nothing for the gate to protect against.
+  // The environment safety gate runs before anything real happens.
   if (!dryRun) {
     await assertSafeToRunMigrations({ allowNoBackupCheck });
   }
@@ -100,12 +76,7 @@ async function runMigrations({
     return notInBatch;
   };
 
-  // Dry runs never mutate the ledger or real data (assuming migrations
-  // honor context.dryRun, per ADR-0006) -- there is nothing to
-  // serialize against another instance, so they skip the exclusive lock
-  // real execution requires. A migration that ignores dryRun and writes
-  // anyway is an authoring bug ADR-0006 already calls out, not something
-  // this driver can detect for it.
+  // DryRun, per ADR-0006) -- there is nothing to serialize against another instance, so they skip the exclusive lock real execution requires.
   const remaining = dryRun ? await execute() : await withMigrationLock(execute, lockTtlMs);
 
   return { dryRun, applied, remaining, failed };

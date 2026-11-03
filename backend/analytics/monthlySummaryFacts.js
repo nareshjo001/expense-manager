@@ -1,36 +1,13 @@
 "use strict";
 
-// AI-001-T02 -- the eligible-fact catalog AI-001-T01's contract defines,
-// turned into code. Each entry is a stable, hand-assigned dotted-path fact
-// ID versioned against reportContractVersion.js's CURRENT_REPORT_VERSION:
-// AI-001-T01 decided fact IDs must be a derived view of the report
-// contract, never SIA's ephemeral per-request factSet.js IDs, so a
-// narrative's citedFacts are only ever interpreted against the exact
-// contract version they were generated from (see this module's
-// CONTRACT_VERSION export and monthlySummaryService.js's use of it).
-//
-// Per AI-001-T01's contract, `budgets.budgetInsights.{title,message,tip}`
-// and `financialHealth.signals[].message` are canned template text, not
-// computed facts, and are deliberately absent below. Where a signal's
-// `id`/`metric`/`value` triple is eligible (financialHealth.topStrength /
-// topWeakness), the resolver reads only those three fields and never `.message`.
-//
-// Every entry's `eligible(report)` mirrors its source analyzer's own
-// hasData/reasonCode/hasBudget convention -- a fact is only ever returned
-// when its source section is actually populated, never fabricated. This
-// module does no formatting/wording and never calls a database or an LLM;
-// monthlySummaryService.js (AI-001-T02's template baseline, and later
-// AI-001-T03's LLM path) is responsible for turning eligible facts into
-// prose.
+// The eligible-fact catalog AI-001-T01's contract defines, turned into code.
 
 const { CURRENT_REPORT_VERSION } = require("./reportContractVersion");
 
 const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
 const isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 
-// financialHealth.signals[] carries {type, id, metric, value, message} --
-// see backend/analytics/analyzers/scores/healthSignals.js. This reads only
-// id/metric/value, exactly the triple AI-001-T01's contract allowlists.
+// Js. This reads only id/metric/value, exactly the triple AI-001-T01's contract allowlists.
 const firstSignalOfType = (report, type) => {
   const signals = report?.financialHealth?.signals;
   if (!Array.isArray(signals)) return null;
@@ -39,8 +16,6 @@ const firstSignalOfType = (report, type) => {
 };
 
 // FACTS: id -> { label, unit, eligible(report) => boolean, resolve(report) => value }.
-// `unit` is descriptive metadata for a future renderer (AI-001-T06), not
-// used for any calculation here.
 const FACTS = {
   "summary.totalSpent": {
     label: "Total spent this month",
@@ -81,9 +56,7 @@ const FACTS = {
   "spending.largestExpense.amount": {
     label: "Amount of the largest single expense this month",
     unit: "currency",
-    // Never cites .expenseDescription/.expenseName/.expenseDate -- only
-    // amount/category are eligible, matching SIA-001-T01's disclosure of
-    // what financialSnapshotService.js's copySafe() already allows through.
+    // Js's copySafe() already allows through.
     eligible: (r) => r?.spending?.hasData === true && r.spending.largestExpense != null,
     resolve: (r) => r.spending.largestExpense.expenseAmount,
   },
@@ -262,19 +235,12 @@ const isFactEligible = (report, factId) => {
   try {
     return entry.eligible(report) === true;
   } catch {
-    // A malformed/partial report shape fails closed (not eligible), same
-    // as every analyzer's own hasData convention -- never throws up into
-    // the narrative generator.
+    // A malformed/partial report shape fails closed (not eligible), same as every analyzer's own hasData convention -- never throws up into the narrative generator.
     return false;
   }
 };
 
-// Returns { factId, label, unit, value, contractVersion } for one fact, or
-// null when the fact is unknown or not eligible against this report. This
-// is the ONLY way monthlySummaryService.js (and, later, AI-001-T04's
-// numeric-claim validator) may read a fact value -- never a raw report
-// property access, so every citation is guaranteed to have passed its
-// analyzer's own hasData/reasonCode gate.
+// Returns { factId, label, unit, value, contractVersion } for one fact, or null when the fact is unknown or not eligible against this report.
 const getFact = (report, factId) => {
   if (!isFactEligible(report, factId)) return null;
   const entry = FACTS[factId];

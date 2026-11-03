@@ -1,76 +1,4 @@
-"""
-ML-001-T06 -- manual rollback tool ("break glass" operator script).
-
-Standalone library + CLI mirroring training/validate_model.py's shape
-(importable functions, plus a main()/argparse CLI entry point) and
-training/model_cleanup.py's operational conventions (reads/writes only
-via training/model_bundle.py's own atomic manifest functions -- never
-reimplements manifest writing itself).
-
-WHY THIS IS A SCRIPT, NOT AN HTTP ENDPOINT
---------------------------------------------------------------------------
-Rolling the live model back to an older, already-on-disk bundle is a
-rare, high-stakes "break glass" action -- reactivating something that is
-by definition NOT the newest validated candidate, on a genuinely live
-production inference service. Every other write path this project
-exposes over HTTP (/retrain-model, and ML-001-T06's own
-/training-runs/{run_id}/approve and /reject) only ever moves the system
-FORWARD along an audited, single-actor-at-a-time MongoDB-backed lock
-(training_run_repository's training lock) that this project's whole
-activation-safety design (see app.py's _attempt_activation) depends on.
-Rollback moves the system BACKWARD, deliberately outside that lock and
-outside any run's own lifecycle -- there is no "run" whose status this
-action transitions, and no gate re-validates the target bundle's
-behavior against the CURRENT dataset/feedback state before reactivating
-it (it was already validated once, against whatever was current back
-when it was first produced).
-
-Exposing that as an always-on network endpoint would mean any caller
-holding the operations token (a single shared secret, per
-_require_operations_token) could revert a live model at any time, with
-no additional confirmation and no requirement that the caller actually
-have deploy/operator access to the host itself. Keeping it a script run
-directly on/against the deployment (the same "operational script" model
-this project already uses for training/model_cleanup.py's dry-run
-inspection via a Python shell -- see RUNBOOK.md section 6) means
-reactivating an old model requires the same access an operator already
-needs to change other production configuration, not merely knowledge of
-one shared HTTP header value. This is a deliberate scope boundary for
-ML-001-T06, consistent with RUNBOOK.md's existing conventions -- not an
-oversight.
-
-HOW ACTIVATION HAPPENS
---------------------------------------------------------------------------
-This is a pure filesystem-level operation: it writes a new
-training/models/active.json (via model_bundle.build_manifest +
-write_manifest, reusing those exactly rather than reimplementing
-manifest writing) pointing at an already-complete, already-loadable
-bundle. It does NOT touch any process's own in-memory predictor
-snapshot (there usually isn't one in the process running this script --
-it is normally run from an operator's own shell, not inside a live
-worker process). Every live worker process picks up the change on its
-own, independently, within ML_MANIFEST_CHECK_INTERVAL_SECONDS (default
-5s) of the manifest write, via inference/predictor_manager.py's existing
-get_snapshot() polling + lazy-reload mechanism -- the exact same
-convergence mechanism every other worker already relies on to notice a
-NORMAL forward activation it did not itself perform. No new notification
-mechanism is introduced here.
-
-USAGE
---------------------------------------------------------------------------
-    cd training
-    python3 rollback_model.py --list
-    python3 rollback_model.py --model-version model-<runId> [--reason "..."]
-
-(Also runnable as `python3 training/rollback_model.py ...` from the
-ml-service root -- this file resolves its own imports relative to its own
-location, not the current working directory.)
-
-Both forms print a JSON result to stdout. `--list` never modifies
-anything. `--model-version` performs the rollback and prints the same
-summary dict rollback_to() returns (or `{"success": false, "error": ...}`
-and a non-zero exit code, on refusal).
-"""
+"""Manual rollback tool ("break glass" operator script). py's own atomic manifest functions -- never reimplements manifest writing itself)."""
 
 import os
 import sys
@@ -86,22 +14,12 @@ from training import model_bundle
 
 
 class RollbackError(Exception):
-    """
-    Raised for every refusal/failure case rollback_to() reports, so
-    callers (this module's own CLI, and any future caller) can catch
-    exactly one exception type -- mirroring the role
-    model_bundle.ManifestError already plays for manifest-read failures.
-    """
+    """ManifestError already plays for manifest-read failures."""
     pass
 
 
 def _list_bundle_dirs():
-    """
-    Mirrors training/model_cleanup.py's own `_list_bundle_dirs`: every
-    immediate subdirectory of model_bundle.MODELS_DIR, excluding
-    `active.json` (a file, not a directory) and any leftover `.tmp-*`
-    directory from an interrupted write_bundle/write_manifest call.
-    """
+    """Tmp-*` directory from an interrupted write_bundle/write_manifest call."""
     if not os.path.isdir(model_bundle.MODELS_DIR):
         return []
     names = []
@@ -115,25 +33,7 @@ def _list_bundle_dirs():
 
 
 def list_promotable_bundles():
-    """
-    Every on-disk bundle an operator could roll back to right now:
-    complete (model_bundle.is_bundle_complete) AND its metadata.json is
-    actually readable. Sorted newest-first by metadata.json's own
-    `createdAt` (ISO-8601, the same field model_bundle.build_metadata
-    always writes) -- a bundle with a missing/unreadable createdAt sorts
-    LAST, never first, so a broken timestamp can never masquerade as
-    "most recent".
-
-    Returns a list of dicts:
-        {"modelVersion", "runId", "createdAt", "datasetHash", "metrics"}
-
-    Never raises for one individual bad bundle: a directory that is
-    "complete" per the cheap existence/non-empty check but whose
-    metadata.json is corrupt JSON is simply omitted, since this
-    function's whole job is "what CAN I roll back to right now", and an
-    unreadable metadata file makes that bundle not a safe answer to that
-    question regardless of what is_bundle_complete reports.
-    """
+    """Json is actually readable."""
     bundles = []
     for model_version in _list_bundle_dirs():
         if not model_bundle.is_bundle_complete(model_version):
@@ -154,43 +54,7 @@ def list_promotable_bundles():
 
 
 def rollback_to(model_version, reason=None):
-    """
-    Reactivates an older, still-on-disk bundle as the live model by
-    publishing a new manifest that points at it -- see this module's own
-    docstring for exactly how live workers converge on the change
-    afterward.
-
-    Refuses (raises RollbackError, changes nothing on disk) when:
-      - the current active.json exists but is invalid/unreadable -- an
-        operator should inspect that manually before this tool guesses
-        at a "previous" version to record.
-      - `model_version` is already the currently-active one per
-        model_bundle.read_manifest() -- nothing to do.
-      - the bundle is not complete (model_bundle.is_bundle_complete is
-        False) -- names exactly which directory was checked.
-      - the bundle's metadata.json cannot be read.
-      - model_bundle.load_bundle(model_version) raises -- the same
-        Gate-2 loadability check the forward activation path
-        (_attempt_activation -> predictor_manager.preload_candidate)
-        already relies on, applied here to the ROLLBACK target so a
-        broken-but-"complete" bundle can never be published as active.
-
-    On success, publishes the new manifest via model_bundle.build_manifest
-    + model_bundle.write_manifest (reused exactly, never reimplemented)
-    and returns:
-        {
-            "fromModelVersion": <str or None>,
-            "toModelVersion": <str>,
-            "generation": <int>,
-            "publishedAt": <str, ISO-8601>,
-            "reason": <str or None>,
-        }
-
-    `fromModelVersion` is None only when there was no previous manifest at
-    all (the very first activation of any kind is happening via this
-    rollback path) -- in that case `generation` is 1, matching
-    build_manifest's own convention for a first-ever publish.
-    """
+    """Reactivates an older, still-on-disk bundle as the live model by publishing a new manifest that points at it -- see this module's own docstring for exactly how live workers converge on the change afterward."""
     try:
         current_manifest = model_bundle.read_manifest()
     except model_bundle.ManifestError as exc:

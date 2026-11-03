@@ -1,8 +1,6 @@
 "use strict";
 
-// IMP-001-T04 -- intended route: GET /api/imports/sessions (verifyToken).
-// Lightweight list (no `rows`, just rowCount) of this user's own
-// ImportSessions, newest first.
+// Intended route: GET /api/imports/sessions (verifyToken).
 const { listImportSessionsSafeShape } = require("../../Services/ImportServices/importSessionService");
 
 const listImportSessionsController = async (req, res) => {

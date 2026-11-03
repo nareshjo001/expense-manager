@@ -1,10 +1,6 @@
 "use strict";
 
-// NOT-003-T02 -- PUT /api/notification-preferences. Thin HTTP wrapper
-// around notificationPreferenceService.savePreferences -- validation and
-// status-code mapping live here, matching
-// Controllers/RecurringExpenses/lifecycle.js's own split between "thin
-// controller, service owns the rules".
+// PUT /api/notification-preferences. js's own split between "thin controller, service owns the rules".
 const { savePreferences } = require("../../Services/NotificationServices/notificationPreferenceService");
 
 const REASON_MESSAGES = {

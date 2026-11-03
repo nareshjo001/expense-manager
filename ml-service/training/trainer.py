@@ -14,11 +14,7 @@ from sklearn.model_selection import train_test_split
 
 import category_config
 import model_bundle
-# ML-001-T03/T04/T05 -- grouped splitting (prevents duplicate rows from
-# leaking across train/val/test, see grouped_split.py's own docstring),
-# baseline comparisons, and the fuller metric set (macro-F1, per-class,
-# confusion, calibration) beyond the single accuracy number this file
-# used to report.
+# Py's own docstring), baseline comparisons, and the fuller metric set (macro-F1, per-class, confusion, calibration) beyond the single accuracy number this file used to report.
 import grouped_split
 import baselines
 import metrics as ml_metrics
@@ -29,17 +25,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _parse_args():
-    """
-    Phase D adds the CLI surface needed to produce a versioned, traceable
-    candidate bundle and a structured result file the orchestrator
-    (training/retrain_pipeline.py) can read back, on top of Phase C's
-    --dataset argument. All of these are required except
-    --previous-accuracy (absent/omitted means "no baseline exists yet",
-    per Phase D's explicit no-invented-baseline rule) -- there is no
-    fallback/default for any of the required ones; a missing required
-    argument is a controlled, non-zero exit (argparse's own usage error,
-    exit code 2).
-    """
+    """Py) can read back, on top of Phase C's --dataset argument."""
     parser = argparse.ArgumentParser(
         description="Train the expense-category model from a specific, "
                      "already-assembled dataset snapshot, and write an "
@@ -212,10 +198,7 @@ print("LABEL ENCODING COMPLETED\n")
 
 print("BUILDING GROUP KEYS...")
 
-# ML-001-T03 -- the dedup boundary for splitting is the SAME text the
-# model actually trains on (post-cleaning expenseName) joined with the
-# normalized category, not the raw input -- see grouped_split.py's
-# module docstring for why (ML-001-T02's 77%-duplicate-rows finding).
+# Py's module docstring for why (ML-001-T02's 77%-duplicate-rows finding).
 group_keys = grouped_split.make_group_key(df["expenseName"].values, df["expenseCategory"].values)
 text_values = df["expenseName"].values
 
@@ -291,12 +274,7 @@ try:
 
     print("MODEL ACCURACY:", round(accuracy * 100, 2), "%")
 
-    # ML-001-T05 -- macro-F1, per-class precision/recall/f1, a full
-    # confusion matrix, and calibration (from predict_proba's per-row max
-    # probability), computed on the TEST split -- the one split nothing
-    # above this point has touched for model selection, per standard
-    # practice. Decoded back to real category names via the label
-    # encoder so the persisted metrics are human-readable, not "class 7".
+    # Macro-F1, per-class precision/recall/f1, a full confusion matrix, and calibration (from predict_proba's per-row max probability), computed on the TEST split -- the one split nothing above this point has touched for model selection, per standard practice.
     y_test_names = encoder.inverse_transform(y_test)
     y_pred_names = encoder.inverse_transform(y_pred)
     class_names = list(encoder.classes_)
@@ -304,13 +282,7 @@ try:
     proba = model.predict_proba(X_test)
     confidences = proba.max(axis=1)
 
-    # ML-001-T05 -- top-k recall needs proba's COLUMN order, which is
-    # model.classes_ (the encoded integer labels the estimator was fitted
-    # on), not encoder.classes_. Those two coincide today, but only
-    # because LabelEncoder happens to assign codes in sorted order --
-    # decoding model.classes_ makes the mapping explicit instead of
-    # relying on that coincidence, and stays correct if the estimator
-    # ever reorders or drops a class it never saw in training.
+    # Classes_. classes_ makes the mapping explicit instead of relying on that coincidence, and stays correct if the estimator ever reorders or dr.
     proba_class_names = list(encoder.inverse_transform(model.classes_))
 
     full_metrics = ml_metrics.compute_full_metrics(
@@ -350,11 +322,7 @@ try:
     if PREVIOUS_ACCURACY is not None:
         metrics["previousAccuracy"] = PREVIOUS_ACCURACY
 
-    # ML-001-T04 -- baseline comparison, evaluated on the VALIDATION
-    # split (kept separate from the test split used above, per standard
-    # practice: val is for model comparison/selection, test stays
-    # untouched for the model's own headline number). Informative only --
-    # a baseline failure never blocks saving the real model's bundle.
+    # Baseline comparison, evaluated on the VALIDATION split (kept separate from the test split used above, per standard practice: val is for model comparison/selection, test stays untouched for the model's own headline number).
     print("\nEVALUATING BASELINES (validation split)...")
     try:
         y_train_names = encoder.inverse_transform(y_train)

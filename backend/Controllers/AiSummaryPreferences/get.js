@@ -1,8 +1,6 @@
 "use strict";
 
-// AI-001-T05 -- GET /sia/monthly-summary/preferences. Read-only opt-in +
-// current-period regeneration-usage view, matching
-// Controllers/NotificationPreferences/get.js's own thin-controller shape.
+// GET /sia/monthly-summary/preferences. js's own thin-controller shape.
 const { getPreference } = require("../../sia/aiSummaryPreferenceService");
 
 const getAiSummaryPreference = async (req, res) => {

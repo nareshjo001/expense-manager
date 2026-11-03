@@ -1,9 +1,6 @@
 "use strict";
 
-// OCR-005-T04 -- GET /api/receipts/:id/duplicates. Thin wrapper around
-// duplicateCandidateService.findDuplicateCandidates, which is
-// ownership-scoped to req.userId. An empty `data` array is the normal
-// "no duplicate candidates found" case, not an error -- still a 200.
+// GET /api/receipts/:id/duplicates. userId.
 const mongoose = require("mongoose");
 const {
   findDuplicateCandidates,

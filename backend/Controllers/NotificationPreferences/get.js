@@ -1,10 +1,6 @@
 "use strict";
 
-// NOT-003-T02 -- GET /api/notification-preferences. Read-only,
-// registry-complete view (see notificationPreferenceService.
-// getEffectivePreferences) plus the type registry's own metadata, so the
-// settings UI (NOT-003-T05) never has to hardcode labels/descriptions
-// separately from what the backend actually knows how to gate.
+// GET /api/notification-preferences. Read-only, registry-complete view (see notificationPreferenceService.
 const { getEffectivePreferences } = require("../../Services/NotificationServices/notificationPreferenceService");
 const { NOTIFICATION_TYPE_META } = require("../../utils/notificationTypes");
 

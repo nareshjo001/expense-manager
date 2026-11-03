@@ -1,15 +1,6 @@
 "use strict";
 
-// ANL-001-T03 -- pure, deterministic, no I/O. Computes a volatility-adaptive
-// week-over-week spending change signal, replacing
-// frontend/src/insights-engine/rules/overallSpend.js +
-// learning/thresholdAdapter/buildWeeklyBaseline.js (ANL-001-T02's contract,
-// WeeklyChangeSignal). The volatility baseline is NOT recomputed here -- it
-// reuses spendingAnalyzer.js's already-computed coefficientOfVariation
-// (report.spending.stability), which is the analytics module's existing
-// single source of weekly-spend volatility. Every money value is rounded
-// with the shared roundMoney helper; changeRatio is a unitless ratio, not a
-// currency amount, so it is rounded separately to 4 decimal places.
+// Pure, deterministic, no I/O. js (ANL-001-T02's contract, WeeklyChangeSignal).
 
 const { roundMoney: round2 } = require("../../utils/money");
 
@@ -23,17 +14,13 @@ const RULES = {
 };
 
 const toSafeNumber = (value, fallback = 0) => {
-  // Number() throws (rather than returning NaN) for an object with no
-  // usable valueOf/toString -- e.g. Object.create(null) -- so a malformed
-  // expenseAmount can't rely on Number.isFinite alone to catch it.
+  // G. isFinite alone to catch it.
   if (typeof value !== "number" && typeof value !== "string") return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
 
-// Sums expenseAmount across a list of expenses, coercing each amount via
-// Number(...) and treating non-finite/NaN values as 0, then rounds the
-// total with the shared money helper.
+// ) and treating non-finite/NaN values as 0, then rounds the total with the shared money helper.
 const sumWeekTotal = (expenses = []) => {
   const list = Array.isArray(expenses) ? expenses : [];
   let total = 0;
@@ -47,9 +34,7 @@ const sumWeekTotal = (expenses = []) => {
 // roundMoney (2dp, rupee-aware) does not apply here.
 const roundRatio = (value) => Math.round(value * 10000) / 10000;
 
-// Change ratio is null when there's no positive previous-week baseline to
-// compare against (division by zero / no signal), otherwise the absolute
-// relative change between the two week totals, rounded to 4dp.
+// Change ratio is null when there's no positive previous-week baseline to compare against (division by zero / no signal), otherwise the absolute relative change between the two week totals, rounded to 4dp.
 const calculateChangeRatio = (currentWeekTotal, previousWeekTotal) => {
   if (previousWeekTotal <= 0) return null;
   return roundRatio(Math.abs(currentWeekTotal - previousWeekTotal) / previousWeekTotal);

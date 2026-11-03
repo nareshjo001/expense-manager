@@ -5,17 +5,7 @@ const crypto = require("crypto");
 const { MlFeedbackModel } = require("../config/Schemas");
 // Remediation Workstream C -- shared ML_ROUTE validation + operations-token
 const { buildMlServiceUrl, mlOperationsHeaders } = require("../utils/mlServiceClient");
-// REC-001 -- job-level lease so multiple instances don't all separately
-// count feedback and call /retrain-model on the same day (the ML service
-// itself already dedupes concurrent triggers via existingRun, but the
-// lease avoids the redundant Mongo count + HTTP call across instances too).
-//
-// REC-001-T03 -- fails CLOSED (the default). If Redis is unreachable this
-// daily job skips one run, which costs at most a day's delay in retraining.
-// The alternative -- every instance counting feedback and firing
-// /retrain-model at once -- leans entirely on the ML service's own
-// existingRun dedupe to save us, and a same-day retrain is not worth
-// betting on that.
+// Job-level lease so multiple instances don't all separately count feedback and call /retrain-model on the same day (the ML service itself already dedupes concurrent triggers via existingRun, but the lease avoids the redundant Mongo count + HTTP call across instances too).
 const { runWithLease } = require("../utils/jobLease");
 
 const JOB_NAME = "feedbackCollector";
@@ -45,9 +35,6 @@ async function runFeedbackCollectorJob() {
         console.log("Retraining threshold reached");
 
         // Threshold met — trigger a model retrain on the ML service.
-        // OBS-001-T02: a fresh per-run correlation ID (no incoming HTTP
-        // request exists for a cron job) so this retrain trigger can be
-        // traced through the ML service's logs.
         const jobRequestId = crypto.randomUUID();
         const response = await axios.post(
             buildMlServiceUrl("/retrain-model"),

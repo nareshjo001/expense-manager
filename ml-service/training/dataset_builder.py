@@ -1,29 +1,4 @@
-"""
-Cumulative training-dataset assembly (Phase C).
-
-Uses two explicit stages rather than a shared, overwritten retraining CSV:
-
-  1. reserve_feedback_for_run(run_id)
-       Reconciles any feedback left "reserved" by a terminal/missing run
-       (see db.feedback_repository.reconcile_reserved_feedback), then
-       atomically reserves all currently-"pending" feedback for `run_id`
-       (db.feedback_repository.reserve_pending_feedback).
-
-  2. build_snapshot_for_run(run_id, reservation)
-       Reads the static base dataset, reads all cumulative "trained"
-       feedback PLUS this run's freshly "reserved" feedback (without
-       mutating "trained" documents), validates and normalizes every
-       feedback row, applies a deterministic duplicate cap and conflict
-       count, writes an immutable run-specific CSV snapshot via a
-       temp-file-then-atomic-rename, computes its SHA-256 hash, and returns
-       a metadata dict intended to be persisted onto the training-run
-       document by the caller (see training/retrain_pipeline.py and
-       app.py's background_retrain).
-
-Neither function mutates "trained" feedback. build_snapshot_for_run mutates
-ONLY this run's own invalid "reserved" rows, transitioning them to
-"needs_review" -- never anything reserved by another run.
-"""
+"""Cumulative training-dataset assembly (Phase C). Uses two explicit stages rather than a shared, overwritten retraining CSV: 1."""
 
 import os
 import csv
@@ -46,16 +21,7 @@ DUPLICATE_CAP = int(os.getenv("ML_FEEDBACK_DUPLICATE_CAP", "3"))
 
 
 def reserve_feedback_for_run(run_id):
-    """
-    Stage 1. Runs reservation reconciliation first (cheap: bounded by the
-    number of currently-"reserved" documents, which is normally zero or a
-    handful) so a feedback document abandoned by a previous run that crashed
-    mid-pipeline is returned to "pending" and can be picked up by this run,
-    rather than staying invisibly stuck. Then atomically reserves every
-    currently-"pending" document for `run_id`.
-
-    Returns the list of raw (serialized) reserved documents.
-    """
+    """Stage 1. Runs reservation reconciliation first (cheap: bounded by the number of currently-"reserved" documents, which is normally zero or a."""
     # Local import: not a cycle (training_run_repository doesn't import dataset_builder); coupling is one read only.
     from db import training_run_repository as runs
 
@@ -67,14 +33,7 @@ def reserve_feedback_for_run(run_id):
 
 
 def _read_base_rows():
-    """
-    Reads the static base dataset unchanged, as (expenseName,
-    expenseCategory) tuples. Deliberately does not normalize/validate base
-    rows here -- trainer.py already performs its own cleaning and
-    category-mapping pass over the FULL combined dataset (base rows
-    included), and Phase C does not change that. This function's only job
-    is to read the file whose row count seeds rowCounts.base.
-    """
+    """Reads the static base dataset unchanged, as (expenseName, expenseCategory) tuples."""
     rows = []
     with open(BASE_DATASET_PATH, newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
@@ -84,17 +43,7 @@ def _read_base_rows():
 
 
 def _validate_feedback_doc(doc):
-    """
-    Validates one feedback document against the canonical schema Phase C
-    requires before it can enter a training snapshot.
-
-    Returns (is_valid, normalized_expense_name, canonical_category, reason).
-    `reason` is populated (and the normalized fields are None) when
-    is_valid is False, always a specific, non-generic string suitable for
-    both a feedback document's lastError and the run's rejectedReasons
-    tally. Never raises -- a malformed document (missing/wrong-typed
-    fields) is simply reported invalid, not allowed to crash the run.
-    """
+    """Validates one feedback document against the canonical schema Phase C requires before it can enter a training snapshot."""
     try:
         raw_name = doc.get("expenseName")
         raw_category = doc.get("actualCategory")
@@ -113,46 +62,14 @@ def _validate_feedback_doc(doc):
 
 
 def _sort_key(row):
-    """
-    Deterministic ordering for duplicate-cap processing: group by
-    (normalized name, canonical category), then prefer the earliest-created
-    document within a group (so, among duplicates, the run consistently
-    "keeps the earliest N, caps the rest" rather than an arbitrary Mongo
-    cursor order), with the document id as a final tiebreaker for full
-    reproducibility given identical input data.
-    """
+    """Deterministic ordering for duplicate-cap processing: group by (normalized name, canonical category), then prefer the earliest-created document within a group (so, among duplicates, the run consistently "keeps the earliest N, caps the rest" rather than an arbitrary Mongo cursor order), with the document id as a final tiebreaker for full reproducibility given identical input data."""
     _source, name, category, doc = row
     created_at = doc.get("createdAt") or doc.get("reservedAt") or datetime.datetime.min
     return (name, category, created_at, str(doc.get("_id", "")))
 
 
 def build_snapshot_for_run(run_id, reservation):
-    """
-    Stage 2. Assembles the cumulative dataset for `run_id` and writes it as
-    an immutable, run-specific CSV snapshot.
-
-    `reservation` is the list returned by reserve_feedback_for_run (this
-    run's freshly reserved documents) -- passed in explicitly rather than
-    re-queried, so this function operates on exactly the set the caller just
-    reserved, with no risk of a second read observing a different set.
-
-    Returns a metadata dict:
-        {
-            "path": <absolute file path>,
-            "sha256": <hex digest>,
-            "rowCounts": {
-                "base": int,
-                "trainedFeedback": int,
-                "currentReserved": int,
-                "acceptedFeedback": int,
-                "rejectedFeedback": int,
-                "duplicatesCapped": int,
-                "finalDataset": int,
-            },
-            "rejectedReasons": {<reason>: count, ...},
-            "conflictCount": int,
-        }
-    """
+    """Stage 2. Assembles the cumulative dataset for `run_id` and writes it as an immutable, run-specific CSV snapshot."""
     base_rows = _read_base_rows()
 
     trained_docs = feedback.get_trained_feedback()

@@ -1,10 +1,6 @@
 "use strict";
 
-// NOT-003-T02/T03/T04 -- notification preferences: read/write the user's
-// saved document, merge it over the type registry's defaults, and resolve
-// the single "may this type send right now, and with what content policy"
-// decision push.service.js needs before it builds a message (T03) or
-// suppresses one for quiet hours (T04).
+// Js needs before it builds a message (T03) or suppresses one for quiet hours (T04).
 const NotificationPreference = require("../../models/NotificationPreference");
 const {
   NOTIFICATION_TYPE_VALUES,
@@ -22,10 +18,7 @@ const DEFAULT_QUIET_HOURS = Object.freeze({
   timeZone: null,
 });
 
-// Merges a saved document's `types` map over the registry defaults -- a
-// type missing from the saved document (never configured, or registered
-// after the document was last saved) falls back to
-// DEFAULT_TYPE_PREFERENCE, never to `undefined`/disabled-by-omission.
+// Merges a saved document's `types` map over the registry defaults -- a type missing from the saved document (never configured, or registered after the document was last saved) falls back to DEFAULT_TYPE_PREFERENCE, never to `undefined`/disabled-by-omission.
 function mergeTypePreferences(savedTypes) {
   const merged = defaultPreferencesByType();
   if (savedTypes && typeof savedTypes === "object") {
@@ -55,9 +48,7 @@ function mergeQuietHours(savedQuietHours) {
   };
 }
 
-// The full, registry-complete view a settings UI renders: every known type,
-// each with a resolved enabled/preview, plus quiet hours -- never a partial
-// document a caller would need to know how to fill gaps in.
+// The full, registry-complete view a settings UI renders: every known type, each with a resolved enabled/preview, plus quiet hours -- never a partial document a caller would need to know how to fill gaps in.
 async function getEffectivePreferences(userId) {
   const doc = await NotificationPreference.findOne({ userId }).lean();
   return {
@@ -67,12 +58,7 @@ async function getEffectivePreferences(userId) {
   };
 }
 
-// Validates a caller-supplied preferences payload (PUT body). Returns
-// { ok: true, types, quietHours } with only recognized fields normalized,
-// or { ok: false, reason }. Unknown type keys in the payload are silently
-// dropped rather than rejected -- a client one release behind a type
-// deprecation should not be unable to save its other, still-valid
-// preferences over that.
+// Validates a caller-supplied preferences payload (PUT body).
 function validatePayload(body) {
   const types = {};
   if (body && body.types !== undefined) {
@@ -134,28 +120,14 @@ function validatePayload(body) {
   return { ok: true, types, quietHours };
 }
 
-// Upserts the user's preferences document. A partial payload (only `types`,
-// or only `quietHours`) patches just that section -- matching
-// recurringLifecycleService.editDefinition's "only fields actually present
-// are applied" convention -- rather than requiring the client to resend the
-// whole document on every save.
-//
-// No CAS/scheduleVersion here (unlike REC-002's recurring-definition
-// mutations): this is a single user's own settings, mutated only from that
-// user's own settings screen. There is no second actor (no cron job, no
-// other user) that could race a save the way a recurring definition's
-// schedule can race a cron run, so last-write-wins is the correct and
-// simpler choice, not a shortcut.
+// Upserts the user's preferences document.
 async function savePreferences(userId, body) {
   const validation = validatePayload(body);
   if (!validation.ok) return validation;
 
   const setOps = {};
   if (body.types !== undefined) {
-    // Merge onto the EXISTING saved document's types (not the full
-    // registry-merged view) so a save that only touches one type does not
-    // freeze every other type's default at today's registry, silently
-    // opting it out of future default changes.
+    // Merge onto the EXISTING saved document's types (not the full registry-merged view) so a save that only touches one type does not freeze every other type's default at today's registry, silently opting it out of future default changes.
     const existing = await NotificationPreference.findOne({ userId }).lean();
     setOps.types = { ...(existing?.types || {}), ...validation.types };
   }
@@ -176,14 +148,7 @@ async function savePreferences(userId, body) {
   return { ok: true, preferences: await getEffectivePreferences(userId) };
 }
 
-// NOT-003-T03/T04 -- the single decision point push.service.js consults
-// before building/sending each user's message: is this type enabled, what
-// preview policy applies, and are we inside this user's quiet hours right
-// now. `type` may be null/unknown (a caller that predates the registry, or
-// a raw sendPush() call in a test) -- in that case every gate defaults to
-// "send, defer entirely to the device's own preview setting", i.e. exactly
-// today's pre-NOT-003 behavior, so nothing that already calls sendPush
-// without a type regresses.
+// Js consults before building/sending each user's message: is this type enabled, what preview policy applies, and are we inside this user's quiet hours right now.
 async function resolveSendPolicy(userId, type, now = new Date()) {
   if (!isKnownType(type)) {
     return { enabled: true, preview: "device", quiet: false };

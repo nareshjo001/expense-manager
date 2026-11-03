@@ -1,33 +1,4 @@
-"""
-Versioned model-bundle retention and cleanup (Phase F).
-
-Classifies every bundle directory under training/models/ into one of a
-fixed set of categories using the manifest, MongoDB run records, bundle
-metadata, and age -- NEVER by loading arbitrary pickle contents just to
-decide whether something is safe to delete -- and then deletes only the
-entries that are unambiguously safe under a conservative retention
-policy.
-
-This module never touches:
-  - training/model.pkl, training/vectorizer.pkl, training/labelEncoder.pkl
-    (the legacy fixed artifacts -- entirely outside training/models/ and
-    never referenced by this module's deletion logic at all)
-  - training/models/active.json's CONTENTS (only ever read, never written
-    or deleted, by this module)
-  - a candidate bundle's own file contents (deletion is always "remove
-    the entire versioned directory", never an edit of what's inside it)
-
-Configuration (env vars, conservative defaults):
-    ML_MODEL_RETENTION_COUNT           (default 5)  -- how many
-        validated-but-not-currently-active bundles to keep, newest first.
-    ML_REJECTED_MODEL_RETENTION_COUNT  (default 3)  -- how many
-        failed-validation/failed-activation bundles to keep, newest first.
-    ML_MODEL_RETENTION_DAYS            (default 7)  -- minimum age (from
-        the bundle's own recorded creation time) before ANY bundle may be
-        deleted, regardless of classification or count. Read fresh from
-        the environment on every call, never cached, so operators/tests
-        can change it without reimporting this module.
-"""
+"""Versioned model-bundle retention and cleanup (Phase F)."""
 
 import os
 import shutil
@@ -76,15 +47,7 @@ def _retention_days():
 
 
 def _list_bundle_dirs():
-    """
-    Every immediate subdirectory of training/models/ that looks like a
-    real bundle directory -- excludes active.json (a file, not a
-    directory) and any leftover ".tmp-*" temp directories from an
-    interrupted write_bundle/write_manifest call (see model_bundle.py;
-    those are never valid bundles and are simply skipped here, not
-    deleted -- an interrupted write's own cleanup is model_bundle.py's
-    responsibility, not this module's).
-    """
+    """Py's responsibility, not this module's)."""
     if not os.path.isdir(model_bundle.MODELS_DIR):
         return []
     names = []
@@ -98,16 +61,7 @@ def _list_bundle_dirs():
 
 
 def _bundle_age_days(model_version):
-    """
-    Age in days, sourced from the bundle's own metadata.json `createdAt`
-    field when readable (authoritative -- this is when the bundle was
-    actually produced), falling back to the directory's filesystem mtime
-    only when metadata cannot be read at all (a malformed/incomplete
-    bundle) -- directory age is never preferred over recorded metadata,
-    only used as a fallback per the Phase F spec's "do not infer deletion
-    safety from directory age alone" (age is still a REQUIRED input, just
-    never the ONLY one, and metadata is trusted first when available).
-    """
+    """Json `createdAt` field when readable (authoritative -- this is when the bundle was actually produced), falling back to the directory's filesystem mtime only when metadata cannot be read at all (a malformed/incomplete bundle) -- directory age is never preferred over recorded metadata, only used as a fallback per the Phase F spec's "do not infer deletion safety from directory age alone" (age is still a REQUIRED input, just never the ONLY one, and metadata is trusted first when available)."""
     try:
         metadata = model_bundle.read_metadata(model_version)
         created_at = metadata.get("createdAt")
@@ -125,19 +79,7 @@ def _bundle_age_days(model_version):
 
 
 def classify_bundles(get_run_for_model_version, find_runs_by_status):
-    """
-    Classifies every bundle directory under training/models/.
-
-    `get_run_for_model_version` / `find_runs_by_status` are injected
-    (normally db.training_run_repository's own functions) rather than
-    imported directly, keeping this module's only hard dependency on
-    MongoDB explicit and swappable for tests -- the same
-    dependency-injection convention already used by
-    db.feedback_repository.reconcile_reserved_feedback.
-
-    Returns a dict: {model_version: {"classification": ..., "ageDays": ...,
-                                       "run": <serialized run or None>}}
-    """
+    """Classifies every bundle directory under training/models/. reconcile_reserved_feedback."""
     try:
         manifest = model_bundle.read_manifest()
     except model_bundle.ManifestError:
@@ -198,9 +140,7 @@ def classify_bundles(get_run_for_model_version, find_runs_by_status):
 
 
 def _bundle_sort_key(item):
-    """Newest first. Prefers the run's own createdAt when available (more
-    reliable than filesystem mtime); falls back to age_days (smaller
-    age_days = newer)."""
+    """Newest first. Prefers the run's own createdAt when available (more reliable than filesystem mtime); falls back to age_days (smaller age_days."""
     model_version, info = item
     run = info.get("run")
     if run and run.get("createdAt"):
@@ -210,31 +150,7 @@ def _bundle_sort_key(item):
 
 
 def plan_cleanup(get_run_for_model_version, find_runs_by_status):
-    """
-    Produces a cleanup PLAN (never deletes anything itself -- see
-    execute_cleanup for that). Returns:
-
-        {
-          "candidates": [{"modelVersion": ..., "classification": ...,
-                            "action": "delete"|"keep", "reason": ...}, ...],
-          "summary": {"delete": N, "keep": N},
-        }
-
-    Retention logic, applied per classification group:
-      - ACTIVE / ROLLBACK_PROTECTED / IN_PROGRESS / UNKNOWN: always "keep"
-        (NEVER_DELETE) -- no count or age reasoning ever overrides this.
-      - VALIDATED_NOT_ACTIVATED: keep the newest ML_MODEL_RETENTION_COUNT;
-        older ones are "delete" candidates ONLY if also past
-        ML_MODEL_RETENTION_DAYS (the age floor applies universally).
-      - FAILED_VALIDATION / FAILED_ACTIVATION: pooled together (both are
-        "training produced a candidate nobody will ever use"), keep the
-        newest ML_REJECTED_MODEL_RETENTION_COUNT combined; older ones are
-        "delete" candidates, again only past the age floor.
-      - ORPHANED: already gated to be past ML_MODEL_RETENTION_DAYS by
-        classify_bundles itself (an orphaned bundle younger than that is
-        classified UNKNOWN instead, and therefore never deleted here) --
-        always a "delete" candidate.
-    """
+    """Produces a cleanup PLAN (never deletes anything itself -- see execute_cleanup for that)."""
     classification_map = classify_bundles(get_run_for_model_version, find_runs_by_status)
     retention_days = _retention_days()
     retention_count = _retention_count()
@@ -301,12 +217,7 @@ def plan_cleanup(get_run_for_model_version, find_runs_by_status):
 
 
 def _is_safe_child_path(target_dir):
-    """
-    Path-safety check (Phase F item 13): the resolved deletion target must
-    be a DIRECT child of the resolved models root, and must not itself be
-    a symlink -- refuses to follow a symlink that could point anywhere
-    else on the filesystem. Returns True only when it is safe to proceed.
-    """
+    """Path-safety check (Phase F item 13): the resolved deletion target must be a DIRECT child of the resolved models root, and must not itself be a symlink -- refuses to follow a symlink that could point anywhere else on the filesystem."""
     if os.path.islink(target_dir):
         return False
     real_root = os.path.realpath(model_bundle.MODELS_DIR)
@@ -315,31 +226,7 @@ def _is_safe_child_path(target_dir):
 
 
 def execute_cleanup(plan, dry_run=True):
-    """
-    Executes (or, if dry_run, merely reports) the deletions in `plan`
-    (normally the return value of plan_cleanup).
-
-    Safety guarantees (Phase F item 13):
-      - dry_run=True performs NO filesystem changes at all -- it only
-        echoes back what WOULD be deleted.
-      - Immediately before each individual deletion, active.json is
-        re-read fresh; if it now points at the candidate being deleted
-        (e.g. a retrain activated it in the time between planning and
-        applying), that one deletion is aborted and logged as skipped --
-        the rest of the plan continues unaffected.
-      - The resolved target must be a direct child of the models root and
-        must not be a symlink (see _is_safe_child_path) -- otherwise
-        skipped and logged, rest of the plan continues.
-      - A missing target directory is treated as an idempotent no-op (already
-        gone), not an error.
-      - One directory's deletion failure (e.g. a permissions error) is
-        caught per-directory and logged; it never aborts the remaining
-        plan and never touches any other (protected or candidate)
-        directory.
-
-    Returns:
-        {"deleted": [...], "skipped": [...], "errors": [...]}
-    """
+    """Executes (or, if dry_run, merely reports) the deletions in `plan` (normally the return value of plan_cleanup)."""
     deleted, skipped, errors = [], [], []
 
     delete_candidates = [c for c in plan.get("candidates", []) if c["action"] == "delete"]
@@ -385,15 +272,7 @@ def execute_cleanup(plan, dry_run=True):
 
 
 def run_cleanup(get_run_for_model_version, find_runs_by_status, dry_run=True):
-    """
-    Convenience entry point combining plan_cleanup + execute_cleanup --
-    the function app.py's activation workflow (or a manual/internal
-    invocation) calls. Never raises: any unexpected exception anywhere in
-    planning/execution is caught here and returned as a structured error
-    rather than propagating into the caller's own control flow (the
-    Phase F spec requires cleanup failure to never affect activation or
-    feedback state).
-    """
+    """Py's activation workflow (or a manual/internal invocation) calls."""
     try:
         plan = plan_cleanup(get_run_for_model_version, find_runs_by_status)
         result = execute_cleanup(plan, dry_run=dry_run)

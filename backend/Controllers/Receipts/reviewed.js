@@ -1,8 +1,6 @@
 "use strict";
 
-// OCR-004-T04 -- POST /api/receipts/:id/reviewed. Optional body:
-// { corrections: { expenseName?, expenseAmount?, expenseDate? } }. Thin
-// wrapper around receiptQueryService.markReceiptReviewed.
+// POST /api/receipts/:id/reviewed. , expenseDate?
 const mongoose = require("mongoose");
 const { markReceiptReviewed, ERROR_CODES } = require("../../Services/ReceiptServices/receiptQueryService");
 

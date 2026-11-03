@@ -1,14 +1,8 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-// DAT-001-T06 -- keeps each *Minor shadow field in sync on every write,
-// behind the MONEY_MINOR_DUAL_WRITE_ENABLED flag. See
-// backend/utils/moneyMinorSync.js for why this is flag-gated.
+// Keeps each *Minor shadow field in sync on every write, behind the MONEY_MINOR_DUAL_WRITE_ENABLED flag.
 const { attachMoneyMinorSync } = require('../utils/moneyMinorSync');
-// DAT-002-T02 -- canonical "MMM YYYY" Budget.month definition, shared with
-// Services/BudgetServices/budget.service.js/Controllers/BudgetControllers/
-// setbudget.js/updatebudget.js/sia/financialQueryService.js. Used below only
-// to validate budgetSchema.month against the same parser those call sites
-// already rely on -- not to change the persisted format.
+// Js. month against the same parser those call sites already rely on -- not to change the persisted format.
 const { parseMonthKey } = require('../utils/monthKeyNormalization');
 
 const userSchema = new Schema({
@@ -17,16 +11,7 @@ const userSchema = new Schema({
         required: true
     },
     email: {
-        // DAT-002-T02 -- canonical representation: lowercase + trimmed.
-        // AUTH-002's security.service.js already defines this exact
-        // transform (normalizeEmail) for audit-hash/rate-limit purposes;
-        // this schema-level setter now applies the same transform to every
-        // write path (signup, and any future email-bearing save()), so a
-        // document's stored email is never in a different case than what
-        // normalizeEmail would produce. The six AuthControllers that query
-        // by email also now normalize req.body.email before querying (see
-        // those files), so a case-varying login/signup input still resolves
-        // to the same account instead of silently creating or missing one.
+        // Canonical representation: lowercase + trimmed.
         type: String,
         required: true,
         unique: true,
@@ -65,13 +50,7 @@ const userSchema = new Schema({
         index: { expireAfterSeconds: 0 }
     },
 
-    // PRV-001-T03 (ADR-0007) -- set together when a re-authenticated
-    // deletion request is accepted; both null means no deletion is
-    // pending. deletionScheduledPurgeAt is the grace-period end (ADR-0007:
-    // 14 days) T04's orchestration hard-deletes against; it is NOT itself
-    // a TTL index field -- purge is an explicit orchestrated action, never
-    // an implicit Mongo expiry, so a crashed/delayed orchestration run
-    // can never silently lose the record of a pending request.
+    // T03 (ADR-0007) -- set together when a re-authenticated deletion request is accepted; both null means no deletion is pending.
     deletionRequestedAt: {
         type: Date,
         default: null
@@ -104,12 +83,7 @@ const expenseSchema = new Schema({
         type: Number,
         required: true
     },
-    // DAT-001-T04 -- shadow integer-paise field (ADR-0003). Optional and
-    // additive: populated by the 20260903-backfill-money-minor-fields
-    // migration for existing docs, and left for T06 to start writing on
-    // every new/edited expense. expenseAmount stays authoritative and
-    // required until T07 removes it, after reconciliation AND a backup
-    // (OPS-002) both exist.
+    // Shadow integer-paise field (ADR-0003).
     expenseAmountMinor: {
         type: Number,
         required: false,
@@ -141,9 +115,7 @@ const expenseSchema = new Schema({
         default: false
     },
 
-    // ML-003-T05 -- mirrors MlFeedbackSchema.abstained below: whether the
-    // prediction shown for this expense was an abstained suggestion
-    // (ML-003-T03/T04) rather than an auto-filled, committed prediction.
+    // Abstained below: whether the prediction shown for this expense was an abstained suggestion (ML-003-T03/T04) rather than an auto-filled, committed prediction.
     wasMlAbstained: {
         type: Boolean,
         default: false
@@ -168,15 +140,7 @@ const budgetSchema = new Schema({
         required: true
     },
     month: {
-        // DAT-002-T02 -- canonical representation is "MMM YYYY" (e.g.
-        // "Jan 2026"), the format every real construction/parse site in
-        // this codebase already uses (verified directly, not assumed --
-        // see docs/data/DAT-002-T01-schema-and-index-inventory.md). This
-        // validator does not change that format; it rejects anything that
-        // doesn't parse as one, using the exact same parser
-        // (utils/monthKeyNormalization.js's parseMonthKey) the rest of the
-        // codebase already relies on to read this field back, so validation
-        // and parsing can never drift apart.
+        // G. md). md).
         type: String,
         required: true,
         validate: {
@@ -249,29 +213,13 @@ const MlFeedbackSchema = new mongoose.Schema({
         default: false
     },
 
-    // ML-003-T05 -- whether the prediction this feedback document is about
-    // was an abstained suggestion (ML-003-T03/T04) rather than an
-    // auto-filled, committed prediction. Defaults to false so every
-    // pre-T05 document (written before this field existed) reads as a
-    // committed prediction, which is what they always were.
+    // Whether the prediction this feedback document is about was an abstained suggestion (ML-003-T03/T04) rather than an auto-filled, committed prediction.
     abstained: {
         type: Boolean,
         default: false
     },
 
-    // ML-003-T05 -- records what happened to a shown prediction, derived
-    // server-side (never trusted from the client) from `abstained` x
-    // `corrected`:
-    //   committed (abstained=false), kept       -> "accepted"
-    //   committed (abstained=false), overridden  -> "corrected"
-    //   abstained (abstained=true),  kept as-is  -> "viewed"    (the user
-    //       viewed the suggestion and used it -- a near-miss signal that
-    //       the abstain threshold may be higher than it needs to be)
-    //   abstained (abstained=true),  overridden  -> "abstained" (the model
-    //       correctly declined to guess; the user chose independently)
-    // Left null (not backfilled) for every feedback document written
-    // before this field existed -- there is no reliable way to reconstruct
-    // whether an old document's prediction was abstained.
+    // Records what happened to a shown prediction, derived server-side (never trusted from the client) from `abstained` x `corrected`: committed (abstained=false), kept -> "accepted" committed (abstained=false), overridden -> "corrected" abstained (abstained=true), kept as-is -> "viewed" (the user viewed the suggestion and used it -- a near-miss signal that the abstain threshold may be higher than it needs to be) abstained (abstained=true), overridden -> "abstained" (the model correctly declined to guess; the user chose independently) Left null (not backfilled) for every feedback document written before this field existed -- there is no reliable way to reconstruct whether an old document's prediction was abstained.
     outcome: {
         type: String,
         enum: {

@@ -20,10 +20,7 @@ const signup = async (req, res) => {
   try {
     // Extract user input from request body
     const { fullName, email: rawEmail, password } = req.body;
-    // DAT-002-T02 -- normalize before both the existence check and the
-    // document write, so "Foo@x.com" and "foo@x.com" resolve to the same
-    // account instead of the unique index (case-sensitive, no collation)
-    // allowing two separate ones.
+    // Com" resolve to the same account instead of the unique index (case-sensitive, no collation) allowing two separate ones.
     const email = normalizeEmail(rawEmail);
 
     // Check if a user already exists with the given email

@@ -1,35 +1,4 @@
-"""
-ML-001-T03 -- grouped train/validation/test splitting.
-
-ML-001-T02's dataset audit (docs/ml/ML-001-T02-deduplication-and-label-
-ambiguity.md) found that 77% of the training dataset's rows are exact
-duplicates of some other row's (expenseName, expenseCategory) pair --
-only 11,514 of 97,056 rows are actually distinct examples. trainer.py's
-previous split (plain sklearn.model_selection.train_test_split,
-stratified by label only) had no way to know that, so a duplicate could
-land in both train and test: the model would then be "tested" on an
-example it had already memorized verbatim during training, inflating
-the reported accuracy without the model actually generalizing any
-better.
-
-This module fixes that at the split level: every row is assigned a
-group key (its post-cleaning expenseName, joined with its normalized
-category -- the same text the model actually trains on, not the raw
-input), and no group is ever allowed to appear in more than one of
-train/validation/test. That is the actual guarantee this module exists
-to provide; grouped_train_val_test_split()'s docstring and
-assert_no_group_leakage() both exist to make that guarantee checkable,
-not just assumed.
-
-Splitting is stratified by label where feasible (StratifiedGroupKFold),
-falling back to group-only splitting (GroupShuffleSplit, no
-stratification) if a class doesn't have enough distinct groups to
-stratify, and finally to today's un-grouped stratified split as a last
-resort if even that fails -- each fallback is recorded in the returned
-`strategy` string rather than happening silently, mirroring the
-fallback_split_used flag trainer.py already reports for its label-only
-stratification fallback.
-"""
+"""Grouped train/validation/test splitting."""
 
 import numpy as np
 from sklearn.model_selection import (
@@ -40,9 +9,7 @@ from sklearn.model_selection import (
 
 # 1/TEST_FOLDS ~= 20% of the full dataset held out as test.
 DEFAULT_TEST_FOLDS = 5
-# 1/VAL_FOLDS of the REMAINING (train+val) portion after test is held out
-# -- with TEST_FOLDS=5 and VAL_FOLDS=8, that's 1/8 of 80% = 10% of the
-# full dataset, leaving ~70% for training.
+# 1/VAL_FOLDS of the REMAINING (train+val) portion after test is held out -- with TEST_FOLDS=5 and VAL_FOLDS=8, that's 1/8 of 80% = 10% of the full dataset, leaving ~70% for training.
 DEFAULT_VAL_FOLDS = 8
 
 STRATEGY_STRATIFIED_GROUP = "stratified_group"
@@ -52,13 +19,7 @@ STRATEGY_UNGROUPED_PLAIN = "ungrouped_plain"
 
 
 def make_group_key(clean_names, normalized_categories):
-    """
-    Builds the group key array used for splitting: the post-cleaning
-    expense name (what TF-IDF actually vectorizes) joined with the
-    normalized category. Two array-likes in, one numpy string array out,
-    same length and order -- callers pass this straight to
-    grouped_train_val_test_split's `groups` argument.
-    """
+    """Builds the group key array used for splitting: the post-cleaning expense name (what TF-IDF actually vectorizes) joined with the normalized category."""
     clean_names = np.asarray(clean_names, dtype=str)
     normalized_categories = np.asarray(normalized_categories, dtype=str)
     if clean_names.shape[0] != normalized_categories.shape[0]:
@@ -131,20 +92,7 @@ def grouped_train_val_test_split(
     val_folds=DEFAULT_VAL_FOLDS,
     random_state=42,
 ):
-    """
-    Splits len(y) samples into (train_idx, val_idx, test_idx, strategy),
-    each an integer numpy index array into range(len(y)), with no group
-    value shared across more than one of the three -- guaranteed for
-    "stratified_group" and "group_only" strategies; NOT guaranteed for
-    the ungrouped fallback strategies, which only run when grouping
-    itself proved infeasible (see module docstring). Callers that need
-    the guarantee checked, not just assumed, should call
-    assert_no_group_leakage() on the result.
-
-    y and groups must be numpy arrays (or array-likes) of the same
-    length as each other, in the same row order as whatever feature
-    matrix the caller will index with the returned indices.
-    """
+    """Splits len(y) samples into (train_idx, val_idx, test_idx, strategy), each an integer numpy index array into range(len(y)), with no group value shared across more than one of the three -- guaranteed for "stratified_group" and "group_only" strategies; NOT guaranteed for the ungrouped fallback strategies, which only run when grouping itself proved infeasible (see module docstring)."""
     y = np.asarray(y)
     groups = np.asarray(groups)
     n_samples = len(y)
@@ -173,11 +121,7 @@ def grouped_train_val_test_split(
 
 
 def assert_no_group_leakage(groups, train_idx, val_idx, test_idx, sample_limit=10):
-    """
-    Raises AssertionError (naming which split pairs overlap and how many
-    groups, plus a small sample) if any group appears in more than one
-    of the three splits. Silent (returns None) when clean.
-    """
+    """Raises AssertionError (naming which split pairs overlap and how many groups, plus a small sample) if any group appears in more than one of the three splits."""
     groups = np.asarray(groups)
     g_train = set(groups[train_idx])
     g_val = set(groups[val_idx])

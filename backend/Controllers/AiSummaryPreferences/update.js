@@ -1,10 +1,6 @@
 "use strict";
 
-// AI-001-T05 -- PUT /sia/monthly-summary/preferences. Thin HTTP wrapper
-// around aiSummaryPreferenceService.setOptIn -- validation/status-code
-// mapping here, matching Controllers/NotificationPreferences/update.js's
-// own "thin controller, service owns the rules" split. This is the ONLY
-// way a user's optedIn flag ever changes -- no other route writes it.
+// PUT /sia/monthly-summary/preferences. js's own "thin controller, service owns the rules" split.
 const { setOptIn } = require("../../sia/aiSummaryPreferenceService");
 
 const REASON_MESSAGES = {

@@ -1,10 +1,6 @@
 "use strict";
 
-// IMP-001-T04 -- intended route:
-// PATCH /api/imports/sessions/:id/rows/:rowIndex (verifyToken).
-// Body: { decision }, one of IMPORT_ROW_DECISIONS.ACCEPT/SKIP -- a row
-// decision only makes sense pre-commit (session must still be
-// "previewing").
+// Intended route: PATCH /api/imports/sessions/:id/rows/:rowIndex (verifyToken).
 const mongoose = require("mongoose");
 const {
   decideImportRow,

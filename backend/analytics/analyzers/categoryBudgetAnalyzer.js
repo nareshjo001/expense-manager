@@ -1,14 +1,6 @@
 "use strict";
 
-// BUD-001-T04 -- deterministic threshold/risk facts for category budgets.
-// Produces the `<summary>` shape documented in section 3 of
-// docs/budgets/BUD-001-T01-category-budget-invariants.md.
-//
-// PURE: no I/O, no Date.now()/new Date() -- `now` is injected by the caller
-// (service/controller), so the same inputs always yield the same output.
-// Every threshold and month rule comes from categoryBudgetContract.js
-// (which in turn reuses budgetAnalyzer.js's STATUS_THRESHOLDS); nothing is
-// re-declared here.
+// Deterministic threshold/risk facts for category budgets. md.
 
 const {
   ROLLOVER_POLICY,
@@ -24,28 +16,20 @@ const AT_RISK_PROJECTED_STATUSES = new Set(["Critical", "Overspent"]);
 
 const toMinor = (value) => (Number.isFinite(value) ? value : 0);
 
-// Deterministic, locale-independent string ordering (localeCompare depends
-// on the process's ICU/locale, which would make the output environment-
-// dependent).
+// Deterministic, locale-independent string ordering (localeCompare depends on the process's ICU/locale, which would make the output environment- dependent).
 const compareStrings = (a, b) => {
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;
 };
 
-// Days in a "YYYY-MM" month from the same server-local boundaries the
-// total budget uses. Math.round absorbs a DST transition inside the month
-// (a 23h or 25h day), which would otherwise make the raw difference a
-// non-integer number of days.
+// Days in a "YYYY-MM" month from the same server-local boundaries the total budget uses.
 const daysInMonthOf = (month) => {
   const { monthStart, monthEnd } = monthToRange(month);
   return Math.round((monthEnd.getTime() - monthStart.getTime()) / DAY_MS);
 };
 
-// Straight-line pace to month end (I10 facts, section 3):
-//   current month -> spent / daysElapsed * daysInMonth
-//   past month    -> spent (the month is final)
-//   future month  -> null (nothing to extrapolate from)
+// Straight-line pace to month end (I10 facts, section 3): current month -> spent / daysElapsed * daysInMonth past month -> spent (the month is final) future month -> null (nothing to extrapolate from).
 const calculateProjectedSpentMinor = ({ spentMinor, month, now }) => {
   const offset = monthDiff(currentMonth(now), month);
   if (offset > 0) return null;
@@ -77,9 +61,7 @@ const analyzeAllocation = ({ allocation, spentByCategory, month, now }) => {
     status,
     projectedSpentMinor,
     projectedStatus,
-    // Only a month still in progress can be "at risk": for a closed month the
-    // projection equals the actual, so a finished month sitting at Critical
-    // would otherwise be flagged as a live risk it can no longer act on.
+    // Only a month still in progress can be "at risk": for a closed month the projection equals the actual, so a finished month sitting at Critical would otherwise be flagged as a live risk it can no longer act on.
     atRisk:
       month === currentMonth(now) &&
       status !== "Overspent" &&
@@ -103,19 +85,14 @@ const compareUnbudgeted = (a, b) =>
 const calculateTotals = ({ categories, totalSpentMinor, totalBudgetMinor, spentByCategory }) => {
   const allocatedMinor = categories.reduce((sum, c) => sum + c.amountMinor, 0);
 
-  // Summed once per DISTINCT category: the unique index makes duplicates
-  // impossible for well-formed data, but a duplicate would otherwise count
-  // the same spend twice and push unbudgetedSpentMinor below zero.
+  // Summed once per DISTINCT category: the unique index makes duplicates impossible for well-formed data, but a duplicate would otherwise count the same spend twice and push unbudgetedSpentMinor below zero.
   const budgetedCategories = new Set(categories.map((c) => c.category));
   let budgetedSpentMinor = 0;
   for (const category of budgetedCategories) {
     budgetedSpentMinor += toMinor(spentByCategory.get(category));
   }
 
-  // Clamped: totalSpentMinor and spentByCategory come from the same
-  // aggregation today and always reconcile, but they are two independent
-  // inputs -- a caller combining a total and a map from different reads
-  // (an expense deleted in between) must never get a negative figure.
+  // Clamped: totalSpentMinor and spentByCategory come from the same aggregation today and always reconcile, but they are two independent inputs -- a caller combining a total and a map from different reads (an expense deleted in between) must never get a negative figure.
   const safeTotalSpentMinor = toMinor(totalSpentMinor);
   const unbudgetedSpentMinor = Math.max(0, safeTotalSpentMinor - budgetedSpentMinor);
 

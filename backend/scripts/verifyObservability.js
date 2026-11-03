@@ -1,52 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// OBS-001-T07 -- observability verification, executable.
-//
-// docs/runbooks/OBS-001-T07-staging-verification.md lists six checks that
-// "need a human with log access": redaction (T01), correlation IDs (T02),
-// structured log format (T03), error aggregation (T04), metrics (T05) and
-// alerts (T06). The reason they needed a human is that they are about what
-// the server WRITES TO ITS LOGS, which no amount of HTTP probing from outside
-// can see. This script removes that reason by owning the process: it starts
-// the real backend (server.js, unmodified) as a child process, captures
-// every line it writes to stdout/stderr, drives real traffic at it, and then
-// checks those captured lines against the runbook's six expectations.
-//
-// What it runs against. MONGO_CONN must name a disposable database -- a
-// staging copy restored from a backup (OPS-002-T05), a CI database, or a
-// local one. The run CREATES a throwaway user and two expenses there and
-// deletes everything tied to that user afterwards. It refuses a database
-// whose name does not look disposable (see DISPOSABLE_DB_PATTERN) unless
-// --allow-any-db is passed, because pointing it at production would write a
-// user into production.
-//
-// What it deliberately does to the child process's environment:
-//   - PROCESS_ROLE=web: no scheduled jobs, so nothing but this script's own
-//     traffic touches the database or shows up in the metrics.
-//   - ML_ROUTE -> a fake ML service this script runs on localhost. It answers
-//     GET / with 500 (so /ping returns 503, a real 5xx for the error-rate
-//     alert) and records the X-Request-ID of every call it receives, which is
-//     the only way to prove the ID is FORWARDED downstream (runbook step 2).
-//   - OBS_ALERT_ERROR_RATE_THRESHOLD=0.01: the runbook's "temporarily lower
-//     the threshold, in staging only" step. It only ever applies to this
-//     child process.
-//   - NODE_ENV defaults to "staging", so the error-reporter's environment tag
-//     is checked against a non-production value.
-//   - JWT_SECRET / REFRESH_TOKEN_SECRET are generated per run when unset:
-//     this instance only has to accept the tokens it issued itself.
-//
-// Metrics are snapshotted on a fixed 5-minute timer (utils/metrics.js), and
-// alerts are evaluated on that snapshot. This script waits for the real
-// timer rather than calling snapshotAndReset() itself, so a pass means the
-// timer, the snapshot and the alert path all work in a running server -- at
-// the cost of the run taking a little over five minutes.
-//
-// Usage (from backend/):
-//   node scripts/verifyObservability.js
-//   node scripts/verifyObservability.js --port=8099 --wait-ms=360000 --out-dir=./obs-run
-//
-// Exit code: 0 if every REQUIRED check passed, 1 otherwise.
+// Observability verification, executable.
 
 const { spawn } = require("child_process");
 const crypto = require("crypto");
@@ -65,11 +20,7 @@ const LOG_LEVELS = new Set(["info", "warn", "error"]);
 const PING_COUNT = 6;
 const DEFAULT_WAIT_MS = 6 * 60 * 1000;
 
-// ---------------------------------------------------------------------------
-// Pure analysis. Everything below this line up to the orchestration section
-// takes plain data and returns plain data, so it is unit-tested directly
-// (tests/verifyObservability.test.js) without a server or a database.
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Pure analysis.
 
 // Mongo connection strings: the database name is the path segment after the
 // host list, before "?". Same parsing rule as scripts/backup/mongoUri.js.
@@ -116,9 +67,7 @@ function structuralProblems(record) {
   return problems;
 }
 
-// Unstructured lines are grouped by their first few words so one noisy
-// console.log does not bury the others; each group keeps a count and one
-// example, truncated. Values are NOT echoed beyond that example.
+// Log does not bury the others; each group keeps a count and one example, truncated.
 function groupUnstructured(lines) {
   const groups = new Map();
   for (const line of lines) {
@@ -138,17 +87,6 @@ function check(id, title, required, ok, details) {
 }
 
 // The six runbook steps, evaluated over one run's evidence.
-//
-// evidence = {
-//   lines: parseLine() results for everything the server printed,
-//   secrets: { label: string } -- values that must never appear verbatim,
-//   requests: { name: { requestId, sentRequestId, status, echoedRequestId } },
-//   mlCalls: [{ method, path, requestId }],
-//   smoke: { exitCode, output },
-//   env: { errorProvider, ownerEmail, nodeEnv },
-//   runbookText: contents of docs/runbooks/OBS-001-alerts.md (or null),
-//   minRequestCount, pingCount,
-// }
 function analyzeRun(evidence) {
   const { lines, secrets, requests, mlCalls, smoke, env, runbookText } = evidence;
   const results = [];
@@ -182,9 +120,7 @@ function analyzeRun(evidence) {
     if (!r.sentRequestId && !(r.echoedRequestId && REQUEST_ID_PATTERN.test(r.echoedRequestId))) {
       idProblems.push(`${name}: no ID sent and none generated (header "${r.echoedRequestId || "(missing)"}")`);
     }
-    // Every log line carrying this request's ID must carry exactly it; and a
-    // line whose requestId is set must belong to a request we actually made
-    // (checked below across all lines).
+    // Every log line carrying this request's ID must carry exactly it; and a line whose requestId is set must belong to a request we actually made (checked below across all lines).
     const tagged = jsonLines.filter((l) => l.json.requestId === r.echoedRequestId && r.echoedRequestId);
     idNotes.push(`${name}: ${tagged.length} log line(s) tagged with its ID`);
   }
@@ -351,9 +287,7 @@ function formatReport(results, meta) {
   out.push(`OBS-001-T07 observability verification -- run ${meta.runId}`);
   out.push(`database: ${meta.dbName}   NODE_ENV: ${meta.nodeEnv}   lines captured: ${meta.lineCount}`);
   out.push("");
-  // An aborted run never produced the traffic the checks judge, so its
-  // "results" would be verdicts about nothing -- a structured-format PASS
-  // over five startup lines, say. Report the abort, not those.
+  // An aborted run never produced the traffic the checks judge, so its "results" would be verdicts about nothing -- a structured-format PASS over five startup lines, say.
   if (meta.abortReason) {
     out.push(`RUN ABORTED: ${meta.abortReason}`);
     out.push("");
@@ -372,9 +306,7 @@ function formatReport(results, meta) {
   return out.join("\n");
 }
 
-// ---------------------------------------------------------------------------
-// Orchestration: fake ML service, child server, traffic, cleanup.
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Orchestration: fake ML service, child server, traffic, cleanup.
 
 function parseArgs(argv) {
   const get = (name, fallback) => {

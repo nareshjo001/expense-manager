@@ -2,16 +2,7 @@
 
 const mongoose = require("mongoose");
 
-// BUD-001-T02 -- optional per-category monthly allocations. A separate
-// collection, not new fields on config/Schemas.js's BudgetModel, so the
-// existing total-budget document, its sync/fencing machinery and its
-// endpoints stay exactly as they are (invariant I1 in
-// docs/budgets/BUD-001-T01-category-budget-invariants.md).
-//
-// Deliberately NOT stored: `spent`. Unlike BudgetModel.spent, per-category
-// spent is always derived at read time from expenses (invariant I9), so
-// there is no second derived value to keep in sync after every expense
-// mutation.
+// Optional per-category monthly allocations. md).
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const categoryBudgetSchema = new mongoose.Schema(
@@ -51,9 +42,7 @@ const categoryBudgetSchema = new mongoose.Schema(
         message: "amountMinor must be an integer number of paise",
       },
     },
-    // BUD-001-T06 alert bookkeeping (I14): highest alert level already
-    // notified for this allocation this month. 0 = none, 1 = Critical,
-    // 2 = Overspent. Reset to 0 whenever `amount` changes.
+    // T06 alert bookkeeping (I14): highest alert level already notified for this allocation this month.
     lastAlertLevel: {
       type: Number,
       default: 0,
@@ -64,11 +53,7 @@ const categoryBudgetSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// The one real query pattern is "all allocations for this user in this
-// month", served by this index's {userId, month} prefix; the full key also
-// enforces I2's one-allocation-per-category rule. Also created explicitly
-// by migrations/scripts/20260926-ensure-category-budget-indexes.js
-// (DAT-003 convention) so index presence doesn't depend on autoIndex.
+// The one real query pattern is "all allocations for this user in this month", served by this index's {userId, month} prefix; the full key also enforces I2's one-allocation-per-category rule.
 categoryBudgetSchema.index(
   { userId: 1, month: 1, category: 1 },
   { unique: true, name: "userId_month_category_unique" }

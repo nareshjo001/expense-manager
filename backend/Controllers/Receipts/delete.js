@@ -1,9 +1,6 @@
 "use strict";
 
-// OCR-004-T04 -- DELETE /api/receipts/:id. Thin wrapper around
-// receiptQueryService.deleteReceipt, which deletes the GridFS blob via the
-// storage adapter FIRST and only removes the Mongo document once that
-// succeeds (see that service function's own comment).
+// DELETE /api/receipts/:id.
 const mongoose = require("mongoose");
 const { deleteReceipt, ERROR_CODES } = require("../../Services/ReceiptServices/receiptQueryService");
 

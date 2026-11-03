@@ -12,13 +12,7 @@ export function useWebPush(isLoggedIn) {
 
   const registerToken = useCallback(async (notificationPreview) => {
     try {
-      // FE-003-T05 -- Firebase (firebase/app + firebase/messaging, loaded
-      // transitively through ./firebase.js) is only needed the moment a
-      // push token is actually requested: once on mount when permission
-      // was already granted in a past session, or when the user clicks
-      // "Enable" below. Every other session -- permission never granted,
-      // native platforms (Capacitor uses useMobilePush instead), or
-      // logged-out -- never needs Firebase's SDK in its bundle at all.
+      // Js) is only needed the moment a push token is actually requested: once on mount when permission was already granted in a past session, or when the user clicks "Enable" below.
       const { requestPushToken } = await import(/* webpackChunkName: "firebase-push" */ "../../pushNotification");
       const deviceToken = await requestPushToken();
       if (!deviceToken) return;

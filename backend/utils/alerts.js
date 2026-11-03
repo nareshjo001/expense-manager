@@ -1,10 +1,4 @@
-// OBS-001-T06 -- alert thresholds and owner/runbook links, layered on top
-// of the OBS-001-T05 in-process metrics snapshot. Deliberately no new
-// third-party alerting vendor: OBS-001-T04 flagged that decision as
-// pending architecture/privacy approval, so alerts here stay on already-
-// approved infrastructure -- a distinct structured log event, plus a
-// best-effort email through the existing Brevo integration when an owner
-// address is configured. See docs/runbooks/OBS-001-alerts.md.
+// Alert thresholds and owner/runbook links, layered on top of the OBS-001-T05 in-process metrics snapshot.
 "use strict";
 
 const { logEvent } = require("./logger");
@@ -12,9 +6,7 @@ const { logEvent } = require("./logger");
 const RUNBOOK_URL = "docs/runbooks/OBS-001-alerts.md";
 const DEFAULT_OWNER = "on-call maintainer";
 
-// Below this many requests in a window, ratios like error rate are too
-// noisy to alert on -- one failed request out of two would otherwise read
-// as a 50% error rate.
+// Below this many requests in a window, ratios like error rate are too noisy to alert on -- one failed request out of two would otherwise read as a 50% error rate.
 const MIN_SAMPLE_SIZE = 5;
 
 function numberFromEnv(name, fallback) {
@@ -26,12 +18,7 @@ function numberFromEnv(name, fallback) {
 const ERROR_RATE_THRESHOLD = numberFromEnv("OBS_ALERT_ERROR_RATE_THRESHOLD", 0.05);
 const LATENCY_MS_THRESHOLD = numberFromEnv("OBS_ALERT_LATENCY_MS_THRESHOLD", 2000);
 
-// Pure function: given one metrics snapshot ({ requestCount, errorCount,
-// avgLatencyMs }), returns the alerts it should raise. No I/O, so this is
-// unit-testable without touching logging or email at all. Deliberately
-// only reads aggregate counters -- never route names, merchant or user
-// fields -- per the feature spec's "avoid high-cardinality merchant/user
-// fields" requirement.
+// Pure function: given one metrics snapshot ({ requestCount, errorCount, avgLatencyMs }), returns the alerts it should raise.
 function detectAlerts(snapshot) {
   const { requestCount, errorCount, avgLatencyMs } = snapshot || {};
   const alerts = [];
@@ -66,10 +53,7 @@ function detectAlerts(snapshot) {
   return alerts;
 }
 
-// Logs each alert as a distinct structured event and, when an owner email
-// is configured, best-effort emails it too. Never throws -- a failed
-// alert dispatch must not take down the metrics timer or the request that
-// triggered a snapshot.
+// Logs each alert as a distinct structured event and, when an owner email is configured, best-effort emails it too.
 async function dispatchAlerts(alerts) {
   for (const alert of alerts) {
     logEvent({
@@ -99,9 +83,7 @@ async function dispatchAlerts(alerts) {
   }
 }
 
-// Single entry point metrics.js calls after building a snapshot: detect,
-// then dispatch whatever was found. Returns the alerts raised (mainly for
-// tests -- production callers can ignore the return value).
+// Js calls after building a snapshot: detect, then dispatch whatever was found.
 async function evaluateAndDispatchAlerts(snapshot) {
   const alerts = detectAlerts(snapshot);
   if (alerts.length > 0) {

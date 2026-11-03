@@ -60,11 +60,6 @@ export const listExportRequests = async (signal) => {
   return data;
 };
 
-export const getExportRequestStatus = async (id, signal) => {
-  const { data } = await api.get(`/api/export/${id}/status`, { signal });
-  return data;
-};
-
 export const downloadExportFile = async (token) => {
   const response = await api.get(`/api/export/download/${token}`, {
     responseType: "blob",

@@ -1,11 +1,6 @@
 "use strict";
 
-// OCR-004-T04 -- GET /api/receipts. Lists the authenticated user's own
-// receipts, newest first, optionally filtered by ?reviewStatus= and/or
-// ?linked=true|false. Thin wrapper around
-// receiptQueryService.listReceipts -- that service already scopes the
-// query to req.userId and strips storageKey from each row (see its own
-// toSafeShape comment).
+// GET /api/receipts. linked=true|false.
 const { listReceipts, ERROR_CODES } = require("../../Services/ReceiptServices/receiptQueryService");
 
 // Maps a thrown service error's `.code` to a response message, matching
@@ -14,11 +9,7 @@ const ERROR_MESSAGES = {
   [ERROR_CODES.INVALID_REVIEW_STATUS_FILTER]: "reviewStatus must be one of: needs_review, reviewed",
 };
 
-// Parses the optional ?linked= query param into true/false/undefined.
-// Any value other than the literal strings "true"/"false" is treated as
-// "not provided" (undefined) rather than silently matching neither/all --
-// the service's own "undefined means no filter" default already covers
-// an absent or unrecognized value the same way.
+// Linked= query param into true/false/undefined.
 function parseLinkedFilter(value) {
   if (value === "true") return true;
   if (value === "false") return false;

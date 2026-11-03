@@ -48,10 +48,7 @@ router.post('/refresh', authLimiter, sessionCsrf, refresh);
 router.post('/logout', authLimiter, sessionCsrf, logout);
 router.post('/logout-all', verifyToken, authLimiter, logoutAll);
 
-// PRV-001-T03 (ADR-0007) -- re-authenticated deletion request/cancel/status.
-// passwordResetLimiter reused deliberately: both endpoints gate a
-// password-compare against a stored hash, the same brute-force surface
-// that limiter already exists to bound.
+// T03 (ADR-0007) -- re-authenticated deletion request/cancel/status.
 router.post('/request-deletion', verifyToken, authLimiter, requestDeletionValidation, passwordResetLimiter, requestDeletion);
 router.post('/cancel-deletion', verifyToken, authLimiter, cancelDeletion);
 router.get('/deletion-status', verifyToken, authLimiter, getDeletionStatus);

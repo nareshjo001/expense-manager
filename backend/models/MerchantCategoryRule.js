@@ -1,9 +1,6 @@
 const mongoose = require("mongoose");
 
-// CAT-001 -- a durable, user-scoped "this merchant always means this
-// category" rule. One rule per (user, normalized merchant) -- the unique
-// index below is what makes upsertRule() a true upsert-by-merchant rather
-// than an ever-growing history of rules for the same merchant.
+// A durable, user-scoped "this merchant always means this category" rule.
 const merchantCategoryRuleSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,

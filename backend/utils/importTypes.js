@@ -1,20 +1,10 @@
 "use strict";
 
-// IMP-001-T01 -- CSV import template, limits and session/row state
-// machines. The single contract every import module (parser, mapping/
-// validation, session model, duplicate/merchant-rule integration, commit,
-// frontend) is built against, the same "write the contract by hand before
-// any parallel work starts" approach every prior feature this codebase
-// has parallelized (DAT-004, OCR-004, OCR-005) already used.
+// CSV import template, limits and session/row state machines.
 
 const IMPORT_TEMPLATE_VERSION = 1;
 
-// Canonical target fields a user's own CSV column headers get mapped
-// onto. `category` is optional -- an unmapped category falls through to
-// a CAT-001 MerchantCategoryRule suggestion (T05) or is left for the user
-// to fill in per row, the same way a manually-added expense's category
-// can be corrected before saving; date/amount/merchant mirror
-// addexpense.js's own required-field set for a manually-added expense.
+// Canonical target fields a user's own CSV column headers get mapped onto.
 const IMPORT_TARGET_FIELDS = Object.freeze({
   DATE: "date",
   AMOUNT: "amount",
@@ -28,29 +18,11 @@ const IMPORT_REQUIRED_TARGET_FIELDS = Object.freeze([
   IMPORT_TARGET_FIELDS.MERCHANT,
 ]);
 
-// Hard ceilings -- an unbounded CSV parse/preview/commit is still an
-// unbounded one, the same "Large history or maximum allowed input" edge
-// case every feature doc's Technical Design section requires a bound for.
-// Ballparked against this codebase's existing bounds: MAX_RECEIPT_BYTES
-// (receiptSecurity.service.js) is 5MB for a single image; a CSV of
-// transaction rows is plain text and far more information-dense per
-// byte, so a smaller ceiling here still comfortably covers a multi-year,
-// multi-thousand-row export from another tool. MAX_IMPORT_ROWS is
-// intentionally the same ballpark as DAT-004's own SYNC_ROW_LIMIT
-// (exportTypes.js) -- "handle it inline, no background job" territory.
+// Hard ceilings -- an unbounded CSV parse/preview/commit is still an unbounded one, the same "Large history or maximum allowed input" edge case every feature doc's Technical Design section requires a bound for.
 const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024; // 2MB
 const MAX_IMPORT_ROWS = 5000;
 
-// A preview session moves through exactly these states, in exactly this
-// order (never backward): PREVIEWING (rows parsed/validated, collecting
-// per-row decisions) -> COMMITTING (T06's batch commit is in flight --
-// this is what makes a second concurrent commit attempt a no-op rather
-// than a double-commit, the same CAS-guarded transition discipline
-// cron/receiptRetention.js's own atomic delete already uses) ->
-// COMMITTED (terminal; possibly 0 rows committed if the user accepted
-// none, which is still a valid, successful outcome). EXPIRED is the one
-// state reachable from PREVIEWING by something OTHER than the user: the
-// retention sweep, for a session nobody ever came back to finish.
+// Js's own atomic delete already uses) -> COMMITTED (terminal; possibly 0 rows committed if the user accepted none, which is still a valid, successful outcome).
 const IMPORT_SESSION_STATUSES = Object.freeze({
   PREVIEWING: "previewing",
   COMMITTING: "committing",
@@ -59,11 +31,7 @@ const IMPORT_SESSION_STATUSES = Object.freeze({
 });
 const IMPORT_SESSION_STATUS_VALUES = Object.freeze(Object.values(IMPORT_SESSION_STATUSES));
 
-// Every row starts PENDING. The user (or, per T05, a sensible default --
-// see that task) moves it to exactly one of ACCEPT/SKIP before commit;
-// PENDING rows still present at commit time are treated as SKIP (an
-// explicit, documented default -- commit never silently accepts a row
-// nobody looked at).
+// Every row starts PENDING.
 const IMPORT_ROW_DECISIONS = Object.freeze({
   PENDING: "pending",
   ACCEPT: "accept",
@@ -71,9 +39,7 @@ const IMPORT_ROW_DECISIONS = Object.freeze({
 });
 const IMPORT_ROW_DECISION_VALUES = Object.freeze(Object.values(IMPORT_ROW_DECISIONS));
 
-// Machine-stable per-row validation error codes -- never free text, same
-// convention as every other *_CODES contract in this codebase (e.g.
-// receiptQueryService.js's ERROR_CODES). A row can carry more than one.
+// G. js's ERROR_CODES). js's ERROR_CODES).
 const IMPORT_ROW_ERROR_CODES = Object.freeze({
   MISSING_DATE: "MISSING_DATE",
   INVALID_DATE: "INVALID_DATE",
@@ -82,18 +48,10 @@ const IMPORT_ROW_ERROR_CODES = Object.freeze({
   MISSING_MERCHANT: "MISSING_MERCHANT",
 });
 
-// An uncommitted preview session is pure UX scaffolding, not a financial
-// record -- nothing of value is lost by expiring it, the user just
-// re-uploads. Same 24h "generous but bounded" window DAT-004's own
-// EXPORT_EXPIRY_HOURS (exportTypes.js) uses for its own ephemeral,
-// non-authoritative artifact.
+// An uncommitted preview session is pure UX scaffolding, not a financial record -- nothing of value is lost by expiring it, the user just re-uploads.
 const IMPORT_SESSION_RETENTION_HOURS = 24;
 
-// True only for a session that is still in-flight (PREVIEWING or stuck
-// mid-COMMITTING past a crash -- see cron/importSessionRetention.js's own
-// comment on why COMMITTING is swept too, not just PREVIEWING) and older
-// than the retention window. A COMMITTED or already-EXPIRED session is
-// never touched again.
+// Js's own comment on why COMMITTING is swept too, not just PREVIEWING) and older than the retention window.
 function isSessionEligibleForRetentionSweep(session, now) {
   if (!session) return false;
   if (session.status === IMPORT_SESSION_STATUSES.COMMITTED) return false;

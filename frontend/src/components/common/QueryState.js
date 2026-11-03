@@ -1,10 +1,6 @@
 import './QueryState.css';
 
-// FE-001 -- shared explicit-state wrapper for TanStack Query-backed screens.
-// Distinguishes loading vs error(+retry) vs empty vs content so a screen can
-// never show the same blank/generic UI for "still loading", "the request
-// failed" and "there is genuinely no data yet" (the exact gap the feature
-// spec calls out for the chart/insights screens).
+// Shared explicit-state wrapper for TanStack Query-backed screens.
 export default function QueryState({
   isLoading,
   isError,
